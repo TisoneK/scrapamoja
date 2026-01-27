@@ -36,10 +36,8 @@
 - **Selector-First Engineering**: All features must start with semantic selector definitions; multi-strategy approach mandatory; confidence scoring required
 - **Stealth-Aware Design**: Human behavior emulation required; anti-bot detection avoidance mandatory; production stealth settings must be conservative
 - **Deep Modularity**: Granular components with single responsibilities; clear contracts between components; independently testable modules
-- **Implementation-First Development**: No automated tests required; direct implementation with manual validation; code reviews serve as primary validation
+- **Test-First Validation**: Failing tests required before implementation; validation frameworks mandatory; DOM snapshot integration for failure analysis
 - **Production Resilience**: Graceful failure handling with retry and recovery; checkpointing and resume capability; structured logging with correlation IDs
-- **Module Lifecycle Management**: Explicit initialization, operation, error handling, recovery, and shutdown phases; modules own internal state with no shared global state; clear public contracts; contained and recoverable failures
-- **Neutral Naming Convention**: Use neutral, structural, and descriptive language only; avoid qualitative, promotional, or marketing-style descriptors; names must describe function and structure, not perceived quality
 
 ### Technical Constraints Validation
 
