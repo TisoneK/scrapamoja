@@ -1,13 +1,13 @@
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Navigation & Routing Intelligence
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Branch**: `004-navigation-routing` | **Date**: 2025-01-27 | **Spec**: [Navigation & Routing Intelligence](spec.md)
+**Input**: Feature specification from `/specs/004-navigation-routing/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+Navigation & Routing Intelligence provides automatic route discovery, intelligent path planning, and dynamic adaptation for web application navigation. The system analyzes DOM structures to map navigation routes, calculates optimal paths considering detection risk, and maintains navigation context for stealth-aware browsing. This feature extends the existing selector engine capabilities with routing intelligence while maintaining constitution compliance through modular design and human behavior emulation.
 
 ## Technical Context
 
@@ -17,15 +17,15 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: Python 3.11+ with asyncio  
+**Primary Dependencies**: Playwright (async API), NetworkX for graph algorithms, JSON schema validation  
+**Storage**: JSON files with schema versioning for route graphs and navigation history  
+**Testing**: Manual validation through code reviews and sanity checks  
+**Target Platform**: Cross-platform web scraping environment  
+**Project Type**: Single project with modular navigation components  
+**Performance Goals**: Route discovery within 30 seconds, path calculation under 100ms  
+**Constraints**: Memory usage <200MB for route graphs, detection risk scores <0.3  
+**Scale/Scope**: Support for web applications with up to 10,000 discoverable routes
 
 ## Constitution Check
 
@@ -33,26 +33,33 @@
 
 ### Required Compliance Gates
 
-- **Selector-First Engineering**: All features must start with semantic selector definitions; multi-strategy approach mandatory; confidence scoring required
-- **Stealth-Aware Design**: Human behavior emulation required; anti-bot detection avoidance mandatory; production stealth settings must be conservative
-- **Deep Modularity**: Granular components with single responsibilities; clear contracts between components; independently testable modules
-- **Implementation-First Development**: No automated tests required; direct implementation with manual validation; code reviews serve as primary validation
-- **Production Resilience**: Graceful failure handling with retry and recovery; checkpointing and resume capability; structured logging with correlation IDs
-- **Module Lifecycle Management**: Explicit initialization, operation, error handling, recovery, and shutdown phases; modules own internal state with no shared global state; clear public contracts; contained and recoverable failures
-- **Neutral Naming Convention**: Use neutral, structural, and descriptive language only; avoid qualitative, promotional, or marketing-style descriptors; names must describe function and structure, not perceived quality
+✅ **Selector-First Engineering**: Navigation routes will be discovered using semantic selector definitions from existing selector engine; multi-strategy approach mandatory; confidence scoring required for route validation
+✅ **Stealth-Aware Design**: Path planning incorporates human behavior emulation; anti-bot detection avoidance mandatory through route risk assessment; production stealth settings conservative
+✅ **Deep Modularity**: Navigation components designed as granular modules with single responsibilities; clear interfaces between route discovery, planning, and adaptation; independently testable modules
+✅ **Implementation-First Development**: Direct implementation approach with manual validation through code reviews; DOM snapshot integration for failure analysis; no automated tests required
+✅ **Production Resilience**: Graceful failure handling with route adaptation and retry; checkpointing for navigation state; structured logging with correlation IDs
+✅ **Module Lifecycle Management**: Each navigation module defines initialization, operation, error handling, recovery, and shutdown phases; modules own internal state; clear public contracts; contained failures
+✅ **Neutral Naming Convention**: All navigation components use neutral, structural names (route_discovery, path_planning, context_manager); no qualitative descriptors; names describe function and structure
 
 ### Technical Constraints Validation
 
-- **Technology Stack**: Python 3.11+ with asyncio; Playwright (async API) only; JSON output with schema versioning
-- **Selector Engineering**: Multi-strategy resolution; confidence scoring >0.8 for production; context scoping for tab-aware selection
-- **Stealth Requirements**: Realistic browser fingerprints; human-like interaction timing; proxy management with residential IPs
+✅ **Technology Stack**: Python 3.11+ with asyncio; Playwright (async API) only for browser operations; JSON output with schema versioning for route data
+✅ **Selector Engineering**: Multi-strategy resolution from existing selector engine; confidence scoring >0.8 for production route validation; context scoping for tab-aware navigation
+✅ **Stealth Requirements**: Realistic browser fingerprints from existing stealth system; human-like interaction timing in path planning; proxy management integration
 
 ### Quality Gates
 
-- All selector definitions must pass confidence thresholds
-- Stealth configuration must be production-ready
-- Error handling must be comprehensive
-- Documentation must be complete for each module
+✅ All selector definitions must pass confidence thresholds (leveraging existing selector engine)
+✅ Stealth configuration must be production-ready (integrating with existing stealth system)
+✅ Error handling must be comprehensive (route adaptation and fallback mechanisms)
+✅ Documentation must be complete for each module (interface contracts and lifecycle management)
+
+### Post-Design Validation
+
+✅ **Phase 1 Design Complete**: All design artifacts generated and validated
+✅ **Constitution Compliance Maintained**: No violations introduced during design phase
+✅ **Integration Points Defined**: Clear contracts with existing selector and stealth systems
+✅ **Performance Constraints Met**: Design supports 30-second route discovery and 100ms path planning targets
 
 ## Project Structure
 
@@ -77,43 +84,33 @@ specs/[###-feature]/
 -->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
 src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+├── navigation/
+│   ├── __init__.py
+│   ├── route_discovery.py      # Route discovery and DOM analysis
+│   ├── path_planning.py       # Optimal path calculation algorithms
+│   ├── route_adaptation.py     # Dynamic route adaptation logic
+│   ├── context_manager.py      # Navigation context tracking
+│   ├── route_optimizer.py      # Learning and optimization
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── route.py           # NavigationRoute entity
+│   │   ├── graph.py           # RouteGraph entity
+│   │   ├── context.py         # NavigationContext entity
+│   │   ├── plan.py            # PathPlan entity
+│   │   └── event.py           # NavigationEvent entity
+│   └── interfaces.py           # Navigation system interfaces
+├── selectors/                  # Existing selector engine
+└── stealth/                    # Existing stealth system
 
 tests/
-├── contract/
 ├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+│   └── navigation/            # Navigation integration tests
+└── fixtures/
+    └── navigation/            # Test navigation scenarios
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: Single project structure selected to maintain deep modularity while integrating with existing selector and stealth systems. Navigation components are organized as separate modules under `src/navigation/` with clear interfaces and independent testability, following Constitution Principle III (Deep Modularity) and VI (Module Lifecycle Management).
 
 ## Complexity Tracking
 

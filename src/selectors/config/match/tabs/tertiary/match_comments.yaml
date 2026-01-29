@@ -1,0 +1,242 @@
+# Match comments tab selectors
+# This file contains selectors for the tertiary match comments tab
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-01-27T17:00:00Z"
+  description: "Match comments tab selectors for user comments and discussions"
+
+context_defaults:
+  page_type: "match"
+  wait_strategy: "network_idle"
+  timeout: 8000
+  section: "tabs.tertiary"
+
+validation_defaults:
+  required: false
+  type: "string"
+
+strategy_templates:
+  comment_item:
+    type: "css_selector"
+    parameters:
+      selector: ".comment, .comment-item, .user-comment"
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  comment_text:
+    type: "css_selector"
+    parameters:
+      selector: ".text, .content, .comment-text"
+    validation:
+      required: true
+      type: "string"
+    confidence:
+      threshold: 0.9
+
+selectors:
+  # Tab navigation
+  comments_tab:
+    description: "Comments tab button/link"
+    context: "match.tabs.tertiary"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".tab-comments, [data-tab='comments'], #comments-tab"
+        priority: 1
+      - type: "text_anchor"
+        parameters:
+          pattern: "Comments, Discussion, Chat"
+        priority: 2
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  # Comments container
+  comments_container:
+    description: "Main comments container"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".comments-container, .comments-section, .discussion"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".user-comments, .match-comments"
+        priority: 2
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  # Individual comments
+  comment_items:
+    description: "All comment items"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - template: "comment_item"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: "article.comment, .user-message, .post"
+        priority: 2
+    validation:
+      required: false
+      type: "array"
+    confidence:
+      threshold: 0.7
+
+  # Comment components
+  comment_author:
+    description: "Comment author name"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".author, .username, .user-name, .comment-author"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-author"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+  comment_timestamp:
+    description: "Comment timestamp"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".timestamp, .time, .date, .comment-time"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-timestamp"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.7
+
+  comment_text:
+    description: "Comment text content"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - template: "comment_text"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".comment-text, .message, .content"
+        priority: 2
+    validation:
+      required: true
+      type: "string"
+      min_length: 1
+    confidence:
+      threshold: 0.9
+
+  # Comment interactions
+  comment_likes:
+    description: "Comment likes/reactions"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".likes, .reactions, .comment-likes"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-likes"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.6
+
+  comment_replies:
+    description: "Comment replies section"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".replies, .comment-replies, .responses"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".thread, .conversation"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.6
+
+  # Comment input
+  comment_input:
+    description: "Comment input field"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: "textarea.comment-input, .comment-form textarea, #new-comment"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "placeholder"
+          value: "Write a comment"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.7
+
+  submit_comment:
+    description: "Submit comment button"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".submit-comment, .post-comment, button[type='submit']"
+        priority: 1
+      - type: "text_anchor"
+        parameters:
+          pattern: "Post, Submit, Send"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.7
+
+  # Pagination and loading
+  load_more_comments:
+    description: "Load more comments button"
+    context: "match.tabs.tertiary.comments"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".load-more, .more-comments, button[data-load-more]"
+        priority: 1
+      - type: "text_anchor"
+        parameters:
+          pattern: "Load more, Show more, More comments"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.6

@@ -1,0 +1,222 @@
+# Fixture match list selectors configuration
+# This file contains selectors for displaying match lists and fixtures
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-01-27T17:00:00Z"
+  description: "Fixture match list selectors for sports content"
+
+context_defaults:
+  page_type: "fixture"
+  wait_strategy: "network_idle"
+  timeout: 15000
+  section: "list"
+
+validation_defaults:
+  required: true
+  type: "string"
+
+strategy_templates:
+  match_item:
+    type: "css_selector"
+    parameters:
+      selector: ".match-item, .fixture-item, .game-item"
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  team_name:
+    type: "text_anchor"
+    parameters:
+      pattern: ".team-name, .team, .side"
+    validation:
+      required: true
+      type: "string"
+    confidence:
+      threshold: 0.9
+
+  match_time:
+    type: "css_selector"
+    parameters:
+      selector: ".time, .kickoff, .match-time"
+    validation:
+      required: true
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+selectors:
+  # Match list container
+  match_list_container:
+    description: "Main container for match list"
+    context: "fixture.list"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".match-list, .fixture-list, .game-list"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: "[data-match-list], .matches"
+        priority: 2
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  # Individual match items
+  match_items:
+    description: "All match items in the list"
+    context: "fixture.list"
+    strategies:
+      - template: "match_item"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: "article.match, .fixture, .game"
+        priority: 2
+    validation:
+      required: true
+      type: "array"
+    confidence:
+      threshold: 0.7
+
+  # Match details within each item
+  home_team:
+    description: "Home team name"
+    context: "fixture.match"
+    strategies:
+      - template: "team_name"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".home-team, .team-home, .side-home"
+        priority: 2
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-home-team"
+        priority: 3
+    validation:
+      required: true
+      type: "string"
+      min_length: 2
+    confidence:
+      threshold: 0.9
+
+  away_team:
+    description: "Away team name"
+    context: "fixture.match"
+    strategies:
+      - template: "team_name"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".away-team, .team-away, .side-away"
+        priority: 2
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-away-team"
+        priority: 3
+    validation:
+      required: true
+      type: "string"
+      min_length: 2
+    confidence:
+      threshold: 0.9
+
+  match_score:
+    description: "Match score or result"
+    context: "fixture.match"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".score, .result, .match-score"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: "[data-score], .final-score"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+  match_time:
+    description: "Match kickoff time"
+    context: "fixture.match"
+    strategies:
+      - template: "match_time"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".kickoff, .start-time, .match-time"
+        priority: 2
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-kickoff"
+        priority: 3
+    validation:
+      required: true
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+  match_status:
+    description: "Match status (live, finished, upcoming)"
+    context: "fixture.match"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".status, .match-status, .game-status"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-status"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.7
+
+  # League/competition information
+  competition_name:
+    description: "Competition or league name"
+    context: "fixture.competition"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".competition, .league, .tournament"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-competition"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+  # Pagination and loading
+  load_more_button:
+    description: "Load more matches button"
+    context: "fixture.pagination"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".load-more, .more-matches, button[data-load-more]"
+        priority: 1
+      - type: "text_anchor"
+        parameters:
+          pattern: "Load more, Show more, More matches"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.6

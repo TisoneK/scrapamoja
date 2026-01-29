@@ -1,0 +1,241 @@
+# Match overview tab selectors
+# This file contains selectors for the primary match overview tab
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-01-27T17:00:00Z"
+  description: "Match overview tab selectors for detailed match information"
+
+context_defaults:
+  page_type: "match"
+  wait_strategy: "network_idle"
+  timeout: 12000
+  section: "tabs.primary"
+
+validation_defaults:
+  required: true
+  type: "string"
+
+strategy_templates:
+  tab_content:
+    type: "css_selector"
+    parameters:
+      selector: ".tab-content, .tab-pane, .panel"
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  team_info:
+    type: "css_selector"
+    parameters:
+      selector: ".team-info, .team-details, .team-data"
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.9
+
+selectors:
+  # Tab navigation
+  overview_tab:
+    description: "Overview tab button/link"
+    context: "match.tabs.primary"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".tab-overview, [data-tab='overview'], #overview-tab"
+        priority: 1
+      - type: "text_anchor"
+        parameters:
+          pattern: "Overview, Summary, Details"
+        priority: 2
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  # Match header information
+  match_header:
+    description: "Main match header section"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".match-header, .game-header, .fixture-header"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".overview-header, .match-info"
+        priority: 2
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.9
+
+  # Team information
+  home_team_info:
+    description: "Home team detailed information"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - template: "team_info"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".home-team-info, .team-home-details"
+        priority: 2
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.9
+
+  away_team_info:
+    description: "Away team detailed information"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - template: "team_info"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".away-team-info, .team-away-details"
+        priority: 2
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.9
+
+  # Score and result
+  current_score:
+    description: "Current match score"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".score, .current-score, .match-score"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".final-score, .result-score"
+        priority: 2
+    validation:
+      required: true
+      type: "string"
+    confidence:
+      threshold: 0.9
+
+  # Match details
+  match_venue:
+    description: "Match venue/stadium"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".venue, .stadium, .location"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-venue"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+  match_datetime:
+    description: "Match date and time"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".datetime, .date-time, .match-date"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".kickoff-time, .start-time"
+        priority: 2
+    validation:
+      required: true
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+  # Team lineups
+  home_lineup:
+    description: "Home team lineup"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".home-lineup, .lineup-home, .starting-home"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".lineups .home-team"
+        priority: 2
+    validation:
+      required: false
+      type: "array"
+    confidence:
+      threshold: 0.7
+
+  away_lineup:
+    description: "Away team lineup"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".away-lineup, .lineup-away, .starting-away"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".lineups .away-team"
+        priority: 2
+    validation:
+      required: false
+      type: "array"
+    confidence:
+      threshold: 0.7
+
+  # Match statistics
+  match_statistics:
+    description: "Match statistics section"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".stats, .statistics, .match-stats"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".overview-stats, .game-stats"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.7
+
+  # Key events
+  match_events:
+    description: "Key match events (goals, cards, substitutions)"
+    context: "match.tabs.primary.overview"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".events, .match-events, .key-events"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".timeline, .event-timeline"
+        priority: 2
+    validation:
+      required: false
+      type: "array"
+    confidence:
+      threshold: 0.6

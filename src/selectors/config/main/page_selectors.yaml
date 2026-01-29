@@ -1,0 +1,162 @@
+# Main page selectors configuration
+# This file contains selectors for the main navigation pages
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-01-27T17:00:00Z"
+  description: "Main page selectors for navigation and content extraction"
+
+context_defaults:
+  page_type: "main"
+  wait_strategy: "network_idle"
+  timeout: 10000
+
+validation_defaults:
+  required: true
+  type: "string"
+  min_length: 1
+
+strategy_templates:
+  navigation_link:
+    type: "css_selector"
+    parameters:
+      selector: "a[href]"
+    validation:
+      required: true
+      type: "string"
+    confidence:
+      threshold: 0.8
+      weight: 1.0
+
+  content_header:
+    type: "text_anchor"
+    parameters:
+      pattern: "h1, h2, h3"
+    validation:
+      required: true
+      type: "string"
+    confidence:
+      threshold: 0.9
+      weight: 1.2
+
+selectors:
+  # Navigation selectors
+  main_navigation:
+    description: "Main navigation menu container"
+    context: "main.navigation"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: "nav.main-nav, .navigation, #main-nav"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "role"
+          value: "navigation"
+        priority: 2
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  navigation_links:
+    description: "All navigation links in main navigation"
+    context: "main.navigation"
+    strategies:
+      - template: "navigation_link"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: "nav a, .navigation a"
+        priority: 2
+    validation:
+      required: false
+      type: "array"
+    confidence:
+      threshold: 0.7
+
+  # Content selectors
+  page_title:
+    description: "Main page title"
+    context: "main.content"
+    strategies:
+      - template: "content_header"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: "title, h1, .page-title"
+        priority: 2
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-title"
+        priority: 3
+    validation:
+      required: true
+      type: "string"
+      min_length: 3
+      max_length: 200
+    confidence:
+      threshold: 0.9
+
+  page_content:
+    description: "Main content area"
+    context: "main.content"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: "main, .main-content, #content, .content"
+        priority: 1
+      - type: "role_based"
+        parameters:
+          role: "main"
+        priority: 2
+      - type: "css_selector"
+        parameters:
+          selector: "article, .article"
+        priority: 3
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  # Footer selectors
+  page_footer:
+    description: "Page footer section"
+    context: "main.footer"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: "footer, .footer, #footer"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "role"
+          value: "contentinfo"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.7
+
+  # Utility selectors
+  loading_indicator:
+    description: "Loading/spinner indicator"
+    context: "main.utility"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".loading, .spinner, .loader, [data-loading]"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "aria-busy"
+          value: "true"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.6
