@@ -51,6 +51,67 @@ class RetryConfig:
         self.backoff_multiplier = backoff_multiplier
         self.jitter = jitter
         self.retryable_exceptions = retryable_exceptions or (BrowserError,)
+        self.logger = structlog.get_logger("retry_config")
+
+    async def execute_with_retry(
+        self,
+        operation: Callable,
+        *args,
+        context: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> Any:
+        """Execute operation with retry configuration."""
+        last_exception = None
+        
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                return await operation(*args, **kwargs)
+            except self.retryable_exceptions as e:
+                last_exception = e
+                
+                if attempt == self.max_attempts:
+                    self.logger.error(
+                        "all_retry_attempts_exhausted",
+                        attempt=attempt,
+                        max_attempts=self.max_attempts,
+                        error=str(e),
+                        context=context
+                    )
+                    raise
+                    
+                delay = self._calculate_delay(attempt - 1)
+                self.logger.warning(
+                    "retry_attempt_failed",
+                    attempt=attempt,
+                    max_attempts=self.max_attempts,
+                    delay=delay,
+                    error=str(e),
+                    context=context
+                )
+                
+                await asyncio.sleep(delay)
+                
+        raise last_exception
+        
+    def _calculate_delay(self, attempt: int) -> float:
+        """Calculate delay based on strategy."""
+        if self.strategy == RetryStrategy.IMMEDIATE:
+            return 0
+        elif self.strategy == RetryStrategy.FIXED_DELAY:
+            return self.base_delay
+        elif self.strategy == RetryStrategy.LINEAR_BACKOFF:
+            delay = self.base_delay * (attempt + 1)
+        else:  # EXPONENTIAL_BACKOFF
+            delay = self.base_delay * (self.backoff_multiplier ** attempt)
+            
+        delay = min(delay, self.max_delay)
+        
+        if self.jitter:
+            # Add ±25% jitter
+            jitter_range = delay * 0.25
+            delay += random.uniform(-jitter_range, jitter_range)
+            
+        return max(0, delay)
 
 
 class CircuitBreakerConfig:
@@ -222,7 +283,10 @@ class ResilienceManager:
         
         # Apply circuit breaker if specified
         if circuit_breaker and circuit_breaker in self.circuit_breakers:
-            func = self.circuit_breakers[circuit_breaker].call(func)
+            original_func = func
+            async def protected_func(*args, **kwargs):
+                return await self.circuit_breakers[circuit_breaker].call(original_func, *args, **kwargs)
+            func = protected_func
             
         # Apply retry logic if specified
         if retry_config and retry_config in self.retry_configs:

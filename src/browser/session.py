@@ -57,6 +57,10 @@ class BrowserSession:
     
     def __post_init__(self):
         """Initialize session after creation."""
+        # Handle case where session_id is explicitly None
+        if self.session_id is None:
+            self.session_id = str(uuid.uuid4())
+        
         self._logger = get_logger(f"browser_session.{self.session_id[:8]}")
         self._storage = get_storage_adapter()
         self._correlation_id = self.session_id[:8]  # Use session ID prefix as correlation ID

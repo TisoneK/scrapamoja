@@ -351,11 +351,34 @@ class FileSystemStorageAdapter(IStorageAdapter):
             if limit:
                 filtered_ids = filtered_ids[:limit]
             
-            return filtered_ids
             
         except Exception as e:
             raise StorageError(
                 "list", "snapshots", "all", str(e)
+            )
+            return []
+    
+    async def list_files(self, pattern: str = "*") -> List[str]:
+        """List files matching pattern in storage directory."""
+        try:
+            storage_path = self.base_path
+            if not storage_path.exists():
+                return []
+            
+            files = []
+            for file_path in storage_path.glob(pattern):
+                if file_path.is_file():
+                    files.append(str(file_path.relative_to(storage_path)))
+            return files
+            
+        except Exception as e:
+            self._logger.error(
+                "list_files_failed",
+                pattern=pattern,
+                error=str(e)
+            )
+            raise StorageError(
+                "list", "files", pattern, str(e)
             )
     
     async def cleanup_old_snapshots(self, older_than: datetime) -> int:
