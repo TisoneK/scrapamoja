@@ -6,8 +6,10 @@ following the Production Resilience constitution principle.
 """
 
 import asyncio
+import hashlib
 import json
 import time
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 import structlog
@@ -33,7 +35,9 @@ class DOMSnapshot:
         selector_results: Optional[Dict[str, Any]] = None,
         network_requests: Optional[List[Dict[str, Any]]] = None,
         console_logs: Optional[List[Dict[str, Any]]] = None,
-        screenshot_path: Optional[str] = None
+        screenshot_path: Optional[str] = None,
+        html_metadata: Optional[Dict[str, Any]] = None,
+        screenshot_metadata: Optional[Dict[str, Any]] = None
     ):
         self.page_id = page_id
         self.url = url
@@ -44,6 +48,8 @@ class DOMSnapshot:
         self.network_requests = network_requests or []
         self.console_logs = console_logs or []
         self.screenshot_path = screenshot_path
+        self.html_metadata = html_metadata
+        self.screenshot_metadata = screenshot_metadata
         
     def to_dict(self) -> Dict[str, Any]:
         """Convert snapshot to dictionary."""
@@ -56,7 +62,9 @@ class DOMSnapshot:
             "selector_results": self.selector_results,
             "network_requests": self.network_requests,
             "console_logs": self.console_logs,
-            "screenshot_path": self.screenshot_path
+            "screenshot_path": self.screenshot_path,
+            "html_metadata": self.html_metadata,
+            "screenshot_metadata": self.screenshot_metadata
         }
 
 
@@ -68,11 +76,87 @@ class DOMSnapshotManager:
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
         self.logger = structlog.get_logger("browser.snapshots")
         
+    def _sanitize_session_id(self, session_id: str) -> str:
+        """
+        Sanitize session ID for use in filenames.
+        
+        Allows only alphanumeric characters and underscores.
+        Replaces invalid characters with underscores.
+        
+        Args:
+            session_id: Original session ID (may contain hyphens, etc.)
+            
+        Returns:
+            Sanitized session ID safe for filenames
+        """
+        import re
+        # Replace any non-alphanumeric characters (except underscore) with underscore
+        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', session_id)
+        # Remove leading/trailing underscores
+        sanitized = sanitized.strip('_')
+        return sanitized or "unknown"
+    
+    def _generate_filename(self, page_name: str, session_id: str, timestamp: int) -> str:
+        """
+        Generate session-aware snapshot filename.
+        
+        Format: {page_name}_{session_id}_{timestamp}.json
+        
+        Args:
+            page_name: Base name for the snapshot (e.g., 'wikipedia_search')
+            session_id: Session identifier for uniqueness
+            timestamp: Unix timestamp as integer
+            
+        Returns:
+            Complete filename with session ID included
+        """
+        sanitized_session = self._sanitize_session_id(session_id)
+        return f"{page_name}_{sanitized_session}_{timestamp}.json"
+    
+    def _generate_screenshot_filename(self, page_name: str, session_id: str, timestamp: int) -> str:
+        """
+        Generate session-aware screenshot filename.
+        
+        Format: {page_name}_{session_id}_{timestamp}.png
+        
+        Args:
+            page_name: Base name for the screenshot
+            session_id: Session identifier for uniqueness
+            timestamp: Unix timestamp as integer
+            
+        Returns:
+            Complete PNG filename with session ID included
+        """
+        sanitized_session = self._sanitize_session_id(session_id)
+        return f"{page_name}_{sanitized_session}_{timestamp}.png"
+    
+    def _generate_screenshot_path(self, page_name: str, session_id: str, timestamp: int) -> str:
+        """
+        Generate session-aware screenshot file path reference.
+        
+        Used in JSON metadata to reference the screenshot file.
+        
+        Format: screenshots/{page_name}_{session_id}_{timestamp}.png
+        
+        Args:
+            page_name: Base name for the screenshot
+            session_id: Session identifier for uniqueness
+            timestamp: Unix timestamp as integer
+            
+        Returns:
+            Relative path for screenshot reference in JSON
+        """
+        filename = self._generate_screenshot_filename(page_name, session_id, timestamp)
+        return f"screenshots/{filename}"
+        
     async def capture_snapshot(
         self,
         page: Page,
         page_id: str,
+        session_id: Optional[str] = None,
         include_screenshot: bool = True,
+        include_html_file: bool = True,
+        screenshot_mode: str = "fullpage",
         include_network: bool = True,
         include_console: bool = True,
         custom_selectors: Optional[List[str]] = None
@@ -105,10 +189,15 @@ class DOMSnapshotManager:
             if custom_selectors:
                 selector_results = await self._evaluate_selectors(page, custom_selectors)
                 
-            # Screenshot
-            screenshot_path = None
+            # Screenshot with rich metadata
+            screenshot_metadata = None
             if include_screenshot:
-                screenshot_path = await self._capture_screenshot(page, page_id)
+                screenshot_metadata = await self._capture_screenshot(page, page_id, session_id, screenshot_mode)
+            
+            # HTML file with rich metadata
+            html_metadata = None
+            if include_html_file:
+                html_metadata = await self._capture_html_file(page, page_id, content)
                 
             snapshot = DOMSnapshot(
                 page_id=page_id,
@@ -118,18 +207,20 @@ class DOMSnapshotManager:
                 selector_results=selector_results,
                 network_requests=network_requests,
                 console_logs=console_logs,
-                screenshot_path=screenshot_path
+                screenshot_path=screenshot_metadata["filepath"] if screenshot_metadata else None,
+                html_metadata=html_metadata,
+                screenshot_metadata=screenshot_metadata
             )
             
-            # Save snapshot to file
-            await self._save_snapshot(snapshot)
+            # Save snapshot to file with session ID
+            await self._save_snapshot(snapshot, session_id)
             
             self.logger.info(
                 "DOM snapshot captured",
                 page_id=page_id,
                 url=url,
                 title=title,
-                screenshot=bool(screenshot_path)
+                screenshot=bool(screenshot_metadata["filepath"] if screenshot_metadata else False)
             )
             
             return snapshot
@@ -183,16 +274,56 @@ class DOMSnapshotManager:
                 
         return results
         
-    async def _capture_screenshot(self, page: Page, page_id: str) -> str:
-        """Capture screenshot and return path."""
+    async def _capture_screenshot(self, page: Page, page_id: str, session_id: Optional[str] = None, screenshot_mode: str = "fullpage") -> dict:
+        """Capture screenshot and return rich metadata with session ID in filename."""
         try:
             timestamp = int(time.time())
-            filename = f"{page_id}_{timestamp}.png"
-            filepath = self.snapshot_dir / filename
             
-            await page.screenshot(path=str(filepath), full_page=True)
+            # Ensure screenshots directory exists
+            screenshots_dir = self.snapshot_dir / "screenshots"
+            screenshots_dir.mkdir(parents=True, exist_ok=True)
             
-            return str(filepath)
+            # Generate filename with session_id if available
+            if session_id:
+                filename = self._generate_screenshot_filename(page_id, session_id, timestamp)
+            else:
+                # Fallback to old format if no session_id provided
+                filename = f"{page_id}_{timestamp}.png"
+            
+            filepath = screenshots_dir / filename
+            
+            # Configure screenshot options
+            screenshot_options = {
+                "path": str(filepath),
+                "type": "png"
+            }
+            
+            if screenshot_mode == "fullpage":
+                screenshot_options["full_page"] = True
+            
+            await page.screenshot(**screenshot_options)
+            
+            # Get screenshot metadata
+            file_size = filepath.stat().st_size
+            
+            # Try to get dimensions if PIL is available
+            width, height = 0, 0
+            try:
+                from PIL import Image
+                with Image.open(filepath) as img:
+                    width, height = img.size
+            except ImportError:
+                self.logger.debug("PIL not available, screenshot dimensions set to 0")
+            
+            return {
+                "filepath": f"screenshots/{filename}",
+                "captured_at": datetime.now(timezone.utc).isoformat(),
+                "width": width,
+                "height": height,
+                "file_size_bytes": file_size,
+                "capture_mode": screenshot_mode,
+                "format": "png"
+            }
             
         except Exception as e:
             self.logger.warning(
@@ -201,12 +332,56 @@ class DOMSnapshotManager:
                 error=str(e)
             )
             return None
+    
+    async def _capture_html_file(self, page: Page, page_id: str, content: str) -> dict:
+        """Capture HTML content to file and return rich metadata."""
+        try:
+            timestamp = int(time.time())
+            filename = f"{page_id}_{timestamp}.html"
+            filepath = self.snapshot_dir / filename
             
-    async def _save_snapshot(self, snapshot: DOMSnapshot) -> None:
-        """Save snapshot to JSON file."""
+            # Create HTML subdirectory
+            html_dir = self.snapshot_dir / "html"
+            html_dir.mkdir(exist_ok=True)
+            html_filepath = html_dir / filename
+            
+            # Write HTML content
+            with open(html_filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            
+            # Generate content hash
+            import hashlib
+            content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
+            
+            return {
+                "filepath": f"html/{filename}",
+                "captured_at": datetime.now(timezone.utc).isoformat(),
+                "file_size_bytes": len(content),
+                "content_length": len(content),
+                "content_hash": content_hash,
+                "format": "html"
+            }
+            
+        except Exception as e:
+            self.logger.warning(
+                "Failed to capture HTML file",
+                page_id=page_id,
+                error=str(e)
+            )
+            return None
+            
+    async def _save_snapshot(self, snapshot: DOMSnapshot, session_id: Optional[str] = None) -> None:
+        """Save snapshot to JSON file with optional session ID in filename."""
         try:
             timestamp = int(snapshot.timestamp)
-            filename = f"{snapshot.page_id}_{timestamp}.json"
+            
+            # Generate filename with session_id if available
+            if session_id:
+                filename = self._generate_filename(snapshot.page_id, session_id, timestamp)
+            else:
+                # Fallback to old format if no session_id provided
+                filename = f"{snapshot.page_id}_{timestamp}.json"
+            
             filepath = self.snapshot_dir / filename
             
             with open(filepath, 'w', encoding='utf-8') as f:
