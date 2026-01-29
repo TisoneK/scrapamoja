@@ -1,21 +1,32 @@
 """
-Browser Manager Lifecycle Example
+Browser Lifecycle Example Using BrowserManager
 
-This example demonstrates the complete browser manager lifecycle from initialization
-through shutdown, including navigation, action execution, and snapshot capture.
+Demonstrates the complete browser lifecycle using the project's BrowserManager API.
+This is the recommended pattern for all automation in this project.
 
-It serves as both a learning resource for new developers and a practical reference
-for common browser automation patterns.
+The example shows:
+1. Getting the global BrowserManager singleton
+2. Creating a BrowserSession with configuration
+3. Navigating to Google and executing a search
+4. Capturing page snapshots
+5. Closing the session through the manager
 
-Lifecycle Stages:
-1. Initialization: Create browser session with default configuration
-2. Navigation: Navigate to target URL and wait for page load
-3. Action Execution: Interact with page elements (search form)
-4. Snapshot Capture: Save page state for analysis or reference
-5. Cleanup: Gracefully close browser and release resources
+This illustrates the centralized session management, resilience handling,
+and resource monitoring provided by BrowserManager.
 
-The example includes comprehensive error handling for common failure scenarios
-and informative console output tracking progress through each stage.
+Usage:
+    python -m examples.browser_lifecycle_example
+
+Expected Output:
+    - Console output for each lifecycle stage
+    - Session initialization and resource tracking
+    - Snapshot JSON file saved to data/snapshots/
+    - Clean session shutdown with resource release
+
+Requirements:
+    - Python 3.11+
+    - Playwright installed: playwright install
+    - Write access to data/snapshots/
 """
 
 import asyncio
@@ -23,19 +34,17 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional
 
-try:
-    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
-except ImportError as e:
-    raise ImportError(
-        "Playwright is required for this example. "
-        "Install it with: pip install playwright && playwright install"
-    ) from e
+from src.browser import (
+    get_browser_manager,
+    BrowserConfiguration,
+    BrowserType,
+)
 
 
 class BrowserLifecycleExample:
-    """Demonstrates complete browser manager lifecycle."""
+    """Demonstrates browser lifecycle using the project's BrowserManager."""
     
     def __init__(
         self,
@@ -49,255 +58,236 @@ class BrowserLifecycleExample:
         Args:
             snapshot_dir: Directory to save snapshots
             headless: Whether to run browser in headless mode
-            timeout_ms: Timeout for navigation and actions (milliseconds)
+            timeout_ms: Timeout for page operations (milliseconds)
         """
         self.snapshot_dir = Path(snapshot_dir)
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
         self.headless = headless
         self.timeout_ms = timeout_ms
         
-        # State tracking
-        self.playwright = None
-        self.browser = None
-        self.context = None
+        # Browser manager and session
+        self.browser_manager = None
+        self.session = None
         self.page = None
+        
+        # Timing tracking
         self.start_time = None
         self.stage_times = {}
     
     async def initialize_browser(self) -> None:
         """
-        Stage 1: Initialize Browser
+        Stage 1: Initialize Browser Through BrowserManager
         
-        Creates a new browser instance with sensible defaults.
-        This stage validates that the browser can be launched and basic
-        configuration is applied correctly.
+        Demonstrates:
+        - Getting the global BrowserManager singleton
+        - Creating BrowserConfiguration with stealth and other settings
+        - Creating a BrowserSession through the manager
+        - Creating a page for automation
         
-        Error handling: Network errors or playwright installation issues
+        The BrowserManager handles:
+        - Session isolation and resource tracking
+        - Resilience and retry logic
+        - State persistence
+        - Resource monitoring
+        
+        Error handling: Manager initialization, session creation failures
         """
         stage_start = time.time()
-        print("\n" + "=" * 50)
-        print("STAGE 1: Initializing Browser")
-        print("=" * 50)
+        print("\n" + "=" * 60)
+        print("STAGE 1: Initialize Browser (via BrowserManager)")
+        print("=" * 60)
         
         try:
-            print("  • Starting Playwright instance...")
-            # Create playwright instance with context manager support
-            self.playwright = await async_playwright().start()
+            print("  * Getting global BrowserManager instance...")
+            # Get the singleton browser manager
+            # Handles initialization automatically
+            self.browser_manager = await get_browser_manager()
             
-            print("  • Launching browser with default configuration...")
-            # Launch browser with headless mode and basic stealth configuration
-            self.browser = await self.playwright.chromium.launch(
+            print("  * Creating BrowserConfiguration...")
+            # Create configuration with project defaults
+            # Includes stealth, proxy, resource limits, and other settings
+            config = BrowserConfiguration(
+                browser_type=BrowserType.CHROMIUM,
                 headless=self.headless,
-                # Basic anti-detection: disable blink features that expose automation
-                args=[
-                    "--disable-blink-features=AutomationControlled"
-                ]
+                # Stealth configuration is built-in to BrowserConfiguration
+                # It handles user-agent, viewport, locale, timezone, etc.
             )
             
-            print("  • Creating browser context...")
-            # Create context for tab isolation and state management
-            self.context = await self.browser.new_context(
-                # User agent to appear more human-like
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                locale="en-US",
-                timezone_id="America/New_York",
-                # Disable images to speed up loading (optional)
-                # extra_http_headers={"Accept-Language": "en-US,en;q=0.9"}
+            print("  * Creating browser session through manager...")
+            # Create a session through the manager
+            # The manager handles:
+            # - Session lifecycle management
+            # - Resilience and retry logic
+            # - Resource monitoring
+            # - State persistence
+            self.session = await self.browser_manager.create_session(
+                configuration=config
             )
             
-            print("  • Creating new page...")
-            # Create page for interaction
-            self.page = await self.context.new_page()
+            print(f"  * Creating page in session {self.session.session_id[:8]}...")
+            # Create a page for automation
+            # The session manages the browser instance
+            self.page = await self.session.create_page()
             
-            # Set default navigation timeout
+            # Set timeouts for page operations
             self.page.set_default_navigation_timeout(self.timeout_ms)
             self.page.set_default_timeout(self.timeout_ms)
             
             elapsed = time.time() - stage_start
             self.stage_times["initialization"] = elapsed
             
-            print(f"  ✓ Browser initialized successfully in {elapsed:.2f}s")
-            print(f"    - Browser type: Chromium (headless={self.headless})")
-            print(f"    - Page context created and ready for navigation")
+            print(f"  [PASS] Browser initialized successfully in {elapsed:.2f}s")
+            print(f"    - Session ID: {self.session.session_id[:8]}...")
+            print(f"    - Browser type: {config.browser_type.value}")
+            print(f"    - Headless: {self.headless}")
+            print(f"    - Session status: {self.session.status.value}")
             
-        except PlaywrightTimeoutError as e:
-            raise RuntimeError(
-                f"Browser initialization timeout after {self.timeout_ms}ms. "
-                "Check system resources and network connectivity."
-            ) from e
         except Exception as e:
             raise RuntimeError(
                 f"Browser initialization failed: {str(e)}. "
-                "Ensure Playwright is installed: playwright install"
+                "Check that BrowserManager is properly configured."
             ) from e
     
     async def navigate_to_google(self) -> None:
         """
-        Stage 2: Navigate to Google Homepage
+        Stage 2: Navigate to Google
         
-        Navigates to Google's homepage and waits for the page to load.
-        This stage validates that the browser can access external sites
-        and that basic navigation and page readiness detection works.
+        Demonstrates:
+        - Navigating through a page managed by BrowserSession
+        - Using wait conditions for reliable loading
+        - Verifying page state after navigation
         
-        Error handling: Network errors, timeout, page load failures
+        Error handling: Network timeouts, navigation failures
         """
         stage_start = time.time()
-        print("\n" + "=" * 50)
-        print("STAGE 2: Navigating to Google")
-        print("=" * 50)
+        print("\n" + "=" * 60)
+        print("STAGE 2: Navigate to Google")
+        print("=" * 60)
+        
+        url = "https://www.google.com"
         
         try:
-            print("  • Navigating to https://www.google.com...")
-            # Navigate with networkidle wait condition to ensure page is fully loaded
-            await self.page.goto(
-                "https://www.google.com",
-                wait_until="networkidle"  # Wait for network activity to settle
-            )
+            print(f"  * Navigating to {url}...")
+            # Navigate using the page from BrowserSession
+            # The page is a standard Playwright AsyncPage
+            await self.page.goto(url, wait_until="networkidle")
             
-            print("  • Waiting for page elements to be available...")
-            # Wait for search input to be visible and interactive
+            print("  * Waiting for search input...")
+            # Ensure search input is available
             await self.page.wait_for_selector(
-                "input[name='q']",  # Google's search input selector
+                "input[name='q']",
                 timeout=self.timeout_ms
             )
             
-            # Get page title and URL for verification
+            # Verify navigation
             title = await self.page.title()
-            url = self.page.url
+            current_url = self.page.url
             
             elapsed = time.time() - stage_start
             self.stage_times["navigation"] = elapsed
             
-            print(f"  ✓ Google homepage loaded successfully in {elapsed:.2f}s")
+            print(f"  [PASS] Navigation completed in {elapsed:.2f}s")
             print(f"    - Page title: {title}")
-            print(f"    - Current URL: {url}")
-            print(f"    - Search input element found and interactive")
+            print(f"    - Current URL: {current_url}")
             
-        except PlaywrightTimeoutError:
-            raise RuntimeError(
-                f"Navigation timeout after {self.timeout_ms}ms. "
-                "Google may be inaccessible or page load is slow. "
-                "Check network connectivity."
-            )
         except Exception as e:
             raise RuntimeError(
-                f"Navigation to Google failed: {str(e)}. "
-                "Google may be inaccessible from your location/network."
-            )
+                f"Navigation failed: {str(e)}. "
+                "Check internet connection and Google accessibility."
+            ) from e
     
     async def execute_search(self, query: str = "Playwright browser automation") -> None:
         """
         Stage 3: Execute Search Action
         
-        Submits a search query through Google's search form and waits for
-        results to load. This stage validates that the browser can interact
-        with page elements (fill inputs, submit forms) and detect page changes.
+        Demonstrates:
+        - Form interaction through Playwright
+        - Form submission
+        - Waiting for results to load
         
-        Error handling: Element not found, action timeouts, navigation failures
+        Error handling: Element not found, action timeouts
         """
         stage_start = time.time()
-        print("\n" + "=" * 50)
-        print("STAGE 3: Executing Search Action")
-        print("=" * 50)
+        print("\n" + "=" * 60)
+        print("STAGE 3: Execute Search Action")
+        print("=" * 60)
         
         try:
-            print(f"  • Filling search input with query: '{query}'...")
-            # Fill the search input field with our query
-            # This simulates human typing through Playwright's input simulation
+            print(f"  * Searching for: '{query}'...")
+            
+            # Fill the search input
             await self.page.fill("input[name='q']", query)
             
-            print("  • Submitting search form...")
-            # Submit the form by pressing Enter
-            # This simulates human behavior more realistically than click submit
+            print("  * Pressing Enter to submit search...")
+            # Submit by pressing Enter
             await self.page.press("input[name='q']", "Enter")
             
-            print("  • Waiting for search results to load...")
-            # Wait for navigation to complete - use longer timeout for search
+            print("  * Waiting for results to load...")
+            # Wait for search results page
             try:
                 await self.page.wait_for_load_state("networkidle", timeout=60000)
             except:
-                # If networkidle times out, try domcontentloaded instead
-                await self.page.wait_for_load_state("domcontentloaded", timeout=self.timeout_ms)
+                # Fallback if networkidle times out
+                await self.page.wait_for_load_state("domcontentloaded")
             
-            # Wait for results container to be visible (may be div#search or other selectors)
-            # Try multiple selectors as Google's structure can vary
-            selectors = [
-                "div#search",  # Standard results container
-                "div.g",       # Individual result item (fallback)
-                "div[data-sokoban-container]"  # Alternative structure
-            ]
-            
-            result_found = False
-            for selector in selectors:
+            # Verify results loaded
+            found_results = False
+            for selector in ["div#search", "div.g", "div[data-sokoban-container]"]:
                 try:
                     await self.page.wait_for_selector(selector, timeout=5000)
-                    result_found = True
+                    found_results = True
                     break
                 except:
-                    continue
+                    pass
             
-            if not result_found:
-                print("  • Warning: Could not find standard results selectors, continuing...")
-            
-            # Get result count estimate
-            results_text = ""
+            # Try to get result count
+            result_text = "Results loaded"
             try:
-                # Try to get "About X results" text
-                results_element = await self.page.query_selector(
-                    "div#result-stats"
-                )
-                if results_element:
-                    results_text = await results_element.text_content()
+                elem = await self.page.query_selector("div#result-stats")
+                if elem:
+                    result_text = await elem.text_content()
             except:
-                results_text = "Results loaded (count not available)"
+                pass
             
             elapsed = time.time() - stage_start
             self.stage_times["search"] = elapsed
             
-            print(f"  ✓ Search executed successfully in {elapsed:.2f}s")
-            print(f"    - Search query: {query}")
-            print(f"    - Results: {results_text}")
-            print(f"    - Results page loaded and ready for snapshot")
+            print(f"  [PASS] Search completed in {elapsed:.2f}s")
+            print(f"    - Query: {query}")
+            print(f"    - Results: {result_text}")
             
-        except PlaywrightTimeoutError:
-            raise RuntimeError(
-                f"Search execution timeout. "
-                "Results may not have loaded within the expected time. "
-                "This can happen if Google blocks automated requests."
-            )
         except Exception as e:
             raise RuntimeError(
-                f"Search execution failed: {str(e)}. "
-                "Page structure may have changed or element not found."
-            )
+                f"Search failed: {str(e)}. "
+                "Page structure may have changed."
+            ) from e
     
     async def capture_snapshot(self) -> Optional[str]:
         """
         Stage 4: Capture Page Snapshot
         
-        Captures the current page state and saves it as a JSON snapshot.
-        This stage demonstrates snapshot capture for later analysis,
-        debugging, or archival purposes.
+        Demonstrates:
+        - Capturing page properties through BrowserSession
+        - Creating snapshots with schema versioning
+        - Persisting snapshots to disk
         
-        Returns: Path to the saved snapshot file
-        Error handling: Write permission errors, serialization failures
+        Returns: Path to saved snapshot file
+        Error handling: File I/O errors, serialization failures
         """
         stage_start = time.time()
-        print("\n" + "=" * 50)
-        print("STAGE 4: Capturing Page Snapshot")
-        print("=" * 50)
+        print("\n" + "=" * 60)
+        print("STAGE 4: Capture Page Snapshot")
+        print("=" * 60)
         
         try:
-            print("  • Capturing page content...")
-            # Get page HTML content
+            print("  * Capturing page content...")
+            # Get page content through Playwright
             content = await self.page.content()
-            
-            print("  • Capturing page metadata...")
-            # Get page metadata
             title = await self.page.title()
             url = self.page.url
             
-            # Create snapshot object with metadata
+            print("  * Building snapshot metadata...")
+            # Create snapshot with schema versioning
             snapshot_data = {
                 "schema_version": "1.0",
                 "captured_at": datetime.now(timezone.utc).isoformat(),
@@ -306,171 +296,161 @@ class BrowserLifecycleExample:
                     "url": url,
                     "content_length": len(content)
                 },
-                "metadata": {
-                    "capture_duration_ms": int((time.time() - stage_start) * 1000),
-                    "stage_times": self.stage_times,
-                    "total_time_ms": int((time.time() - self.start_time) * 1000)
+                "session": {
+                    "session_id": self.session.session_id,
+                    "status": self.session.status.value,
+                    "browser_type": self.session.configuration.browser_type.value
+                },
+                "timing": {
+                    "initialization_ms": int(self.stage_times.get("initialization", 0) * 1000),
+                    "navigation_ms": int(self.stage_times.get("navigation", 0) * 1000),
+                    "search_ms": int(self.stage_times.get("search", 0) * 1000),
+                    "total_ms": int((time.time() - self.start_time) * 1000)
                 }
             }
             
-            # Generate snapshot filename with timestamp
+            # Generate timestamped filename
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            snapshot_filename = f"google_search_{timestamp}.json"
-            snapshot_path = self.snapshot_dir / snapshot_filename
+            filename = f"google_search_{timestamp}.json"
+            filepath = self.snapshot_dir / filename
             
-            print(f"  • Writing snapshot to {snapshot_path}...")
-            # Save snapshot metadata (content is too large to include directly)
-            with open(snapshot_path, "w", encoding="utf-8") as f:
+            print(f"  * Writing snapshot to {filepath}...")
+            # Write snapshot to disk
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(snapshot_data, f, indent=2)
             
             elapsed = time.time() - stage_start
             self.stage_times["snapshot"] = elapsed
             
-            print(f"  ✓ Snapshot captured and saved in {elapsed:.2f}s")
-            print(f"    - File: {snapshot_path}")
-            print(f"    - Page title: {title}")
-            print(f"    - Content size: {len(content)} bytes")
-            print(f"    - Metadata: {json.dumps(snapshot_data['metadata'], indent=6)}")
+            print(f"  [PASS] Snapshot saved in {elapsed:.2f}s")
+            print(f"    - File: {filepath.name}")
+            print(f"    - Title: {title}")
+            print(f"    - Size: {len(content)} bytes")
             
-            return str(snapshot_path)
+            return str(filepath)
             
         except PermissionError as e:
-            print(f"  ✗ Permission error writing snapshot: {str(e)}")
             raise RuntimeError(
-                f"Cannot write snapshot to {self.snapshot_dir}. "
-                "Check directory permissions: chmod u+w {self.snapshot_dir}"
+                f"Permission denied writing to {self.snapshot_dir}"
             ) from e
         except Exception as e:
-            print(f"  ✗ Snapshot capture failed: {str(e)}")
-            raise RuntimeError(
-                f"Snapshot capture failed: {str(e)}"
-            ) from e
+            raise RuntimeError(f"Snapshot capture failed: {str(e)}") from e
     
     async def cleanup(self) -> None:
         """
-        Stage 5: Cleanup and Shutdown
+        Stage 5: Cleanup and Close Session
         
-        Gracefully closes the browser and releases all resources.
-        This stage ensures proper resource cleanup even if errors occurred
-        in previous stages. Uses try/finally pattern for robustness.
+        Demonstrates:
+        - Proper session shutdown through BrowserManager
+        - Resource cleanup with error handling
+        - Manager handling of session lifecycle
+        
+        The BrowserManager handles:
+        - Page cleanup
+        - Browser process termination
+        - Resource monitoring cleanup
+        - State persistence
         """
-        stage_start = time.time()
-        print("\n" + "=" * 50)
-        print("STAGE 5: Cleaning Up")
-        print("=" * 50)
+        print("\n" + "=" * 60)
+        print("STAGE 5: Cleanup and Close Session")
+        print("=" * 60)
         
         try:
-            if self.page:
-                print("  • Closing page...")
-                await self.page.close()
+            stage_start = time.time()
             
-            if self.context:
-                print("  • Closing context...")
-                await self.context.close()
-            
-            if self.browser:
-                print("  • Closing browser...")
-                await self.browser.close()
-            
-            if self.playwright:
-                print("  • Stopping Playwright...")
-                await self.playwright.stop()
+            if self.session and self.browser_manager:
+                session_id = self.session.session_id
+                print(f"  * Closing session {session_id[:8]}...")
+                
+                # Close through the browser manager
+                # The manager handles:
+                # - Page cleanup
+                # - Browser closure
+                # - Resource release
+                # - Monitoring cleanup
+                await self.browser_manager.close_session(session_id)
             
             elapsed = time.time() - stage_start
             self.stage_times["cleanup"] = elapsed
             
-            print(f"  ✓ Cleanup completed in {elapsed:.2f}s")
+            print(f"  [PASS] Cleanup completed in {elapsed:.2f}s")
+            print("    - Session closed through BrowserManager")
             print("    - All resources released")
             print("    - Browser process terminated")
             
         except Exception as e:
-            print(f"  ✗ Error during cleanup: {str(e)}")
-            # Don't raise - cleanup should not fail the entire example
+            print(f"  [FAIL] Cleanup error: {str(e)}")
+            # Continue even if cleanup fails
+        
+        finally:
+            # Clear references
+            self.page = None
+            self.session = None
     
-    async def run(self) -> None:
+    async def run(self) -> bool:
         """
         Execute the complete browser lifecycle example.
         
-        Orchestrates all stages: initialization, navigation, search,
-        snapshot capture, and cleanup. Handles errors gracefully with
-        informative messages.
+        Orchestrates all stages and handles errors gracefully.
+        
+        Returns: True if successful, False otherwise
         """
-        print("\n" + "=" * 60)
-        print("BROWSER LIFECYCLE EXAMPLE")
-        print("=" * 60)
-        print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("\n" + "=" * 70)
+        print("BROWSER LIFECYCLE EXAMPLE - Using BrowserManager")
+        print("=" * 70)
+        print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         self.start_time = time.time()
-        snapshot_path = None
         
         try:
-            # Stage 1: Initialize
+            # Execute all stages
             await self.initialize_browser()
-            
-            # Stage 2: Navigate
             await self.navigate_to_google()
-            
-            # Stage 3: Execute action
             await self.execute_search()
+            snapshot_file = await self.capture_snapshot()
             
-            # Stage 4: Capture snapshot
-            snapshot_path = await self.capture_snapshot()
+            # Print summary
+            total_time = time.time() - self.start_time
+            
+            print("\n" + "=" * 70)
+            print("LIFECYCLE COMPLETED SUCCESSFULLY")
+            print("=" * 70)
+            print(f"Total execution time: {total_time:.2f}s\n")
+            print("Stage Breakdown:")
+            for stage, duration in self.stage_times.items():
+                stage_name = stage.replace("_", " ").title()
+                print(f"  {stage_name:20} {duration:7.2f}s")
+            print(f"  {'Total':20} {total_time:7.2f}s")
+            
+            if snapshot_file:
+                print(f"\nSnapshot saved to: {snapshot_file}")
+            
+            print("=" * 70 + "\n")
+            return True
             
         except RuntimeError as e:
-            # Runtime errors with helpful messages
-            print(f"\n✗ EXAMPLE FAILED: {str(e)}")
+            print(f"\n[FAIL] EXAMPLE FAILED: {str(e)}\n")
             return False
         except Exception as e:
-            # Unexpected errors
-            print(f"\n✗ UNEXPECTED ERROR: {str(e)}")
+            print(f"\n[FAIL] ERROR: {str(e)}\n")
+            import traceback
+            traceback.print_exc()
             return False
         finally:
-            # Stage 5: Always cleanup
             await self.cleanup()
-        
-        # Print summary
-        total_time = time.time() - self.start_time
-        print("\n" + "=" * 60)
-        print("EXAMPLE COMPLETED SUCCESSFULLY")
-        print("=" * 60)
-        print(f"Total execution time: {total_time:.2f}s")
-        print(f"\nStage timings:")
-        for stage, duration in self.stage_times.items():
-            print(f"  {stage:15} {duration:6.2f}s")
-        print(f"  {'total':15} {total_time:6.2f}s")
-        
-        if snapshot_path:
-            print(f"\nSnapshot saved to: {snapshot_path}")
-        
-        print("=" * 60 + "\n")
-        return True
 
 
 async def main():
-    """
-    Main entry point for the example.
-    
-    Creates an example instance and runs the complete lifecycle.
-    """
-    # Create example instance with default configuration
+    """Entry point for the example."""
     example = BrowserLifecycleExample(
         snapshot_dir="data/snapshots",
         headless=True,  # Set to False to see the browser
-        timeout_ms=30000  # 30 seconds
+        timeout_ms=30000
     )
     
-    # Run the complete lifecycle
     success = await example.run()
-    
-    # Exit with appropriate code
     exit(0 if success else 1)
 
 
 if __name__ == "__main__":
-    """
-    Run the example as a standalone script.
-    
-    Usage:
-        python examples/browser_lifecycle_example.py
-    """
     asyncio.run(main())
