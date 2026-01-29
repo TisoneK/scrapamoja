@@ -174,3 +174,101 @@ Expected behavior after fixes:
 2. **CRITICAL** - Bug #2 (Session ID None) - Blocks all session creation
 3. **HIGH** - Bug #3 (list_files) - Blocks session persistence
 4. **MEDIUM** - Bug #4 (CircuitBreaker await) - Resource leak
+
+---
+
+## Remaining Issues Observed (2026-01-29)
+
+These issues were observed when running the updated `examples/browser_lifecycle_example.py` after fixing the four critical bugs above. They should be addressed next.
+
+### Issue A: Navigation Timeout
+
+**Symptom:**
+```
+Navigation failed: Page.wait_for_selector: Timeout 30000ms exceeded.
+Call log:
+    - waiting for locator("input[name='q']") to be visible
+```
+
+**Context:**
+- Observed during Stage 2 (Navigate to Google).
+- Likely caused by network connectivity, regional blocking of Google, or a transient page structure / consent/redirect screen.
+
+**Impact:**
+- Prevents the example from completing end-to-end but is not a framework bug in the BrowserManager itself.
+
+**Next Steps / Mitigation:**
+- Verify network connectivity from CI/runner environment.
+- Add test-mode configuration to use a stable local test page (e.g., `examples/test_pages/google_stub.html`) for CI.
+- Add retry/backoff around page.wait_for_selector for robust tests.
+
+---
+
+### Issue B: Storage Interface Missing Methods
+
+**Symptom:**
+```
+ERROR: 'FileSystemStorageAdapter' object has no attribute 'store'
+WARNING: 'FileSystemStorageAdapter' object has no attribute 'delete'
+```
+
+**Context:**
+- Observed during session persistence and cleanup phases.
+- Persistence attempted in `BrowserSession` and failed; cleanup attempted at session close and failed.
+
+**Impact:**
+- Session persistence and cleanup features fail; leaves stale state in storage or prevents state recording.
+
+**Fix Required:**
+- Implement `store(key, value)` and `delete(key)` in `src/storage/adapter.py` for `FileSystemStorageAdapter`.
+- Ensure the adapter follows the storage adapter interface used elsewhere in the repo (check `get_storage_adapter()` usage sites for expected behaviors).
+
+---
+
+### Issue C: Asyncio Subprocess Deallocator Warning
+
+**Symptom:**
+```
+Exception ignored while calling deallocator <function BaseSubprocessTransport.__del__ ...>:
+    File ".../asyncio/base_subprocess.py", line 134, in __del__
+    File ".../asyncio/windows_utils.py", line 102, in fileno
+ValueError: I/O operation on closed pipe
+```
+
+**Context:**
+- Observed after session cleanup; related to the browser subprocess/proactor transport on Windows.
+
+**Impact:**
+- Unclean shutdown logs and potential resource issues on Windows runners.
+
+**Fix Required / Mitigation:**
+- Ensure Playwright browser subprocesses are closed before loop shutdown.
+- Guard __repr__/fileno calls or ensure pipes are checked for closed state before access.
+- Consider explicit subprocess handle close in session shutdown logic.
+
+---
+
+## Verification Steps
+
+Run the example and confirm these issues are resolved after fixes:
+
+```bash
+python -m examples.browser_lifecycle_example
+```
+
+Look for:
+- BrowserManager initialization logs
+- Session creation and page creation logs
+- Navigation to Google (or stub page) succeeds
+- Snapshot creation
+- Session cleanup completes with no storage adapter errors and no subprocess deallocator warnings
+
+---
+
+## New Recommended Tasks
+
+- Implement `store()` and `delete()` in `src/storage/adapter.py` for `FileSystemStorageAdapter` (HIGH)
+- Add a local test page stub and update the example to support `TEST_MODE` for CI (MED)
+- Harden session shutdown to ensure subprocess pipes are closed safely on Windows (MED)
+- Add an automated integration/regression test for the lifecycle example (MED)
+
