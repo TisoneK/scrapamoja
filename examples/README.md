@@ -46,26 +46,79 @@ python examples/browser_lifecycle_example.py
 **Expected output:**
 
 ```
-Browser Lifecycle Example
-=========================
+============================================================
+BROWSER LIFECYCLE EXAMPLE
+============================================================
+Started at: 2026-01-29 09:43:21
 
-Initializing browser...
-  ✓ Browser initialized in 2.1s
-  
-Navigating to Google...
-  ✓ Google homepage loaded in 1.5s
-  
-Executing search...
-  ✓ Search submitted in 0.8s
-  ✓ Results loaded in 2.3s
-  
-Capturing snapshot...
-  ✓ Snapshot saved to data/snapshots/[timestamp].json
-  
-Cleaning up...
-  ✓ Browser closed and resources released
+==================================================
+STAGE 1: Initializing Browser
+==================================================
+  • Starting Playwright instance...
+  • Launching browser with default configuration...
+  • Creating browser context...
+  • Creating new page...
+  ✓ Browser initialized successfully in 0.75s
+    - Browser type: Chromium (headless=True)
+    - Page context created and ready for navigation
 
-Completed in 6.7s
+==================================================
+STAGE 2: Navigating to Google
+==================================================
+  • Navigating to https://www.google.com...
+  • Waiting for page elements to be available...
+  ✓ Google homepage loaded successfully in 4.15s
+    - Page title: Google
+    - Current URL: https://www.google.com/
+    - Search input element found and interactive
+
+==================================================
+STAGE 3: Executing Search Action
+==================================================
+  • Filling search input with query: 'Playwright browser automation'...
+  • Submitting search form...
+  • Waiting for search results to load...
+  ✓ Search executed successfully in 15.09s
+    - Search query: Playwright browser automation
+    - Results page loaded and ready for snapshot
+
+==================================================
+STAGE 4: Capturing Page Snapshot
+==================================================
+  • Capturing page content...
+  • Capturing page metadata...
+  • Writing snapshot to data/snapshots/google_search_20260129_064341.json...
+  ✓ Snapshot captured and saved in 0.02s
+    - File: data/snapshots/google_search_20260129_064341.json
+    - Page title: Playwright browser automation - Google
+    - Content size: 88561 bytes
+
+==================================================
+STAGE 5: Cleaning Up
+==================================================
+  • Closing page...
+  • Closing context...
+  • Closing browser...
+  • Stopping Playwright...
+  ✓ Cleanup completed in 0.20s
+    - All resources released
+    - Browser process terminated
+
+============================================================
+EXAMPLE COMPLETED SUCCESSFULLY
+============================================================
+Total execution time: 20.21s
+
+Stage timings:
+  initialization    0.75s
+  navigation        4.15s
+  search           15.09s
+  snapshot          0.02s
+  cleanup           0.20s
+  total            20.21s
+
+Snapshot saved to: data/snapshots/google_search_20260129_064341.json
+============================================================
 ```
 
 ## Quick Start
