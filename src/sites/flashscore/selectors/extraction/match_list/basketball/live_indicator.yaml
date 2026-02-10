@@ -1,0 +1,23 @@
+description: "Live match indicator in match listing"
+confidence_threshold: 0.8
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".event__match .live-indicator"
+    weight: 1.0
+  - type: "css"
+    selector: "[data-testid='live-indicator']"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//div[contains(@class, 'live') and contains(@class, 'indicator')]"
+    weight: 0.8
+  - type: "css"
+    selector: ".live-indicator"
+    weight: 0.7
+  - type: "css"
+    selector: ".event__match--live"
+    weight: 0.6
+metadata:
+  wait_for_element: true
+  dom_state: "live"

@@ -1,0 +1,28 @@
+description: "Cookie consent dialog and accept button"
+confidence_threshold: 0.9
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: "#onetrust-accept-btn-handler"
+    weight: 1.0
+  - type: "css"
+    selector: ".ot-button-group"
+    weight: 0.9
+  - type: "css"
+    selector: ".ot-btn-container"
+    weight: 0.8
+  - type: "css"
+    selector: "#onetrust-pc-btn-handler"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//button[contains(text(), 'Accept All') or contains(text(), 'Accept')]"
+    weight: 0.6
+  - type: "css"
+    selector: ".cookie-consent-accept"
+    weight: 0.5
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  dom_state_indicators:
+    unknown: ["cookie", "consent", "privacy"]

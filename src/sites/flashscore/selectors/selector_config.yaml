@@ -1,0 +1,147 @@
+description: "Flashscore selector configuration with sport and status awareness"
+version: "1.0"
+base_url: "https://www.flashscore.com"
+
+# HTML structure references for different match states
+html_references:
+  live_match: "html_structure/match_page_live.html"
+  finished_match: "html_structure/match_page_finished.html"
+  scheduled_match: "html_structure/match_page_scheduled.html"
+
+# Sport-specific configurations
+sports:
+  basketball:
+    name: "Basketball"
+    path_segment: "basketball"
+    data_attributes:
+      sport_id: "3"
+    match_periods:
+      live: ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter", "Overtime", "Half Time"]
+      finished: ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter", "Overtime"]
+    score_format:
+      live: "current_score_with_periods"
+      finished: "final_score_with_periods"
+  
+  football:
+    name: "Football"
+    path_segment: "football"
+    data_attributes:
+      sport_id: "1"
+    match_periods:
+      live: ["1st Half", "2nd Half", "Half Time"]
+      finished: ["1st Half", "2nd Half"]
+    score_format:
+      live: "current_score"
+      finished: "final_score"
+
+# Match status detection patterns
+match_status_detection:
+  live:
+    indicators:
+      - "detailScore__live"
+      - "eventTime"
+      - "wcl-badgeLiveBet"
+    status_text: ["Live", "1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter", "Half Time", "Overtime"]
+  
+  finished:
+    indicators:
+      - "fixedHeaderDuel__detailStatus:contains('Finished')"
+      - "detailScore__status:contains('Finished')"
+    status_text: ["Finished", "After Overtime", "Walkover"]
+  
+  scheduled:
+    indicators:
+      - "duelParticipant__startTime"
+      - "detailScore__wrapper:not(.detailScore__live)"
+    status_text: ["Scheduled", "Postponed", "Cancelled"]
+
+# Navigation hierarchy
+navigation_hierarchy:
+  primary_tabs:
+    live: ["match", "h2h", "standings"]
+    finished: ["match", "odds", "h2h", "standings", "news", "video"]
+    scheduled: ["match", "h2h", "standings"]
+  
+  secondary_tabs:
+    live:
+      match: ["summary", "lineups", "match_history"]
+    finished:
+      match: ["summary", "player_stats", "stats", "lineups", "match_history"]
+      odds: ["home_away", "1x2", "over_under", "asian_handicap"]
+    scheduled:
+      match: ["summary", "lineups"]
+  
+  tertiary_tabs:
+    live:
+      odds: ["live_odds"]
+    finished:
+      odds: ["prematch_odds"]
+      summary: ["prematch_odds"]
+
+# Extraction data types by sport
+extraction_types:
+  basketball:
+    match_summary:
+      - "home_team"
+      - "away_team" 
+      - "score"
+      - "match_info"
+      - "venue"
+      - "referee"
+      - "attendance"
+      - "quarter_scores"
+    match_odds:
+      - "home_odds"
+      - "away_odds"
+      - "bookmaker"
+      - "odds_change"
+    match_stats:
+      - "field_goals_attempted"
+      - "field_goals_percentage"
+      - "total_rebounds"
+      - "assists"
+      - "personal_fouls"
+      - "steals"
+      - "turnovers"
+      - "blocks"
+  
+  football:
+    match_summary:
+      - "home_team"
+      - "away_team"
+      - "score"
+      - "match_info"
+      - "venue"
+      - "referee"
+      - "attendance"
+      - "half_time_score"
+    match_odds:
+      - "home_odds"
+      - "draw_odds"
+      - "away_odds"
+      - "bookmaker"
+      - "odds_change"
+    match_stats:
+      - "possession"
+      - "shots_on_target"
+      - "shots_total"
+      - "passes"
+      - "fouls"
+      - "corners"
+      - "offsides"
+
+# Selector loading strategy
+selector_loading:
+  strategy: "sport_status_aware"
+  fallback_order:
+    1: "sport_specific"
+    2: "status_specific" 
+    3: "generic"
+  cache_ttl: 3600  # 1 hour
+  
+# Error handling
+error_handling:
+  retry_attempts: 3
+  retry_delay: 1.0
+  fallback_selectors: true
+  log_failures: true

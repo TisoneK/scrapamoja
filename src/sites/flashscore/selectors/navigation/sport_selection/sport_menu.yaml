@@ -1,0 +1,20 @@
+description: "Main sports navigation menu"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".sports-menu"
+    weight: 1.0
+  - type: "css"
+    selector: "[data-testid='sports-menu']"
+    weight: 0.9
+  - type: "css"
+    selector: ".navigation__sports"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//nav[contains(@class, 'sports') or contains(@id, 'sports')]"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  required_for_navigation: true

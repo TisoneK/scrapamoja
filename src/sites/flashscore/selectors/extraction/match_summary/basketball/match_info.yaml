@@ -1,0 +1,20 @@
+description: "Match information (date, time, status) in match summary"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".duelParticipant__startTime div"
+    weight: 1.0
+  - type: "css"
+    selector: ".detailScore__status"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//div[contains(@class, 'duelParticipant__startTime')]//div"
+    weight: 0.8
+  - type: "css"
+    selector: "[data-testid='match-status']"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  tab_context: "summary"

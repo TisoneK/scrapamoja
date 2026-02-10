@@ -1,0 +1,203 @@
+# Match statistics tab selectors
+# This file contains selectors for the secondary match statistics tab
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-01-27T17:00:00Z"
+  description: "Match statistics tab selectors for detailed match analytics"
+
+context_defaults:
+  page_type: "match"
+  wait_strategy: "network_idle"
+  timeout: 10000
+  section: "tabs.secondary"
+
+validation_defaults:
+  required: false
+  type: "string"
+
+strategy_templates:
+  stat_item:
+    type: "css_selector"
+    parameters:
+      selector: ".stat-item, .stat, .metric"
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  stat_value:
+    type: "css_selector"
+    parameters:
+      selector: ".value, .stat-value, .number"
+    validation:
+      required: true
+      type: "string"
+    confidence:
+      threshold: 0.9
+
+selectors:
+  # Tab navigation
+  statistics_tab:
+    description: "Statistics tab button/link"
+    context: "match.tabs.secondary"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".tab-statistics, [data-tab='statistics'], #statistics-tab"
+        priority: 1
+      - type: "text_anchor"
+        parameters:
+          pattern: "Statistics, Stats, Analytics"
+        priority: 2
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  # Statistics sections
+  possession_stats:
+    description: "Possession statistics section"
+    context: "match.tabs.secondary.statistics"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".possession, .possession-stats, .ball-possession"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-stat-type"
+          value: "possession"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.7
+
+  shot_stats:
+    description: "Shot statistics section"
+    context: "match.tabs.secondary.statistics"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".shots, .shot-stats, .shooting"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "data-stat-type"
+          value: "shots"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.7
+
+  # Team statistics
+  home_team_stats:
+    description: "Home team detailed statistics"
+    context: "match.tabs.secondary.statistics"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".home-stats, .team-home-stats, .stats-home"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".statistics .home-team"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  away_team_stats:
+    description: "Away team detailed statistics"
+    context: "match.tabs.secondary.statistics"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".away-stats, .team-away-stats, .stats-away"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".statistics .away-team"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  # Individual statistics
+  possession_percentage:
+    description: "Possession percentage for a team"
+    context: "match.tabs.secondary.statistics"
+    strategies:
+      - template: "stat_value"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".possession-percentage, .possession-percent"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+  total_shots:
+    description: "Total shots for a team"
+    context: "match.tabs.secondary.statistics"
+    strategies:
+      - template: "stat_value"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".total-shots, .shots-total"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+  shots_on_target:
+    description: "Shots on target for a team"
+    context: "match.tabs.secondary.statistics"
+    strategies:
+      - template: "stat_value"
+        priority: 1
+      - type: "css_selector"
+        parameters:
+          selector: ".shots-on-target, .shots-target"
+        priority: 2
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.8
+
+  # Chart and visualization elements
+  statistics_chart:
+    description: "Statistics chart or visualization"
+    context: "match.tabs.secondary.statistics"
+    strategies:
+      - type: "css_selector"
+        parameters:
+          selector: ".chart, .graph, .visualization, .stats-chart"
+        priority: 1
+      - type: "attribute_match"
+        parameters:
+          attribute: "role"
+          value: "img"
+        priority: 2
+    validation:
+      required: false
+      type: "object"
+    confidence:
+      threshold: 0.6

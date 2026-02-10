@@ -1,0 +1,21 @@
+description: "Fourth quarter statistics"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".q4-stats"
+    weight: 1.0
+  - type: "css"
+    selector: ".quarter4-stats"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-quarter='4']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//div[contains(@class, 'quarter') and contains(@class, '4')]"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "q4"

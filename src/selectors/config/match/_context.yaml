@@ -1,0 +1,48 @@
+# Context defaults for match configurations
+# This file provides inheritance context for all match-related selectors
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-01-27T17:00:00Z"
+  description: "Context defaults for match selector configurations"
+
+context_defaults:
+  page_type: "match"
+  wait_strategy: "network_idle"
+  timeout: 10000
+
+validation_defaults:
+  required: false
+  type: "string"
+  min_length: 1
+
+strategy_templates:
+  match_element:
+    type: "css_selector"
+    parameters:
+      selector: ".match, .game, .fixture"
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  team_element:
+    type: "css_selector"
+    parameters:
+      selector: ".team, .side, .participant"
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.9
+
+  score_element:
+    type: "css_selector"
+    parameters:
+      selector: ".score, .result, .points"
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.8

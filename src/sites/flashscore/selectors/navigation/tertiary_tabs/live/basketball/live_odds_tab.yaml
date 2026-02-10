@@ -1,0 +1,22 @@
+description: "Live odds sub-tab for live matches"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "button[data-testid='wcl-tab']:contains('Live odds')"
+    weight: 1.0
+  - type: "xpath"
+    selector: "//button[contains(text(), 'Live odds')]"
+    weight: 0.9
+  - type: "css"
+    selector: ".wcl-tab_GS7ig:contains('Live odds')"
+    weight: 0.8
+  - type: "css"
+    selector: "button:contains('Live odds')"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  match_status: "live"
+  tab_context: "tertiary"

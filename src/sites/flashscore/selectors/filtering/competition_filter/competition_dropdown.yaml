@@ -1,0 +1,20 @@
+description: "Competition/league filter dropdown"
+confidence_threshold: 0.8
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".competition-dropdown"
+    weight: 1.0
+  - type: "css"
+    selector: "[data-testid='competition-filter']"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//select[contains(@class, 'competition') or contains(@name, 'league')]"
+    weight: 0.8
+  - type: "css"
+    selector: ".league-filter"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  required_for_navigation: false

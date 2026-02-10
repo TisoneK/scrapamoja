@@ -1,0 +1,39 @@
+# Context defaults for fixture configurations
+# This file provides inheritance context for all fixture-related selectors
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-01-27T17:00:00Z"
+  description: "Context defaults for fixture selector configurations"
+
+context_defaults:
+  page_type: "fixture"
+  wait_strategy: "network_idle"
+  timeout: 12000
+  section: "list"
+
+validation_defaults:
+  required: true
+  type: "string"
+  min_length: 1
+
+strategy_templates:
+  fixture_element:
+    type: "css_selector"
+    parameters:
+      selector: ".fixture, .game, .match-item"
+    validation:
+      required: true
+      type: "object"
+    confidence:
+      threshold: 0.8
+
+  team_score:
+    type: "css_selector"
+    parameters:
+      selector: ".score, .result, .points"
+    validation:
+      required: false
+      type: "string"
+    confidence:
+      threshold: 0.9

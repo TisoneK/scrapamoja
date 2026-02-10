@@ -1,0 +1,22 @@
+description: "Home/Away sub-tab in odds section"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "button[data-testid='wcl-tab'][data-selected='true']"
+    weight: 1.0
+  - type: "css"
+    selector: ".wcl-tabSelected_rHdTM"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//button[contains(text(), 'Home/Away')]"
+    weight: 0.8
+  - type: "css"
+    selector: "button:contains('Home/Away')"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  tab_context: "odds"
+  sub_tab_context: "home_away"

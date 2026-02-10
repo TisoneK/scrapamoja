@@ -1,0 +1,20 @@
+description: "Date picker for filtering matches by date"
+confidence_threshold: 0.8
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".date-picker"
+    weight: 1.0
+  - type: "css"
+    selector: "[data-testid='date-picker']"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//input[contains(@type, 'date') or contains(@class, 'date')]"
+    weight: 0.8
+  - type: "css"
+    selector: ".calendar-input"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  required_for_navigation: false

@@ -1,0 +1,23 @@
+description: "Home team name in match summary"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".event__participant--home"
+    weight: 1.0
+  - type: "css"
+    selector: ".homeTeam"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//div[contains(@class, 'home') and contains(@class, 'team')]"
+    weight: 0.8
+  - type: "css"
+    selector: "[data-testid='home-team']"
+    weight: 0.7
+  - type: "css"
+    selector: ".participant__home"
+    weight: 0.6
+metadata:
+  wait_for_element: true
+  tab_context: "summary"

@@ -1,0 +1,21 @@
+description: "Overtime statistics in Inc OT view"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".overtime-stats"
+    weight: 1.0
+  - type: "css"
+    selector: ".ot-statistics"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-testid='overtime-stats']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//div[contains(@class, 'overtime') and contains(@class, 'stats')]"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "inc_ot"

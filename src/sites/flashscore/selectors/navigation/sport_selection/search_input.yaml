@@ -1,0 +1,23 @@
+description: "Search input for sports"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "#search-window"
+    weight: 1.0
+  - type: "css"
+    selector: ".searchIcon"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-testid='wcl-icon-action-icon-search']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//input[contains(@class, 'search') or contains(@placeholder, 'Search')]"
+    weight: 0.7
+  - type: "css"
+    selector: ".header__button--search"
+    weight: 0.6
+metadata:
+  wait_for_element: true
+  required_for_navigation: false
