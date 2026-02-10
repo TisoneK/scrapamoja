@@ -166,24 +166,13 @@ influxdb/
 metrics/
 
 # Application specific
-data/storage/browser-states/
-data/logs/
-data/metrics/
-data/snapshots/
+data/
 logs/
 *.log
 temp/
 tmp/
 
 # Scrapamoja specific
-data/snapshots/**/*.json
-data/snapshots/**/*.html
-data/snapshots/**/*.png
-data/storage/**/*.json
-data/tab_contexts/
-data/thresholds.json
-data/indexes/
-data/browser_sessions/
 
 # OpenSpec and specification artifacts
 openspec/changes/archive/
