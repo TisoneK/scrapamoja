@@ -12,6 +12,9 @@ import argparse
 from ...scraper import FlashscoreScraper
 from ...selector_config import sports, match_status_detection
 from ..utils.output import OutputFormatter
+from src.browser import BrowserManager, BrowserConfiguration, BrowserType
+from src.selectors import get_selector_engine
+from tests.fixtures.browser_configs import CHROMIUM_HEADLESS_CONFIG
 
 
 class ScrapeCommand:
@@ -71,8 +74,20 @@ class ScrapeCommand:
             # Determine headless mode
             headless = args.headless and not args.no_headless
             
+            # Initialize browser manager and session
+            browser_manager = BrowserManager()
+            config = CHROMIUM_HEADLESS_CONFIG
+            config.headless = headless
+            
+            # Create browser session
+            session = await browser_manager.create_session(config)
+            page = await session.create_page()
+            
+            # Initialize selector engine
+            selector_engine = get_selector_engine()
+            
             # Initialize scraper
-            scraper = FlashscoreScraper(None, None)  # Will be initialized properly
+            scraper = FlashscoreScraper(page, selector_engine)
             
             # Navigate to site
             await scraper.navigate()
@@ -94,6 +109,9 @@ class ScrapeCommand:
                 await self._write_to_file(output, args.file)
             else:
                 print(output)
+            
+            # Cleanup
+            await browser_manager.close_session(session.session_id)
             
             return 0
             

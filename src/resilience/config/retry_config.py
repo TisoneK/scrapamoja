@@ -1,626 +1,464 @@
 """
-Retry Policy Configuration Management
+Retry Configuration Manager
 
-Manages retry policy configurations including default policies,
-custom policy creation, validation, and persistence.
+Manages centralized retry configuration with validation, loading, and hot-reload support.
 """
 
-import json
-from typing import Dict, Any, Optional, List
+import asyncio
+import os
 from pathlib import Path
+from typing import Dict, Any, Optional, Callable, List
+from dataclasses import dataclass, field
 from datetime import datetime
 
-from ..models.retry_policy import (
-    RetryPolicy, BackoffType, JitterType, RetryCondition,
-    DEFAULT_EXPONENTIAL_BACKOFF, AGGRESSIVE_RETRY, CONSERVATIVE_RETRY,
-    LINEAR_RETRY, FIXED_RETRY
-)
+import yaml
+from pydantic import BaseModel, Field, validator, ValidationError
+
 from ..logging.resilience_logger import get_logger
-from ..correlation import get_correlation_id
 from ..exceptions import RetryConfigurationError
 
 
-class RetryPolicyManager:
-    """Manages retry policy configurations."""
+logger = get_logger("retry_config")
+
+
+class RetryPolicyConfig(BaseModel):
+    """Retry policy configuration model."""
+    
+    id: str = Field(..., description="Unique identifier for retry policy")
+    name: str = Field(..., description="Human-readable name for policy")
+    description: Optional[str] = Field(None, description="Description of when and why to use this policy")
+    max_attempts: int = Field(..., gt=0, description="Maximum number of retry attempts")
+    backoff_type: str = Field(..., description="Type of backoff strategy")
+    base_delay: float = Field(..., ge=0.0, description="Base delay in seconds")
+    max_delay: float = Field(..., ge=0.0, description="Maximum delay in seconds")
+    jitter_type: Optional[str] = Field("none", description="Type of jitter to apply")
+    jitter_amount: Optional[float] = Field(0.1, ge=0.0, le=1.0, description="Amount of jitter to apply")
+    enable_circuit_breaker: Optional[bool] = Field(False, description="Whether to enable circuit breaker")
+    circuit_breaker_threshold: Optional[int] = Field(None, gt=0, description="Number of failures before opening circuit")
+    circuit_breaker_timeout: Optional[float] = Field(None, gt=0.0, description="Time in seconds before attempting to close circuit")
+    retryable_exceptions: Optional[List[str]] = Field(None, description="List of exception types that should trigger retry")
+    enabled: bool = Field(True, description="Whether policy is active")
+    
+    @validator('backoff_type')
+    def validate_backoff_type(cls, v):
+        """Validate backoff type is one of the allowed values."""
+        allowed_types = ['exponential', 'linear', 'fixed', 'immediate']
+        if v not in allowed_types:
+            raise ValueError(f"backoff_type must be one of {allowed_types}, got '{v}'")
+        return v
+    
+    @validator('jitter_type')
+    def validate_jitter_type(cls, v):
+        """Validate jitter type is one of the allowed values."""
+        if v is None:
+            return v
+        allowed_types = ['none', 'full', 'decorrelated', 'equal']
+        if v not in allowed_types:
+            raise ValueError(f"jitter_type must be one of {allowed_types}, got '{v}'")
+        return v
+    
+    @validator('max_delay')
+    def validate_max_delay(cls, v, values):
+        """Validate max_delay is greater than or equal to base_delay."""
+        if 'base_delay' in values and v < values['base_delay']:
+            raise ValueError(f"max_delay ({v}) must be greater than or equal to base_delay ({values['base_delay']})")
+        return v
+
+
+class GlobalDefaultsConfig(BaseModel):
+    """Global defaults configuration model."""
+    
+    jitter_type: Optional[str] = Field("none", description="Default jitter type")
+    jitter_amount: Optional[float] = Field(0.1, ge=0.0, le=1.0, description="Default jitter amount")
+    enable_circuit_breaker: Optional[bool] = Field(False, description="Default circuit breaker enabled")
+
+
+class SubsystemMappingsConfig(BaseModel):
+    """Subsystem mappings configuration model."""
+    
+    browser: Optional[Dict[str, Any]] = Field(None, description="Browser subsystem mappings")
+    navigation: Optional[Dict[str, Any]] = Field(None, description="Navigation subsystem mappings")
+    telemetry: Optional[Dict[str, Any]] = Field(None, description="Telemetry subsystem mappings")
+
+
+class RetryConfiguration(BaseModel):
+    """Complete retry configuration model."""
+    
+    version: str = Field(..., description="Configuration schema version")
+    global_defaults: Optional[GlobalDefaultsConfig] = Field(None, description="Global defaults applied to all policies")
+    policies: Dict[str, RetryPolicyConfig] = Field(default_factory=dict, description="Retry policies")
+    subsystem_mappings: Optional[SubsystemMappingsConfig] = Field(None, description="Subsystem mappings to policy IDs")
+    
+    @validator('version')
+    def validate_version(cls, v):
+        """Validate configuration version."""
+        # Simple version validation - can be enhanced later
+        if not v or not isinstance(v, str):
+            raise ValueError("version must be a non-empty string")
+        return v
+
+
+@dataclass
+class ConfigChange:
+    """Represents a configuration change event."""
+    
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    old_config: Optional[Dict[str, Any]] = None
+    new_config: Optional[Dict[str, Any]] = None
+    change_type: str = "unknown"  # 'added', 'modified', 'removed', 'reloaded'
+
+
+class RetryConfigManager:
+    """Manages retry configuration with loading, validation, and hot-reload support."""
     
     def __init__(self, config_path: Optional[str] = None):
         """
-        Initialize retry policy manager.
+        Initialize retry configuration manager.
         
         Args:
-            config_path: Path to configuration file
+            config_path: Path to configuration file. If None, uses default path.
         """
-        self.config_path = config_path or "./retry_policies.json"
-        self.logger = get_logger("retry_policy_manager")
-        self.policies: Dict[str, RetryPolicy] = {}
-        self._load_default_policies()
-        self._load_policies_from_file()
-    
-    def _load_default_policies(self) -> None:
-        """Load default retry policies."""
-        default_policies = [
-            DEFAULT_EXPONENTIAL_BACKOFF,
-            AGGRESSIVE_RETRY,
-            CONSERVATIVE_RETRY,
-            LINEAR_RETRY,
-            FIXED_RETRY
-        ]
+        self.config_path = Path(config_path) if config_path else self._get_default_config_path()
+        self._config: Optional[RetryConfiguration] = None
+        self._change_callbacks: List[Callable[[ConfigChange], None]] = []
+        self._watcher_task: Optional[asyncio.Task] = None
+        self._last_modified: Optional[float] = None
+        self._debounce_delay: float = 1.0  # Debounce file changes within 1 second
         
-        for policy in default_policies:
-            self.policies[policy.id] = policy
-        
-        self.logger.info(
-            f"Loaded {len(default_policies)} default retry policies",
-            event_type="default_policies_loaded",
-            correlation_id=get_correlation_id(),
-            context={
-                "policy_count": len(default_policies),
-                "policy_names": [p.name for p in default_policies]
-            },
-            component="retry_policy_manager"
+        logger.info(
+            "Retry config manager initialized",
+            config_path=str(self.config_path),
+            component="retry_config_manager"
         )
     
-    def _load_policies_from_file(self) -> None:
-        """Load retry policies from configuration file."""
-        config_path = Path(self.config_path)
+    def _get_default_config_path(self) -> Path:
+        """Get default configuration file path."""
+        # Default to src/config/retry_config.yaml relative to repository root
+        repo_root = Path(__file__).parent.parent.parent.parent
+        return repo_root / "src" / "config" / "retry_config.yaml"
+    
+    async def load_config(self) -> RetryConfiguration:
+        """
+        Load retry configuration from file.
         
-        if not config_path.exists():
-            self.logger.info(
-                f"Retry policy config file not found: {self.config_path}",
-                event_type="config_file_not_found",
-                correlation_id=get_correlation_id(),
-                context={"config_path": self.config_path},
-                component="retry_policy_manager"
+        Returns:
+            Validated retry configuration
+            
+        Raises:
+            RetryConfigurationError: If configuration is invalid or cannot be loaded
+        """
+        try:
+            logger.info(
+                "Loading retry configuration",
+                config_path=str(self.config_path),
+                component="retry_config_manager"
             )
+            
+            if not self.config_path.exists():
+                raise RetryConfigurationError(
+                    f"Configuration file not found: {self.config_path}",
+                    context={"config_path": str(self.config_path)}
+                )
+            
+            with open(self.config_path, 'r') as f:
+                config_data = yaml.safe_load(f)
+            
+            # Validate configuration
+            config = RetryConfiguration(**config_data)
+            
+            # Apply global defaults to policies
+            if config.global_defaults:
+                self._apply_global_defaults(config)
+            
+            self._config = config
+            
+            logger.info(
+                "Retry configuration loaded successfully",
+                version=config.version,
+                policies_count=len(config.policies),
+                component="retry_config_manager"
+            )
+            
+            return config
+            
+        except yaml.YAMLError as e:
+            raise RetryConfigurationError(
+                f"Failed to parse YAML configuration: {e}",
+                context={"config_path": str(self.config_path), "error": str(e)}
+            )
+        except ValidationError as e:
+            raise RetryConfigurationError(
+                f"Configuration validation failed: {e}",
+                context={"config_path": str(self.config_path), "validation_errors": str(e)}
+            )
+        except Exception as e:
+            raise RetryConfigurationError(
+                f"Failed to load configuration: {e}",
+                context={"config_path": str(self.config.path), "error": str(e)}
+            )
+    
+    def _apply_global_defaults(self, config: RetryConfiguration) -> None:
+        """Apply global defaults to policies that don't specify them."""
+        if not config.global_defaults:
             return
         
-        try:
-            with open(config_path, 'r') as f:
-                config_data = json.load(f)
+        for policy_id, policy in config.policies.items():
+            # Apply jitter defaults
+            if policy.jitter_type is None and config.global_defaults.jitter_type:
+                policy.jitter_type = config.global_defaults.jitter_type
+            if policy.jitter_amount is None and config.global_defaults.jitter_amount is not None:
+                policy.jitter_amount = config.global_defaults.jitter_amount
             
-            policies_data = config_data.get("policies", [])
-            loaded_count = 0
-            
-            for policy_data in policies_data:
-                try:
-                    policy = RetryPolicy.from_dict(policy_data)
-                    self.policies[policy.id] = policy
-                    loaded_count += 1
-                except Exception as e:
-                    self.logger.error(
-                        f"Failed to load retry policy: {str(e)}",
-                        event_type="policy_load_error",
-                        correlation_id=get_correlation_id(),
-                        context={
-                            "policy_data": policy_data,
-                            "error": str(e)
-                        },
-                        component="retry_policy_manager"
-                    )
-            
-            self.logger.info(
-                f"Loaded {loaded_count} retry policies from file",
-                event_type="policies_loaded_from_file",
-                correlation_id=get_correlation_id(),
-                context={
-                    "config_path": self.config_path,
-                    "loaded_count": loaded_count,
-                    "total_policies": len(self.policies)
-                },
-                component="retry_policy_manager"
-            )
-            
-        except Exception as e:
-            self.logger.error(
-                f"Failed to load retry policy config file: {str(e)}",
-                event_type="config_file_load_error",
-                correlation_id=get_correlation_id(),
-                context={
-                    "config_path": self.config_path,
-                    "error": str(e)
-                },
-                component="retry_policy_manager"
-            )
+            # Apply circuit breaker defaults
+            if policy.enable_circuit_breaker is None and config.global_defaults.enable_circuit_breaker is not None:
+                policy.enable_circuit_breaker = config.global_defaults.enable_circuit_breaker
     
-    def save_policies_to_file(self) -> None:
-        """Save all retry policies to configuration file."""
-        config_path = Path(self.config_path)
-        
-        # Ensure directory exists
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        try:
-            config_data = {
-                "version": "1.0",
-                "updated_at": datetime.utcnow().isoformat(),
-                "policies": [policy.to_dict() for policy in self.policies.values()]
-            }
-            
-            with open(config_path, 'w') as f:
-                json.dump(config_data, f, indent=2)
-            
-            self.logger.info(
-                f"Saved {len(self.policies)} retry policies to file",
-                event_type="policies_saved_to_file",
-                correlation_id=get_correlation_id(),
-                context={
-                    "config_path": self.config_path,
-                    "policy_count": len(self.policies)
-                },
-                component="retry_policy_manager"
-            )
-            
-        except Exception as e:
-            self.logger.error(
-                f"Failed to save retry policy config file: {str(e)}",
-                event_type="config_file_save_error",
-                correlation_id=get_correlation_id(),
-                context={
-                    "config_path": self.config_path,
-                    "error": str(e)
-                },
-                component="retry_policy_manager"
-            )
-    
-    def create_policy(
-        self,
-        name: str,
-        description: str,
-        max_attempts: int = 3,
-        base_delay: float = 1.0,
-        max_delay: float = 300.0,
-        multiplier: float = 2.0,
-        backoff_type: BackoffType = BackoffType.EXPONENTIAL,
-        jitter_type: JitterType = JitterType.FULL,
-        jitter_factor: float = 0.1,
-        retry_conditions: Optional[List[RetryCondition]] = None,
-        retryable_error_codes: Optional[List[int]] = None,
-        retryable_error_patterns: Optional[List[str]] = None,
-        enable_circuit_breaker: bool = False,
-        circuit_breaker_threshold: int = 5,
-        circuit_breaker_timeout: float = 60.0,
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> str:
+    async def reload_config(self) -> None:
         """
-        Create a new retry policy.
+        Reload configuration from file.
         
-        Args:
-            name: Policy name
-            description: Policy description
-            max_attempts: Maximum number of retry attempts
-            base_delay: Base delay in seconds
-            max_delay: Maximum delay in seconds
-            multiplier: Backoff multiplier
-            backoff_type: Type of backoff strategy
-            jitter_type: Type of jitter strategy
-            jitter_factor: Jitter factor (0.0-1.0)
-            retry_conditions: Conditions for retrying
-            retryable_error_codes: HTTP status codes that are retryable
-            retryable_error_patterns: Error patterns that are retryable
-            enable_circuit_breaker: Enable circuit breaker
-            circuit_breaker_threshold: Circuit breaker failure threshold
-            circuit_breaker_timeout: Circuit breaker timeout in seconds
-            metadata: Additional metadata
-            
-        Returns:
-            ID of created policy
+        Raises:
+            RetryConfigurationError: If configuration is invalid
         """
-        policy = RetryPolicy(
-            name=name,
-            description=description,
-            max_attempts=max_attempts,
-            base_delay=base_delay,
-            max_delay=max_delay,
-            multiplier=multiplier,
-            backoff_type=backoff_type,
-            jitter_type=jitter_type,
-            jitter_factor=jitter_factor,
-            retry_conditions=retry_conditions or [RetryCondition.TRANSIENT_FAILURE],
-            retryable_error_codes=retryable_error_codes or [],
-            retryable_error_patterns=retryable_error_patterns or [],
-            enable_circuit_breaker=enable_circuit_breaker,
-            circuit_breaker_threshold=circuit_breaker_threshold,
-            circuit_breaker_timeout=circuit_breaker_timeout,
-            metadata=metadata or {}
+        logger.info(
+            "Reloading retry configuration",
+            config_path=str(self.config_path),
+            component="retry_config_manager"
         )
         
-        self.policies[policy.id] = policy
+        old_config = self._config
+        new_config = await self.load_config()
         
-        self.logger.info(
-            f"Created retry policy: {policy.name}",
-            event_type="policy_created",
-            correlation_id=get_correlation_id(),
-            context={
-                "policy_id": policy.id,
-                "policy_name": policy.name,
-                "max_attempts": policy.max_attempts,
-                "backoff_type": policy.backoff_type.value,
-                "jitter_type": policy.jitter_type.value
-            },
-            component="retry_policy_manager"
+        # Notify callbacks of configuration change
+        change = ConfigChange(
+            timestamp=datetime.utcnow(),
+            old_config=old_config.dict() if old_config else None,
+            new_config=new_config.dict(),
+            change_type="reloaded"
         )
         
-        return policy.id
-    
-    def get_policy(self, policy_id: str) -> Optional[RetryPolicy]:
-        """
-        Get a retry policy by ID.
+        await self._notify_change_callbacks(change)
         
-        Args:
-            policy_id: Policy identifier
-            
-        Returns:
-            Retry policy or None if not found
-        """
-        return self.policies.get(policy_id)
-    
-    def get_policy_by_name(self, name: str) -> Optional[RetryPolicy]:
-        """
-        Get a retry policy by name.
-        
-        Args:
-            name: Policy name
-            
-        Returns:
-            Retry policy or None if not found
-        """
-        for policy in self.policies.values():
-            if policy.name == name:
-                return policy
-        return None
-    
-    def list_policies(self) -> List[Dict[str, Any]]:
-        """
-        List all available retry policies.
-        
-        Returns:
-            List of policy information
-        """
-        return [
-            {
-                "id": policy.id,
-                "name": policy.name,
-                "description": policy.description,
-                "max_attempts": policy.max_attempts,
-                "base_delay": policy.base_delay,
-                "max_delay": policy.max_delay,
-                "multiplier": policy.multiplier,
-                "backoff_type": policy.backoff_type.value,
-                "jitter_type": policy.jitter_type.value,
-                "jitter_factor": policy.jitter_factor,
-                "enabled": policy.enabled,
-                "created_at": policy.created_at.isoformat(),
-                "updated_at": policy.updated_at.isoformat(),
-                "is_default": policy.id in [
-                    DEFAULT_EXPONENTIAL_BACKOFF.id,
-                    AGGRESSIVE_RETRY.id,
-                    CONSERVATIVE_RETRY.id,
-                    LINEAR_RETRY.id,
-                    FIXED_RETRY.id
-                ]
-            }
-            for policy in self.policies.values()
-        ]
-    
-    def update_policy(
-        self,
-        policy_id: str,
-        updates: Dict[str, Any]
-    ) -> bool:
-        """
-        Update an existing retry policy.
-        
-        Args:
-            policy_id: Policy identifier
-            updates: Updates to apply
-            
-        Returns:
-            True if updated successfully, False if not found
-        """
-        policy = self.policies.get(policy_id)
-        if not policy:
-            return False
-        
-        # Don't allow updating default policies
-        if policy_id in [
-            DEFAULT_EXPONENTIAL_BACKOFF.id,
-            AGGRESSIVE_RETRY.id,
-            CONSERVATIVE_RETRY.id,
-            LINEAR_RETRY.id,
-            FIXED_RETRY.id
-        ]:
-            raise RetryConfigurationError("Cannot update default retry policies")
-        
-        # Apply updates
-        for key, value in updates.items():
-            if hasattr(policy, key):
-                setattr(policy, key, value)
-        
-        policy.updated_at = datetime.utcnow()
-        
-        self.logger.info(
-            f"Updated retry policy: {policy.name}",
-            event_type="policy_updated",
-            correlation_id=get_correlation_id(),
-            context={
-                "policy_id": policy_id,
-                "policy_name": policy.name,
-                "updates": updates
-            },
-            component="retry_policy_manager"
+        logger.info(
+            "Retry configuration reloaded successfully",
+            version=new_config.version,
+            component="retry_config_manager"
         )
-        
-        return True
     
-    def delete_policy(self, policy_id: str) -> bool:
+    async def watch_config(self, callback: Optional[Callable[[ConfigChange], None]] = None) -> None:
         """
-        Delete a retry policy.
+        Watch configuration file for changes and trigger callback.
         
         Args:
-            policy_id: Policy identifier
+            callback: Callback function to invoke on changes
             
-        Returns:
-            True if deleted successfully, False if not found
+        Raises:
+            RetryConfigurationError: If file watching cannot be started
         """
-        if policy_id not in self.policies:
-            return False
+        if callback:
+            self._change_callbacks.append(callback)
         
-        # Don't allow deleting default policies
-        if policy_id in [
-            DEFAULT_EXPONENTIAL_BACKOFF.id,
-            AGGRESSIVE_RETRY.id,
-            CONSERVATIVE_RETRY.id,
-            LINEAR_RETRY.id,
-            FIXED_RETRY.id
-        ]:
-            raise RetryConfigurationError("Cannot delete default retry policies")
+        # Start watching task
+        self._watcher_task = asyncio.create_task(self._watch_config_loop())
         
-        policy = self.policies[policy_id]
-        del self.policies[policy_id]
-        
-        self.logger.info(
-            f"Deleted retry policy: {policy.name}",
-            event_type="policy_deleted",
-            correlation_id=get_correlation_id(),
-            context={
-                "policy_id": policy_id,
-                "policy_name": policy.name
-            },
-            component="retry_policy_manager"
+        logger.info(
+            "Configuration file watching started",
+            config_path=str(self.config_path),
+            component="retry_config_manager"
         )
-        
-        return True
     
-    def enable_policy(self, policy_id: str) -> bool:
-        """
-        Enable a retry policy.
-        
-        Args:
-            policy_id: Policy identifier
-            
-        Returns:
-            True if enabled successfully, False if not found
-        """
-        policy = self.policies.get(policy_id)
-        if not policy:
-            return False
-        
-        policy.enabled = True
-        policy.updated_at = datetime.utcnow()
-        
-        self.logger.info(
-            f"Enabled retry policy: {policy.name}",
-            event_type="policy_enabled",
-            correlation_id=get_correlation_id(),
-            context={
-                "policy_id": policy_id,
-                "policy_name": policy.name
-            },
-            component="retry_policy_manager"
-        )
-        
-        return True
-    
-    def disable_policy(self, policy_id: str) -> bool:
-        """
-        Disable a retry policy.
-        
-        Args:
-            policy_id: Policy identifier
-            
-        Returns:
-            True if disabled successfully, False if not found
-        """
-        policy = self.policies.get(policy_id)
-        if not policy:
-            return False
-        
-        policy.enabled = False
-        policy.updated_at = datetime.utcnow()
-        
-        self.logger.info(
-            f"Disabled retry policy: {policy.name}",
-            event_type="policy_disabled",
-            correlation_id=get_correlation_id(),
-            context={
-                "policy_id": policy_id,
-                "policy_name": policy.name
-            },
-            component="retry_policy_manager"
-        )
-        
-        return True
-    
-    def validate_policy(self, policy_config: Dict[str, Any]) -> List[str]:
-        """
-        Validate a retry policy configuration.
-        
-        Args:
-            policy_config: Policy configuration to validate
-            
-        Returns:
-            List of validation errors (empty if valid)
-        """
-        errors = []
-        
-        # Required fields
-        required_fields = ["name", "description", "max_attempts"]
-        for field in required_fields:
-            if field not in policy_config:
-                errors.append(f"Missing required field: {field}")
-        
-        # Validate max_attempts
-        if "max_attempts" in policy_config:
-            max_attempts = policy_config["max_attempts"]
-            if not isinstance(max_attempts, int) or max_attempts < 1:
-                errors.append("max_attempts must be a positive integer")
-        
-        # Validate delays
-        for delay_field in ["base_delay", "max_delay"]:
-            if delay_field in policy_config:
-                delay = policy_config[delay_field]
-                if not isinstance(delay, (int, float)) or delay < 0:
-                    errors.append(f"{delay_field} must be a non-negative number")
-        
-        # Validate multiplier
-        if "multiplier" in policy_config:
-            multiplier = policy_config["multiplier"]
-            if not isinstance(multiplier, (int, float)) or multiplier <= 0:
-                errors.append("multiplier must be a positive number")
-        
-        # Validate jitter_factor
-        if "jitter_factor" in policy_config:
-            jitter_factor = policy_config["jitter_factor"]
-            if not isinstance(jitter_factor, (int, float)) or not (0 <= jitter_factor <= 1):
-                errors.append("jitter_factor must be between 0 and 1")
-        
-        # Validate backoff_type
-        if "backoff_type" in policy_config:
-            backoff_type = policy_config["backoff_type"]
+    async def _watch_config_loop(self) -> None:
+        """Watch configuration file for changes."""
+        while True:
             try:
-                BackoffType(backoff_type)
-            except ValueError:
-                errors.append(f"Invalid backoff_type: {backoff_type}")
-        
-        # Validate jitter_type
-        if "jitter_type" in policy_config:
-            jitter_type = policy_config["jitter_type"]
-            try:
-                JitterType(jitter_type)
-            except ValueError:
-                errors.append(f"Invalid jitter_type: {jitter_type}")
-        
-        # Validate retry_conditions
-        if "retry_conditions" in policy_config:
-            retry_conditions = policy_config["retry_conditions"]
-            if not isinstance(retry_conditions, list):
-                errors.append("retry_conditions must be a list")
-            else:
-                for condition in retry_conditions:
-                    try:
-                        RetryCondition(condition)
-                    except ValueError:
-                        errors.append(f"Invalid retry_condition: {condition}")
-        
-        return errors
+                # Check if file exists and get modification time
+                if self.config_path.exists():
+                    current_modified = self.config_path.stat().st_mtime
+                    
+                    # Check if file was modified (with debounce)
+                    if self._last_modified is None or \
+                       (current_modified - self._last_modified) >= self._debounce_delay:
+                        
+                        # File was modified, reload configuration
+                        logger.info(
+                            "Configuration file modified, reloading",
+                            config_path=str(self.config_path),
+                            component="retry_config_manager"
+                        )
+                        
+                        await self.reload_config()
+                        self._last_modified = current_modified
+                
+                # Wait before checking again
+                await asyncio.sleep(1.0)
+                
+            except asyncio.CancelledError:
+                logger.info(
+                    "Configuration file watching stopped",
+                    component="retry_config_manager"
+                )
+                break
+            except Exception as e:
+                logger.error(
+                    f"Error watching configuration file: {e}",
+                    config_path=str(self.config_path),
+                    component="retry_config_manager"
+                )
+                await asyncio.sleep(5.0)  # Wait before retrying
     
-    def clone_policy(
-        self,
-        policy_id: str,
-        new_name: str,
-        new_description: Optional[str] = None
-    ) -> str:
+    async def _notify_change_callbacks(self, change: ConfigChange) -> None:
+        """Notify all registered callbacks of configuration change."""
+        for callback in self._change_callbacks:
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(change)
+                else:
+                    callback(change)
+            except Exception as e:
+                logger.error(
+                    f"Error in configuration change callback: {e}",
+                    component="retry_config_manager"
+                )
+    
+    def register_change_callback(self, callback: Callable[[ConfigChange], None]) -> None:
         """
-        Clone an existing retry policy.
+        Register a callback to be invoked on configuration changes.
         
         Args:
-            policy_id: Policy identifier to clone
-            new_name: Name for the new policy
-            new_description: Description for the new policy
+            callback: Callback function to invoke on changes
+        """
+        self._change_callbacks.append(callback)
+        logger.info(
+            "Configuration change callback registered",
+            callbacks_count=len(self._change_callbacks),
+            component="retry_config_manager"
+        )
+    
+    async def stop_watching(self) -> None:
+        """Stop watching configuration file."""
+        if self._watcher_task and not self._watcher_task.done():
+            self._watcher_task.cancel()
+            try:
+                await self._watcher_task
+            except asyncio.CancelledError:
+                pass
+            
+            logger.info(
+                "Configuration file watching stopped",
+                component="retry_config_manager"
+            )
+    
+    @property
+    def config(self) -> Optional[RetryConfiguration]:
+        """Get current configuration."""
+        return self._config
+    
+    @property
+    def policies(self) -> Dict[str, RetryPolicyConfig]:
+        """Get all retry policies."""
+        return self._config.policies if self._config else {}
+    
+    @property
+    def subsystem_mappings(self) -> Optional[SubsystemMappingsConfig]:
+        """Get subsystem mappings."""
+        return self._config.subsystem_mappings if self._config else None
+    
+    def get_policy(self, policy_id: str) -> Optional[RetryPolicyConfig]:
+        """
+        Get a specific retry policy by ID.
+        
+        Args:
+            policy_id: ID of retry policy
             
         Returns:
-            ID of cloned policy
+            Retry policy configuration or None if not found
         """
-        original_policy = self.policies.get(policy_id)
-        if not original_policy:
-            raise RetryConfigurationError(f"Policy not found: {policy_id}")
-        
-        # Create clone
-        cloned_policy = original_policy.clone(
-            name=new_name,
-            description=new_description or f"Clone of {original_policy.name}"
-        )
-        
-        self.policies[cloned_policy.id] = cloned_policy
-        
-        self.logger.info(
-            f"Cloned retry policy: {original_policy.name} -> {cloned_policy.name}",
-            event_type="policy_cloned",
-            correlation_id=get_correlation_id(),
-            context={
-                "original_policy_id": policy_id,
-                "original_policy_name": original_policy.name,
-                "cloned_policy_id": cloned_policy.id,
-                "cloned_policy_name": cloned_policy.name
-            },
-            component="retry_policy_manager"
-        )
-        
-        return cloned_policy.id
+        return self._config.policies.get(policy_id) if self._config else None
     
-    def get_policy_statistics(self) -> Dict[str, Any]:
+    def get_subsystem_policy(self, subsystem: str, operation: str) -> Optional[str]:
         """
-        Get statistics about retry policies.
+        Get retry policy ID for a subsystem operation.
         
+        Args:
+            subsystem: Subsystem name (browser, navigation, telemetry)
+            operation: Operation name within subsystem
+            
         Returns:
-            Policy statistics
+            Policy ID or None if not found
         """
-        total_policies = len(self.policies)
-        enabled_policies = sum(1 for p in self.policies.values() if p.enabled)
-        disabled_policies = total_policies - enabled_policies
+        if not self._config or not self._config.subsystem_mappings:
+            return None
         
-        # Count by backoff type
-        backoff_counts = {}
-        for policy in self.policies.values():
-            backoff_type = policy.backoff_type.value
-            backoff_counts[backoff_type] = backoff_counts.get(backoff_type, 0) + 1
+        subsystem_mappings = getattr(self._config.subsystem_mappings, subsystem, None)
+        if not subsystem_mappings:
+            return None
         
-        # Count by jitter type
-        jitter_counts = {}
-        for policy in self.policies.values():
-            jitter_type = policy.jitter_type.value
-            jitter_counts[jitter_type] = jitter_counts.get(jitter_type, 0) + 1
+        return subsystem_mappings.get(operation)
+    
+    async def shutdown(self) -> None:
+        """Shutdown configuration manager gracefully."""
+        await self.stop_watching()
         
-        return {
-            "total_policies": total_policies,
-            "enabled_policies": enabled_policies,
-            "disabled_policies": disabled_policies,
-            "backoff_type_distribution": backoff_counts,
-            "jitter_type_distribution": jitter_counts,
-            "default_policies": 5,
-            "custom_policies": total_policies - 5
-        }
+        logger.info(
+            "Retry config manager shutdown",
+            component="retry_config_manager"
+        )
 
 
-# Global retry policy manager instance
-_retry_policy_manager = RetryPolicyManager()
+# Global configuration manager instance
+_config_manager: Optional[RetryConfigManager] = None
 
 
-def get_retry_policy_manager() -> RetryPolicyManager:
-    """Get the global retry policy manager instance."""
-    return _retry_policy_manager
+async def get_config_manager(config_path: Optional[str] = None) -> RetryConfigManager:
+    """
+    Get or create the global retry configuration manager.
+    
+    Args:
+        config_path: Path to configuration file. If None, uses default path.
+        
+    Returns:
+        Retry configuration manager instance
+    """
+    global _config_manager
+    
+    if _config_manager is None:
+        _config_manager = RetryConfigManager(config_path)
+        await _config_manager.load_config()
+    
+    return _config_manager
 
 
-def get_retry_policy(policy_id: str) -> Optional[RetryPolicy]:
-    """Get a retry policy using the global manager."""
-    return _retry_policy_manager.get_policy(policy_id)
+async def reload_config() -> None:
+    """
+    Reload the global retry configuration.
+    
+    Raises:
+        RetryConfigurationError: If configuration is invalid
+    """
+    global _config_manager
+    
+    if _config_manager is None:
+        raise RetryConfigurationError(
+            "Configuration manager not initialized. Call get_config_manager() first.",
+            context={}
+        )
+    
+    await _config_manager.reload_config()
 
 
-def create_retry_policy(**kwargs) -> str:
-    """Create a retry policy using the global manager."""
-    return _retry_policy_manager.create_policy(**kwargs)
-
-
-def list_retry_policies() -> List[Dict[str, Any]]:
-    """List all retry policies using the global manager."""
-    return _retry_policy_manager.list_policies()
+async def watch_config(callback: Optional[Callable[[ConfigChange], None]] = None) -> None:
+    """
+    Watch the global retry configuration for changes.
+    
+    Args:
+        callback: Callback function to invoke on changes
+    """
+    global _config_manager
+    
+    if _config_manager is None:
+        raise RetryConfigurationError(
+            "Configuration manager not initialized. Call get_config_manager() first.",
+            context={}
+        )
+    
+    await _config_manager.watch_config(callback)

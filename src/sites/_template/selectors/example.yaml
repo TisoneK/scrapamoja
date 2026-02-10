@@ -1,0 +1,17 @@
+# Example selector configuration
+# Copy and modify this file to create your own selectors
+
+description: "Search input field"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: "input[type='search']"
+    weight: 1.0
+  - type: "xpath"
+    selector: "//input[@type='search']"
+    weight: 0.8
+  - type: "text"
+    selector: "Search"
+    weight: 0.6

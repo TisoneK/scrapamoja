@@ -130,6 +130,43 @@ class FailureClassifier:
         self.compiled_permanent_patterns = [
             re.compile(pattern, re.IGNORECASE) for pattern in self.permanent_patterns
         ]
+        
+        # Subsystem-specific custom classification rules
+        self.subsystem_rules: Dict[str, Dict[str, Any]] = {}
+    
+    def register_subsystem_rules(
+        self,
+        subsystem: str,
+        transient_patterns: Optional[List[str]] = None,
+        permanent_patterns: Optional[List[str]] = None,
+        retryable_exceptions: Optional[List[str]] = None
+    ) -> None:
+        """
+        Register custom classification rules for a subsystem.
+        
+        Args:
+            subsystem: Subsystem name (browser, navigation, telemetry)
+            transient_patterns: Custom transient failure patterns (regex)
+            permanent_patterns: Custom permanent failure patterns (regex)
+            retryable_exceptions: Custom retryable exception types
+        """
+        self.subsystem_rules[subsystem] = {
+            "transient_patterns": transient_patterns or [],
+            "permanent_patterns": permanent_patterns or [],
+            "retryable_exceptions": retryable_exceptions or []
+        }
+    
+    def get_subsystem_rules(self, subsystem: str) -> Dict[str, Any]:
+        """
+        Get custom classification rules for a subsystem.
+        
+        Args:
+            subsystem: Subsystem name
+            
+        Returns:
+            Dictionary of custom rules or empty dict if not found
+        """
+        return self.subsystem_rules.get(subsystem, {})
     
     def classify_failure(
         self,
@@ -148,6 +185,43 @@ class FailureClassifier:
         """
         error_message = str(error).lower()
         error_type_name = type(error).__name__.lower()
+        
+        # Check subsystem-specific rules first
+        if context and "subsystem" in context:
+            subsystem = context.get("subsystem")
+            subsystem_rules = self.get_subsystem_rules(subsystem)
+            
+            # Check custom retryable exceptions
+            if subsystem_rules.get("retryable_exceptions"):
+                retryable_exceptions = subsystem_rules["retryable_exceptions"]
+                if any(exc in error_type_name for exc in retryable_exceptions):
+                    return (
+                        FailureType.TRANSIENT,
+                        self._determine_category(error, context),
+                        self._determine_severity(error, context, is_permanent=False)
+                    )
+            
+            # Check custom transient patterns
+            if subsystem_rules.get("transient_patterns"):
+                transient_patterns = subsystem_rules["transient_patterns"]
+                for pattern in transient_patterns:
+                    if re.search(pattern, error_message):
+                        return (
+                            FailureType.TRANSIENT,
+                            self._determine_category(error, context),
+                            self._determine_severity(error, context, is_permanent=False)
+                        )
+            
+            # Check custom permanent patterns
+            if subsystem_rules.get("permanent_patterns"):
+                permanent_patterns = subsystem_rules["permanent_patterns"]
+                for pattern in permanent_patterns:
+                    if re.search(pattern, error_message):
+                        return (
+                            FailureType.PERMANENT,
+                            self._determine_category(error, context),
+                            self._determine_severity(error, context, is_permanent=True)
+                        )
         
         # Check for permanent patterns first (more specific)
         if self._matches_permanent_patterns(error_message, error_type_name):

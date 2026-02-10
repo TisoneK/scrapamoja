@@ -1,0 +1,27 @@
+name: issue_list_item
+description: "Individual issue item in issues list"
+selector_type: hybrid
+confidence_threshold: 0.7
+strategies:
+  - type: attribute
+    selector: ".js-issue-row"
+    weight: 0.9
+  - type: semantic
+    selector: "div[id*='issue_']"
+    weight: 0.8
+  - type: attribute
+    selector: ".issue-item"
+    weight: 0.7
+  - type: semantic
+    selector: "tr.js-issue-row"
+    weight: 0.6
+validation_rules:
+  - type: existence
+    required: true
+  - type: attribute_exists
+    attribute: "id"
+    required: true
+  - type: text_pattern
+    pattern: ".*issue_.*"
+    attribute: "id"
+    required: false

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Search Stub</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background-color: #fff;
+        }
+        form { 
+            margin: 20px 0; 
+        }
+        input[type="text"] { 
+            width: 300px; 
+            padding: 8px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            font-size: 16px;
+        }
+        button { 
+            padding: 8px 16px; 
+            background-color: #4285f4; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #357ae8;
+        }
+        h1 {
+            color: #4285f4;
+            font-size: 24px;
+        }
+        .search-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <h1>Google Search Stub</h1>
+        <p>This is a test page for browser lifecycle example navigation.</p>
+        
+        <form>
+            <input name="q" type="text" placeholder="Search Google or type a URL" autofocus>
+            <button type="submit">Google Search</button>
+        </form>
+        
+        <div id="results"></div>
+    </div>
+    
+    <script>
+        // Simple form handling for testing
+        document.querySelector('form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const input = document.querySelector('input[name="q"]');
+            if (input.value) {
+                const results = document.getElementById('results');
+                results.innerHTML = '<p>Search submitted for: ' + input.value + '</p>';
+                results.style.color = '#4285f4';
+                results.style.fontWeight = 'bold';
+            }
+        });
+    </script>
+</body>
+</html>

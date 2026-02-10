@@ -1,0 +1,26 @@
+name: search_input
+description: "GitHub search input field"
+selector_type: hybrid
+confidence_threshold: 0.9
+strategies:
+  - type: attribute
+    selector: "input[data-testid='search-input']"
+    weight: 0.9
+  - type: attribute
+    selector: "input[name='q']"
+    weight: 0.8
+  - type: semantic
+    selector: "#search-form input[type='text']"
+    weight: 0.7
+  - type: attribute
+    selector: ".header-search-input"
+    weight: 0.6
+validation_rules:
+  - type: existence
+    required: true
+  - type: attribute_exists
+    attribute: "name"
+    required: true
+  - type: attribute_exists
+    attribute: "placeholder"
+    required: true

@@ -1,0 +1,23 @@
+name: repository_list
+description: "Repository list items in search results or repository listings"
+selector_type: hybrid
+confidence_threshold: 0.7
+strategies:
+  - type: attribute
+    selector: "[data-testid='results-list'] > div"
+    weight: 0.9
+  - type: semantic
+    selector: "div[data-repository-hovercards-enabled]"
+    weight: 0.8
+  - type: attribute
+    selector: ".repo-list-item"
+    weight: 0.7
+  - type: semantic
+    selector: "article[data-hpc]"
+    weight: 0.6
+validation_rules:
+  - type: existence
+    required: true
+  - type: text_pattern
+    pattern: ".*[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+.*"
+    required: false

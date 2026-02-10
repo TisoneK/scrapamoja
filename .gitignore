@@ -135,6 +135,14 @@ dmypy.json
 *.swo
 *~
 
+# Windsurf and AI tools
+.windsurf/workspace/
+.windsurf/cache/
+.windsurf/logs/
+.windsurf/sessions/
+.kilocode/cache/
+.kilocode/logs/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -147,6 +155,14 @@ test-results/
 playwright/.cache/
 browser-profiles/
 user-data-dir/
+ms-playwright/
+
+# InfluxDB and metrics
+*.db
+*.sqlite
+*.sqlite3
+influxdb/
+metrics/
 
 # Application specific
 data/storage/browser-states/
@@ -158,6 +174,37 @@ logs/
 temp/
 tmp/
 
+# Scrapamoja specific
+data/snapshots/**/*.json
+data/snapshots/**/*.html
+data/snapshots/**/*.png
+data/storage/**/*.json
+data/tab_contexts/
+data/thresholds.json
+data/indexes/
+data/browser_sessions/
+
+# OpenSpec and specification artifacts
+openspec/changes/archive/
+openspec/specs/**/*.md
+specs/**/*.md
+!specs/README.md
+
+# Template and CLI artifacts
+template-cli
+.template-cache/
+
+# Documentation build artifacts
+docs/**/build/
+docs/**/_build/
+docs/**/node_modules/
+
+# Test artifacts and temporary files
+test_*.py
+test_*_real.py
+debug_*.py
+*_real.py
+
 # Configuration secrets
 .env.local
 .env.production
@@ -165,6 +212,19 @@ config/secrets/
 *.key
 *.pem
 *.crt
+config/local_*.yaml
+config/production_*.yaml
+
+# Specify and memory management
+.specify/memory/
+.specify/cache/
+
+# AI assistant and development tools
+.claude/
+.aider/
+.cursor/
+*ai-chat*
+*assistant-response*
 
 # Temporary files
 *.tmp

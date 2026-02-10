@@ -11,6 +11,9 @@ from typing import Dict, Any
 from ...scraper import FlashscoreScraper
 from ...selector_config import sports, match_status_detection
 from ..utils.output import OutputFormatter
+from src.browser import BrowserManager, BrowserConfiguration, BrowserType
+from src.selectors import get_selector_engine
+from tests.fixtures.browser_configs import CHROMIUM_HEADLESS_CONFIG
 
 
 class TestCommand:
@@ -75,8 +78,20 @@ class TestCommand:
         """Test navigation functionality."""
         print(f"Testing navigation for {args.sport} {args.status} matches...")
         
+        # Initialize browser manager and session
+        browser_manager = BrowserManager()
+        config = CHROMIUM_HEADLESS_CONFIG
+        config.headless = True
+        
+        # Create browser session
+        session = await browser_manager.create_session(config)
+        page = await session.create_page()
+        
+        # Initialize selector engine
+        selector_engine = get_selector_engine()
+        
         # Initialize scraper
-        scraper = FlashscoreScraper(None, None)  # Will be initialized properly
+        scraper = FlashscoreScraper(page, selector_engine)
         
         # Test navigation flow
         test_results = {
@@ -138,6 +153,9 @@ class TestCommand:
         formatter = OutputFormatter()
         output = formatter.format(test_results, 'json')
         print(output)
+        
+        # Cleanup
+        await browser_manager.close_session(session.session_id)
         
         # Return success if no errors
         has_errors = any(

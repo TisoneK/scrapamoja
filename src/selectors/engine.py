@@ -347,6 +347,47 @@ class SelectorEngine(ISelectorEngine):
         # Get metrics from performance monitor
         return self._performance_monitor.get_metrics(selector_name)
     
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get selector engine statistics."""
+        try:
+            # Get basic statistics
+            total_selectors = len(self._selector_registry)
+            registered_selectors = list(self._selector_registry.keys())
+            
+            # Get performance statistics
+            stats = {
+                "total_selectors": total_selectors,
+                "registered_selectors": registered_selectors,
+                "engine_type": "SelectorEngine",
+                "strategies_loaded": len(self._strategy_factory.list_strategies()),
+                "performance_monitor_active": self._performance_monitor is not None,
+                "validation_engine_active": self._validation_engine is not None
+            }
+            
+            # Add performance metrics if available
+            if self._performance_monitor:
+                try:
+                    # Get top performers and underperformers
+                    top_performers = self._performance_monitor.get_top_performers(5)
+                    underperformers = self._performance_monitor.get_underperformers(5)
+                    
+                    stats.update({
+                        "top_performers": top_performers,
+                        "underperformers": underperformers,
+                        "performance_tracking": True
+                    })
+                except Exception as e:
+                    stats["performance_tracking"] = False
+                    stats["performance_error"] = str(e)
+            
+            return stats
+            
+        except Exception as e:
+            return {
+                "error": f"Failed to get statistics: {str(e)}",
+                "total_selectors": len(self._selector_registry) if hasattr(self, '_selector_registry') else 0
+            }
+    
     async def register_selector(self, selector: SemanticSelector) -> bool:
         """Register a new selector definition."""
         try:
@@ -612,10 +653,33 @@ class SelectorEngine(ISelectorEngine):
         """Initialize common strategy patterns."""
         # Register strategy factory
         common_strategies = [
-            {"type": "text_anchor", "id": "default_text_anchor", "priority": 1},
-            {"type": "attribute_match", "id": "default_attribute_match", "priority": 2},
-            {"type": "dom_relationship", "id": "default_dom_relationship", "priority": 3},
-            {"type": "role_based", "id": "default_role_based", "priority": 4}
+            {
+                "type": "text_anchor", 
+                "id": "default_text_anchor", 
+                "priority": 1,
+                "anchor_text": "text",
+                "case_sensitive": False
+            },
+            {
+                "type": "attribute_match", 
+                "id": "default_attribute_match", 
+                "priority": 2,
+                "attribute": "href",
+                "value_pattern": ".*"
+            },
+            {
+                "type": "dom_relationship", 
+                "id": "default_dom_relationship", 
+                "priority": 3,
+                "relationship_type": "child",
+                "parent_selector": "div.parent"
+            },
+            {
+                "type": "role_based", 
+                "id": "default_role_based", 
+                "priority": 4,
+                "role": "button"
+            }
         ]
         
         for strategy_config in common_strategies:

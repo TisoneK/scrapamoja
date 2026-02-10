@@ -1,0 +1,59 @@
+"""
+Flow implementation for {{ metadata.name }} template.
+
+This module provides navigation and interaction flows for {{ metadata.site_domain }}.
+"""
+
+import logging
+from typing import Dict, Any, Optional
+from src.sites.base.template.flow import BaseFlow
+
+logger = logging.getLogger(__name__)
+
+
+class MainFlow(BaseFlow):
+    """
+    Main flow for {{ metadata.name }} template.
+    
+    This flow handles the primary navigation and interaction patterns
+    for {{ metadata.site_domain }}.
+    """
+    
+    def __init__(self, page, selector_engine):
+        """
+        Initialize main flow.
+        
+        Args:
+            page: Playwright page instance
+            selector_engine: Selector engine instance
+        """
+        super().__init__(page, selector_engine)
+        self.flow_name = "main_flow"
+        self.description = "Main navigation flow for {{ metadata.name }}"
+    
+    async def execute(self, **kwargs) -> Dict[str, Any]:
+        """
+        Execute the main flow.
+        
+        Args:
+            **kwargs: Flow parameters
+            
+        Returns:
+            Dict[str, Any]: Flow execution results
+        """
+        try:
+            # Implementation will be added based on specific requirements
+            return {
+                "flow": self.flow_name,
+                "success": True,
+                "data": {},
+                "message": "Main flow executed successfully"
+            }
+        
+        except Exception as e:
+            logger.error(f"Error in main flow: {e}")
+            return {
+                "flow": self.flow_name,
+                "success": False,
+                "error": str(e)
+            }

@@ -1,0 +1,26 @@
+name: repository_list_item
+description: "Individual repository item within a repository list"
+selector_type: hybrid
+confidence_threshold: 0.7
+strategies:
+  - type: attribute
+    selector: "h2 a[href*='/']"
+    weight: 0.9
+  - type: semantic
+    selector: "h3 a"
+    weight: 0.8
+  - type: attribute
+    selector: ".v-align-middle"
+    weight: 0.7
+  - type: semantic
+    selector: "a[itemprop='name codeRepository']"
+    weight: 0.6
+validation_rules:
+  - type: existence
+    required: true
+  - type: attribute_exists
+    attribute: "href"
+    required: true
+  - type: text_pattern
+    pattern: "[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+"
+    required: true
