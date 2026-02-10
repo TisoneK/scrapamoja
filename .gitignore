@@ -140,6 +140,8 @@ dmypy.json
 .kilocode/
 .specify/
 .FullName/
+openspec/
+specs/
 
 # OS
 .DS_Store
