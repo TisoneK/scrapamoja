@@ -136,12 +136,10 @@ dmypy.json
 *~
 
 # Windsurf and AI tools
-.windsurf/workspace/
-.windsurf/cache/
-.windsurf/logs/
-.windsurf/sessions/
-.kilocode/cache/
-.kilocode/logs/
+.windsurf/
+.kilocode/
+.specify/
+.FullName/
 
 # OS
 .DS_Store
