@@ -94,9 +94,9 @@ class EnhancedSiteScraper(ABC):
             self._execution_context = ComponentContext(
                 page=self.page,
                 selector_engine=self.selector_engine,
-                config_manager=self.config_manager,
-                di_container=self.di_container,
-                site_id=self.site_id,
+                navigation_state={},
+                session_data={},
+                correlation_id=f"{self.site_id}_{datetime.utcnow().timestamp()}",
                 environment=self.environment.value
             )
             

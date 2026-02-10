@@ -13,8 +13,37 @@ class FlashscoreFlow(BaseFlow):
     
     async def open_home(self):
         """Navigate to Flashscore home page."""
-        await self.page.goto("https://www.flashscore.com")
-        await self.page.wait_for_load_state('networkidle')
+        await self.page.goto("https://www.flashscore.com", wait_until="domcontentloaded")
+        
+        # Wait for main content to be present using selector system
+        try:
+            from src.selectors.context import DOMContext
+            from datetime import datetime
+            from src.observability.logger import get_logger
+            
+            logger = get_logger("flashscore.flow")
+            
+            dom_context = DOMContext(
+                page=self.page,
+                tab_context="flashscore_extraction",
+                url=self.page.url,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Try to resolve the main content selector
+            main_content_result = await self.selector_engine.resolve("match_items", dom_context)
+            if main_content_result and main_content_result.element_info:
+                logger.info("Main content found using selector engine")
+            else:
+                # Wait for any match element as fallback
+                await self.page.wait_for_selector('.event__match', timeout=5000)
+        except Exception as e:
+            logger.error(f"Selector engine error: {e}")
+            # Final fallback: wait for any match element
+            try:
+                await self.page.wait_for_selector('.event__match', timeout=3000)
+            except:
+                pass  # Continue anyway
         
         # Handle cookie consent if present
         await self._handle_cookie_consent()
@@ -67,7 +96,7 @@ class FlashscoreFlow(BaseFlow):
                 football_link = await self.selector_engine.find(self.page, selector_name)
                 if football_link:
                     await football_link.click()
-                    await self.page.wait_for_load_state('networkidle')
+                    await self.page.wait_for_timeout(2000)
                     break
             except Exception:
                 continue
@@ -86,7 +115,7 @@ class FlashscoreFlow(BaseFlow):
                 live_link = await self.selector_engine.find(self.page, selector_name)
                 if live_link:
                     await live_link.click()
-                    await self.page.wait_for_load_state('networkidle')
+                    await self.page.wait_for_timeout(2000)
                     break
             except Exception:
                 continue
@@ -109,7 +138,7 @@ class FlashscoreFlow(BaseFlow):
         match_element = await self.selector_engine.find(self.page, "match_item", match_identifier)
         if match_element:
             await match_element.click()
-            await self.page.wait_for_load_state('networkidle')
+            await self.page.wait_for_timeout(2000)
     
     async def scroll_to_matches(self):
         """Scroll to the matches section."""
@@ -133,8 +162,37 @@ class FlashscoreFlow(BaseFlow):
     async def navigate_to_live_games(self, sport_path: str):
         """Navigate to live games for a specific sport."""
         # First navigate to the sport
-        await self.page.goto(f"https://www.flashscore.com/{sport_path}/")
-        await self.page.wait_for_load_state('networkidle')
+        await self.page.goto(f"https://www.flashscore.com/{sport_path}/", wait_until="domcontentloaded")
+        
+        # Wait for the main content container to be present using selector system
+        try:
+            from src.selectors.context import DOMContext
+            from datetime import datetime
+            from src.observability.logger import get_logger
+            
+            logger = get_logger("flashscore.flow")
+            
+            dom_context = DOMContext(
+                page=self.page,
+                tab_context="flashscore_extraction",
+                url=self.page.url,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Try to resolve the main content selector
+            main_content_result = await self.selector_engine.resolve("match_items", dom_context)
+            if main_content_result and main_content_result.element_info:
+                logger.info("Main content found using selector engine")
+            else:
+                # Wait for any match element as fallback
+                await self.page.wait_for_selector('.event__match', timeout=5000)
+        except Exception as e:
+            logger.error(f"Selector engine error: {e}")
+            # Final fallback: wait for any match element
+            try:
+                await self.page.wait_for_selector('.event__match', timeout=3000)
+            except:
+                pass  # Continue anyway
         
         # Then filter for live games
         await self.navigate_to_live_matches()
@@ -143,7 +201,17 @@ class FlashscoreFlow(BaseFlow):
         """Navigate to finished games for a specific sport."""
         # First navigate to the sport
         await self.page.goto(f"https://www.flashscore.com/{sport_path}/")
-        await self.page.wait_for_load_state('networkidle')
+        await self.page.wait_for_load_state('domcontentloaded')
+        
+        # Wait for the main content container to be present using selector system
+        try:
+            await self.page.wait_for_selector('.container__liveTableWrapper', timeout=10000)
+        except:
+            # Fallback: use selector engine to find match items
+            try:
+                await self.selector_engine.find(self.page, "match_items")
+            except:
+                await self.page.wait_for_timeout(2000)  # Final fallback
         
         # Try to find finished games filter
         finished_selectors = [
@@ -157,7 +225,11 @@ class FlashscoreFlow(BaseFlow):
                 finished_link = await self.selector_engine.find(self.page, selector_name)
                 if finished_link:
                     await finished_link.click()
-                    await self.page.wait_for_load_state('networkidle')
+                    # Wait for match items to reload
+                    try:
+                        await self.selector_engine.find(self.page, "match_items")
+                    except:
+                        await self.page.wait_for_timeout(1000)
                     break
             except Exception:
                 continue
@@ -166,7 +238,17 @@ class FlashscoreFlow(BaseFlow):
         """Navigate to scheduled games for a specific sport."""
         # First navigate to the sport
         await self.page.goto(f"https://www.flashscore.com/{sport_path}/")
-        await self.page.wait_for_load_state('networkidle')
+        await self.page.wait_for_load_state('domcontentloaded')
+        
+        # Wait for the main content container to be present using selector system
+        try:
+            await self.page.wait_for_selector('.container__liveTableWrapper', timeout=10000)
+        except:
+            # Fallback: use selector engine to find match items
+            try:
+                await self.selector_engine.find(self.page, "match_items")
+            except:
+                await self.page.wait_for_timeout(2000)  # Final fallback
         
         # Try to find scheduled games filter
         scheduled_selectors = [
@@ -180,7 +262,11 @@ class FlashscoreFlow(BaseFlow):
                 scheduled_link = await self.selector_engine.find(self.page, selector_name)
                 if scheduled_link:
                     await scheduled_link.click()
-                    await self.page.wait_for_load_state('networkidle')
+                    # Wait for match items to reload
+                    try:
+                        await self.selector_engine.find(self.page, "match_items")
+                    except:
+                        await self.page.wait_for_timeout(1000)
                     break
             except Exception:
                 continue

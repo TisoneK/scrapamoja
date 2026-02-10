@@ -1,0 +1,27 @@
+description: "Main content container for match listings"
+confidence_threshold: 0.8
+timeout: 10.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".container__liveTableWrapper"
+    weight: 1.0
+  - type: "css"
+    selector: ".liveTableWrapper"
+    weight: 0.9
+  - type: "css"
+    selector: "[class*='liveTable']"
+    weight: 0.8
+  - type: "css"
+    selector: ".container__table"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//div[contains(@class, 'container') and contains(@class, 'table')]"
+    weight: 0.6
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  dom_state_indicators:
+    live: ["live", "table", "container"]
+    scheduled: ["table", "container"]
+    finished: ["table", "container"]
