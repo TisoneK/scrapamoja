@@ -66,11 +66,41 @@ class BrowserSession:
         self._correlation_id = self.session_id[:8]  # Use session ID prefix as correlation ID
         self._metrics_collector = get_browser_metrics_collector()
         
+        # Track subprocess handles for cleanup
+        self._subprocess_handles = []
+        
         # Start metrics tracking
         self._metrics_collector.start_session_tracking(
             self.session_id,
             self.configuration.browser_type.value
         )
+    
+    def _cleanup_subprocess_handles(self) -> None:
+        """Clean up subprocess handles with Windows-specific handling."""
+        for handle in self._subprocess_handles:
+            try:
+                if hasattr(handle, 'process') and handle.process:
+                    # Check if process is still running
+                    if handle.process.poll() is None:
+                        # Try to terminate gracefully
+                        try:
+                            handle.process.terminate()
+                            # Give it a moment to terminate
+                            import time
+                            time.sleep(0.1)
+                            # Force kill if still running
+                            if handle.process.poll() is None:
+                                handle.process.kill()
+                        except Exception:
+                            pass  # Ignore termination errors
+                            
+            except Exception as e:
+                # Log cleanup errors but don't raise
+                if hasattr(self, '_logger'):
+                    self._logger.warning(
+                        "subprocess_cleanup_error",
+                        error=str(e)
+                    )
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert session to dictionary for serialization."""
@@ -137,9 +167,9 @@ class BrowserSession:
                 **self.configuration.launch_options
             }
             
-            # Add stealth configuration
-            if self.configuration.stealth.user_agent:
-                launch_args["user_agent"] = self.configuration.stealth.user_agent
+            # Note: user_agent should be set at context level, not browser level
+            # Remove user_agent from launch_args if it exists
+            launch_args.pop("user_agent", None)
             
             # Initialize browser
             from playwright.async_api import async_playwright
@@ -258,6 +288,9 @@ class BrowserSession:
             
             if self.configuration.stealth.timezone:
                 final_options["timezone_id"] = self.configuration.stealth.timezone
+            
+            if self.configuration.stealth.user_agent:
+                final_options["user_agent"] = self.configuration.stealth.user_agent
             
             if self.configuration.stealth.geolocation:
                 final_options["geolocation"] = self.configuration.stealth.geolocation
@@ -462,6 +495,9 @@ class BrowserSession:
                         session_id=self.session_id,
                         error=str(e)
                     )
+            
+            # Enhanced subprocess cleanup
+            self._cleanup_subprocess_handles()
             
             # Stop resource monitoring
             if self.process_id:

@@ -38,33 +38,35 @@ class FlashscoreCLI:
     
     def create_parser(self) -> argparse.ArgumentParser:
         """Create argument parser."""
+        # Create parent parser for common arguments
+        parent_parser = argparse.ArgumentParser(add_help=False)
+        parent_parser.add_argument(
+            '--config',
+            type=str,
+            help='Path to configuration file'
+        )
+        parent_parser.add_argument(
+            '--verbose', '-v',
+            action='store_true',
+            help='Enable verbose output'
+        )
+        parent_parser.add_argument(
+            '--quiet', '-q',
+            action='store_true',
+            help='Suppress output except errors'
+        )
+        
         parser = argparse.ArgumentParser(
             prog='flashscore-cli',
             description='Flashscore scraper CLI',
             formatter_class=argparse.RawDescriptionHelpFormatter,
+            parents=[parent_parser],
             epilog="""
 Examples:
   %(prog)s scrape basketball live --output json
   %(prog)s validate selectors --sport basketball
   %(prog)s test navigation --status live
             """
-        )
-        
-        # Global arguments
-        parser.add_argument(
-            '--config',
-            type=str,
-            help='Path to configuration file'
-        )
-        parser.add_argument(
-            '--verbose', '-v',
-            action='store_true',
-            help='Enable verbose output'
-        )
-        parser.add_argument(
-            '--quiet', '-q',
-            action='store_true',
-            help='Suppress output except errors'
         )
         
         # Subcommands
@@ -78,7 +80,8 @@ Examples:
         for cmd_name, cmd_class in self.commands.items():
             cmd_parser = subparsers.add_parser(
                 cmd_name,
-                help=cmd_class.help_text
+                help=cmd_class.help_text,
+                parents=[parent_parser]
             )
             cmd_class.add_arguments(cmd_parser)
         

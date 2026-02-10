@@ -27,7 +27,7 @@ class ValidateCommand:
         )
         
         parser.add_argument(
-            '--config',
+            '--validate-config',
             action='store_true',
             help='Validate configuration files'
         )
@@ -55,7 +55,7 @@ class ValidateCommand:
         try:
             validation_results = {}
             
-            if args.config or not args.selectors:
+            if args.validate_config or not args.selectors:
                 validation_results['config'] = await self._validate_config()
             
             if args.selectors:
