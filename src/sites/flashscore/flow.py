@@ -162,7 +162,7 @@ class FlashscoreFlow(BaseFlow):
             football_result = await self.selector_engine.resolve("football_link", dom_context)
             if football_result and football_result.element_info:
                 await football_result.element_info.element.click()
-                await self.page.wait_for_timeout(2000)
+                await self.page.wait_for_timeout(self._get_timeout_ms("football_link", 2.0))
         except Exception as e:
             logger.warning(f"Error navigating to football: {e}")
     
@@ -186,22 +186,44 @@ class FlashscoreFlow(BaseFlow):
             live_result = await self.selector_engine.resolve("live_games_filter", dom_context)
             if live_result and live_result.element_info:
                 await live_result.element_info.element.click()
-                await self.page.wait_for_timeout(2000)
+                await self.page.wait_for_timeout(self._get_timeout_ms("live_games_filter", 2.0))
         except Exception as e:
             logger.warning(f"Error navigating to live matches: {e}")
     
     async def select_date(self, date_str: str):
         """Select a specific date for matches."""
-        date_picker = await self.selector_engine.find(self.page, "date_picker")
-        if date_picker:
-            await date_picker.click()
-            await self.page.wait_for_timeout(1000)
+        try:
+            from src.selectors.context import DOMContext
+            from datetime import datetime
+            from src.observability.logger import get_logger
             
-            # Try to find and click the specific date
-            date_option = await self.selector_engine.find(self.page, "date_option", date_str)
-            if date_option:
-                await date_option.click()
-                await self.page.wait_for_timeout(2000)
+            logger = get_logger("flashscore.flow")
+            
+            dom_context = DOMContext(
+                page=self.page,
+                tab_context="flashscore_navigation",
+                url=self.page.url,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Use selector engine to find date picker
+            try:
+                date_result = await self.selector_engine.resolve("date_picker", dom_context)
+                if date_result and date_result.element_info:
+                    await date_result.element_info.element.click()
+                    await self.page.wait_for_timeout(self._get_timeout_ms("date_picker", 1.0))
+                    
+                    # Try to find and click specific date
+                    date_option_result = await self.selector_engine.resolve("date_option", dom_context)
+                    if date_option_result and date_option_result.element_info:
+                        await date_option_result.element_info.element.click()
+                        await self.page.wait_for_timeout(self._get_timeout_ms("date_option", 2.0))
+                else:
+                    logger.warning("Date picker not found")
+            except Exception as e:
+                logger.warning(f"Error selecting date: {e}")
+        except Exception as e:
+            logger.warning(f"Error in select_date: {e}")
     
     async def click_match(self, match_identifier: str):
         """Click on a specific match."""
