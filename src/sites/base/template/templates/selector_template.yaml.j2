@@ -1,0 +1,26 @@
+name: main_content
+description: Main content area selector
+selector: .main-content
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 30000
+    retry_count: 3
+  - name: xpath
+    type: xpath
+    priority: 2
+    confidence: 0.8
+    timeout: 30000
+    retry_count: 3
+validation:
+  required: true
+  exists: true
+  min_length: 50
+  max_length: 50000
+metadata:
+  category: content
+  tags: [main, content, primary]
+  version: 1.0.0
+  author: {{ metadata.author }}

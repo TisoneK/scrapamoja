@@ -1,0 +1,132 @@
+"""
+Configuration for {{ metadata.name }} template.
+
+This module contains configuration settings and constants for {{ metadata.site_domain }}.
+"""
+
+from typing import Dict, Any
+
+# Site configuration
+SITE_CONFIG = {
+    "name": "{{ metadata.name }}",
+    "domain": "{{ metadata.site_domain }}",
+    "base_url": "https://{{ metadata.site_domain }}",
+    "version": "{{ metadata.version }}",
+    "author": "{{ metadata.author }}",
+    "description": "{{ metadata.description }}",
+    "framework_version": "{{ metadata.framework_version }}"
+}
+
+# Scraping configuration
+SCRAPING_CONFIG = {
+    "timeout": 30,
+    "retry_count": 3,
+    "retry_delay": 1.0,
+    "rate_limit": {
+        "requests_per_minute": 60,
+        "burst_size": 10
+    },
+    "user_agent": "{{ metadata.name }}-Scraper/{{ metadata.version }}"
+}
+
+# Extraction configuration
+EXTRACTION_CONFIG = {
+    "timeout": 30,
+    "max_retries": 3,
+    "default_wait_time": 2.0,
+    "element_wait_timeout": 10.0
+}
+
+# Feature configuration
+FEATURE_CONFIG = {
+    "screenshot_capture": True,
+    "html_capture": True,
+    "resource_monitoring": True,
+    "performance_logging": True,
+    "error_tracking": True,
+    "stealth_mode": True
+}
+
+# Selector configuration
+SELECTOR_CONFIG = {
+    "default_timeout": 30.0,
+    "default_strategy": "css",
+    "fallback_strategies": ["xpath", "text"],
+    "validation_enabled": True
+}
+
+# Flow configuration
+FLOW_CONFIG = {
+    "default_wait_time": 2.0,
+    "max_wait_time": 30.0,
+    "retry_on_failure": True,
+    "max_retries": 3
+}
+
+# Integration configuration
+INTEGRATION_CONFIG = {
+    "browser_lifecycle": True,
+    "resource_monitoring": True,
+    "logging_integration": True,
+    "error_handling": True,
+    "performance_monitoring": True
+}
+
+# Validation configuration
+VALIDATION_CONFIG = {
+    "strict_mode": True,
+    "validate_selectors": True,
+    "validate_extraction": True,
+    "validate_structure": True
+}
+
+# Development configuration
+DEV_CONFIG = {
+    "debug_mode": False,
+    "verbose_logging": False,
+    "mock_data": False,
+    "test_mode": False
+}
+
+# Combine all configurations
+CONFIG = {
+    "site": SITE_CONFIG,
+    "scraping": SCRAPING_CONFIG,
+    "extraction": EXTRACTION_CONFIG,
+    "features": FEATURE_CONFIG,
+    "selectors": SELECTOR_CONFIG,
+    "flows": FLOW_CONFIG,
+    "integration": INTEGRATION_CONFIG,
+    "validation": VALIDATION_CONFIG,
+    "development": DEV_CONFIG
+}
+
+
+def get_config(section: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Get configuration section.
+    
+    Args:
+        section: Configuration section name
+        
+    Returns:
+        Dict[str, Any]: Configuration data
+    """
+    if section is None:
+        return CONFIG
+    
+    return CONFIG.get(section, {})
+
+
+def update_config(section: str, updates: Dict[str, Any]) -> None:
+    """
+    Update configuration section.
+    
+    Args:
+        section: Configuration section name
+        updates: Configuration updates
+    """
+    if section in CONFIG:
+        CONFIG[section].update(updates)
+    else:
+        CONFIG[section] = updates

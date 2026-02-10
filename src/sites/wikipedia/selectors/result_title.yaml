@@ -1,0 +1,14 @@
+description: "Search result title link"
+confidence_threshold: 0.8
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "a.mw-search-result-heading"
+    weight: 1.0
+  - type: "css"
+    selector: ".searchresult .mw-search-result-heading a"
+    weight: 0.9
+  - type: "xpath"
+    selector: ".//a[contains(@class, 'mw-search-result-heading')]"
+    weight: 0.8

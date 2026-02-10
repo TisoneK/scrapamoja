@@ -8,9 +8,11 @@ These examples show:
 - Browser initialization and configuration
 - Navigation and page state management
 - Action execution with selectors and form interaction
+- **Selector engine integration with multi-strategy element location**
 - Snapshot capture and storage
 - Error handling and graceful degradation
 - Resource cleanup and shutdown
+- **Telemetry capture and debugging capabilities**
 
 Each example is self-contained and designed to be educational—showing both successful execution paths and error handling strategies.
 
@@ -18,20 +20,36 @@ Each example is self-contained and designed to be educational—showing both suc
 
 ### browser_lifecycle_example.py
 
-A complete demonstration of the browser manager lifecycle from start to finish.
+A complete demonstration of the browser manager lifecycle from start to finish, **now enhanced with selector engine integration**.
 
 **What it does:**
 1. Initializes a browser instance with default configuration
-2. Navigates to Google's homepage and waits for full page load
-3. Executes a search query by interacting with the search form
-4. Captures a snapshot of the search results page
-5. Gracefully closes the browser and releases all resources
+2. Navigates to Wikipedia's homepage and waits for full page load
+3. **Uses multi-strategy selector engine to locate and interact with page elements**
+4. Executes a search query with robust element location and fallback patterns
+5. Captures a snapshot of the search results page with selector operation metadata
+6. **Collects comprehensive telemetry data on selector performance**
+7. Gracefully closes the browser and releases all resources
+
+**Selector Engine Features Demonstrated:**
+- **Multi-strategy element location** (CSS, XPath, text-based selectors)
+- **Confidence scoring** for element matching quality
+- **Fallback patterns** when primary selectors fail
+- **Error handling and retry logic** with exponential backoff
+- **Telemetry collection** with strategy performance metrics
+- **Debug mode** with detailed strategy attempt logging
+- **Correlation IDs** for traceable operations
 
 **Why it's useful:**
 - Learn how the browser manager works end-to-end
 - Understand initialization and cleanup patterns
 - See real examples of navigation, action execution, and snapshot capture
+- **Learn selector engine best practices and patterns**
+- **Understand multi-strategy element location and confidence scoring**
+- **See comprehensive error handling and fallback mechanisms**
+- **Learn telemetry collection and performance monitoring**
 - Validate your development environment is properly configured
+- **Wikipedia is automation-friendly and has no bot detection**
 
 **Running the example:**
 
@@ -41,6 +59,163 @@ python -m examples.browser_lifecycle_example
 
 # Or directly:
 python examples/browser_lifecycle_example.py
+
+# With debug mode for detailed selector engine logging:
+$env:DEBUG_SELECTOR=1
+python -m examples.browser_lifecycle_example
+```
+
+**Expected output (with selector engine integration):**
+
+```
+============================================================
+BROWSER LIFECYCLE EXAMPLE - Using BrowserManager
+============================================================
+Started: 2026-01-29 14:30:00
+
+============================================================
+STAGE 1: Initialize Browser Through BrowserManager
+============================================================
+  * Getting global BrowserManager singleton...
+  * Creating BrowserConfiguration with stealth settings...
+  * Creating browser session through manager...
+  ✓ Browser initialized successfully in 2.15s
+    - Session ID: 3887fc77-2e2e-4603-862b-f4e6c65899f4
+    - Browser type: chromium
+    - Headless: False
+
+============================================================
+STAGE 2: Navigate to Wikipedia
+============================================================
+  * Navigating to https://en.wikipedia.org...
+  ✓ Navigation completed in 11.82s
+
+🔍 Performing Wikipedia search for: 'Python programming'
+Using selector engine with multi-strategy approach...
+✅ Located search input using selector engine (Wikipedia search input field)
+✅ Selector operation successful: Wikipedia search input field
+   [selector_1234_5678] Strategy: css
+   [selector_1234_5678] Confidence: 0.920
+   [selector_1234_5678] Confidence Level: EXCELLENT
+   [selector_1234_5678] 🎯 Excellent match - High confidence selector
+   [selector_1234_5678] Duration: 45ms
+
+✅ Located search results using selector engine (Wikipedia search result link)
+✅ Selector operation successful: Wikipedia search result link
+   [selector_1234_5678] Strategy: css
+   [selector_1234_5678] Confidence: 0.880
+   [selector_1234_5678] Confidence Level: GOOD
+   [selector_1234_5678] ✅ Good match - Reliable selector
+   [selector_1234_5678] Duration: 67ms
+
+✅ Successfully completed Wikipedia search using selector engine
+
+============================================================
+STAGE 4: Capture Page Snapshot (using Core Module)
+============================================================
+  * Capturing rich snapshot using core module...
+  ✓ Snapshot captured and saved in 0.02s
+    - File: data/snapshots/wikipedia_search_20260129_143000.json
+
+============================================================
+LIFECYCLE COMPLETED SUCCESSFULLY
+============================================================
+Total execution time: 25.43s
+
+📊 Selector Engine Telemetry:
+  Total operations: 2
+  Successful operations: 2
+  Success rate: 100.00%
+  Average confidence: 0.900
+  Total duration: 112ms
+  Average operation duration: 56.0ms
+  Strategies used: css
+  Fallback usage rate: 0.00%
+  Correlation ID: selector_1234_5678
+
+  Strategy Performance:
+    CSS:
+      Success rate: 100.00%
+      Avg confidence: 0.900
+      Avg duration: 56.0ms
+
+📊 Telemetry data saved to: data/telemetry/selector_telemetry_3887fc77_20260129_143000.json
+============================================================
+```
+
+## Selector Engine Integration
+
+### Key Concepts
+
+**Multi-Strategy Approach**: The selector engine tries multiple strategies in priority order:
+1. **CSS Selectors** - Fast and precise for stable elements
+2. **XPath Expressions** - Powerful for complex element relationships  
+3. **Text-Based Matching** - Robust for dynamic content
+
+**Confidence Scoring**: Each located element receives a confidence score (0.0-1.0) based on:
+- Attribute matching accuracy
+- Element visibility and interactivity
+- Context relevance
+
+**Fallback Patterns**: When primary strategies fail, the engine:
+- Tries alternative selector configurations
+- Implements exponential backoff retry logic
+- Provides detailed error reporting
+- Maintains workflow continuity
+
+### Telemetry and Debugging
+
+**Correlation IDs**: Each session gets a unique correlation ID for traceable operations.
+
+**Performance Metrics**: Comprehensive tracking includes:
+- Strategy success rates and timing
+- Confidence score distributions
+- Fallback usage patterns
+- Operation duration analysis
+
+**Debug Mode**: Enable with `$env:DEBUG_SELECTOR=1` for detailed:
+- Strategy attempt logging
+- Confidence score analysis
+- Timing breakdown per strategy
+- Error pattern identification
+
+### Configuration Examples
+
+**Basic Selector Configuration**:
+```python
+def get_search_config() -> SelectorConfiguration:
+    strategies = [
+        {
+            "type": "css",
+            "selector": "input#searchInput",
+            "priority": 1,
+            "expected_attributes": {"type": "search", "name": "search"}
+        },
+        {
+            "type": "xpath", 
+            "selector": "//input[@name='search']",
+            "priority": 2,
+            "expected_attributes": {"type": "search"}
+        }
+    ]
+    return SelectorConfiguration("Search input field", strategies)
+```
+
+**Usage Pattern**:
+```python
+# Locate element with multi-strategy approach
+search_input = await selector_integration.locate_element(
+    page=page,
+    config=get_search_config()
+)
+
+# Interact with error recovery
+await selector_integration.interact_with_element(
+    page=page,
+    element=search_input,
+    interaction_type="type",
+    interaction_data={"text": "search term"}
+)
 ```
 
 **Expected output:**

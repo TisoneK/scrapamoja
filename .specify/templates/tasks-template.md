@@ -8,7 +8,7 @@ description: "Task list template for feature implementation"
 **Input**: Design documents from `/specs/[###-feature-name]/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: Manual validation only - no automated tests included in implementation approach.
+**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -60,17 +60,14 @@ description: "Task list template for feature implementation"
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-### Constitution-Compliant Foundation Tasks
+Examples of foundational tasks (adjust based on your project):
 
-- [ ] T004 Setup Python 3.11+ environment with asyncio and Playwright dependencies
-- [ ] T005 [P] Implement Selector Engine backbone (semantic definitions, multi-strategy resolution)
-- [ ] T006 [P] Configure stealth framework (fingerprint normalization, human behavior emulation)
-- [ ] T007 [P] Setup structured logging with correlation IDs and run traceability
-- [ ] T008 Create base modular architecture (granular components with single responsibilities)
-- [ ] T009 [P] Implement module lifecycle management framework (initialization, operation, error handling, recovery, shutdown)
-- [ ] T010 Configure error handling and retry/resilience frameworks
-- [ ] T011 Setup DOM snapshot integration for failure analysis
-- [ ] T012 Configure proxy management with residential IP support
+- [ ] T004 Setup database schema and migrations framework
+- [ ] T005 [P] Implement authentication/authorization framework
+- [ ] T006 [P] Setup API routing and middleware structure
+- [ ] T007 Create base models/entities that all stories depend on
+- [ ] T008 Configure error handling and logging infrastructure
+- [ ] T009 Setup environment configuration management
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -80,18 +77,23 @@ description: "Task list template for feature implementation"
 
 **Goal**: [Brief description of what this story delivers]
 
-**Independent Validation**: [How to manually verify this story works on its own]
+**Independent Test**: [How to verify this story works on its own]
+
+### Tests for User Story 1 (OPTIONAL - only if tests requested) ⚠️
+
+> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+
+- [ ] T010 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T011 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
 
 ### Implementation for User Story 1
 
-- [ ] T010 [P] [US1] Define semantic selectors for [feature] in src/selectors/[feature]_selectors.py
-- [ ] T011 [P] [US1] Implement multi-strategy selector resolution with confidence scoring
-- [ ] T012 [P] [US1] Create stealth configuration for [feature] interactions
-- [ ] T013 [US1] Implement module lifecycle for [Service] in src/services/[service].py (initialization, operation, error handling, recovery, shutdown)
-- [ ] T014 [US1] Implement [feature] in src/[location]/[file].py with selector-first approach
-- [ ] T015 [US1] Add DOM snapshot integration for failure analysis
-- [ ] T016 [US1] Add structured logging with correlation IDs for user story 1 operations
-- [ ] T017 [US1] Implement graceful error handling and retry logic
+- [ ] T012 [P] [US1] Create [Entity1] model in src/models/[entity1].py
+- [ ] T013 [P] [US1] Create [Entity2] model in src/models/[entity2].py
+- [ ] T014 [US1] Implement [Service] in src/services/[service].py (depends on T012, T013)
+- [ ] T015 [US1] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T016 [US1] Add validation and error handling
+- [ ] T017 [US1] Add logging for user story 1 operations
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -101,18 +103,19 @@ description: "Task list template for feature implementation"
 
 **Goal**: [Brief description of what this story delivers]
 
-**Independent Validation**: [How to manually verify this story works on its own]
+**Independent Test**: [How to verify this story works on its own]
+
+### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
+
+- [ ] T018 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T019 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
 
 ### Implementation for User Story 2
 
-- [ ] T018 [P] [US2] Define semantic selectors for [feature] in src/selectors/[feature]_selectors.py
-- [ ] T019 [P] [US2] Implement multi-strategy selector resolution with confidence scoring
-- [ ] T020 [P] [US2] Create stealth configuration for [feature] interactions
-- [ ] T021 [US2] Implement module lifecycle for [Service] in src/services/[service].py
-- [ ] T022 [US2] Implement [feature] in src/[location]/[file].py with selector-first approach
+- [ ] T020 [P] [US2] Create [Entity] model in src/models/[entity].py
+- [ ] T021 [US2] Implement [Service] in src/services/[service].py
+- [ ] T022 [US2] Implement [endpoint/feature] in src/[location]/[file].py
 - [ ] T023 [US2] Integrate with User Story 1 components (if needed)
-- [ ] T024 [US2] Add DOM snapshot integration for failure analysis
-- [ ] T025 [US2] Add structured logging with correlation IDs for user story 2 operations
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -122,17 +125,18 @@ description: "Task list template for feature implementation"
 
 **Goal**: [Brief description of what this story delivers]
 
-**Independent Validation**: [How to manually verify this story works on its own]
+**Independent Test**: [How to verify this story works on its own]
+
+### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
+
+- [ ] T024 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T025 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
 
 ### Implementation for User Story 3
 
-- [ ] T026 [P] [US3] Define semantic selectors for [feature] in src/selectors/[feature]_selectors.py
-- [ ] T027 [P] [US3] Implement multi-strategy selector resolution with confidence scoring
-- [ ] T028 [P] [US3] Create stealth configuration for [feature] interactions
-- [ ] T029 [US3] Implement module lifecycle for [Service] in src/services/[service].py
-- [ ] T030 [US3] Implement [feature] in src/[location]/[file].py with selector-first approach
-- [ ] T031 [US3] Add DOM snapshot integration for failure analysis
-- [ ] T032 [US3] Add structured logging with correlation IDs for user story 3 operations
+- [ ] T026 [P] [US3] Create [Entity] model in src/models/[entity].py
+- [ ] T027 [US3] Implement [Service] in src/services/[service].py
+- [ ] T028 [US3] Implement [endpoint/feature] in src/[location]/[file].py
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -146,14 +150,12 @@ description: "Task list template for feature implementation"
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T033 [P] Documentation updates in docs/ (include selector engineering guides)
-- [ ] T034 Code cleanup and refactoring (maintain deep modularity)
-- [ ] T035 Performance optimization across all stories (selector confidence tuning)
-- [ ] T036 Security hardening (stealth configuration review)
-- [ ] T037 Run quickstart.md validation
-- [ ] T038 Constitution compliance audit (verify all principles followed)
-- [ ] T039 Selector drift detection and adaptation review
-- [ ] T040 Production resilience testing (retry/recovery validation)
+- [ ] TXXX [P] Documentation updates in docs/
+- [ ] TXXX Code cleanup and refactoring
+- [ ] TXXX Performance optimization across all stories
+- [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
+- [ ] TXXX Security hardening
+- [ ] TXXX Run quickstart.md validation
 
 ---
 
@@ -176,11 +178,9 @@ description: "Task list template for feature implementation"
 
 ### Within Each User Story
 
-- Semantic selectors MUST be defined first (selector-first engineering)
-- Multi-strategy selector resolution before service implementation
-- Stealth configuration before feature implementation
-- Services before feature implementation
-- DOM snapshot integration before final validation
+- Tests (if included) MUST be written and FAIL before implementation
+- Models before services
+- Services before endpoints
 - Core implementation before integration
 - Story complete before moving to next priority
 
@@ -189,6 +189,7 @@ description: "Task list template for feature implementation"
 - All Setup tasks marked [P] can run in parallel
 - All Foundational tasks marked [P] can run in parallel (within Phase 2)
 - Once Foundational phase completes, all user stories can start in parallel (if team capacity allows)
+- All tests for a user story marked [P] can run in parallel
 - Models within a story marked [P] can run in parallel
 - Different user stories can be worked on in parallel by different team members
 
@@ -197,10 +198,13 @@ description: "Task list template for feature implementation"
 ## Parallel Example: User Story 1
 
 ```bash
-# Launch all selector definitions for User Story 1 together:
-Task: "Define semantic selectors for [feature] in src/selectors/[feature]_selectors.py"
-Task: "Implement multi-strategy selector resolution with confidence scoring"
-Task: "Create stealth configuration for [feature] interactions"
+# Launch all tests for User Story 1 together (if tests requested):
+Task: "Contract test for [endpoint] in tests/contract/test_[name].py"
+Task: "Integration test for [user journey] in tests/integration/test_[name].py"
+
+# Launch all models for User Story 1 together:
+Task: "Create [Entity1] model in src/models/[entity1].py"
+Task: "Create [Entity2] model in src/models/[entity2].py"
 ```
 
 ---
@@ -240,15 +244,8 @@ With multiple developers:
 
 - [P] tasks = different files, no dependencies
 - [Story] label maps task to specific user story for traceability
-- Each user story should be independently completable and verifiable
-- **Selector-first approach**: Semantic selectors MUST be defined before any implementation
-- **Stealth-aware design**: Human behavior emulation required for all interactions
-- **Deep modularity**: Granular components with single responsibilities
-- **Implementation-first development**: Direct implementation with manual validation, no automated tests
-- **Module lifecycle management**: Explicit phases, state ownership, clear contracts, contained failures
-- **Production resilience**: Graceful failure handling with retry and recovery
-- **Neutral naming convention**: Use structural, descriptive language only, avoid qualitative descriptors
+- Each user story should be independently completable and testable
+- Verify tests fail before implementing
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
-- Constitution compliance mandatory for all implementation decisions

@@ -84,26 +84,16 @@
 
 ### Functional Requirements
 
-- **FR-001**: System MUST implement semantic selector definitions with multi-strategy resolution
-- **FR-002**: System MUST provide confidence scoring for all selectors (>0.8 threshold for production)
-- **FR-003**: System MUST emulate human behavior for stealth (mouse movement, scroll timing, click hesitation)
-- **FR-004**: System MUST implement graceful failure handling with retry and recovery mechanisms
-- **FR-005**: System MUST provide structured logging with correlation IDs and run traceability
-- **FR-006**: System MUST use Python 3.11+ with asyncio for all async operations
-- **FR-007**: System MUST use Playwright (async API) exclusively for browser automation
-- **FR-008**: System MUST output JSON with schema versioning for data compatibility
-- **FR-009**: System MUST implement DOM snapshot integration for failure analysis
-- **FR-010**: System MUST provide checkpointing and resume capability for long-running operations
+- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
+- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
+- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
+- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
+- **FR-005**: System MUST [behavior, e.g., "log all security events"]
 
-### Technical Constraints (Constitution Alignment)
+*Example of marking unclear requirements:*
 
-- **TC-001**: No requests library or BeautifulSoup allowed - only Playwright for HTTP/DOM operations
-- **TC-002**: All selectors must be context-scoped and tab-aware for SPA navigation
-- **TC-003**: Browser fingerprint normalization mandatory for anti-detection
-- **TC-004**: Proxy management with residential IPs required for production use
-- **TC-005**: Deep modularity required - granular components with single responsibilities
-- **TC-006**: Implementation-first development - direct implementation with manual validation
-- **TC-007**: Neutral naming convention required - use structural, descriptive language only
+- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
+- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
 
 ### Key Entities *(include if feature involves data)*
 

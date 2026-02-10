@@ -1,0 +1,16 @@
+description: "Search result URL"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "a.mw-search-result-heading"
+    attribute: "href"
+    weight: 1.0
+  - type: "css"
+    selector: ".searchresult .mw-search-result-heading a"
+    attribute: "href"
+    weight: 0.9
+  - type: "xpath"
+    selector: ".//a[contains(@class, 'mw-search-result-heading')]/@href"
+    weight: 0.8

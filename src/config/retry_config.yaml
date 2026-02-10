@@ -1,0 +1,225 @@
+# Centralized Retry Configuration
+# Version: 1.0.0
+# This file defines retry policies for all subsystems (browser, navigation, telemetry)
+
+version: "1.0.0"
+
+# Global defaults applied to all policies
+global_defaults:
+  jitter_type: "full"
+  jitter_amount: 0.1
+  enable_circuit_breaker: false
+
+# Retry policies
+policies:
+  # Browser subsystem policies
+  browser_state_timeout:
+    name: "Browser State Timeout Retry"
+    description: "Retry state operations that timeout"
+    max_attempts: 3
+    backoff_type: "exponential"
+    base_delay: 1.0
+    max_delay: 10.0
+    jitter_type: "full"
+    jitter_amount: 0.1
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "TimeoutError"
+      - "ConnectionError"
+    enabled: true
+
+  browser_network_error:
+    name: "Browser Network Error Retry"
+    description: "Retry state operations with network errors"
+    max_attempts: 5
+    backoff_type: "exponential"
+    base_delay: 2.0
+    max_delay: 30.0
+    jitter_type: "full"
+    jitter_amount: 0.1
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "ConnectionError"
+      - "NetworkError"
+    enabled: true
+
+  browser_disk_full:
+    name: "Browser Disk Full Retry"
+    description: "Retry state operations when disk is full"
+    max_attempts: 2
+    backoff_type: "linear"
+    base_delay: 5.0
+    max_delay: 15.0
+    jitter_type: "full"
+    jitter_amount: 0.1
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "OSError"
+      - "IOError"
+    enabled: true
+
+  browser_monitoring_timeout:
+    name: "Browser Monitoring Timeout Retry"
+    description: "Retry monitoring operations that timeout"
+    max_attempts: 3
+    backoff_type: "exponential"
+    base_delay: 1.0
+    max_delay: 10.0
+    jitter_type: "full"
+    jitter_amount: 0.1
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "TimeoutError"
+      - "ConnectionError"
+    enabled: true
+
+  browser_access_denied:
+    name: "Browser Access Denied Retry"
+    description: "Retry monitoring operations with access denied errors"
+    max_attempts: 2
+    backoff_type: "linear"
+    base_delay: 5.0
+    max_delay: 15.0
+    jitter_type: "full"
+    jitter_amount: 0.1
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "PermissionError"
+      - "AccessDeniedError"
+    enabled: true
+
+  browser_psutil_error:
+    name: "Browser PSUtil Error Retry"
+    description: "Retry monitoring operations with psutil errors"
+    max_attempts: 3
+    backoff_type: "exponential"
+    base_delay: 2.0
+    max_delay: 20.0
+    jitter_type: "full"
+    jitter_amount: 0.1
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "TimeoutError"
+      - "ConnectionError"
+    enabled: true
+
+  browser_session_default:
+    name: "Browser Session Default Retry"
+    description: "Default retry for browser session operations"
+    max_attempts: 3
+    backoff_type: "exponential"
+    base_delay: 1.0
+    max_delay: 10.0
+    jitter_type: "full"
+    jitter_amount: 0.1
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "TimeoutError"
+      - "ConnectionError"
+    enabled: true
+
+  # Navigation subsystem policies
+  navigation_retry_with_delay:
+    name: "Navigation Retry With Delay"
+    description: "Retry route adaptation with delay"
+    max_attempts: 3
+    backoff_type: "exponential"
+    base_delay: 2.0
+    max_delay: 30.0
+    jitter_type: "full"
+    jitter_amount: 0.1
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "TimeoutError"
+      - "ConnectionError"
+      - "NavigationError"
+    enabled: true
+
+  # Telemetry subsystem policies
+  telemetry_error_handling:
+    name: "Telemetry Error Handling Retry"
+    description: "Retry telemetry operations with errors"
+    max_attempts: 3
+    backoff_type: "exponential"
+    base_delay: 1.0
+    max_delay: 60.0
+    jitter_type: "full"
+    jitter_amount: 0.1
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "TimeoutError"
+      - "ConnectionError"
+    enabled: true
+
+  telemetry_batch_processing:
+    name: "Telemetry Batch Processing Retry"
+    description: "Retry telemetry batch processing"
+    max_attempts: 3
+    backoff_type: "fixed"
+    base_delay: 1.0
+    max_delay: 1.0
+    jitter_type: "none"
+    jitter_amount: 0.0
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "TimeoutError"
+      - "ConnectionError"
+    enabled: true
+
+  telemetry_alerting_notification:
+    name: "Telemetry Alerting Notification Retry"
+    description: "Retry alert notification delivery"
+    max_attempts: 3
+    backoff_type: "fixed"
+    base_delay: 60.0
+    max_delay: 60.0
+    jitter_type: "none"
+    jitter_amount: 0.0
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "TimeoutError"
+      - "ConnectionError"
+    enabled: true
+
+  telemetry_simple_retries:
+    name: "Telemetry Simple Retries"
+    description: "Simple retry for telemetry operations"
+    max_attempts: 3
+    backoff_type: "fixed"
+    base_delay: 10.0
+    max_delay: 10.0
+    jitter_type: "none"
+    jitter_amount: 0.0
+    enable_circuit_breaker: false
+    retryable_exceptions:
+      - "TimeoutError"
+      - "ConnectionError"
+    enabled: true
+
+# Subsystem mappings
+subsystem_mappings:
+  browser:
+    state_operations:
+      timeout: "browser_state_timeout"
+      network_error: "browser_network_error"
+      disk_full: "browser_disk_full"
+    monitoring_operations:
+      timeout: "browser_monitoring_timeout"
+      access_denied: "browser_access_denied"
+      psutil_error: "browser_psutil_error"
+    session_operations:
+      default: "browser_session_default"
+
+  navigation:
+    route_adaptation:
+      retry_with_delay: "navigation_retry_with_delay"
+
+  telemetry:
+    error_handling:
+      default: "telemetry_error_handling"
+    batch_processing:
+      default: "telemetry_batch_processing"
+    alerting:
+      notification: "telemetry_alerting_notification"
+    simple_retries:
+      default: "telemetry_simple_retries"

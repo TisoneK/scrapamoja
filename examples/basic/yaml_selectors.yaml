@@ -1,0 +1,502 @@
+# YAML Selector Examples
+
+This file contains comprehensive examples of YAML selectors for different use cases.
+
+## Basic Selectors
+
+### Simple Text Content
+```yaml
+name: page_title
+description: Page title selector
+selector: h1
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.95
+    timeout: 5000
+validation:
+  required: true
+  exists: true
+  text_pattern: "^.+$"
+metadata:
+  category: content
+  tags: [title, header, text]
+  version: 1.0.0
+```
+
+### Link Elements
+```yaml
+name: navigation_links
+description: Main navigation links
+selector: nav a
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 10000
+  - name: xpath
+    type: xpath
+    priority: 2
+    confidence: 0.8
+    timeout: 10000
+validation:
+  required: true
+  exists: true
+  attribute_pattern:
+    href: "^https?://"
+metadata:
+  category: navigation
+  tags: [links, navigation, url]
+  version: 1.0.0
+```
+
+## Advanced Selectors
+
+### Multi-Strategy Selector
+```yaml
+name: article_content
+description: Main article content with fallback strategies
+selector: .article-content
+strategies:
+  - name: primary_css
+    type: css
+    priority: 1
+    confidence: 0.95
+    timeout: 15000
+    retry_count: 3
+  - name: fallback_css
+    type: css
+    selector: .post-content
+    priority: 2
+    confidence: 0.85
+    timeout: 15000
+  - name: xpath_fallback
+    type: xpath
+    selector: "//div[contains(@class, 'content')]"
+    priority: 3
+    confidence: 0.75
+    timeout: 20000
+validation:
+  required: true
+  exists: true
+  min_length: 100
+  max_length: 50000
+  text_pattern: "^[A-Za-z0-9\\s\\.,!?;:'\"()-]+$"
+metadata:
+  category: content
+  tags: [article, content, text, fallback]
+  version: 1.0.0
+```
+
+### Image Selector
+```yaml
+name: featured_image
+description: Featured article image
+selector: .featured-image img
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 10000
+validation:
+  required: false
+  exists: true
+  attribute_pattern:
+    src: "^https?://"
+    alt: "^.+$"
+  min_width: 300
+  min_height: 200
+metadata:
+  category: media
+  tags: [image, media, visual]
+  version: 1.0.0
+```
+
+## Form Selectors
+
+### Form Input
+```yaml
+name: search_input
+description: Search form input field
+selector: input[name="search"]
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.95
+    timeout: 5000
+validation:
+  required: true
+  exists: true
+  attribute_pattern:
+    type: "text|search"
+    placeholder: "^.+$"
+metadata:
+  category: form
+  tags: [input, form, search]
+  version: 1.0.0
+```
+
+### Submit Button
+```yaml
+name: submit_button
+description: Form submit button
+selector: button[type="submit"]
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 5000
+  - name: xpath
+    type: xpath
+    selector: "//input[@type='submit']"
+    priority: 2
+    confidence: 0.85
+    timeout: 5000
+validation:
+  required: true
+  exists: true
+  text_pattern: "^(Submit|Send|Go|Search)$"
+  attribute_pattern:
+    type: "submit|button"
+metadata:
+  category: form
+  tags: [button, form, submit]
+  version: 1.0.0
+```
+
+## List Selectors
+
+### Blog Post List
+```yaml
+name: blog_posts
+description: List of blog posts
+selector: .blog-list .blog-post
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 15000
+validation:
+  required: true
+  exists: true
+  min_count: 1
+  max_count: 100
+metadata:
+  category: list
+  tags: [blog, posts, list]
+  version: 1.0.0
+```
+
+### Product List
+```yaml
+name: product_items
+description: E-commerce product items
+selector: .product-grid .product-item
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 20000
+  - name: xpath
+    type: xpath
+    selector: "//div[contains(@class, 'product') and contains(@class, 'item')]"
+    priority: 2
+    confidence: 0.8
+    timeout: 25000
+validation:
+  required: true
+  exists: true
+  min_count: 1
+metadata:
+  category: list
+  tags: [product, ecommerce, list]
+  version: 1.0.0
+```
+
+## Metadata Selectors
+
+### Date/Time
+```yaml
+name: publish_date
+description: Article publish date
+selector: .publish-date
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 5000
+validation:
+  required: true
+  exists: true
+  attribute_pattern:
+    datetime: "^\\d{4}-\\d{2}-\\d{2}"
+  text_pattern: "^\\d{1,2}\\s+(January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}$"
+metadata:
+  category: metadata
+  tags: [date, time, metadata]
+  version: 1.0.0
+```
+
+### Author Information
+```yaml
+name: author_info
+description: Article author information
+selector: .author
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 5000
+validation:
+  required: false
+  exists: true
+  text_pattern: "^[A-Za-z\\s\\.]+$"
+metadata:
+  category: metadata
+  tags: [author, metadata, person]
+  version: 1.0.0
+```
+
+## Complex Selectors
+
+### Conditional Selector
+```yaml
+name: price_info
+description: Product price with conditional logic
+selector: .price
+strategies:
+  - name: regular_price
+    type: css
+    selector: .price .regular
+    priority: 1
+    confidence: 0.95
+    timeout: 5000
+  - name: sale_price
+    type: css
+    selector: .price .sale
+    priority: 2
+    confidence: 0.9
+    timeout: 5000
+  - name: fallback_price
+    type: css
+    selector: .price
+    priority: 3
+    confidence: 0.8
+    timeout: 5000
+validation:
+  required: true
+  exists: true
+  text_pattern: "^\\$\\d+(\\.\\d{2})?$"
+metadata:
+  category: commercial
+  tags: [price, cost, commercial]
+  version: 1.0.0
+```
+
+### Multi-Attribute Selector
+```yaml
+name: social_links
+description: Social media links
+selector: .social-links a
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 10000
+validation:
+  required: false
+  exists: true
+  attribute_pattern:
+    href: "^(https?://)?(www\\.)?(facebook|twitter|instagram|linkedin)\\.com"
+    rel: "nofollow|noopener"
+  text_pattern: "^(Facebook|Twitter|Instagram|LinkedIn)$"
+metadata:
+  category: social
+  tags: [social, links, media]
+  version: 1.0.0
+```
+
+## Error Handling Selectors
+
+### Graceful Degradation
+```yaml
+name: optional_content
+description: Optional content that may not exist
+selector: .optional-section
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.8
+    timeout: 5000
+validation:
+  required: false
+  exists: true
+  min_length: 10
+metadata:
+  category: optional
+  tags: [optional, content, fallback]
+  version: 1.0.0
+```
+
+### Retry Logic
+```yaml
+name: dynamic_content
+description: Content that loads dynamically
+selector: .dynamic-content
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.85
+    timeout: 30000
+    retry_count: 5
+    retry_delay: 1000
+validation:
+  required: false
+  exists: true
+  min_length: 50
+metadata:
+  category: dynamic
+  tags: [dynamic, content, async]
+  version: 1.0.0
+```
+
+## Performance Optimized Selectors
+
+### Efficient List Selector
+```yaml
+name: large_list_items
+description: Large list with performance optimization
+selector: .large-list li
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.9
+    timeout: 10000
+    max_results: 50
+validation:
+  required: true
+  exists: true
+  min_count: 1
+metadata:
+  category: list
+  tags: [list, performance, large]
+  version: 1.0.0
+```
+
+### Cached Selector
+```yaml
+name: cached_content
+description: Content that should be cached
+selector: .static-content
+strategies:
+  - name: css
+    type: css
+    priority: 1
+    confidence: 0.95
+    timeout: 5000
+    cache_ttl: 3600
+validation:
+  required: true
+  exists: true
+metadata:
+  category: cached
+  tags: [cached, static, performance]
+  version: 1.0.0
+```
+
+## Best Practices
+
+### 1. Always include validation rules
+```yaml
+validation:
+  required: true
+  exists: true
+  text_pattern: "^.+$"
+```
+
+### 2. Provide multiple strategies
+```yaml
+strategies:
+  - name: primary
+    type: css
+    priority: 1
+    confidence: 0.95
+  - name: fallback
+    type: xpath
+    priority: 2
+    confidence: 0.85
+```
+
+### 3. Use descriptive metadata
+```yaml
+metadata:
+  category: content
+  tags: [article, text, main]
+  version: 1.0.0
+  description: "Main article content selector"
+```
+
+### 4. Set appropriate timeouts
+```yaml
+timeout: 10000  # 10 seconds
+```
+
+### 5. Include retry logic for dynamic content
+```yaml
+retry_count: 3
+retry_delay: 1000
+```
+
+## Testing Your Selectors
+
+Use these selectors with the template framework:
+
+```python
+# Load YAML selectors
+selector_loader = YAMLSelectorLoader("my_template", selector_engine, "selectors/")
+await selector_loader.load_selectors()
+
+# Use selectors in your scraper
+elements = await selector_engine.find_all(selector_name="blog_posts")
+```
+
+## Common Patterns
+
+### Navigation Menu
+```yaml
+name: main_navigation
+selector: .main-menu a
+```
+
+### Article Content
+```yaml
+name: article_body
+selector: .article-body
+```
+
+### Product Information
+```yaml
+name: product_details
+selector: .product-details
+```
+
+### Contact Information
+```yaml
+name: contact_info
+selector: .contact-info
+```
+
+These examples provide a comprehensive starting point for creating your own YAML selectors! 🚀

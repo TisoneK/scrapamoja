@@ -1,0 +1,13 @@
+"""
+Package initialization for {{ template_name }} template.
+"""
+
+from .scraper import {{ metadata.name|title }}Scraper
+
+__version__ = "{{ metadata.version }}"
+__author__ = "{{ metadata.author }}"
+__description__ = "{{ metadata.description }}"
+
+__all__ = [
+    "{{ metadata.name|title }}Scraper"
+]

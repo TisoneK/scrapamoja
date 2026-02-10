@@ -58,13 +58,13 @@ description: "Task list for Fix Framework Issues feature implementation"
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Implement store() method in FileSystemStorageAdapter class in src/storage/adapter.py
-- [ ] T009 [US1] Implement delete() method in FileSystemStorageAdapter class in src/storage/adapter.py
-- [ ] T010 [US1] Add proper error handling and structured logging to storage methods in src/storage/adapter.py
-- [ ] T011 [US1] Test storage operations with various data types and error scenarios
-- [ ] T012 [US1] Verify storage adapter follows existing adapter patterns in src/storage/adapter.py
-- [ ] T013 [US1] Test session persistence functionality with browser lifecycle example
-- [ ] T014 [US1] Test session cleanup functionality with browser lifecycle example
+- [X] T008 [US1] Implement store() method in FileSystemStorageAdapter class in src/storage/adapter.py
+- [X] T009 [US1] Implement delete() method in FileSystemStorageAdapter class in src/storage/adapter.py
+- [X] T010 [US1] Add proper error handling and structured logging to storage methods in src/storage/adapter.py
+- [X] T011 [US1] Test storage operations with various data types and error scenarios
+- [X] T012 [US1] Verify storage adapter follows existing adapter patterns in src/storage/adapter.py
+- [X] T013 [US1] Test session persistence functionality with browser lifecycle example
+- [X] T014 [US1] Test session cleanup functionality with browser lifecycle example
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -78,14 +78,14 @@ description: "Task list for Fix Framework Issues feature implementation"
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Create test pages directory and Google stub page in examples/test_pages/google_stub.html
-- [ ] T016 [US2] Add environment variable detection to browser lifecycle example in examples/browser_lifecycle_example.py
-- [ ] T017 [US2] Implement _get_navigation_url() method in examples/browser_lifecycle_example.py
-- [ ] T018 [US2] Enhance navigate_to_google() method with retry/backoff logic in examples/browser_lifecycle_example.py
-- [ ] T019 [US2] Add configurable navigation timeouts for test vs production modes in examples/browser_lifecycle_example.py
-- [ ] T020 [US2] Test navigation functionality in normal mode with examples/browser_lifecycle_example.py
-- [ ] T021 [US2] Test navigation functionality in TEST_MODE with examples/browser_lifecycle_example.py
-- [ ] T022 [US2] Verify TEST_MODE works without external network access
+- [X] T015 [US2] Create test pages directory and Google stub page in examples/test_pages/google_stub.html
+- [X] T016 [US2] Add environment variable detection to browser lifecycle example in examples/browser_lifecycle_example.py
+- [X] T017 [US2] Implement _get_navigation_url() method in examples/browser_lifecycle_example.py
+- [X] T018 [US2] Enhance navigate_to_google() method with retry/backoff logic in examples/browser_lifecycle_example.py
+- [X] T019 [US2] Add configurable navigation timeouts for test vs production modes in examples/browser_lifecycle_example.py
+- [X] T020 [US2] Test navigation functionality in normal mode with examples/browser_lifecycle_example.py
+- [X] T021 [US2] Test navigation functionality in TEST_MODE with examples/browser_lifecycle_example.py
+- [X] T022 [US2] Verify TEST_MODE works without external network access
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -99,14 +99,14 @@ description: "Task list for Fix Framework Issues feature implementation"
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Add subprocess handle tracking to BrowserSession.__post_init__ in src/browser/session.py
-- [ ] T024 [US3] Implement _cleanup_subprocess_handles() method in src/browser/session.py
-- [ ] T025 [US3] Enhance close() method with subprocess cleanup in src/browser/session.py
-- [ ] T026 [US3] Add Windows-specific closed pipe access guards in src/browser/session.py
-- [ ] T027 [US3] Add structured logging for subprocess cleanup operations in src/browser/session.py
-- [ ] T028 [US3] Test subprocess cleanup with single browser session in examples/browser_lifecycle_example.py
-- [ ] T029 [US3] Test subprocess cleanup with multiple browser sessions in examples/browser_lifecycle_example.py
-- [ ] T030 [US3] Verify no subprocess deallocator warnings appear on Windows
+- [X] T023 [US3] Add subprocess handle tracking to BrowserSession.__post_init__ in src/browser/session.py
+- [X] T024 [US3] Implement _cleanup_subprocess_handles() method in src/browser/session.py
+- [X] T025 [US3] Enhance close() method with subprocess cleanup in src/browser/session.py
+- [X] T026 [US3] Add Windows-specific closed pipe access guards in src/browser/session.py
+- [X] T027 [US3] Add structured logging for subprocess cleanup operations in src/browser/session.py
+- [X] T028 [US3] Test subprocess cleanup with single browser session in examples/browser_lifecycle_example.py
+- [X] T029 [US3] Test subprocess cleanup with multiple browser sessions in examples/browser_lifecycle_example.py
+- [X] T030 [US3] Verify no subprocess deallocator warnings appear on Windows
 
 **Checkpoint**: All user stories should now be independently functional
 

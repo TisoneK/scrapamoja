@@ -18,6 +18,10 @@ from ..logging.resilience_logger import get_logger
 from ..correlation import get_correlation_id, with_correlation_id
 from ..events import publish_retry_event, publish_failure_event
 from ..exceptions import MaxRetriesExceededError, PermanentFailureError, RetryConfigurationError
+from ..config.retry_config import get_config_manager, ConfigChange
+
+
+logger = get_logger("retry_manager")
 
 
 @dataclass
@@ -53,7 +57,7 @@ class RetrySession:
     
     @property
     def total_duration(self) -> float:
-        """Get total duration of the retry session."""
+        """Get total duration of retry session."""
         end_time = self.end_time or datetime.utcnow()
         return (end_time - self.start_time).total_seconds()
     
@@ -75,24 +79,17 @@ class RetryManager(IRetryManager, IResilienceManager):
         self._initialized = False
     
     async def initialize(self) -> None:
-        """Initialize the retry manager."""
+        """Initialize retry manager."""
         if self._initialized:
             return
         
-        # Register default policies
-        from ..models.retry_policy import (
-            DEFAULT_EXPONENTIAL_BACKOFF,
-            AGGRESSIVE_RETRY,
-            CONSERVATIVE_RETRY,
-            LINEAR_RETRY,
-            FIXED_RETRY
-        )
+        # Load configuration from config manager
+        config_manager = get_config_manager()
+        config = await config_manager.load_config()
         
-        self.policies[DEFAULT_EXPONENTIAL_BACKOFF.id] = DEFAULT_EXPONENTIAL_BACKOFF
-        self.policies[AGGRESSIVE_RETRY.id] = AGGRESSIVE_RETRY
-        self.policies[CONSERVATIVE_RETRY.id] = CONSERVATIVE_RETRY
-        self.policies[LINEAR_RETRY.id] = LINEAR_RETRY
-        self.policies[FIXED_RETRY.id] = FIXED_RETRY
+        # Load policies from configuration
+        for policy_id, policy_config in config.policies.items():
+            self.policies[policy_id] = RetryPolicy.from_dict(policy_config.dict())
         
         self._initialized = True
         
@@ -102,19 +99,14 @@ class RetryManager(IRetryManager, IResilienceManager):
             correlation_id=get_correlation_id(),
             context={
                 "policies_count": len(self.policies),
-                "default_policies": [
-                    DEFAULT_EXPONENTIAL_BACKOFF.name,
-                    AGGRESSIVE_RETRY.name,
-                    CONSERVATIVE_RETRY.name,
-                    LINEAR_RETRY.name,
-                    FIXED_RETRY.name
-                ]
+                "config_version": config.version,
+                "loaded_policies": list(config.policies.keys())
             },
             component="retry_manager"
         )
     
     async def shutdown(self) -> None:
-        """Shutdown the retry manager gracefully."""
+        """Shutdown retry manager gracefully."""
         if not self._initialized:
             return
         
@@ -158,7 +150,7 @@ class RetryManager(IRetryManager, IResilienceManager):
             **kwargs: Operation keyword arguments
             
         Returns:
-            Result of the operation
+            Result of operation
             
         Raises:
             MaxRetriesExceededError: If all retry attempts fail
@@ -262,6 +254,62 @@ class RetryManager(IRetryManager, IResilienceManager):
         
         return policy.id
     
+    async def reload_config(self) -> None:
+        """
+        Reload retry configuration from file.
+        
+        Raises:
+            RetryConfigurationError: If configuration is invalid
+        """
+        config_manager = get_config_manager()
+        await config_manager.reload_config()
+        
+        # Reload policies from configuration
+        new_policies = config_manager.policies
+        
+        # Update existing policies and add new ones
+        for policy_id, policy_config in new_policies.items():
+            if policy_id in self.policies:
+                # Update existing policy
+                self.policies[policy_id] = RetryPolicy.from_dict(policy_config.dict())
+            else:
+                # Add new policy
+                self.policies[policy_id] = RetryPolicy.from_dict(policy_config.dict())
+        
+        # Remove policies that no longer exist in configuration
+        existing_policy_ids = set(self.policies.keys())
+        config_policy_ids = set(new_policies.keys())
+        removed_policy_ids = existing_policy_ids - config_policy_ids
+        for policy_id in removed_policy_ids:
+            del self.policies[policy_id]
+        
+        self.logger.info(
+            f"Retry configuration reloaded: {len(new_policies)} policies, {len(removed_policy_ids)} removed",
+            event_type="config_reloaded",
+            correlation_id=get_correlation_id(),
+            context={
+                "policies_count": len(self.policies),
+                "added_policies": len(config_policy_ids - existing_policy_ids),
+                "removed_policies": len(removed_policy_ids)
+            },
+            component="retry_manager"
+        )
+    
+    async def register_config_change_callback(self, callback) -> None:
+        """
+        Register a callback to be invoked on configuration changes.
+        
+        Args:
+            callback: Callback function to invoke on configuration changes
+        """
+        config_manager = get_config_manager()
+        config_manager.register_change_callback(callback)
+        
+        self.logger.info(
+            "Configuration change callback registered",
+            component="retry_manager"
+        )
+    
     async def _execute_retry_session(
         self,
         session: RetrySession,
@@ -271,7 +319,7 @@ class RetryManager(IRetryManager, IResilienceManager):
         **kwargs
     ) -> Any:
         """
-        Execute a retry session with the given policy.
+        Execute a retry session with given policy.
         
         Args:
             session: Retry session information
@@ -281,7 +329,7 @@ class RetryManager(IRetryManager, IResilienceManager):
             **kwargs: Operation keyword arguments
             
         Returns:
-            Result of the operation
+            Result of operation
         """
         attempt = 0
         last_error = None
@@ -333,7 +381,7 @@ class RetryManager(IRetryManager, IResilienceManager):
                     if delay > 0:
                         await asyncio.sleep(delay)
                 
-                # Execute the operation
+                # Execute operation
                 if asyncio.iscoroutinefunction(operation):
                     result = await operation(*args, **kwargs)
                 else:
@@ -364,13 +412,13 @@ class RetryManager(IRetryManager, IResilienceManager):
                 return result
                 
             except Exception as error:
-                # Handle the error
+                # Handle error
                 last_error = error
                 retry_attempt.error = error
                 retry_attempt.duration = time.time() - attempt_start
                 session.attempts.append(retry_attempt)
                 
-                # Classify the failure
+                # Classify failure
                 failure_type = await self.classify_failure(error)
                 
                 # Check if it's a permanent failure
@@ -401,7 +449,7 @@ class RetryManager(IRetryManager, IResilienceManager):
                         }
                     )
                 
-                # Log the retry attempt
+                # Log retry attempt
                 self.logger.warning(
                     f"Operation failed on attempt {attempt}: {session.operation} - {str(error)}",
                     event_type="operation_failed",
@@ -620,3 +668,8 @@ async def execute_with_retry(
 async def create_retry_policy(policy_config: Dict[str, Any]) -> str:
     """Create a retry policy using the global retry manager."""
     return await _retry_manager.create_retry_policy(policy_config)
+
+
+async def reload_config() -> None:
+    """Reload the global retry configuration."""
+    await _retry_manager.reload_config()

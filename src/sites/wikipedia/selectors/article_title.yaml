@@ -1,0 +1,18 @@
+description: "Wikipedia article title"
+confidence_threshold: 0.9
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: "#firstHeading"
+    weight: 1.0
+  - type: "css"
+    selector: ".mw-first-heading"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//h1[@id='firstHeading']"
+    weight: 0.8
+  - type: "text"
+    selector: "Edit source"
+    context: "parent"
+    weight: 0.6

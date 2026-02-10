@@ -1,0 +1,114 @@
+"""
+{{ metadata.name }} Site Template
+
+This module provides the main scraper implementation for {{ metadata.site_domain }}.
+"""
+
+import logging
+from typing import Dict, Any, Optional
+from src.sites.base.template import BaseSiteTemplate
+
+logger = logging.getLogger(__name__)
+
+
+class {{ metadata.name|title }}Scraper(BaseSiteTemplate):
+    """
+    Main scraper for {{ metadata.site_domain }}.
+    
+    This template provides scraping functionality for {{ metadata.site_domain }}
+    using the Site Template Integration Framework.
+    """
+    
+    def __init__(self, page, selector_engine):
+        """
+        Initialize {{ metadata.name }} scraper.
+        
+        Args:
+            page: Playwright page instance
+            selector_engine: Selector engine instance
+        """
+        super().__init__(
+            name="{{ metadata.name }}",
+            version="{{ metadata.version }}",
+            description="{{ metadata.description }}",
+            author="{{ metadata.author }}",
+            framework_version="{{ metadata.framework_version }}",
+            site_domain="{{ metadata.site_domain }}"
+        )
+        
+        # Template-specific initialization
+        self.capabilities = [
+            "scraping",
+            "extraction",
+            "navigation"
+        ]
+        
+        self.supported_domains = [
+            "{{ metadata.site_domain }}"
+        ]
+        
+        self.dependencies = [
+            "selector_engine",
+            "extractor"
+        ]
+        
+        logger.info(f"{{ metadata.name|title }}Scraper initialized for {self.site_domain}")
+    
+    async def _execute_scrape_logic(self, action: str, **kwargs) -> Dict[str, Any]:
+        """
+        Execute scraping logic for {{ metadata.name }}.
+        
+        Args:
+            action: Action to perform
+            **kwargs: Additional parameters
+            
+        Returns:
+            Dict[str, Any]: Scrape results
+        """
+        try:
+            if action == "scrape_main_content":
+                return await self._scrape_main_content(**kwargs)
+            elif action == "navigate_to_page":
+                return await self._navigate_to_page(**kwargs)
+            else:
+                raise ValueError(f"Unknown action: {action}")
+        
+        except Exception as e:
+            logger.error(f"Error executing {action}: {e}")
+            raise
+    
+    async def _scrape_main_content(self, **kwargs) -> Dict[str, Any]:
+        """
+        Scrape main content from the page.
+        
+        Args:
+            **kwargs: Additional parameters
+            
+        Returns:
+            Dict[str, Any]: Scrape results
+        """
+        # Implementation will be added based on specific requirements
+        return {
+            "action": "scrape_main_content",
+            "success": True,
+            "data": {},
+            "message": "Main content scraped successfully"
+        }
+    
+    async def _navigate_to_page(self, **kwargs) -> Dict[str, Any]:
+        """
+        Navigate to a specific page.
+        
+        Args:
+            **kwargs: Navigation parameters
+            
+        Returns:
+            Dict[str, Any]: Navigation results
+        """
+        # Implementation will be added based on specific requirements
+        return {
+            "action": "navigate_to_page",
+            "success": True,
+            "data": {},
+            "message": "Navigation completed successfully"
+        }

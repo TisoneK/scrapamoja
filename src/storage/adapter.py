@@ -380,6 +380,66 @@ class FileSystemStorageAdapter(IStorageAdapter):
             raise StorageError(
                 "list", "files", pattern, str(e)
             )
+
+    async def store(self, key: str, value: Any) -> None:
+        """Store data with given key using JSON serialization."""
+        try:
+            # Handle keys that already have .json extension
+            if key.endswith('.json'):
+                file_path = self.base_path / key
+            else:
+                file_path = self.base_path / f"{key}.json"
+            
+            # Ensure directory exists
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+                
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(value, f, indent=2)
+            
+            self._logger.info(
+                "data_stored",
+                key=key,
+                file_path=str(file_path)
+            )
+            
+        except Exception as e:
+            self._logger.error(
+                "store_failed",
+                key=key,
+                error=str(e)
+            )
+            raise StorageError("store", "data", key, str(e))
+
+    async def delete(self, key: str) -> None:
+        """Delete data file for given key."""
+        try:
+            # Handle keys that already have .json extension
+            if key.endswith('.json'):
+                file_path = self.base_path / key
+            else:
+                file_path = self.base_path / f"{key}.json"
+                
+            if file_path.exists():
+                file_path.unlink()
+                
+                self._logger.info(
+                    "data_deleted",
+                    key=key,
+                    file_path=str(file_path)
+                )
+            else:
+                self._logger.debug(
+                    "data_not_found",
+                    key=key
+                )
+                
+        except Exception as e:
+            self._logger.error(
+                "delete_failed",
+                key=key,
+                error=str(e)
+            )
+            raise StorageError("delete", "data", key, str(e))
     
     async def cleanup_old_snapshots(self, older_than: datetime) -> int:
         """Clean up old snapshots."""
