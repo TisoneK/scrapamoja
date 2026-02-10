@@ -11,6 +11,24 @@ from src.selectors.context_manager import SelectorContext, DOMState
 class FlashscoreFlow(BaseFlow):
     """Navigation flow for Flashscore scraper."""
     
+    def _get_timeout_ms(self, selector_name: str, default_timeout: float = 3.0) -> int:
+        """
+        Get timeout from selector definition and convert to milliseconds.
+        
+        Args:
+            selector_name: Name of the selector to get timeout for
+            default_timeout: Default timeout in seconds if selector not found
+            
+        Returns:
+            Timeout in milliseconds
+        """
+        try:
+            selector = self.selector_engine.get_selector(selector_name)
+            timeout = selector.timeout if selector else default_timeout
+            return int(timeout * 1000)  # Convert seconds to milliseconds
+        except Exception:
+            return int(default_timeout * 1000)
+
     async def open_home(self):
         """Navigate to Flashscore home page."""
         await self.page.goto("https://www.flashscore.com", wait_until="domcontentloaded")
@@ -70,14 +88,10 @@ class FlashscoreFlow(BaseFlow):
                 cookie_result = await self.selector_engine.resolve("cookie_consent", dom_context)
                 if cookie_result and cookie_result.element_info:
                     logger.info("Cookie consent dialog found using selector engine")
-                    # Get timeout from selector definition
-                    cookie_selector = self.selector_engine.get_selector("cookie_consent")
-                    timeout = cookie_selector.timeout if cookie_selector else 5.0
-                    
                     # Click accept button
                     await cookie_result.element_info.element.click()
                     # Wait using timeout from config
-                    await self.page.wait_for_timeout(int(timeout * 1000))  # Convert to milliseconds
+                    await self.page.wait_for_timeout(self._get_timeout_ms("cookie_consent", 5.0))
                 else:
                     logger.info("No cookie consent dialog found")
             except Exception as e:
@@ -87,7 +101,7 @@ class FlashscoreFlow(BaseFlow):
                     accept_button = await self.page.query_selector("#onetrust-accept-btn-handler")
                     if accept_button:
                         await accept_button.click()
-                        await self.page.wait_for_timeout(5000)  # 5 second fallback
+                        await self.page.wait_for_timeout(self._get_timeout_ms("cookie_consent", 5.0))
                 except:
                     pass  # Cookie dialog might not be present
                     
@@ -115,16 +129,12 @@ class FlashscoreFlow(BaseFlow):
             try:
                 search_result = await self.selector_engine.resolve("search_input", dom_context)
                 if search_result and search_result.element_info:
-                    # Get timeout from selector definition
-                    search_selector = self.selector_engine.get_selector("search_input")
-                    timeout = search_selector.timeout if search_selector else 3.0
-                    
                     search_input = search_result.element_info.element
                     await search_input.clear()
                     await search_input.type(sport_name)
                     await search_input.press('Enter')
                     # Wait using timeout from config
-                    await self.page.wait_for_timeout(int(timeout * 1000))  # Convert to milliseconds
+                    await self.page.wait_for_timeout(self._get_timeout_ms("search_input"))
                 else:
                     logger.warning("Search input not found")
             except Exception as e:
