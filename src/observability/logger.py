@@ -154,9 +154,9 @@ class CorrelationContext:
     """Manager for correlation context across async operations."""
     
     @staticmethod
-    def set_correlation_id(correlation_id: str) -> None:
+    def set_correlation_id(cid: str) -> None:
         """Set correlation ID for current context."""
-        correlation_id.set(correlation_id)
+        correlation_id.set(cid)
     
     @staticmethod
     def get_correlation_id() -> Optional[str]:
@@ -169,9 +169,9 @@ class CorrelationContext:
         return str(uuid.uuid4())
     
     @staticmethod
-    def set_run_id(run_id: str) -> None:
+    def set_run_id(rid: str) -> None:
         """Set run ID for current context."""
-        run_id.set(run_id)
+        run_id.set(rid)
     
     @staticmethod
     def get_run_id() -> Optional[str]:
@@ -179,9 +179,9 @@ class CorrelationContext:
         return run_id.get()
     
     @staticmethod
-    def set_selector_name(selector_name: str) -> None:
+    def set_selector_name(sname: str) -> None:
         """Set selector name for current context."""
-        selector_name.set(selector_name)
+        selector_name.set(sname)
     
     @staticmethod
     def get_selector_name() -> Optional[str]:
