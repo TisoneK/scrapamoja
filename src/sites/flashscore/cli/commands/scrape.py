@@ -6,6 +6,8 @@ Handles data extraction from Flashscore.
 
 import asyncio
 from typing import List, Optional
+import json
+import re
 from pathlib import Path
 import argparse
 
@@ -329,6 +331,13 @@ class ScrapeCommand:
         try:
             from src.selectors.context import DOMContext
             from datetime import datetime
+            from src.observability.logger import get_logger, CorrelationContext
+            
+            logger = get_logger("flashscore.scrape")
+            
+            # Generate unique correlation ID for this operation
+            correlation_id = f"scrape_scheduled_{datetime.utcnow().timestamp()}"
+            CorrelationContext.set_correlation_id(correlation_id)
             
             # Create DOM context for the page
             dom_context = DOMContext(
@@ -371,12 +380,58 @@ class ScrapeCommand:
             'total': len(matches)
         }
     
+    async def _extract_match_id(self, element) -> str:
+        """Extract match ID using two methods: URL parameter (primary) and aria-describedby (fallback)."""
+        
+        # Method 1: Extract from URL parameter ?mid=CSXgyReU (primary)
+        try:
+            link_element = await element.query_selector('.eventRowLink')
+            if link_element:
+                href = await link_element.get_attribute('href')
+                if href:
+                    import re
+                    mid_match = re.search(r'[?&]mid=([^&]+)', href)
+                    if mid_match:
+                        return mid_match.group(1)
+        except:
+            pass
+        
+        # Method 2: Extract from aria-describedby="g_3_CSXgyReU" (fallback)
+        try:
+            link_element = await element.query_selector('.eventRowLink')
+            if link_element:
+                aria_describedby = await link_element.get_attribute('aria-describedby')
+                if aria_describedby:
+                    # Remove "g_3_" prefix to get match ID
+                    if aria_describedby.startswith('g_'):
+                        parts = aria_describedby.split('_')
+                        if len(parts) >= 3:
+                            return '_'.join(parts[2:])  # Join everything after "g_3_"
+        except:
+            pass
+        
+        return None
+
     async def _extract_match_data(self, element, status: str) -> dict:
         """Extract data from a match element using proper selector system."""
         # Basic match data extraction using selector engine
         try:
             # For match list extraction, we need to find elements within the match item
-            # Use the element as the context for finding team names and scores
+            # Use element as context for finding team names and scores
+            
+            # Extract match ID using dedicated method
+            match_id = await self._extract_match_id(element)
+            
+            # Extract match URL
+            match_url = None
+            try:
+                link_element = await element.query_selector('.eventRowLink')
+                if link_element:
+                    match_url = await link_element.get_attribute('href')
+                    if match_url and not match_url.startswith('http'):
+                        match_url = f"https://www.flashscore.com{match_url}"
+            except:
+                pass
             
             # Try to find home team within the match element
             try:
@@ -399,12 +454,29 @@ class ScrapeCommand:
             except:
                 score = None
             
+            # Try to extract time/date info
+            try:
+                time_element = await element.query_selector('.event__time, .time')
+                match_time = await time_element.text_content() if time_element else None
+            except:
+                match_time = None
+            
+            # Try to extract tournament info
+            try:
+                tournament_element = await element.query_selector('.event__tournament, .tournament')
+                tournament = await tournament_element.text_content() if tournament_element else None
+            except:
+                tournament = None
+            
             return {
+                'match_id': match_id,
                 'home_team': home_team,
                 'away_team': away_team,
                 'score': score,
                 'status': status,
-                'url': await element.get_attribute('href')
+                'url': match_url,
+                'time': match_time,
+                'tournament': tournament
             }
         except Exception as e:
             return {'error': str(e), 'status': status}
