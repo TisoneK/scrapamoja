@@ -1,0 +1,22 @@
+description: "Full Time sub-tab within STATS"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "[data-subtab='ft']"
+    weight: 1.0
+  - type: "css"
+    selector: ".subtab-ft"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//a[contains(text(), 'FT') or contains(text(), 'Full Time')]"
+    weight: 0.8
+  - type: "css"
+    selector: "[href*='ft']"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  required_for_navigation: false
+  tab_context: "stats"
+  tertiary_context: "ft"

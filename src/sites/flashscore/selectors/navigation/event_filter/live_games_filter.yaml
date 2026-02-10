@@ -1,0 +1,18 @@
+description: "Live games filter button"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".filters__tab.selected"
+    weight: 1.0
+  - type: "css"
+    selector: "[data-analytics-element='SCN_TAB'][data-analytics-alias='live']"
+    weight: 0.9
+  - type: "css"
+    selector: ".filters__text.filters__text--default"
+    weight: 0.8
+metadata:
+  wait_for_element: true
+  required_for_navigation: false
+  dom_state: "live"

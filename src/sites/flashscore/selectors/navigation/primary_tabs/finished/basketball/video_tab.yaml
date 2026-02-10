@@ -1,0 +1,19 @@
+description: "Video tab for finished matches"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "a[data-analytics-alias='video-detail'] button"
+    weight: 1.0
+  - type: "xpath"
+    selector: "//a[@data-analytics-alias='video-detail']//button"
+    weight: 0.9
+  - type: "css"
+    selector: "button:contains('Video')"
+    weight: 0.8
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  match_status: "finished"
+  tab_context: "primary"

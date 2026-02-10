@@ -1,0 +1,17 @@
+description: "Referee information in match summary"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".wcl-infoLabelWrapper_DXbvw + .wcl-infoValue_grawU"
+    weight: 1.0
+  - type: "xpath"
+    selector: "//div[contains(@class, 'wcl-infoLabelWrapper_DXbvw')]/following-sibling::div[contains(@class, 'wcl-infoValue_grawU')]"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-testid='referee']"
+    weight: 0.8
+metadata:
+  wait_for_element: true
+  tab_context: "summary"

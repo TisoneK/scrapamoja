@@ -1,0 +1,22 @@
+description: "1X2 sub-tab in odds section"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "button[data-testid='wcl-tab']:contains('1X2')"
+    weight: 1.0
+  - type: "xpath"
+    selector: "//button[contains(text(), '1X2')]"
+    weight: 0.9
+  - type: "css"
+    selector: ".wcl-tab_GS7ig:contains('1X2')"
+    weight: 0.8
+  - type: "css"
+    selector: "button:contains('1X2')"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  tab_context: "odds"
+  sub_tab_context: "1x2"

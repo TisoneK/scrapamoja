@@ -1,0 +1,22 @@
+description: "Summary sub-tab for live matches"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "a[data-analytics-alias='match-summary'] button[data-selected='true']"
+    weight: 1.0
+  - type: "css"
+    selector: "a[data-analytics-alias='match-summary'] button.wcl-tabSelected_rHdTM"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//a[@data-analytics-alias='match-summary']//button[contains(@class, 'wcl-tabSelected')]"
+    weight: 0.8
+  - type: "css"
+    selector: "button:contains('Summary')"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  match_status: "live"
+  tab_context: "secondary"

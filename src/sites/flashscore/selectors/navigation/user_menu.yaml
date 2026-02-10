@@ -1,0 +1,28 @@
+description: "User menu and login button"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "#user-menu"
+    weight: 1.0
+  - type: "css"
+    selector: "#hamburger-menu"
+    weight: 0.9
+  - type: "css"
+    selector: "#user-menu"
+    weight: 0.8
+  - type: "css"
+    selector: "#header__block--user"
+    weight: 0.7
+  - type: "css"
+    selector: "#user-menu"
+    weight: 0.6
+  - type: "css"
+    selector: "#header__button--user"
+    weight: 0.5
+  - type: "css"
+    selector: ".header__text--user"
+    weight: 0.4
+metadata:
+  wait_for_element: false

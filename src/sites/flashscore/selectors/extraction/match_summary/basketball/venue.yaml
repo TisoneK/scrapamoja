@@ -1,0 +1,20 @@
+description: "Match venue information in match summary"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".wcl-infoValue_grawU span:first-child"
+    weight: 1.0
+  - type: "xpath"
+    selector: "//div[contains(@class, 'wcl-infoValue_grawU')]//span[1]"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-testid='venue']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//span[contains(text(), '(') and contains(text(), ')')]"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  tab_context: "summary"

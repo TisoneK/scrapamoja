@@ -1,0 +1,21 @@
+description: "Privacy policy dialog and close button"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".privacy-dialog-close"
+    weight: 1.0
+  - type: "css"
+    selector: "[data-testid='privacy-close']"
+    weight: 0.9
+  - type: "css"
+    selector: ".modal-close"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//button[contains(@class, 'close') and contains(@aria-label, 'Close')]"
+    weight: 0.7
+metadata:
+  wait_for_element: false
+  required_for_navigation: false
+  skip_if_not_present: true

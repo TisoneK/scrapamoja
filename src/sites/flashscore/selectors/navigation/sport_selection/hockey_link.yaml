@@ -1,0 +1,21 @@
+description: "Hockey sport navigation link"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "[data-sport-id='4']"
+    weight: 1.0
+  - type: "css"
+    selector: ".menuTop__item[href*='hockey']"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//a[contains(text(), 'Hockey') or contains(@href, 'hockey')]"
+    weight: 0.8
+  - type: "css"
+    selector: "[href*='hockey']"
+    weight: 0.7
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  sport_context: "hockey"
