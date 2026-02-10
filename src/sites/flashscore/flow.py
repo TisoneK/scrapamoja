@@ -51,23 +51,45 @@ class FlashscoreFlow(BaseFlow):
     async def _handle_cookie_consent(self):
         """Handle cookie consent dialog if present."""
         try:
-            # Try multiple cookie consent selectors
-            cookie_selectors = [
-                "cookie_consent",  # From our hierarchical selectors
-                "cookie_accept",
-                "#onetrust-accept-btn-handler",
-                ".cookie-consent-accept"
-            ]
+            from src.selectors.context import DOMContext
+            from datetime import datetime
+            from src.observability.logger import get_logger
             
-            for selector_name in cookie_selectors:
+            logger = get_logger("flashscore.flow")
+            
+            # Create DOM context for the page
+            dom_context = DOMContext(
+                page=self.page,
+                tab_context="flashscore_authentication",
+                url=self.page.url,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Use the selector engine to find cookie consent button
+            try:
+                cookie_result = await self.selector_engine.resolve("cookie_consent", dom_context)
+                if cookie_result and cookie_result.element_info:
+                    logger.info("Cookie consent dialog found using selector engine")
+                    # Get timeout from selector definition
+                    cookie_selector = self.selector_engine.get_selector("cookie_consent")
+                    timeout = cookie_selector.timeout if cookie_selector else 5.0
+                    
+                    # Click accept button
+                    await cookie_result.element_info.element.click()
+                    # Wait using timeout from config
+                    await self.page.wait_for_timeout(int(timeout * 1000))  # Convert to milliseconds
+                else:
+                    logger.info("No cookie consent dialog found")
+            except Exception as e:
+                logger.warning(f"Error using selector engine for cookie consent: {e}")
+                # Fallback: try direct query if selector engine fails
                 try:
-                    accept_button = await self.selector_engine.find(self.page, selector_name)
+                    accept_button = await self.page.query_selector("#onetrust-accept-btn-handler")
                     if accept_button:
                         await accept_button.click()
-                        await self.page.wait_for_timeout(1000)
-                        break
-                except Exception:
-                    continue
+                        await self.page.wait_for_timeout(5000)  # 5 second fallback
+                except:
+                    pass  # Cookie dialog might not be present
                     
         except Exception:
             # Cookie dialog might not be present or different structure
@@ -75,50 +97,88 @@ class FlashscoreFlow(BaseFlow):
     
     async def search_sport(self, sport_name: str):
         """Search for a specific sport."""
-        search_input = await self.selector_engine.find(self.page, "search_input")
-        if search_input:
-            await search_input.clear()
-            await search_input.type(sport_name)
-            await search_input.press('Enter')
-            await self.page.wait_for_timeout(2000)
+        try:
+            from src.selectors.context import DOMContext
+            from datetime import datetime
+            from src.observability.logger import get_logger
+            
+            logger = get_logger("flashscore.flow")
+            
+            dom_context = DOMContext(
+                page=self.page,
+                tab_context="flashscore_navigation",
+                url=self.page.url,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Use selector engine to find search input
+            try:
+                search_result = await self.selector_engine.resolve("search_input", dom_context)
+                if search_result and search_result.element_info:
+                    # Get timeout from selector definition
+                    search_selector = self.selector_engine.get_selector("search_input")
+                    timeout = search_selector.timeout if search_selector else 3.0
+                    
+                    search_input = search_result.element_info.element
+                    await search_input.clear()
+                    await search_input.type(sport_name)
+                    await search_input.press('Enter')
+                    # Wait using timeout from config
+                    await self.page.wait_for_timeout(int(timeout * 1000))  # Convert to milliseconds
+                else:
+                    logger.warning("Search input not found")
+            except Exception as e:
+                logger.warning(f"Error searching for sport: {e}")
+        except Exception as e:
+            logger.warning(f"Error in search_sport: {e}")
     
     async def navigate_to_football(self):
         """Navigate to football section."""
-        # Try multiple football link selectors
-        football_selectors = [
-            "football_link",  # From our hierarchical selectors
-            ".sport-football",
-            "[data-sport='football']"
-        ]
-        
-        for selector_name in football_selectors:
-            try:
-                football_link = await self.selector_engine.find(self.page, selector_name)
-                if football_link:
-                    await football_link.click()
-                    await self.page.wait_for_timeout(2000)
-                    break
-            except Exception:
-                continue
+        try:
+            from src.selectors.context import DOMContext
+            from datetime import datetime
+            from src.observability.logger import get_logger
+            
+            logger = get_logger("flashscore.flow")
+            
+            dom_context = DOMContext(
+                page=self.page,
+                tab_context="flashscore_navigation",
+                url=self.page.url,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Try to find football link using selector engine
+            football_result = await self.selector_engine.resolve("football_link", dom_context)
+            if football_result and football_result.element_info:
+                await football_result.element_info.element.click()
+                await self.page.wait_for_timeout(2000)
+        except Exception as e:
+            logger.warning(f"Error navigating to football: {e}")
     
     async def navigate_to_live_matches(self):
-        """Navigate to live matches section."""
-        # Try live filter selector from hierarchical selectors
-        live_selectors = [
-            "live_filter",  # From our hierarchical selectors
-            "live_matches_link",
-            ".filter-live"
-        ]
-        
-        for selector_name in live_selectors:
-            try:
-                live_link = await self.selector_engine.find(self.page, selector_name)
-                if live_link:
-                    await live_link.click()
-                    await self.page.wait_for_timeout(2000)
-                    break
-            except Exception:
-                continue
+        """Navigate to live matches filter."""
+        try:
+            from src.selectors.context import DOMContext
+            from datetime import datetime
+            from src.observability.logger import get_logger
+            
+            logger = get_logger("flashscore.flow")
+            
+            dom_context = DOMContext(
+                page=self.page,
+                tab_context="flashscore_navigation",
+                url=self.page.url,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Try to find live games filter using selector engine
+            live_result = await self.selector_engine.resolve("live_games_filter", dom_context)
+            if live_result and live_result.element_info:
+                await live_result.element_info.element.click()
+                await self.page.wait_for_timeout(2000)
+        except Exception as e:
+            logger.warning(f"Error navigating to live matches: {e}")
     
     async def select_date(self, date_str: str):
         """Select a specific date for matches."""
