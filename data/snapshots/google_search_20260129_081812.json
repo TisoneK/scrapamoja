@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-01-29T08:18:12.033816+00:00",
+  "page": {
+    "title": "Google Search Stub",
+    "url": "file:///C:/Users/tison/Dev/scorewise/scraper/examples/test_pages/google_stub.html",
+    "content_length": 2185
+  },
+  "session": {
+    "session_id": "452fc855-06f3-4448-98a9-d7a67c481c60",
+    "status": "active",
+    "browser_type": "chromium"
+  },
+  "timing": {
+    "initialization_ms": 1257,
+    "navigation_ms": 175,
+    "search_ms": 456,
+    "total_ms": 1900
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-01-29T06:43:41.714106",
+  "page": {
+    "title": "Playwright browser automation - Tafuta na Google",
+    "url": "https://www.google.com/search?hl=sw-KE&source=hp&biw=&bih=&q=Playwright+browser+automation&iflsig=AFdpzrgAAAAAaXsPnBPjNW0mI_22ewc-klaVQOTVC0Yh&gbv=2&oq=Playwright+browser+automation&gs_l=heirloom-hp.3...2930.2930.0.2958.1.1.0.0.0.0.0.0..0.0....0...1..34.heirloom-hp..1.0.0.OkvxNMQMOU4&sei=kAF7aaWEBPSqwPAPsYL76AU",
+    "content_length": 88561
+  },
+  "metadata": {
+    "capture_duration_ms": 18,
+    "stage_times": {
+      "initialization": 0.7513728141784668,
+      "navigation": 4.14699649810791,
+      "search": 15.092290878295898
+    },
+    "total_time_ms": 20010
+  }
+}

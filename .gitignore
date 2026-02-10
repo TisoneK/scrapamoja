@@ -136,13 +136,6 @@ dmypy.json
 *~
 
 # Windsurf and AI tools
-.windsurf/
-.kilocode/
-.specify/
-.FullName/
-openspec/
-specs/
-.github/
 
 # OS
 .DS_Store
@@ -166,7 +159,6 @@ influxdb/
 metrics/
 
 # Application specific
-data/
 logs/
 *.log
 temp/

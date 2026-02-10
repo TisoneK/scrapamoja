@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.2",
+  "captured_at": "2026-01-29T10:29:31.860932+00:00",
+  "page": {
+    "title": "Playwright browser automation - Search results - Wikipedia",
+    "url": "https://en.wikipedia.org/wiki/Special:Search?search=Playwright+browser+automation&go=Go&ns0=1",
+    "content_length": 571221,
+    "html": {
+      "filepath": "html/20260129_102931_6e21db45_55da12498845.html",
+      "captured_at": "2026-01-29T10:29:31.860952+00:00",
+      "file_size_bytes": 571221,
+      "content_length": 571221,
+      "content_hash": "55da12498845c3b8fd39168f5f366fa996aba39f943b9a6e9009b34b05ab91d8",
+      "format": "html"
+    },
+    "screenshot": {
+      "filepath": "screenshots/wikipedia_search_20260129_102931.png",
+      "captured_at": "2026-01-29T10:29:31.860903+00:00",
+      "width": 1265,
+      "height": 2319,
+      "file_size_bytes": 306558,
+      "capture_mode": "fullpage",
+      "format": "png"
+    }
+  },
+  "session": {
+    "session_id": "6e21db45-2c6c-42b8-92e0-f1ea2039504e",
+    "status": "active",
+    "browser_type": "chromium"
+  },
+  "timing": {
+    "initialization_ms": 2389,
+    "navigation_ms": 3005,
+    "search_ms": 8994,
+    "total_ms": 15041
+  }
+}

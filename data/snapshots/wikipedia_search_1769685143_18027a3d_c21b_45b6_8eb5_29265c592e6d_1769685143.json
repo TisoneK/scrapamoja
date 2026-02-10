@@ -1,0 +1,28 @@
+{
+  "page_id": "wikipedia_search_1769685143",
+  "url": "file:///C:/Users/tison/Dev/scorewise/scraper/examples/test_pages/wikipedia_stub.html",
+  "timestamp": 1769685143.3709285,
+  "title": "Wikipedia Search Stub",
+  "content": "<!DOCTYPE html><html lang=\"en\"><head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Wikipedia Search Stub</title>\n    <style>\n        body {\n            font-family: Arial, sans-serif;\n            margin: 20px;\n            background-color: #f9f9f9;\n        }\n        .search-box {\n            margin: 20px 0;\n            padding: 20px;\n            background-color: white;\n            border: 1px solid #ddd;\n            border-radius: 4px;\n        }\n        input[name=\"search\"] {\n            width: 300px;\n            padding: 8px;\n            font-size: 16px;\n            border: 1px solid #ccc;\n            border-radius: 4px;\n        }\n        button {\n            padding: 8px 16px;\n            font-size: 16px;\n            background-color: #0645ad;\n            color: white;\n            border: none;\n            border-radius: 4px;\n            cursor: pointer;\n        }\n        button:hover {\n            background-color: #0533a0;\n        }\n        #results {\n            margin: 20px 0;\n            padding: 20px;\n            background-color: white;\n            border: 1px solid #ddd;\n            border-radius: 4px;\n            display: none;\n        }\n        #results.show {\n            display: block;\n        }\n        .result-item {\n            margin: 10px 0;\n            padding: 10px;\n            border-left: 4px solid #0645ad;\n            background-color: #f5f5f5;\n        }\n        .result-item a {\n            color: #0645ad;\n            text-decoration: none;\n            font-weight: bold;\n        }\n        .result-item p {\n            margin: 5px 0 0 0;\n            color: #666;\n            font-size: 14px;\n        }\n    </style>\n</head>\n<body>\n    <h1>Wikipedia Search Stub</h1>\n    <p>This is a test page for the browser lifecycle example in TEST_MODE.</p>\n    \n    <div class=\"search-box\">\n        <form id=\"searchForm\">\n            <input type=\"text\" name=\"search\" id=\"searchInput\" placeholder=\"Search Wikipedia\">\n            <button type=\"submit\">Search</button>\n        </form>\n    </div>\n    \n    <div id=\"results\" class=\"show\">\n        <h2>Search Results</h2>\n        <div id=\"resultsList\">\n                <div class=\"result-item\">\n                    <a href=\"#\">Playwright browser automation - Main Article</a>\n                    <p>The main Wikipedia article about Playwright browser automation</p>\n                </div>\n            \n                <div class=\"result-item\">\n                    <a href=\"#\">Overview of Playwright browser automation</a>\n                    <p>General information about Playwright browser automation</p>\n                </div>\n            \n                <div class=\"result-item\">\n                    <a href=\"#\">Playwright browser automation in Practice</a>\n                    <p>Practical applications and examples of Playwright browser automation</p>\n                </div>\n            </div>\n    </div>\n\n    <script>\n        document.getElementById('searchForm').addEventListener('submit', function(e) {\n            e.preventDefault();\n            const query = document.getElementById('searchInput').value;\n            \n            // Simulate search results\n            const results = [\n                {\n                    title: query + ' - Main Article',\n                    description: 'The main Wikipedia article about ' + query\n                },\n                {\n                    title: 'Overview of ' + query,\n                    description: 'General information about ' + query\n                },\n                {\n                    title: query + ' in Practice',\n                    description: 'Practical applications and examples of ' + query\n                }\n            ];\n            \n            // Display results\n            const resultsList = document.getElementById('resultsList');\n            resultsList.innerHTML = results.map(r => `\n                <div class=\"result-item\">\n                    <a href=\"#\">${r.title}</a>\n                    <p>${r.description}</p>\n                </div>\n            `).join('');\n            \n            document.getElementById('results').classList.add('show');\n        });\n    </script>\n\n\n</body></html>",
+  "selector_results": {},
+  "network_requests": [],
+  "console_logs": [],
+  "screenshot_path": "screenshots/wikipedia_search_1769685143_18027a3d_c21b_45b6_8eb5_29265c592e6d_1769685143.png",
+  "html_metadata": {
+    "filepath": "html/wikipedia_search_1769685143_1769685143.html",
+    "captured_at": "2026-01-29T11:12:23.370893+00:00",
+    "file_size_bytes": 4232,
+    "content_length": 4232,
+    "content_hash": "0c1ffe6667fe0df72aa016db88531265d6a82dfc59a3cdfbc7780f147bfa6ee4",
+    "format": "html"
+  },
+  "screenshot_metadata": {
+    "filepath": "screenshots/wikipedia_search_1769685143_18027a3d_c21b_45b6_8eb5_29265c592e6d_1769685143.png",
+    "captured_at": "2026-01-29T11:12:23.369879+00:00",
+    "width": 1280,
+    "height": 720,
+    "file_size_bytes": 37642,
+    "capture_mode": "fullpage",
+    "format": "png"
+  }
+}
