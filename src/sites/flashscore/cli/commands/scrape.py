@@ -70,8 +70,12 @@ class ScrapeCommand:
         """Run the scrape command."""
         session = None
         try:
-            # Create browser session (using defaults)
-            session = await self.browser_manager.create_session()
+            # Create browser configuration based on --no-headless flag
+            from src.browser.config import BrowserConfiguration
+            browser_config = BrowserConfiguration(headless=not args.no_headless)
+            
+            # Create browser session with proper configuration
+            session = await self.browser_manager.create_session(configuration=browser_config)
             
             # Create a page in the session
             page = await session.create_page()

@@ -92,8 +92,8 @@ class SelectorEngineLogger:
         )
         
         # Configure standard logging
+        # Don't set level here to respect CLI configuration
         logging.basicConfig(
-            level=logging.INFO,
             format="%(message)s",
             handlers=[
                 logging.StreamHandler(),

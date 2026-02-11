@@ -121,7 +121,7 @@ class SelectorRegistry:
                 source="selector_registry"
             )
             
-            self._logger.info(
+            self._logger.debug(
                 "selector_registered",
                 selector_name=selector.name,
                 context=selector.context,

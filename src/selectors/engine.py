@@ -533,7 +533,7 @@ class SelectorEngine(ISelectorEngine):
                 strategy_instance = self._strategy_factory.create_strategy(strategy_config)
                 self._strategies[strategy.id] = strategy_instance
             
-            self._logger.info(
+            self._logger.debug(
                 "selector_registered",
                 selector_name=selector.name,
                 strategies=len(selector.strategies),

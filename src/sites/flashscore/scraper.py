@@ -54,7 +54,7 @@ class FlashscoreScraper(BaseSiteScraper):
             for yaml_file in yaml_files:
                 await self._load_selector_file(yaml_file)
                 
-            self.logger.info(f"Loaded {len(yaml_files)} selector files from {selectors_root}")
+            self.logger.debug(f"Loaded {len(yaml_files)} selector files from {selectors_root}")
             
             # Log registry state for debugging
             if hasattr(self.context_loader, 'get_registry_state'):
@@ -82,7 +82,7 @@ class FlashscoreScraper(BaseSiteScraper):
             relative_path = yaml_file.relative_to(selectors_root)
             selector_name = str(relative_path.with_suffix('')).replace('\\', '.').replace('/', '.')
             
-            self.logger.info(f"Loading selector file: {yaml_file} -> {selector_name}")
+            self.logger.debug(f"Loading selector file: {yaml_file} -> {selector_name}")
             
             # Create SemanticSelector from YAML data
             from src.models.selector_models import SemanticSelector
@@ -117,7 +117,7 @@ class FlashscoreScraper(BaseSiteScraper):
             
             # Register with selector engine (only pass the selector object)
             success = await self.selector_engine.register_selector(selector)
-            self.logger.info(f"Registered selector {selector_name}: {success}")
+            self.logger.debug(f"Registered selector {selector_name}: {success}")
             
         except Exception as e:
             self.logger.error(f"Failed to load selector file {yaml_file}: {e}")
