@@ -362,37 +362,59 @@ class FlashscoreFlow(BaseFlow):
     
     async def navigate_to_scheduled_games(self, sport_path: str):
         """Navigate to scheduled games for a specific sport."""
-        # First navigate to the sport
-        await self.page.goto(f"https://www.flashscore.com/{sport_path}/")
-        await self.page.wait_for_load_state('domcontentloaded')
+        from src.observability.logger import get_logger
+        logger = get_logger("flashscore.flow")
+        
+        # First navigate to the sport with better timeout handling
+        try:
+            await self.page.goto(f"https://www.flashscore.com/{sport_path}/", wait_until="domcontentloaded", timeout=30000)
+            logger.info(f"Successfully navigated to {sport_path} page")
+        except Exception as e:
+            logger.error(f"Failed to navigate to {sport_path} page: {e}")
+            # Try alternative approach - navigate to home first, then to sport
+            try:
+                await self.page.goto("https://www.flashscore.com", wait_until="domcontentloaded", timeout=20000)
+                await self.page.wait_for_timeout(2000)
+                await self.page.goto(f"https://www.flashscore.com/{sport_path}/", wait_until="domcontentloaded", timeout=30000)
+                logger.info(f"Successfully navigated to {sport_path} page via home page")
+            except Exception as e2:
+                logger.error(f"Alternative navigation also failed: {e2}")
+                raise e2
         
         # Wait for the main content container to be present using selector system
         try:
             await self.page.wait_for_selector('.container__liveTableWrapper', timeout=10000)
+            logger.info("Main content container found")
         except:
             # Fallback: use selector engine to find match items
             try:
                 await self.selector_engine.find(self.page, "match_items")
+                logger.info("Match items found via selector engine")
             except:
                 await self.page.wait_for_timeout(2000)  # Final fallback
+                logger.warning("Using final timeout fallback")
         
         # Try to find scheduled games filter
         scheduled_selectors = [
-            "scheduled_filter",
+            "navigation.event_filter.scheduled_games_filter",
+            "scheduled_filter", 
             "filter-scheduled",
             ".filter-scheduled"
         ]
         
         for selector_name in scheduled_selectors:
             try:
+                logger.info(f"Trying scheduled filter selector: {selector_name}")
                 scheduled_link = await self.selector_engine.find(self.page, selector_name)
                 if scheduled_link:
                     await scheduled_link.click()
+                    logger.info(f"Successfully clicked scheduled filter using {selector_name}")
                     # Wait for match items to reload
                     try:
                         await self.selector_engine.find(self.page, "match_items")
                     except:
                         await self.page.wait_for_timeout(1000)
                     break
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed with selector {selector_name}: {e}")
                 continue

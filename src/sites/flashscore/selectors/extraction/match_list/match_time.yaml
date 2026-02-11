@@ -9,6 +9,12 @@ strategies:
   - type: "xpath"
     selector: "//div[contains(@class, 'event__time')]"
     weight: 0.8
+  - type: "css"
+    selector: "[class*='event__time']"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//span[contains(@class, 'time')]"
+    weight: 0.6
 metadata:
   wait_for_element: false
   required_for_navigation: false

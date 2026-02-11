@@ -48,8 +48,9 @@ class FlashscoreScraper(BaseSiteScraper):
         try:
             selectors_root = Path(__file__).parent / "selectors"
             
-            # Load all YAML files recursively
+            # Load all YAML files recursively, excluding config files
             yaml_files = list(selectors_root.rglob("*.yaml")) + list(selectors_root.rglob("*.yml"))
+            yaml_files = [f for f in yaml_files if f.name != 'selector_config.yaml']
             
             for yaml_file in yaml_files:
                 await self._load_selector_file(yaml_file)

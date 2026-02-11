@@ -231,7 +231,7 @@ class TemplateValidator:
         try:
             # Check key classes
             class_tests = [
-                ('TemplateScraper', 'src.sites._template.scraper', 'EnhancedSiteScraper'),
+                ('TemplateScraper', 'src.sites._template.scraper', 'ModularSiteScraper'),
                 ('BaseTemplateFlow', 'src.sites._template.flows.base_flow', 'BaseFlow'),
                 ('SearchFlow', 'src.sites._template.flows.search_flow', 'BaseTemplateFlow'),
                 ('LoginFlow', 'src.sites._template.flows.login_flow', 'BaseTemplateFlow'),

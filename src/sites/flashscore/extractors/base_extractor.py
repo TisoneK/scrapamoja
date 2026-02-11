@@ -182,58 +182,16 @@ class BaseExtractor(ABC):
     
     async def _extract_time_info(self, element: ElementHandle, expected_status: str) -> Optional[str]:
         """Extract time information based on match status."""
-        from src.selectors.context import DOMContext
-        from datetime import datetime
-        
-        # Create DOM context for element
-        dom_context = DOMContext(
-            page=element,
-            tab_context="match_extraction",
-            url=self.scraper.page.url or '',
-            timestamp=datetime.utcnow()
-        )
-        
-        if expected_status == 'live':
-            # For live matches, try to get current match stage/period
+        # For scheduled matches, extract time directly from the match element
+        if expected_status in ['scheduled', 'finished']:
             try:
-                stage_result = await self.scraper.selector_engine.resolve("extraction.match_list.match_stage", dom_context)
-                if stage_result and stage_result.element_info:
-                    stage_text = stage_result.element_info.get('text', '').strip()
-                    if stage_text:
-                        self.logger.info(f"Extracted match stage: '{stage_text}' for live match")
-                        return stage_text
-                    else:
-                        self.logger.warning(f"Stage selector returned empty text for live match")
-                else:
-                    self.logger.warning(f"Stage selector failed or returned no element info for live match")
+                time_element = await element.query_selector('.event__time')
+                if time_element:
+                    time_text = await time_element.text_content()
+                    if time_text and time_text.strip():
+                        self.logger.info(f"Extracted time: '{time_text.strip()}' from element")
+                        return time_text.strip()
             except Exception as e:
-                self.logger.error(f"Error resolving match_stage selector: {e}")
-            
-            # Fallback to time extraction if stage fails
-            try:
-                time_result = await self.scraper.selector_engine.resolve("extraction.match_list.match_time", dom_context)
-                if time_result and time_result.element_info:
-                    time_text = time_result.element_info.get('text', '').strip()
-                    if time_text:
-                        self.logger.info(f"Using time as fallback for live match: '{time_text}'")
-                        return time_text
-            except Exception as e:
-                self.logger.error(f"Error resolving match_time selector as fallback: {e}")
-        
-        else:
-            # For scheduled and finished matches, get kickoff time
-            try:
-                time_result = await self.scraper.selector_engine.resolve("extraction.match_list.match_time", dom_context)
-                if time_result and time_result.element_info:
-                    time_text = time_result.element_info.get('text', '').strip()
-                    if time_text:
-                        self.logger.info(f"Extracted kickoff time: '{time_text}' for {expected_status} match")
-                        return time_text
-                    else:
-                        self.logger.warning(f"Time selector returned empty text for {expected_status} match")
-                else:
-                    self.logger.warning(f"Time selector failed or returned no element info for {expected_status} match")
-            except Exception as e:
-                self.logger.error(f"Error resolving match_time selector: {e}")
+                self.logger.error(f"Error extracting time from element: {e}")
         
         return None

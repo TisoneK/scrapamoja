@@ -195,7 +195,7 @@ def get_flow(flow_name: str):
 #### Step 5: Update Main Scraper
 ```python
 # scraper.py
-class YourSiteScraper(EnhancedSiteScraper):
+class YourSiteScraper(ModularSiteScraper):
     async def setup_components(self) -> None:
         """Register flows for standard pattern."""
         # Register main flow
@@ -400,7 +400,7 @@ def get_flow(domain: str, flow_name: str):
 #### Step 5: Update Main Scraper
 ```python
 # scraper.py (updated)
-class YourSiteScraper(EnhancedSiteScraper):
+class YourSiteScraper(ModularSiteScraper):
     async def setup_components(self) -> None:
         """Register domain-separated flows."""
         # Register flows by domain
@@ -518,7 +518,7 @@ class SearchExtractionFlow(BaseFlow):
         }
 
 # Main scraper coordination
-class YourSiteScraper(EnhancedSiteScraper):
+class YourSiteScraper(ModularSiteScraper):
     async def perform_search_and_extract(self, query: str):
         """Coordinated search and extraction using domain flows."""
         # Navigate to home

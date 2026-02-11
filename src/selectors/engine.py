@@ -616,7 +616,7 @@ class SelectorEngine(ISelectorEngine):
                     self._logger.debug(
                         "strategy_failed",
                         selector_name=selector.name,
-                        strategy_id=strategy_id,
+                        strategy_id=strategy.id,
                         failure_reason=result.failure_reason
                     )
                     continue
@@ -626,7 +626,7 @@ class SelectorEngine(ISelectorEngine):
                 self._logger.error(
                     "strategy_execution_error",
                     selector_name=selector.name,
-                    strategy_id=strategy_id,
+                    strategy_id=strategy.id,
                     error=str(e)
                 )
                 continue
@@ -691,14 +691,17 @@ class SelectorEngine(ISelectorEngine):
             # Capture DOM content
             dom_content = await context.get_page_content()
             
+            # Create snapshot ID first (before snapshot object)
+            snapshot_id_value = f"failure_{selector.name}_{datetime.utcnow().timestamp()}"
+            
             # Create snapshot
             snapshot = DOMSnapshot(
-                id=f"failure_{selector.name}_{datetime.utcnow().timestamp()}",
+                id=snapshot_id_value,
                 selector_name=selector.name,
                 snapshot_type=SnapshotType.FAILURE,
                 dom_content=dom_content,
                 metadata=metadata,
-                file_path=f"data/snapshots/{snapshot.id}.json",
+                file_path=f"data/snapshots/{snapshot_id_value}.json",
                 created_at=datetime.utcnow(),
                 file_size=len(dom_content.encode('utf-8'))
             )

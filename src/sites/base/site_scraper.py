@@ -1,5 +1,5 @@
 """
-Enhanced base site scraper with modular support.
+Modular base site scraper with component support.
 
 Defines the contract that all site scrapers must implement.
 Provides common functionality and enforces required methods.
@@ -22,8 +22,8 @@ from .base_processor import BaseProcessor
 from .base_validator import BaseValidator
 
 
-class EnhancedSiteScraper(ABC):
-    """Enhanced base class defining the contract for all site scrapers with modular support."""
+class ModularSiteScraper(ABC):
+    """Base class for site scrapers with modular component support."""
     
     # Class attributes (must be defined by implementation)
     site_id: str
@@ -108,7 +108,8 @@ class EnhancedSiteScraper(ABC):
                 if self._execution_context:
                     self.di_container.register_instance("context", self._execution_context)
             
-            print(f"Enhanced scraper initialized for {self.site_id}")
+            # Modular components initialized successfully
+            # The scraper is ready for use
             
         except Exception as e:
             print(f"Failed to initialize modular components: {str(e)}")
@@ -324,7 +325,7 @@ class EnhancedSiteScraper(ABC):
     
     async def scrape_with_components(self, **kwargs) -> Dict[str, Any]:
         """
-        Enhanced scraping using modular components.
+        Execute modular scraping using registered components.
         
         Args:
             **kwargs: Scraping arguments
@@ -388,7 +389,7 @@ class EnhancedSiteScraper(ABC):
             
         except Exception as e:
             self._execution_stats['failed_scrapes'] += 1
-            print(f"Enhanced scraping failed: {str(e)}")
+            self.logger.error(f"Modular scraping failed: {str(e)}")
             return {
                 'error': str(e),
                 'stats': self._execution_stats
@@ -542,14 +543,14 @@ class EnhancedSiteScraper(ABC):
             self._processors.clear()
             self._validators.clear()
             
-            print(f"Enhanced scraper cleanup completed for {self.site_id}")
+            self.logger.info(f"Modular scraper cleanup completed for {self.site_id}")
             
         except Exception as e:
             print(f"Error during scraper cleanup: {str(e)}")
 
 
 # Legacy compatibility
-class BaseSiteScraper(EnhancedSiteScraper):
+class BaseSiteScraper(ModularSiteScraper):
     """Legacy base class for backward compatibility."""
     
     def __init__(self, page: Page, selector_engine):

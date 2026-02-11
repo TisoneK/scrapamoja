@@ -112,7 +112,18 @@ class ScrapeCommand:
         finally:
             # Cleanup
             if session:
-                await self.browser_manager.close_session(session.session_id)
+                try:
+                    await self.browser_manager.close_session(session.session_id)
+                except Exception as e:
+                    print(f"Warning: Error during session cleanup: {e}", file=__import__('sys').stderr)
+            
+            # Additional cleanup for asyncio resources
+            try:
+                import asyncio
+                # Give asyncio a chance to clean up pending tasks
+                await asyncio.sleep(0.1)
+            except Exception:
+                pass
     
     async def _scrape_data(self, scraper: FlashscoreScraper, args: argparse.Namespace) -> dict:
         """Scrape data based on arguments using the orchestrator."""

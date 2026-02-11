@@ -1,5 +1,5 @@
 """
-Enhanced template scraper with modular architecture.
+Template scraper with modular architecture.
 
 Copy and modify this file to create your site scraper.
 This template demonstrates the new modular component system with flows,
@@ -7,7 +7,7 @@ processors, validators, and dependency injection.
 """
 
 from typing import Dict, Any, Optional
-from src.sites.base.site_scraper import EnhancedSiteScraper
+from src.sites.base.site_scraper import ModularSiteScraper
 from src.sites.base.configuration_manager import Environment
 from src.sites.base.component_manager import ComponentManager
 from src.sites.base.configuration_manager import ConfigurationManager
@@ -23,8 +23,8 @@ from src.sites.base.base_validator import BaseValidator
 # from .validators.data_validator import DataValidator
 
 
-class TemplateScraper(EnhancedSiteScraper):
-    """Enhanced template scraper with modular component support."""
+class TemplateScraper(ModularSiteScraper):
+    """Template scraper with modular component support."""
     
     # Site configuration (can be moved to config files)
     site_id = "template"
@@ -199,8 +199,8 @@ class TemplateScraper(EnhancedSiteScraper):
     
     async def scrape_with_modular_components(self, **kwargs) -> Dict[str, Any]:
         """
-        Enhanced scraping using all modular components.
-        This method demonstrates the full power of the modular architecture.
+        Execute modular scraping using registered components.
+        This method demonstrates the full capability of the modular architecture.
         """
         try:
             # Setup components if not already done

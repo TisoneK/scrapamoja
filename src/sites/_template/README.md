@@ -201,7 +201,7 @@ cp -r src/sites/_template src/sites/your_site_name
 ### 3. Update Basic Configuration
 Edit `src/sites/your_site_name/scraper.py`:
 ```python
-class YourSiteScraper(EnhancedSiteScraper):
+class YourSiteScraper(ModularSiteScraper):
     site_id = "your_site"
     site_name = "Your Site Name"
     base_url = "https://example.com"

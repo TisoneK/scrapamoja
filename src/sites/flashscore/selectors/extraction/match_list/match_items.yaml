@@ -1,0 +1,27 @@
+description: "Match items container for individual match elements"
+confidence_threshold: 0.8
+timeout: 10.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".event__match"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='event__match']"
+    weight: 0.9
+  - type: "css"
+    selector: ".liveTable .event__match"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//div[contains(@class, 'event__match')]"
+    weight: 0.7
+  - type: "css"
+    selector: ".container__liveTableWrapper .event__match"
+    weight: 0.6
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  dom_state_indicators:
+    live: ["event__match", "live"]
+    scheduled: ["event__match"]
+    finished: ["event__match"]
