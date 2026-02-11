@@ -544,6 +544,12 @@ class StrategyFactory:
         elif strategy_type == StrategyType.ROLE_BASED:
             from .role_based import RoleBasedStrategy
             return RoleBasedStrategy(strategy_id, priority, strategy_config)
+        elif strategy_type == StrategyType.CSS:
+            from .css import CSSStrategy
+            return CSSStrategy(strategy_id, priority, strategy_config)
+        elif strategy_type == StrategyType.XPATH:
+            from .xpath import XPathStrategy
+            return XPathStrategy(strategy_id, priority, strategy_config)
         else:
             raise ValueError(f"Unknown strategy type: {strategy_type}")
     

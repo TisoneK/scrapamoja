@@ -1,0 +1,18 @@
+description: "Match time/kickoff time information"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".event__time"
+    weight: 1.0
+  - type: "xpath"
+    selector: "//div[contains(@class, 'event__time')]"
+    weight: 0.8
+metadata:
+  wait_for_element: false
+  required_for_navigation: false
+  dom_state_indicators:
+    live: ["live", "event__time"]
+    scheduled: ["event__time"]
+    finished: ["event__time"]

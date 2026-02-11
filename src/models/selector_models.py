@@ -18,6 +18,8 @@ class StrategyType(str, Enum):
     ATTRIBUTE_MATCH = "attribute_match"
     DOM_RELATIONSHIP = "dom_relationship"
     ROLE_BASED = "role_based"
+    CSS = "css"
+    XPATH = "xpath"
 
 
 class ValidationType(str, Enum):
@@ -169,6 +171,7 @@ class SelectorResult:
     success: bool
     timestamp: datetime = field(default_factory=datetime.utcnow)
     failure_reason: Optional[str] = None
+    snapshot_id: Optional[str] = None
     
     def __post_init__(self):
         """Validate selector result parameters."""

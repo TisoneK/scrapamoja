@@ -28,6 +28,7 @@ class StrategyType(Enum):
     ATTRIBUTE_MATCH = "attribute_match"
     DOM_RELATIONSHIP = "dom_relationship"
     ROLE_BASED = "role_based"
+    CSS = "css"
 
 
 class ErrorType(Enum):

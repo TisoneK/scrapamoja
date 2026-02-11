@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from src.models.selector_models import (
     SemanticSelector, SelectorResult, StrategyPattern, ValidationRule,
-    ConfidenceMetrics, SnapshotType, DOMSnapshot
+    ConfidenceMetrics, SnapshotType, DOMSnapshot, SnapshotMetadata
 )
 from src.selectors.context import DOMContext
 from src.selectors.strategies.base import StrategyFactory
@@ -20,6 +20,7 @@ from src.selectors.confidence.thresholds import get_threshold_manager
 from src.selectors.validation import get_validation_engine
 from src.selectors.quality.control import get_quality_control_manager
 from src.selectors.interfaces import ISelectorEngine
+from src.selectors.registry import get_selector_registry
 from src.observability.logger import get_logger, CorrelationContext
 from src.observability.events import publish_selector_resolved, publish_selector_failed
 from src.observability.metrics import get_performance_monitor
@@ -57,6 +58,9 @@ class SelectorEngine(ISelectorEngine):
         self._strategies: Dict[str, IStrategyPattern] = {}
         self._selector_registry: Dict[str, SemanticSelector] = {}
         
+        # Get global selector registry
+        self._global_registry = get_selector_registry()
+        
         # Performance tracking
         self._resolution_attempts: List[ResolutionAttempt] = []
         self._current_resolution_id: Optional[str] = None
@@ -90,6 +94,10 @@ class SelectorEngine(ISelectorEngine):
             # Get selector definition
             selector = self.get_selector(selector_name)
             if not selector:
+                # Try fallback to common CSS selectors based on selector name patterns
+                fallback_result = await self._try_fallback_resolution(selector_name, context)
+                if fallback_result:
+                    return fallback_result
                 raise SelectorNotFoundError(selector_name)
             
             try:
@@ -296,19 +304,116 @@ class SelectorEngine(ISelectorEngine):
                 for name in selector_names
             ]
     
+    async def _try_fallback_resolution(self, selector_name: str, context: DOMContext) -> Optional[SelectorResult]:
+        """Try to resolve selector using fallback CSS selectors."""
+        try:
+            # Define fallback CSS selectors based on common patterns
+            fallback_selectors = {
+                # Match items
+                'match_items': '.event__match',
+                'extraction.match_list.basketball.match_items': '.event__match',
+                
+                # Live games filter
+                'live_games_filter': '.filters__tab.selected, [data-analytics-element="SCN_TAB"][data-analytics-alias="live"]',
+                
+                # Team names
+                'home_team': '.event__participant--home, .participant__home',
+                'away_team': '.event__participant--away, .participant__away',
+                
+                # Time and stage
+                'match_time': '.event__time',
+                'match_stage': '.event__stage',
+                
+                # Score
+                'extraction.match_summary.basketball.score': '.event__score--home, .event__score--away',
+                'extraction.match_list.basketball.live_indicator': '.event__score--home, .event__score--away',
+            }
+            
+            # Get fallback CSS selector
+            css_selector = fallback_selectors.get(selector_name)
+            if not css_selector:
+                return None
+            
+            # Try to resolve using the CSS selector
+            element = await context.page.query_selector(css_selector)
+            if element:
+                from src.models.selector_models import ElementInfo
+                element_info = ElementInfo(
+                    element=element,
+                    css_selector=css_selector,
+                    xpath_selector=None,
+                    text_content=await element.text_content(),
+                    attributes={},
+                    confidence=0.8,  # Medium confidence for fallbacks
+                    resolution_strategy="css_fallback"
+                )
+                
+                return SelectorResult(
+                    selector_name=selector_name,
+                    strategy_used="css_fallback",
+                    element_info=element_info,
+                    confidence_score=0.8,
+                    resolution_time=0.001,
+                    validation_results=[],
+                    success=True,
+                    timestamp=datetime.utcnow(),
+                    failure_reason=None
+                )
+            
+            return None
+            
+        except Exception as e:
+            self._logger.debug(f"Fallback resolution failed for {selector_name}: {e}")
+            return None
+
     def get_selector(self, name: str) -> Optional[SemanticSelector]:
         """Get selector definition by name."""
-        return self._selector_registry.get(name)
+        # First check local registry
+        selector = self._selector_registry.get(name)
+        if selector:
+            return selector
+        
+        # Then check global registry
+        return self._global_registry.get_selector(name)
+    
+    async def register_selector(self, name: str, selector: SemanticSelector) -> bool:
+        """Register a selector with the engine."""
+        try:
+            # Add to local registry for quick access
+            self._selector_registry[name] = selector
+            
+            # Also register with global registry
+            success = await self._global_registry.register_selector(selector)
+            
+            if success:
+                self._logger.info(f"Successfully registered selector: {name}")
+            else:
+                self._logger.warning(f"Failed to register selector with global registry: {name}")
+            
+            return success
+        except Exception as e:
+            self._logger.error(f"Error registering selector {name}: {e}")
+            return False
     
     def list_selectors(self, context: Optional[str] = None) -> List[str]:
         """List available selectors, optionally filtered by context."""
+        # Get selectors from both registries
+        local_selectors = list(self._selector_registry.keys())
+        global_selectors = self._global_registry.list_selectors(context)
+        
+        # Combine and deduplicate
+        all_selectors = list(set(local_selectors + global_selectors))
+        
         if context:
-            return [
-                name for name, selector in self._selector_registry.items()
-                if selector.context == context
-            ]
+            # Filter by context
+            filtered_selectors = []
+            for name in all_selectors:
+                selector = self.get_selector(name)
+                if selector and selector.context == context:
+                    filtered_selectors.append(name)
+            return filtered_selectors
         else:
-            return list(self._selector_registry.keys())
+            return all_selectors
     
     async def validate_selector(self, selector: SemanticSelector) -> List[str]:
         """Validate selector definition, return list of issues."""
@@ -406,12 +511,26 @@ class SelectorEngine(ISelectorEngine):
             
             # Register strategies
             for strategy in selector.strategies:
-                strategy_instance = self._strategy_factory.create_strategy({
-                    "type": strategy.type.value,
-                    "id": strategy.id,
-                    "priority": strategy.priority,
-                    **strategy.config
-                })
+                # Handle both enum and string strategy types
+                strategy_type = strategy.type
+                if isinstance(strategy_type, str):
+                    # String type from processed YAML
+                    strategy_config = {
+                        "type": strategy_type,
+                        "id": strategy.id,
+                        "priority": strategy.priority,
+                        **strategy.config
+                    }
+                else:
+                    # Enum type from direct usage
+                    strategy_config = {
+                        "type": strategy.type.value,
+                        "id": strategy.id,
+                        "priority": strategy.priority,
+                        **strategy.config
+                    }
+                
+                strategy_instance = self._strategy_factory.create_strategy(strategy_config)
                 self._strategies[strategy.id] = strategy_instance
             
             self._logger.info(

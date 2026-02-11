@@ -1,0 +1,23 @@
+description: "Finished match indicator in match listing"
+confidence_threshold: 0.8
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".event__score[data-state='final']"
+    weight: 1.0
+  - type: "css"
+    selector: ".event__stage--block:contains('Finished'), .event__stage--block:contains('After')"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//span[contains(@class, 'event__score') and @data-state='final']"
+    weight: 0.8
+  - type: "css"
+    selector: ".wcl-isFinal_7U4ca"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//div[contains(@class, 'event__stage--block') and (contains(text(), 'Finished') or contains(text(), 'After'))]"
+    weight: 0.6
+metadata:
+  wait_for_element: true
+  dom_state: "finished"

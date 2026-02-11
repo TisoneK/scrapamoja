@@ -1,0 +1,23 @@
+description: "Match element indicators - finds all match containers regardless of status"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".container__liveTableWrapper .event__match"
+    weight: 1.0
+  - type: "css"
+    selector: ".event__match"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-testid='event-match']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//div[contains(@class, 'event') and contains(@class, 'match')]"
+    weight: 0.7
+  - type: "css"
+    selector: ".match-item"
+    weight: 0.6
+metadata:
+  wait_for_element: true
+  clickable_element: true

@@ -12,6 +12,7 @@ from .flow import FlashscoreFlow
 from .config import SITE_CONFIG
 from src.selectors.context_manager import SelectorContext, get_context_manager, DOMState
 from src.selectors.context_loader import get_context_based_loader
+from src.observability.logger import get_logger
 
 
 class FlashscoreScraper(BaseSiteScraper):
@@ -24,6 +25,7 @@ class FlashscoreScraper(BaseSiteScraper):
     def __init__(self, page, selector_engine):
         super().__init__(page, selector_engine)
         self.flow = FlashscoreFlow(page, selector_engine)
+        self.logger = get_logger("flashscore.scraper")
         
         # Initialize hierarchical selector system
         selectors_root = Path(__file__).parent / "selectors"
@@ -32,6 +34,93 @@ class FlashscoreScraper(BaseSiteScraper):
         
         # Initialize context
         self.current_context: SelectorContext = None
+        
+        # Load selectors into registry will be done asynchronously after init
+    
+    async def initialize_selectors(self):
+        """Initialize selectors asynchronously after scraper creation."""
+        self.logger.info("Starting selector initialization...")
+        await self._load_selectors()
+        self.logger.info("Selector initialization completed")
+
+    async def _load_selectors(self):
+        """Load all YAML selectors into the selector engine registry."""
+        try:
+            selectors_root = Path(__file__).parent / "selectors"
+            
+            # Load all YAML files recursively
+            yaml_files = list(selectors_root.rglob("*.yaml")) + list(selectors_root.rglob("*.yml"))
+            
+            for yaml_file in yaml_files:
+                await self._load_selector_file(yaml_file)
+                
+            self.logger.info(f"Loaded {len(yaml_files)} selector files from {selectors_root}")
+            
+            # Log registry state for debugging
+            if hasattr(self.context_loader, 'get_registry_state'):
+                registry_state = self.context_loader.get_registry_state()
+                self.logger.info(f"Registry state: {registry_state}", extra=registry_state)
+            else:
+                self.logger.warning("Context loader does not support registry state debugging")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load selectors: {e}")
+    
+    async def _load_selector_file(self, yaml_file: Path):
+        """Load a single selector YAML file into the registry."""
+        try:
+            import yaml
+            
+            with open(yaml_file, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+            
+            if not data:
+                return
+            
+            # Create selector name from file path
+            selectors_root = Path(__file__).parent / "selectors"
+            relative_path = yaml_file.relative_to(selectors_root)
+            selector_name = str(relative_path.with_suffix('')).replace('\\', '.').replace('/', '.')
+            
+            self.logger.info(f"Loading selector file: {yaml_file} -> {selector_name}")
+            
+            # Create SemanticSelector from YAML data
+            from src.models.selector_models import SemanticSelector
+            
+            # Convert strategies to proper format
+            from src.models.selector_models import StrategyPattern, StrategyType
+            strategies = []
+            for i, strategy in enumerate(data.get('strategies', [])):
+                strategy_pattern = StrategyPattern(
+                    id=f"{selector_name}_strategy_{i}",
+                    type=StrategyType(strategy.get('type', 'css')),
+                    priority=len(strategies) + 1,  # Use order as priority
+                    config={
+                        'selector': strategy.get('selector'),
+                        'weight': strategy.get('weight', 1.0)
+                    }
+                )
+                strategies.append(strategy_pattern)
+            
+            selector = SemanticSelector(
+                name=selector_name,
+                description=data.get('description', ''),
+                context=data.get('context', selector_name),
+                strategies=strategies,
+                validation_rules=data.get('validation_rules', []),
+                confidence_threshold=data.get('confidence_threshold', 0.8),
+                metadata={
+                    'file_path': str(yaml_file),
+                    **data.get('metadata', {})
+                }
+            )
+            
+            # Register with selector engine (only pass the selector object)
+            success = await self.selector_engine.register_selector(selector)
+            self.logger.info(f"Registered selector {selector_name}: {success}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load selector file {yaml_file}: {e}")
 
     async def navigate(self):
         """Navigate to Flashscore home page."""
@@ -183,7 +272,7 @@ class FlashscoreScraper(BaseSiteScraper):
     async def _is_match_live(self, element) -> bool:
         """Check if match is currently live."""
         try:
-            live_indicator = await self.selector_engine.find(element, "live_indicator")
+            live_indicator = await self.selector_engine.find(element, "live_indicators")
             return live_indicator is not None
         except Exception:
             return False

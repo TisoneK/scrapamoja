@@ -8,6 +8,7 @@ selector engine, enabling template-based selector management.
 import asyncio
 import logging
 import yaml
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
@@ -132,26 +133,33 @@ class BaseSelectorLoader(ISelectorLoader):
     
     async def register_selector(self, selector_name: str, selector_config: Dict[str, Any]) -> bool:
         """
-        Register a single selector with the selector engine.
+        Register a single selector with selector engine.
         
         Args:
             selector_name: Name of the selector
-            selector_config: Selector configuration from YAML
+            selector_config: Selector configuration dictionary
             
         Returns:
             bool: True if registration successful
         """
+        # Generate correlation ID for this registration attempt
+        correlation_id = str(uuid.uuid4())
+        start_time = datetime.now()
+        
         try:
-            start_time = datetime.now()
+            logger.info(f"Starting registration for selector {selector_name}", 
+                       extra={"correlation_id": correlation_id, "selector_name": selector_name})
             
             # Validate selector configuration
-            if not await self.validate_selector_config(selector_config):
-                logger.error(f"Invalid selector configuration for {selector_name}")
+            if not selector_config:
+                logger.error(f"Empty selector configuration for {selector_name}", 
+                           extra={"correlation_id": correlation_id, "selector_name": selector_name})
                 return False
             
             # Check if selector engine supports registration
             if not hasattr(self.selector_engine, 'register_selector'):
-                logger.error(f"Selector engine does not support registration")
+                logger.error(f"Selector engine does not support registration", 
+                           extra={"correlation_id": correlation_id, "selector_name": selector_name})
                 return False
             
             # Create SemanticSelector object from configuration
@@ -159,18 +167,73 @@ class BaseSelectorLoader(ISelectorLoader):
             
             strategies = selector_config.get('strategies', [])
             if not strategies:
-                logger.error(f"No strategies found in selector configuration for {selector_name}")
+                logger.error(f"No strategies found in selector configuration for {selector_name}", 
+                           extra={"correlation_id": correlation_id, "selector_name": selector_name})
                 return False
+            
+            # Validate individual strategies before creating selector
+            logger.info(f"Processing {len(strategies)} strategies for selector {selector_name}", 
+                       extra={"correlation_id": correlation_id, "selector_name": selector_name, "strategy_count": len(strategies)})
+            
+            # Convert weight to priority for SemanticSelector compatibility
+            processed_strategies = []
+            for i, strategy in enumerate(strategies):
+                try:
+                    strategy_type = strategy.get('type')
+                    if not strategy_type:
+                        logger.warning(f"Strategy {i} missing type for selector {selector_name}", 
+                                     extra={"correlation_id": correlation_id, "selector_name": selector_name, "strategy_index": i})
+                        continue
+                    
+                    # Validate strategy type is supported
+                    from src.selectors.models import StrategyType
+                    try:
+                        StrategyType(strategy_type)
+                        logger.debug(f"Strategy {i} type '{strategy_type}' validated for selector {selector_name}", 
+                                   extra={"correlation_id": correlation_id, "selector_name": selector_name, "strategy_index": i, "strategy_type": strategy_type})
+                    except ValueError as ve:
+                        logger.error(f"Unknown strategy type '{strategy_type}' in strategy {i} for selector {selector_name}: {ve}", 
+                                       extra={"correlation_id": correlation_id, "selector_name": selector_name, "strategy_index": i, "strategy_type": strategy_type})
+                        return False
+                        
+                except Exception as e:
+                    logger.error(f"Error validating strategy {i} for selector {selector_name}: {e}", 
+                               extra={"correlation_id": correlation_id, "selector_name": selector_name, "strategy_index": i})
+                    continue
+                
+                # Convert weight to priority for SemanticSelector compatibility
+                weight = strategy.get('weight', 1.0)
+                priority = i + 1  # Use order as priority (lower = higher priority)
+                
+                processed_strategy = {
+                    'type': strategy_type,
+                    'selector': strategy.get('selector'),
+                    'priority': priority,
+                    'weight': weight,
+                    'config': {k: v for k, v in strategy.items() if k != 'type' and k != 'selector' and k != 'weight'}
+                }
+                processed_strategies.append(processed_strategy)
             
             selector = SemanticSelector(
                 name=selector_name,
-                strategies=strategies,
+                strategies=processed_strategies,
                 confidence_threshold=selector_config.get('confidence_threshold', 0.7),
                 validation_rules=selector_config.get('validation_rules', [])
             )
             
+            logger.info(f"Created SemanticSelector for {selector_name} with {len(strategies)} strategies", 
+                       extra={"correlation_id": correlation_id, "selector_name": selector_name, "strategy_count": len(strategies)})
+            
             # Register with selector engine
-            self.selector_engine.register_selector(selector_name, selector)
+            try:
+                self.selector_engine.register_selector(selector_name, selector)
+                logger.info(f"Successfully registered selector {selector_name} with engine", 
+                           extra={"correlation_id": correlation_id, "selector_name": selector_name})
+            except Exception as reg_error:
+                logger.error(f"Failed to register selector {selector_name} with engine: {reg_error}", 
+                           extra={"correlation_id": correlation_id, "selector_name": selector_name})
+                self.selector_status[selector_name] = SelectorLoadStatus.FAILED
+                return False
             
             # Update tracking
             self.loaded_selectors.append(selector_name)
@@ -182,11 +245,13 @@ class BaseSelectorLoader(ISelectorLoader):
             self.load_times[selector_name] = load_time
             self.total_load_time += load_time
             
-            logger.info(f"Successfully registered selector: {selector_name} (took {load_time:.3f}s)")
+            logger.info(f"Successfully registered selector: {selector_name} (took {load_time:.3f}s)", 
+                       extra={"correlation_id": correlation_id, "selector_name": selector_name, "load_time": load_time})
             return True
             
         except Exception as e:
-            logger.error(f"Failed to register selector {selector_name}: {e}")
+            logger.error(f"Failed to register selector {selector_name}: {e}", 
+                       extra={"correlation_id": correlation_id, "selector_name": selector_name})
             self.selector_status[selector_name] = SelectorLoadStatus.FAILED
             return False
     
@@ -198,6 +263,24 @@ class BaseSelectorLoader(ISelectorLoader):
             List[str]: List of selector names
         """
         return self.loaded_selectors.copy()
+    
+    def get_registry_state(self) -> Dict[str, Any]:
+        """
+        Get current registry state for debugging.
+        
+        Returns:
+            Dict with registry information
+        """
+        if hasattr(self.selector_engine, 'list_selectors'):
+            registered_selectors = self.selector_engine.list_selectors()
+            return {
+                'loaded_count': len(self.loaded_selectors),
+                'registered_count': len(registered_selectors),
+                'loaded_selectors': self.loaded_selectors,
+                'registered_selectors': registered_selectors,
+                'missing_selectors': [s for s in self.loaded_selectors if s not in registered_selectors]
+            }
+        return {'error': 'Registry does not support listing selectors'}
     
     async def validate_selector_config(self, config: Dict[str, Any]) -> bool:
         """
@@ -295,8 +378,11 @@ class BaseSelectorLoader(ISelectorLoader):
             # Extract selector name
             selector_name = config.get('name', yaml_file.stem)
             
+            # Use full qualified name for registration to match scraper expectations
+            full_selector_name = f"extraction.match_list.basketball.{yaml_file.stem}"
+            
             # Register selector
-            success = await self.register_selector(selector_name, config)
+            success = await self.register_selector(full_selector_name, config)
             
             # Record performance metrics
             load_time = (datetime.now() - start_time).total_seconds()

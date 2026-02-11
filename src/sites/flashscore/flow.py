@@ -291,11 +291,14 @@ class FlashscoreFlow(BaseFlow):
     
     async def navigate_to_finished_games(self, sport_path: str):
         """Navigate to finished games for a specific sport."""
-        # First navigate to the sport
+        from src.observability.logger import get_logger
+        logger = get_logger("flashscore.flow")
+        
+        # First navigate to sport
         await self.page.goto(f"https://www.flashscore.com/{sport_path}/")
         await self.page.wait_for_load_state('domcontentloaded')
         
-        # Wait for the main content container to be present using selector system
+        # Wait for main content container to be present using selector system
         try:
             await self.page.wait_for_selector('.container__liveTableWrapper', timeout=10000)
         except:
@@ -307,24 +310,55 @@ class FlashscoreFlow(BaseFlow):
         
         # Try to find finished games filter
         finished_selectors = [
-            "finished_filter",
-            "filter-finished", 
-            ".filter-finished"
+            "navigation.event_filter.finished_games_filter",
+            "[data-analytics-element='SCN_TAB'][data-analytics-alias='finished']",
+            ".filters__tab.selected"
         ]
         
+        filter_clicked = False
         for selector_name in finished_selectors:
             try:
+                logger.info(f"Trying to find finished filter with selector: {selector_name}")
                 finished_link = await self.selector_engine.find(self.page, selector_name)
                 if finished_link:
+                    logger.info(f"Found finished filter, clicking...")
                     await finished_link.click()
                     # Wait for match items to reload
                     try:
                         await self.selector_engine.find(self.page, "match_items")
                     except:
-                        await self.page.wait_for_timeout(1000)
+                        await self.page.wait_for_timeout(2000)
+                    filter_clicked = True
                     break
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed with selector {selector_name}: {e}")
                 continue
+        
+        if not filter_clicked:
+            logger.warning("Could not find or click finished filter, proceeding with current page")
+            # Try alternative approach - look for calendar and select previous date
+            try:
+                # Look for date picker or calendar to select finished games
+                date_selectors = [
+                    ".calendar__navigation",
+                    ".calendar__day",
+                    "[data-date]"
+                ]
+                for date_sel in date_selectors:
+                    try:
+                        date_elements = await self.page.query_selector_all(date_sel)
+                        if date_elements:
+                            # Click on a past date to get finished games
+                            for date_elem in date_elements[:1]:  # Try first past date
+                                await date_elem.click()
+                                await self.page.wait_for_timeout(2000)
+                                logger.info("Clicked on past date for finished games")
+                                break
+                            break
+                    except:
+                        continue
+            except Exception as e:
+                logger.warning(f"Alternative date selection failed: {e}")
     
     async def navigate_to_scheduled_games(self, sport_path: str):
         """Navigate to scheduled games for a specific sport."""
