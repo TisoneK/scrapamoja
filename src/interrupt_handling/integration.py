@@ -188,6 +188,10 @@ class InterruptAwareScraper:
         """Check if shutdown is in progress."""
         return self.interrupt_handler.is_shutting_down()
     
+    def should_exit(self) -> bool:
+        """Check if the program should exit after interrupt handling."""
+        return self.interrupt_handler.should_exit()
+    
     @contextmanager
     def managed_scraping_session(self, session_id: str):
         """Context manager for a scraping session with interrupt handling."""
