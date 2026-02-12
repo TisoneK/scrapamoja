@@ -101,6 +101,30 @@ class BrowserSession:
                         "subprocess_cleanup_error",
                         error=str(e)
                     )
+        
+        # Clear the list after cleanup
+        self._subprocess_handles.clear()
+    
+    async def _ensure_transport_cleanup(self) -> None:
+        """Ensure asyncio transports are properly cleaned up before event loop closes."""
+        try:
+            # Allow asyncio to process any pending transport cleanup
+            await asyncio.sleep(0.1)
+            
+            # Get the current event loop and run pending callbacks
+            try:
+                loop = asyncio.get_running_loop()
+                # Process any pending callbacks to complete transport cleanup
+                # Only sleep if the loop is still running
+                loop.is_running()  # This checks if loop is active
+                await asyncio.sleep(0.05)
+            except RuntimeError:
+                pass  # No running loop
+            except Exception:
+                pass  # Ignore any other errors
+                
+        except Exception:
+            pass  # Ignore cleanup errors
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert session to dictionary for serialization."""
@@ -485,10 +509,19 @@ class BrowserSession:
             
             self.contexts.clear()
             
-            # Close browser
+            # Close browser - ensure transport cleanup completes
             if self.browser:
                 try:
+                    self._logger.info(
+                        "closing_browser_transport",
+                        session_id=self.session_id,
+                        browser_type=self.configuration.browser_type.value if hasattr(self.configuration.browser_type, 'value') else str(self.configuration.browser_type)
+                    )
                     await self.browser.close()
+                    self._logger.info(
+                        "browser_transport_closed",
+                        session_id=self.session_id
+                    )
                 except Exception as e:
                     self._logger.warning(
                         "browser_close_error",
@@ -498,6 +531,9 @@ class BrowserSession:
             
             # Enhanced subprocess cleanup
             self._cleanup_subprocess_handles()
+            
+            # Ensure transport cleanup completes
+            await self._ensure_transport_cleanup()
             
             # Stop resource monitoring
             if self.process_id:
@@ -527,6 +563,66 @@ class BrowserSession:
                 session_id=self.session_id,
                 correlation_id=self._correlation_id
             )
+            
+            # Add diagnostic logging at browser session close
+            try:
+                import threading
+                import asyncio
+                
+                self._logger.info("=== DIAGNOSTIC: BROWSER_SESSION_CLOSED ===")
+                active_threads = threading.enumerate()
+                self._logger.info(f"Active threads at browser close ({len(active_threads)}):")
+                for thread in active_threads:
+                    self._logger.info(f"  - {thread.name} (ID: {thread.ident}, Daemon: {thread.daemon})")
+                
+                try:
+                    if asyncio.get_event_loop().is_running():
+                        tasks = asyncio.all_tasks()
+                        self._logger.info(f"Pending async tasks at browser close ({len(tasks)}):")
+                        for task in tasks:
+                            self._logger.info(f"  - {task.get_name()} (Done: {task.done()})")
+                            # Add detailed inspection for non-completed tasks
+                            if not task.done():
+                                try:
+                                    coro = task.get_coro()
+                                    if coro:
+                                        self._logger.info(f"    Coroutine: {coro}")
+                                        # Try to get the function name
+                                        if hasattr(coro, '__name__'):
+                                            self._logger.info(f"    Function: {coro.__name__}")
+                                        elif hasattr(coro, 'cr_frame') and coro.cr_frame:
+                                            self._logger.info(f"    Function: {coro.cr_frame.f_code.co_name}")
+                                        # Try to get stack trace
+                                        try:
+                                            stack = task.get_stack()
+                                            if stack:
+                                                self._logger.info(f"    Created at: {stack[-1].filename}:{stack[-1].lineno}")
+                                        except:
+                                            self._logger.info("    Could not determine creation location")
+                                except Exception as e:
+                                    self._logger.info(f"    Could not inspect coroutine: {e}")
+                        
+                        # Cancel all pending tasks to prevent hanging
+                        pending_tasks = [task for task in tasks if not task.done()]
+                        if pending_tasks:
+                            self._logger.info(f"Cancelling {len(pending_tasks)} pending tasks to prevent hanging")
+                            for task in pending_tasks:
+                                task.cancel()
+                            # Give tasks a moment to cancel
+                            await asyncio.sleep(0.1)
+                            # Check if cancellation worked
+                            still_pending = [task for task in pending_tasks if not task.done()]
+                            if still_pending:
+                                self._logger.warning(f"{len(still_pending)} tasks still pending after cancellation")
+                            else:
+                                self._logger.info("All pending tasks successfully cancelled")
+                    else:
+                        self._logger.info("No active event loop at browser close")
+                except Exception as e:
+                    self._logger.info(f"Could not check async tasks at browser close: {e}")
+                self._logger.info("=== END DIAGNOSTIC ===")
+            except Exception as e:
+                self._logger.warning(f"Failed to log diagnostics at browser close: {e}")
             
             # Remove persisted state
             try:
