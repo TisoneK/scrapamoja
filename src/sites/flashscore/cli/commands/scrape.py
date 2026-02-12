@@ -4,6 +4,7 @@ Scrape command for Flashscore data extraction.
 import argparse
 import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -67,34 +68,40 @@ class ScrapeCommand:
         )
     
     async def execute(self, args: argparse.Namespace) -> int:
-        """Run the scrape command."""
+        """Run scrape command with interrupt handling support."""
         session = None
+        
         try:
-            # Create browser configuration based on --no-headless flag
+            # Initialize browser manager
+            from src.browser.manager import BrowserManager
+            browser_manager = BrowserManager()
+            
+            # Initialize scraper with interrupt handling
             from src.browser.config import BrowserConfiguration
             browser_config = BrowserConfiguration(headless=not args.no_headless)
             
-            # Create browser session with proper configuration
-            session = await self.browser_manager.create_session(configuration=browser_config)
-            
-            # Create a page in the session
-            page = await session.create_page()
-            
-            # Create selector engine
-            from src.selectors.engine import SelectorEngine
-            selector_engine = SelectorEngine()
-            
-            # Create scraper
-            scraper = FlashscoreScraper(page, selector_engine)
+            session = await browser_manager.create_session(browser_config)
             
             # Initialize selector engine
+            from src.selectors import get_selector_engine
+            selector_engine = get_selector_engine()
+            
+            scraper = FlashscoreScraper(
+                page=await session.create_page(),
+                selector_engine=selector_engine
+            )
+            
+            # Initialize selectors asynchronously
             await scraper.initialize_selectors()
             
-            # Navigate to Flashscore
-            await scraper.navigate()
+            # Initialize orchestrator
+            from src.sites.flashscore.orchestrator import FlashscoreOrchestrator
+            orchestrator = FlashscoreOrchestrator(scraper)
             
-            # Scrape data using orchestrator
-            result = await self._scrape_data(scraper, args)
+            # Scrape data using interrupt-aware scraper
+            result = await scraper.scrape_with_interrupt_handling(
+                orchestrator.scrape_data, args
+            )
             
             # Output results
             if args.output:
@@ -106,22 +113,42 @@ class ScrapeCommand:
             return 0
             
         except Exception as e:
-            print(f"Scraping failed: {e}", file=__import__('sys').stderr)
+            print(f"Scraping failed: {e}", file=sys.stderr)
             return 1
         
         finally:
             # Cleanup
             if session:
                 try:
-                    await self.browser_manager.close_session(session.session_id)
+                    await browser_manager.close_session(session.session_id)
                 except Exception as e:
-                    print(f"Warning: Error during session cleanup: {e}", file=__import__('sys').stderr)
+                    print(f"Warning: Error during session cleanup: {e}", file=sys.stderr)
             
             # Additional cleanup for asyncio resources
             try:
                 import asyncio
-                # Give asyncio a chance to clean up pending tasks
-                await asyncio.sleep(0.1)
+                import warnings
+                
+                # Suppress asyncio ResourceWarning during cleanup
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", ResourceWarning)
+                    
+                    # Wait for all pending tasks to complete (excluding Connection.run)
+                    tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+                    # Filter out Connection.run task which should keep running
+                    filtered_tasks = [task for task in tasks if 'Connection.run' not in str(task.get_coro())]
+                    if filtered_tasks:
+                        await asyncio.gather(*filtered_tasks, return_exceptions=True)
+                    
+                    # Force cleanup of event loop
+                    loop = asyncio.get_event_loop()
+                    if loop and not loop.is_closed():
+                        # Run a final iteration to process any remaining callbacks
+                        await asyncio.sleep(0)
+                        
+                        # Close the event loop properly
+                        loop.close()
+                        
             except Exception:
                 pass
     
