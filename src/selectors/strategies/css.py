@@ -97,8 +97,10 @@ class CSSStrategy(BaseStrategyPattern):
                     failure_reason=f"No elements found for CSS selector: {css_selector}"
                 )
             
-            # Create element info for first element (or all if needed)
+            # Create element info for first element and store all elements in metadata
             element_infos = []
+            playwright_elements = []  # Store actual Playwright element handles
+            
             for element in elements:
                 try:
                     # Get element properties
@@ -120,6 +122,7 @@ class CSSStrategy(BaseStrategyPattern):
                         }
                     )
                     element_infos.append(element_info)
+                    playwright_elements.append(element)  # Store actual element
                 except Exception as e:
                     # Continue with other elements if one fails
                     continue
@@ -136,12 +139,17 @@ class CSSStrategy(BaseStrategyPattern):
                     failure_reason="Failed to extract element information"
                 )
             
-            # Return successful result with first element
+            # Store all elements in the first element's metadata for access by extractors
+            first_element = element_infos[0]
+            first_element.metadata['all_elements'] = playwright_elements
+            first_element.metadata['element_count'] = len(playwright_elements)
+            
+            # Return successful result with first element (containing all elements in metadata)
             return SelectorResult(
                 selector_name=selector.name,
                 strategy_used=self.id,
-                element_info=element_infos[0],
-                confidence_score=element_infos[0].confidence,
+                element_info=first_element,
+                confidence_score=first_element.confidence,
                 resolution_time=(datetime.utcnow() - start_time).total_seconds(),
                 validation_results=[],
                 success=True

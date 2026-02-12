@@ -7,6 +7,9 @@ strategies:
     selector: ".event__match--scheduled"
     weight: 1.0
   - type: "css"
+    selector: ".event__match.event__match--scheduled"
+    weight: 0.95
+  - type: "css"
     selector: ".event__time"
     weight: 0.9
   - type: "css"
@@ -15,9 +18,6 @@ strategies:
   - type: "xpath"
     selector: "//div[contains(@class, 'event__match--scheduled')]"
     weight: 0.7
-  - type: "xpath"
-    selector: "//span[contains(@class, 'event__score') and @data-state='pre-match']"
-    weight: 0.6
 metadata:
   wait_for_element: true
   dom_state: "scheduled"

@@ -452,6 +452,118 @@ class SelectorEngine(ISelectorEngine):
         # Get metrics from performance monitor
         return self._performance_monitor.get_metrics(selector_name)
     
+    async def find(self, page_or_element, selector_name: str, context: Optional[str] = None) -> Optional[Any]:
+        """
+        Find a single element using semantic selector name.
+        
+        Args:
+            page_or_element: Playwright page or element instance
+            selector_name: Name of the semantic selector
+            context: Optional context string
+            
+        Returns:
+            Playwright element handle or None if not found
+        """
+        try:
+            # Create DOM context from page/element
+            if hasattr(page_or_element, 'url'):  # It's a Page
+                dom_context = DOMContext(
+                    page=page_or_element,
+                    tab_context=context or "default",
+                    url=page_or_element.url,
+                    timestamp=datetime.utcnow()
+                )
+            else:  # It's an ElementHandle - use its page
+                page = page_or_element.page
+                dom_context = DOMContext(
+                    page=page,
+                    tab_context=context or "default", 
+                    url=page.url,
+                    timestamp=datetime.utcnow()
+                )
+            
+            # Resolve selector
+            result = await self.resolve(selector_name, dom_context)
+            
+            if result.success and result.element_info:
+                return result.element_info.element
+            else:
+                return None
+                
+        except Exception as e:
+            self._logger.error(f"Error finding element with selector {selector_name}: {e}")
+            return None
+    
+    async def find_all(self, page_or_element, selector_name: str, context: Optional[str] = None) -> List[Any]:
+        """
+        Find all elements using semantic selector name.
+        
+        Args:
+            page_or_element: Playwright page or element instance
+            selector_name: Name of the semantic selector
+            context: Optional context string
+            
+        Returns:
+            List of Playwright element handles
+        """
+        try:
+            # Create DOM context from page/element
+            if hasattr(page_or_element, 'url'):  # It's a Page
+                dom_context = DOMContext(
+                    page=page_or_element,
+                    tab_context=context or "default",
+                    url=page_or_element.url,
+                    timestamp=datetime.utcnow()
+                )
+            else:  # It's an ElementHandle - use its page
+                page = page_or_element.page
+                dom_context = DOMContext(
+                    page=page,
+                    tab_context=context or "default",
+                    url=page.url,
+                    timestamp=datetime.utcnow()
+                )
+            
+            # Resolve selector
+            result = await self.resolve(selector_name, dom_context)
+            
+            if result.success and result.element_info:
+                # For find_all, we need to query multiple elements
+                # This is a simplified implementation - in practice, you might want to
+                # query all elements matching the resolved CSS selector
+                css_selector = result.element_info.css_selector
+                if css_selector:
+                    elements = await page_or_element.query_selector_all(css_selector)
+                    return elements
+                else:
+                    return [result.element_info.element]
+            else:
+                return []
+                
+        except Exception as e:
+            self._logger.error(f"Error finding elements with selector {selector_name}: {e}")
+            return []
+    
+    async def get_text(self, element, selector_name: str) -> str:
+        """
+        Get text content from an element found by selector.
+        
+        Args:
+            element: Playwright element handle
+            selector_name: Name of the selector (for logging)
+            
+        Returns:
+            Text content of the element
+        """
+        try:
+            if element:
+                text = await element.text_content()
+                return text.strip() if text else ""
+            return ""
+        except Exception as e:
+            self._logger.error(f"Error getting text for selector {selector_name}: {e}")
+            return ""
+    
     def get_statistics(self) -> Dict[str, Any]:
         """Get selector engine statistics."""
         try:

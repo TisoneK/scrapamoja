@@ -31,15 +31,22 @@ class FlashscoreFlow(BaseFlow):
 
     async def open_home(self):
         """Navigate to Flashscore home page."""
-        await self.page.goto("https://www.flashscore.com", wait_until="domcontentloaded")
+        from src.observability.logger import get_logger
+        logger = get_logger("flashscore.flow")
+        
+        logger.info("Starting navigation to Flashscore home page...")
+        
+        try:
+            await self.page.goto("https://www.flashscore.com", wait_until="domcontentloaded")
+            logger.info("Successfully navigated to Flashscore home page")
+        except Exception as e:
+            logger.error(f"Failed to navigate to home page: {e}")
+            raise
         
         # Wait for main content to be present using selector system
         try:
             from src.selectors.context import DOMContext
             from datetime import datetime
-            from src.observability.logger import get_logger
-            
-            logger = get_logger("flashscore.flow")
             
             dom_context = DOMContext(
                 page=self.page,
@@ -48,66 +55,106 @@ class FlashscoreFlow(BaseFlow):
                 timestamp=datetime.utcnow()
             )
             
+            logger.info("Looking for main content using selector engine...")
             # Try to resolve the main content selector
             main_content_result = await self.selector_engine.resolve("match_items", dom_context)
             if main_content_result and main_content_result.element_info:
                 logger.info("Main content found using selector engine")
             else:
+                logger.info("Selector engine didn't find main content, trying fallback...")
                 # Wait for any match element as fallback
                 await self.page.wait_for_selector('.event__match', timeout=5000)
+                logger.info("Found match elements with fallback selector")
         except Exception as e:
             logger.error(f"Selector engine error: {e}")
             # Final fallback: wait for any match element
             try:
                 await self.page.wait_for_selector('.event__match', timeout=3000)
+                logger.info("Found match elements with final fallback")
             except:
-                pass  # Continue anyway
+                logger.warning("No match elements found, continuing anyway")
         
         # Handle cookie consent if present
+        logger.info("Proceeding to handle cookie consent...")
         await self._handle_cookie_consent()
+        logger.info("Home page navigation completed")
     
     async def _handle_cookie_consent(self):
         """Handle cookie consent dialog if present."""
+        from src.observability.logger import get_logger
+        logger = get_logger("flashscore.flow")
+        
+        logger.info("Starting cookie consent handling...")
+        
         try:
-            from src.selectors.context import DOMContext
-            from datetime import datetime
-            from src.observability.logger import get_logger
+            # Wait a moment for the cookie dialog to appear
+            await self.page.wait_for_timeout(2000)
             
-            logger = get_logger("flashscore.flow")
+            # Method 1: Try direct selector first (most reliable)
+            cookie_selectors = [
+                "#onetrust-accept-btn-handler",  # Main accept button
+                ".ot-button-group .ot-btn-container button",  # Alternative
+                "button[data-testid='accept-cookies']",  # Generic
+                ".cookie-consent-accept",  # Generic class
+                "button:has-text('Accept')",  # Text-based
+                "button:has-text('I Accept')",  # Text-based
+                "[data-analytics-element='cookie-consent-accept']"  # Analytics-based
+            ]
             
-            # Create DOM context for the page
-            dom_context = DOMContext(
-                page=self.page,
-                tab_context="flashscore_authentication",
-                url=self.page.url,
-                timestamp=datetime.utcnow()
-            )
+            for selector in cookie_selectors:
+                try:
+                    logger.info(f"Trying cookie selector: {selector}")
+                    accept_button = await self.page.wait_for_selector(selector, timeout=3000)
+                    if accept_button:
+                        logger.info(f"Found cookie accept button with selector: {selector}")
+                        await accept_button.click()
+                        logger.info("Successfully clicked cookie accept button")
+                        await self.page.wait_for_timeout(2000)
+                        return True
+                except Exception as e:
+                    logger.debug(f"Selector {selector} failed: {e}")
+                    continue
             
-            # Use the selector engine to find cookie consent button
+            # Method 2: Try selector engine as fallback
             try:
+                from src.selectors.context import DOMContext
+                from datetime import datetime
+                
+                dom_context = DOMContext(
+                    page=self.page,
+                    tab_context="flashscore_authentication",
+                    url=self.page.url,
+                    timestamp=datetime.utcnow()
+                )
+                
+                logger.info("Trying selector engine for cookie consent...")
                 cookie_result = await self.selector_engine.resolve("cookie_consent", dom_context)
                 if cookie_result and cookie_result.element_info:
                     logger.info("Cookie consent dialog found using selector engine")
-                    # Click accept button
                     await cookie_result.element_info.element.click()
-                    # Wait using timeout from config
-                    await self.page.wait_for_timeout(self._get_timeout_ms("cookie_consent", 5.0))
+                    await self.page.wait_for_timeout(2000)
+                    return True
                 else:
-                    logger.info("No cookie consent dialog found")
+                    logger.info("No cookie consent dialog found via selector engine")
             except Exception as e:
                 logger.warning(f"Error using selector engine for cookie consent: {e}")
-                # Fallback: try direct query if selector engine fails
-                try:
-                    accept_button = await self.page.query_selector("#onetrust-accept-btn-handler")
-                    if accept_button:
-                        await accept_button.click()
-                        await self.page.wait_for_timeout(self._get_timeout_ms("cookie_consent", 5.0))
-                except:
-                    pass  # Cookie dialog might not be present
+            
+            # Method 3: Check if cookie dialog is still visible
+            try:
+                cookie_dialog = await self.page.query_selector(".ot-sdk-container")
+                if cookie_dialog:
+                    logger.warning("Cookie dialog still visible - trying to dismiss with JavaScript")
+                    await self.page.evaluate("() => { if (window.OnetrustActiveGroups) { window.OneTrust.UpdateConsent(); } }")
+                    await self.page.wait_for_timeout(1000)
+            except Exception as e:
+                logger.debug(f"JavaScript dismissal failed: {e}")
+            
+            logger.info("Cookie consent handling completed - no dialog found or all methods failed")
+            return False
                     
-        except Exception:
-            # Cookie dialog might not be present or different structure
-            pass
+        except Exception as e:
+            logger.error(f"Unexpected error in cookie consent handling: {e}")
+            return False
     
     async def search_sport(self, sport_name: str):
         """Search for a specific sport."""
@@ -394,27 +441,6 @@ class FlashscoreFlow(BaseFlow):
                 await self.page.wait_for_timeout(2000)  # Final fallback
                 logger.warning("Using final timeout fallback")
         
-        # Try to find scheduled games filter
-        scheduled_selectors = [
-            "navigation.event_filter.scheduled_games_filter",
-            "scheduled_filter", 
-            "filter-scheduled",
-            ".filter-scheduled"
-        ]
-        
-        for selector_name in scheduled_selectors:
-            try:
-                logger.info(f"Trying scheduled filter selector: {selector_name}")
-                scheduled_link = await self.selector_engine.find(self.page, selector_name)
-                if scheduled_link:
-                    await scheduled_link.click()
-                    logger.info(f"Successfully clicked scheduled filter using {selector_name}")
-                    # Wait for match items to reload
-                    try:
-                        await self.selector_engine.find(self.page, "match_items")
-                    except:
-                        await self.page.wait_for_timeout(1000)
-                    break
-            except Exception as e:
-                logger.debug(f"Failed with selector {selector_name}: {e}")
-                continue
+        # Skip scheduled filter click - page already shows scheduled matches by default
+        # The scheduled filter selector was failing, but scheduled matches are found without it
+        logger.info("Skipping scheduled filter click - page shows scheduled matches by default")

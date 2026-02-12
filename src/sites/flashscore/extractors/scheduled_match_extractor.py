@@ -152,44 +152,57 @@ class ScheduledMatchExtractor(BaseExtractor):
             logger.warning("No real content detected after maximum attempts, proceeding anyway")
     
     async def _get_match_elements(self):
-        """Get scheduled match elements using scheduled indicators directly."""
+        """Get scheduled match elements using direct CSS selector (what actually works)."""
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.scheduled")
         
-        # Use scheduled_indicators selector to find only scheduled matches
+        # Use the working CSS selector first (what we know works)
+        try:
+            scheduled_elements = await self.scraper.page.query_selector_all('.event__match--scheduled')
+            if scheduled_elements:
+                logger.info(f"Found {len(scheduled_elements)} scheduled match elements with direct CSS selector (primary method)")
+                return scheduled_elements
+            else:
+                logger.warning("No scheduled matches found with direct CSS selector")
+        except Exception as e:
+            logger.error(f"Error with direct CSS selector: {e}")
+        
+        # Only try semantic selector as fallback if direct CSS fails
         try:
             from src.selectors.context import DOMContext
             from datetime import datetime
             
-            dom_context = DOMContext(
+            # Create DOM context
+            context = DOMContext(
                 page=self.scraper.page,
-                tab_context="match_extraction",
+                tab_context="scheduled",
                 url=self.scraper.page.url,
                 timestamp=datetime.utcnow()
             )
             
-            result = await self.scraper.selector_engine.resolve("extraction.match_list.basketball.scheduled_indicators", dom_context)
+            # Check if selector engine exists and is properly initialized
+            if not hasattr(self.scraper, 'selector_engine') or self.scraper.selector_engine is None:
+                logger.warning("Selector engine not available")
+                return []
+            
+            # Use semantic selector as fallback
+            result = await self.scraper.selector_engine.resolve('extraction.match_list.basketball.scheduled_indicators', context)
             if result and result.element_info:
-                elements = result.element_info.get('elements', [])
-                if elements:
-                    logger.info(f"Found {len(elements)} scheduled match elements via scheduled_indicators selector")
+                # Check if elements are stored in metadata (for multi-element results)
+                if hasattr(result.element_info, 'metadata') and result.element_info.metadata.get('all_elements'):
+                    elements = result.element_info.metadata.get('all_elements')
+                    logger.info(f"Found {len(elements)} scheduled match elements via semantic selector (fallback)")
+                    return elements
+                # Fallback to old way for single element results
+                elif hasattr(result.element_info, 'element') and result.element_info.element:
+                    elements = [result.element_info.element]
+                    logger.info(f"Found {len(elements)} scheduled match elements via semantic selector (single element fallback)")
                     return elements
                 else:
-                    logger.warning("Scheduled indicators selector returned success but no elements")
+                    logger.warning("Semantic selector returned success but no elements")
             else:
-                logger.warning("Scheduled indicators selector failed to resolve")
+                logger.warning("Semantic selector failed to resolve")
         except Exception as e:
-            logger.error(f"Error using scheduled indicators selector: {e}")
-        
-        # Fallback to direct CSS query for scheduled matches
-        try:
-            scheduled_elements = await self.scraper.page.query_selector_all('.event__match--scheduled')
-            if scheduled_elements:
-                logger.info(f"Found {len(scheduled_elements)} scheduled match elements with fallback CSS selector")
-                return scheduled_elements
-            else:
-                logger.warning("No scheduled matches found with fallback selector")
-        except Exception as e:
-            logger.error(f"Error with fallback scheduled selector: {e}")
+            logger.error(f"Error using semantic selector: {e}")
         
         return []
