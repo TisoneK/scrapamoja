@@ -80,46 +80,21 @@ class FlashscoreFlow(BaseFlow):
         logger.info("Home page navigation completed")
     
     async def _handle_cookie_consent(self):
-        """Handle cookie consent dialog if present."""
+        """Handle cookie consent dialog if present using selector engine."""
         from src.observability.logger import get_logger
+        from src.selectors.context import DOMContext
+        from datetime import datetime
+        
         logger = get_logger("flashscore.flow")
         
-        logger.info("Starting cookie consent handling...")
+        logger.info("cookie_consent_handling_initiated")
         
         try:
             # Wait a moment for the cookie dialog to appear
             await self.page.wait_for_timeout(2000)
             
-            # Method 1: Try direct selector first (most reliable)
-            cookie_selectors = [
-                "#onetrust-accept-btn-handler",  # Main accept button
-                ".ot-button-group .ot-btn-container button",  # Alternative
-                "button[data-testid='accept-cookies']",  # Generic
-                ".cookie-consent-accept",  # Generic class
-                "button:has-text('Accept')",  # Text-based
-                "button:has-text('I Accept')",  # Text-based
-                "[data-analytics-element='cookie-consent-accept']"  # Analytics-based
-            ]
-            
-            for selector in cookie_selectors:
-                try:
-                    logger.info(f"Trying cookie selector: {selector}")
-                    accept_button = await self.page.wait_for_selector(selector, timeout=3000)
-                    if accept_button:
-                        logger.info(f"Found cookie accept button with selector: {selector}")
-                        await accept_button.click()
-                        logger.info("Successfully clicked cookie accept button")
-                        await self.page.wait_for_timeout(2000)
-                        return True
-                except Exception as e:
-                    logger.debug(f"Selector {selector} failed: {e}")
-                    continue
-            
-            # Method 2: Try selector engine as fallback
+            # Primary Method: Use selector engine (comprehensive approach)
             try:
-                from src.selectors.context import DOMContext
-                from datetime import datetime
-                
                 dom_context = DOMContext(
                     page=self.page,
                     tab_context="flashscore_authentication",
@@ -127,33 +102,50 @@ class FlashscoreFlow(BaseFlow):
                     timestamp=datetime.utcnow()
                 )
                 
-                logger.info("Trying selector engine for cookie consent...")
+                logger.info("cookie_consent_handling_started", method="selector_engine")
                 cookie_result = await self.selector_engine.resolve("cookie_consent", dom_context)
                 if cookie_result and cookie_result.element_info:
-                    logger.info("Cookie consent dialog found using selector engine")
+                    logger.info("cookie_consent_dialog_found", method="selector_engine", selector_used=cookie_result.strategy_used)
                     await cookie_result.element_info.element.click()
+                    logger.info("cookie_consent_accepted", method="selector_engine")
                     await self.page.wait_for_timeout(2000)
                     return True
                 else:
-                    logger.info("No cookie consent dialog found via selector engine")
+                    logger.info("cookie_consent_dialog_not_found", method="selector_engine")
             except Exception as e:
-                logger.warning(f"Error using selector engine for cookie consent: {e}")
+                logger.warning("cookie_consent_handling_failed", method="selector_engine", error=str(e))
             
-            # Method 3: Check if cookie dialog is still visible
+            # Fallback Method: Try authentication.cookie_consent selector
+            try:
+                logger.info("cookie_consent_handling_started", method="authentication_selector")
+                auth_cookie_result = await self.selector_engine.resolve("authentication.cookie_consent", dom_context)
+                if auth_cookie_result and auth_cookie_result.element_info:
+                    logger.info("cookie_consent_dialog_found", method="authentication_selector", selector_used=auth_cookie_result.strategy_used)
+                    await auth_cookie_result.element_info.element.click()
+                    logger.info("cookie_consent_accepted", method="authentication_selector")
+                    await self.page.wait_for_timeout(2000)
+                    return True
+                else:
+                    logger.info("cookie_consent_dialog_not_found", method="authentication_selector")
+            except Exception as e:
+                logger.warning("cookie_consent_handling_failed", method="authentication_selector", error=str(e))
+            
+            # Last Resort: JavaScript dismissal for stubborn dialogs
             try:
                 cookie_dialog = await self.page.query_selector(".ot-sdk-container")
                 if cookie_dialog:
-                    logger.warning("Cookie dialog still visible - trying to dismiss with JavaScript")
+                    logger.warning("cookie_consent_dialog_still_visible", method="javascript_dismissal")
                     await self.page.evaluate("() => { if (window.OnetrustActiveGroups) { window.OneTrust.UpdateConsent(); } }")
                     await self.page.wait_for_timeout(1000)
+                    logger.info("cookie_consent_javascript_dismissal_attempted")
             except Exception as e:
-                logger.debug(f"JavaScript dismissal failed: {e}")
+                logger.debug("cookie_consent_javascript_dismissal_failed", error=str(e))
             
-            logger.info("Cookie consent handling completed - no dialog found or all methods failed")
+            logger.info("cookie_consent_handling_completed", result="no_dialog_found")
             return False
                     
         except Exception as e:
-            logger.error(f"Unexpected error in cookie consent handling: {e}")
+            logger.error("cookie_consent_handling_unexpected_error", error=str(e))
             return False
     
     async def search_sport(self, sport_name: str):
