@@ -35,6 +35,13 @@ from .models.context import TabContext
 from .models.enums import ContextStatus
 
 
+# Optional shutdown coordinator import (will be None if not available)
+try:
+    from src.core.shutdown import ShutdownCoordinator
+except ImportError:
+    ShutdownCoordinator = None
+
+
 @dataclass
 class BrowserSession:
     """Represents a browser instance with its configuration and state."""
@@ -281,6 +288,87 @@ class BrowserSession:
                 f"Session initialization failed: {str(e)}",
                 {"session_id": self.session_id, "error": str(e)}
             )
+    
+    def register_shutdown_cleanup(self, shutdown_coordinator) -> None:
+        """Register cleanup functions with the shutdown coordinator."""
+        if shutdown_coordinator is None or ShutdownCoordinator is None:
+            return
+        
+        # Register browser cleanup with priority 12
+        shutdown_coordinator.register_cleanup(
+            self._cleanup_browser_resources,
+            priority=12,
+            name=f"browser_cleanup_{self.session_id}",
+            timeout_seconds=10.0
+        )
+        
+        # Register page cleanup with priority 10
+        shutdown_coordinator.register_cleanup(
+            self._cleanup_all_pages,
+            priority=10,
+            name=f"page_cleanup_{self.session_id}",
+            timeout_seconds=5.0
+        )
+        
+        # Register context cleanup with priority 11
+        shutdown_coordinator.register_cleanup(
+            self._cleanup_all_contexts,
+            priority=11,
+            name=f"context_cleanup_{self.session_id}",
+            timeout_seconds=8.0
+        )
+        
+        # Register checkpoint persistence with priority 30 (if available)
+        try:
+            from src.resilience.checkpoint.checkpoint_manager import CheckpointManager
+            checkpoint_manager = CheckpointManager()
+            shutdown_coordinator.register_cleanup(
+                checkpoint_manager.shutdown,
+                priority=30,
+                name="checkpoint_persistence",
+                timeout_seconds=15.0
+            )
+            self._logger.info("registered_checkpoint_cleanup")
+        except ImportError:
+            # Checkpoint manager not available, skip registration
+            pass
+        except Exception as e:
+            self._logger.warning("failed_to_register_checkpoint_cleanup", error=str(e))
+        
+        self._logger.info(
+            "registered_shutdown_cleanup",
+            session_id=self.session_id
+        )
+    
+    async def _cleanup_browser_resources(self) -> None:
+        """Cleanup browser resources for shutdown."""
+        await self.close()
+    
+    async def _cleanup_all_pages(self) -> None:
+        """Cleanup all pages for shutdown."""
+        for page in self.pages:
+            try:
+                await page.close()
+            except Exception as e:
+                self._logger.warning(
+                    "page_cleanup_error",
+                    session_id=self.session_id,
+                    error=str(e)
+                )
+        self.pages.clear()
+    
+    async def _cleanup_all_contexts(self) -> None:
+        """Cleanup all contexts for shutdown."""
+        for context in self.contexts:
+            try:
+                await context.close()
+            except Exception as e:
+                self._logger.warning(
+                    "context_cleanup_error",
+                    session_id=self.session_id,
+                    error=str(e)
+                )
+        self.contexts.clear()
     
     async def create_context(self, **context_options) -> BrowserContext:
         """Create a new browser context."""
@@ -563,66 +651,6 @@ class BrowserSession:
                 session_id=self.session_id,
                 correlation_id=self._correlation_id
             )
-            
-            # Add diagnostic logging at browser session close
-            try:
-                import threading
-                import asyncio
-                
-                self._logger.info("=== DIAGNOSTIC: BROWSER_SESSION_CLOSED ===")
-                active_threads = threading.enumerate()
-                self._logger.info(f"Active threads at browser close ({len(active_threads)}):")
-                for thread in active_threads:
-                    self._logger.info(f"  - {thread.name} (ID: {thread.ident}, Daemon: {thread.daemon})")
-                
-                try:
-                    if asyncio.get_event_loop().is_running():
-                        tasks = asyncio.all_tasks()
-                        self._logger.info(f"Pending async tasks at browser close ({len(tasks)}):")
-                        for task in tasks:
-                            self._logger.info(f"  - {task.get_name()} (Done: {task.done()})")
-                            # Add detailed inspection for non-completed tasks
-                            if not task.done():
-                                try:
-                                    coro = task.get_coro()
-                                    if coro:
-                                        self._logger.info(f"    Coroutine: {coro}")
-                                        # Try to get the function name
-                                        if hasattr(coro, '__name__'):
-                                            self._logger.info(f"    Function: {coro.__name__}")
-                                        elif hasattr(coro, 'cr_frame') and coro.cr_frame:
-                                            self._logger.info(f"    Function: {coro.cr_frame.f_code.co_name}")
-                                        # Try to get stack trace
-                                        try:
-                                            stack = task.get_stack()
-                                            if stack:
-                                                self._logger.info(f"    Created at: {stack[-1].filename}:{stack[-1].lineno}")
-                                        except:
-                                            self._logger.info("    Could not determine creation location")
-                                except Exception as e:
-                                    self._logger.info(f"    Could not inspect coroutine: {e}")
-                        
-                        # Cancel all pending tasks to prevent hanging
-                        pending_tasks = [task for task in tasks if not task.done()]
-                        if pending_tasks:
-                            self._logger.info(f"Cancelling {len(pending_tasks)} pending tasks to prevent hanging")
-                            for task in pending_tasks:
-                                task.cancel()
-                            # Give tasks a moment to cancel
-                            await asyncio.sleep(0.1)
-                            # Check if cancellation worked
-                            still_pending = [task for task in pending_tasks if not task.done()]
-                            if still_pending:
-                                self._logger.warning(f"{len(still_pending)} tasks still pending after cancellation")
-                            else:
-                                self._logger.info("All pending tasks successfully cancelled")
-                    else:
-                        self._logger.info("No active event loop at browser close")
-                except Exception as e:
-                    self._logger.info(f"Could not check async tasks at browser close: {e}")
-                self._logger.info("=== END DIAGNOSTIC ===")
-            except Exception as e:
-                self._logger.warning(f"Failed to log diagnostics at browser close: {e}")
             
             # Remove persisted state
             try:

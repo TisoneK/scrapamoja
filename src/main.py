@@ -14,6 +14,9 @@ import logging
 # Import logging configuration first
 from src.core.logging_config import JsonLoggingConfigurator
 
+# Import shutdown coordination
+from src.core.shutdown import ShutdownCoordinator
+
 # Import interrupt handling
 from src.interrupt_handling.compatibility import create_compatible_handler
 from src.interrupt_handling.config import InterruptConfig
@@ -27,7 +30,9 @@ SITE_CLIS = {
 
 
 async def cli():
-    """Main CLI entry point with interrupt handling support."""
+    """Main CLI entry point with graceful shutdown support."""
+    import sys
+    
     if len(sys.argv) < 2:
         print("Usage: python -m src.main <site> <command> ...")
         print(f"Available sites: {', '.join(SITE_CLIS.keys())}")
@@ -47,23 +52,20 @@ async def cli():
     # Initialize logging with verbose flag
     JsonLoggingConfigurator.setup(verbose=verbose)
     
-    # Initialize interrupt handling
+    # Initialize shutdown coordinator
+    shutdown_coordinator = ShutdownCoordinator()
+    
+    # Get logger for shutdown coordinator (use centralized JSON logger)
+    from src.observability.logger import get_logger
+    logger = get_logger("shutdown_coordinator")
+    shutdown_coordinator.set_logger(logger)
+    
+    # Setup signal handlers through coordinator
+    shutdown_coordinator.setup_signal_handlers()
+    
+    # Initialize interrupt handling (for compatibility with existing system)
     config = InterruptConfig.from_env()
     interrupt_handler = create_compatible_handler(config)
-    
-    # Set up signal handlers
-    def signal_handler(signum, frame):
-        print(f"\nReceived interrupt signal {signum}. Gracefully shutting down...")
-        # Let the interrupt handler take care of cleanup
-        if hasattr(interrupt_handler, 'handle_interrupt'):
-            interrupt_handler.handle_interrupt(signum)
-    
-    # Register signal handlers
-    if config.enable_interrupt_handling:
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-        if hasattr(signal, 'SIGBREAK'):
-            signal.signal(signal.SIGBREAK, signal_handler)
     
     try:
         # Import the site's CLI module and class
@@ -76,23 +78,37 @@ async def cli():
         parser = site_cli.create_parser()
         args = parser.parse_args(sys.argv[2:])
         
-        # Run the site CLI with interrupt handling
-        result = await site_cli.run(args)
+        # Run the site CLI with shutdown coordination
+        result = await site_cli.run(args, interrupt_handler=interrupt_handler, shutdown_coordinator=shutdown_coordinator)
         
-        # Check if interrupt handler signaled exit
-        if hasattr(interrupt_handler, 'should_exit') and interrupt_handler.should_exit():
-            return 0
+        # Normal shutdown through coordinator
+        if not shutdown_coordinator.is_shutting_down():
+            shutdown_success = await shutdown_coordinator.shutdown()
+            return 0 if shutdown_success else 1
         
         return result
         
     except KeyboardInterrupt:
         print("\nOperation cancelled by user")
-        return 1
+        # Graceful shutdown through coordinator
+        try:
+            shutdown_success = await shutdown_coordinator.shutdown()
+            return 0 if shutdown_success else 1
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
+            return 1
     except Exception as e:
         print(f"Error: {e}")
         if config.log_level == 'DEBUG':
             import traceback
             traceback.print_exc()
+        
+        # Attempt graceful shutdown even on error
+        try:
+            await shutdown_coordinator.shutdown()
+        except Exception as shutdown_error:
+            print(f"Error during shutdown: {shutdown_error}")
+        
         return 1
 
 

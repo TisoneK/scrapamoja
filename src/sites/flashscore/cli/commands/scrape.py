@@ -36,6 +36,16 @@ class ScrapeCommand:
     
     def __init__(self):
         self.browser_manager = BrowserManager()
+        self.interrupt_handler = None
+        self.shutdown_coordinator = None
+    
+    def set_interrupt_handler(self, interrupt_handler):
+        """Set interrupt handler for graceful shutdown."""
+        self.interrupt_handler = interrupt_handler
+    
+    def set_shutdown_coordinator(self, shutdown_coordinator):
+        """Set shutdown coordinator for graceful shutdown."""
+        self.shutdown_coordinator = shutdown_coordinator
     
     def add_arguments(self, parser: argparse.ArgumentParser):
         """Add command-specific arguments."""
@@ -81,6 +91,10 @@ class ScrapeCommand:
             browser_config = BrowserConfiguration(headless=not args.no_headless)
             
             session = await browser_manager.create_session(browser_config)
+            
+            # Register session with shutdown coordinator if available
+            if self.shutdown_coordinator:
+                session.register_shutdown_cleanup(self.shutdown_coordinator)
             
             # Initialize selector engine
             from src.selectors import get_selector_engine
