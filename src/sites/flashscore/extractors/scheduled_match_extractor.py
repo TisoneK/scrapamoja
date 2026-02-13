@@ -1,7 +1,7 @@
 """
 Scheduled match extractor for Flashscore.
 """
-from typing import Dict, Any, Optional
+from src.sites.flashscore.models import MatchListing
 from playwright.async_api import ElementHandle
 
 from .base_extractor import BaseExtractor
@@ -100,14 +100,14 @@ class ScheduledMatchExtractor(BaseExtractor):
         matches = []
         for i, element in enumerate(match_elements):
             if limit and i >= limit:
-                logger.info(f"Reached limit of {limit} scheduled match{'s' if limit > 1 else ''}")
+                logger.info(f"Reached limit of {limit} scheduled match{'es' if limit > 1 else ''}")
                 break
             
             # Elements are already scheduled (from scheduled_indicators), no need to check status
             match_data = await self.extract_match_data(element, 'scheduled')
             if match_data:
                 matches.append(match_data)
-                logger.info(f"Added scheduled match: {match_data.get('home_team', 'Unknown')} vs {match_data.get('away_team', 'Unknown')}")
+                logger.info(f"Added scheduled match: {match_data.teams['home']} vs {match_data.teams['away']}")
             else:
                 logger.debug("Skipped scheduled match - no data extracted")
         

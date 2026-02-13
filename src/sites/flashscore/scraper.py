@@ -13,10 +13,11 @@ from .config import SITE_CONFIG
 from src.selectors.context_manager import SelectorContext, get_context_manager, DOMState
 from src.selectors.context_loader import get_context_based_loader
 from src.observability.logger import get_logger
+from src.interrupt_handling.integration import InterruptAwareScraper
 
 
-class FlashscoreScraper(BaseSiteScraper):
-    """Flashscore scraper implementation."""
+class FlashscoreScraper(InterruptAwareScraper):
+    """Flashscore scraper implementation with interrupt handling support."""
     
     site_id = SITE_CONFIG["id"]
     site_name = SITE_CONFIG["name"]
@@ -116,7 +117,7 @@ class FlashscoreScraper(BaseSiteScraper):
                 }
             )
             
-            # Register with selector engine (only pass the selector object)
+            # Register with selector engine
             success = await self.selector_engine.register_selector(selector)
             self.logger.debug(f"Registered selector {selector_name}: {success}")
             

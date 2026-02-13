@@ -148,6 +148,7 @@ class StealthSettings:
         
     def get_stealth_launch_args(self) -> List[str]:
         """Get stealth launch arguments for browser."""
+        import sys
         args = []
         
         if self.stealth_level in [StealthLevel.HIGH, StealthLevel.MAXIMUM]:
@@ -157,12 +158,12 @@ class StealthSettings:
                 "--disable-dev-shm-usage",
                 "--disable-accelerated-2d-canvas",
                 "--no-first-run",
-                "--no-zygote",
                 "--disable-gpu",
                 "--disable-background-timer-throttling",
                 "--disable-backgrounding-occluded-windows",
                 "--disable-renderer-backgrounding"
             ])
+            # Note: --no-zygote is intentionally omitted on Windows as it can cause browser hangs
             
         if self.canvas_fingerprint_protection:
             args.extend([

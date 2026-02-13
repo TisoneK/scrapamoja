@@ -1,0 +1,11 @@
+{
+  "checkpoint_id": "interrupt_1770928256",
+  "timestamp": 1770928256.0623968,
+  "application_state": {},
+  "scraping_state": {},
+  "resource_state": {},
+  "metadata": {
+    "interrupt_signal": "SIGINT"
+  },
+  "version": "1.0"
+}

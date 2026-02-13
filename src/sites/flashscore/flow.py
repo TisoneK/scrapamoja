@@ -6,6 +6,7 @@ Handles navigation and interaction with Flashscore sports pages.
 
 from src.sites.base.flow import BaseFlow
 from src.selectors.context_manager import SelectorContext, DOMState
+from src.sites.flashscore.models import NavigationState, PageState
 
 
 class FlashscoreFlow(BaseFlow):
@@ -181,6 +182,118 @@ class FlashscoreFlow(BaseFlow):
         except Exception as e:
             logger.warning(f"Error in search_sport: {e}")
     
+    async def navigate_to_basketball(self) -> NavigationState:
+        """Navigate to basketball section using workflow-based navigation."""
+        from src.observability.logger import get_logger
+        from src.selectors.context import DOMContext
+        from datetime import datetime
+        import re
+        
+        logger = get_logger("flashscore.flow")
+        
+        logger.info("Starting basketball workflow navigation...")
+        
+        try:
+            # Step 1: Navigate to home page
+            await self.open_home()
+            
+            # Step 2: Handle cookie consent
+            await self._handle_cookie_consent()
+            
+            # Step 3: Navigate to basketball section through proper menu navigation
+            dom_context = DOMContext(
+                page=self.page,
+                tab_context="flashscore_navigation",
+                url=self.page.url,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Try to find basketball link using selector engine
+            basketball_result = await self.selector_engine.resolve("navigation.sport_selection.basketball_link", dom_context)
+            if basketball_result and basketball_result.element_info:
+                await basketball_result.element_info.element.click()
+                await self.page.wait_for_timeout(self._get_timeout_ms("basketball_link", 2.0))
+                logger.info("Successfully clicked basketball link")
+            else:
+                logger.warning("Basketball link not found via selector engine")
+                # Fallback: try direct navigation
+                await self.page.goto("https://www.flashscore.com/basketball/", wait_until="domcontentloaded")
+            
+            # Step 4: Verify basketball page loaded via URL pattern
+            current_url = self.page.url
+            url_verified = bool(re.search(r'/basketball/', current_url))
+            
+            # Step 5: Verify presence of match listing container
+            elements_present = False
+            try:
+                match_container = await self.page.wait_for_selector('.container__liveTableWrapper', timeout=5000)
+                elements_present = match_container is not None
+                logger.info("Match listing container found")
+            except:
+                # Try alternative selector
+                try:
+                    match_elements = await self.page.query_selector_all('.event__match')
+                    elements_present = len(match_elements) > 0
+                    logger.info(f"Found {len(match_elements)} match elements")
+                except:
+                    logger.warning("No match elements found")
+            
+            # Step 6: Filter for scheduled matches
+            await self._filter_scheduled_matches()
+            
+            navigation_state = NavigationState(
+                url=current_url,
+                verified=url_verified and elements_present,
+                elements_present=elements_present,
+                timestamp=datetime.utcnow()
+            )
+            
+            if navigation_state.verified:
+                logger.info("Basketball navigation completed successfully")
+            else:
+                logger.warning("Basketball navigation completed with verification issues")
+            
+            return navigation_state
+            
+        except Exception as e:
+            logger.error(f"Error in navigate_to_basketball: {e}")
+            # Return failed state
+            return NavigationState(
+                url=self.page.url,
+                verified=False,
+                elements_present=False,
+                timestamp=datetime.utcnow()
+            )
+    
+    async def _filter_scheduled_matches(self):
+        """Filter for scheduled matches."""
+        from src.observability.logger import get_logger
+        logger = get_logger("flashscore.flow")
+        
+        try:
+            # Look for scheduled matches filter
+            scheduled_selectors = [
+                "navigation.event_filter.scheduled_games_filter",
+                "[data-analytics-element='SCN_TAB'][data-analytics-alias='scheduled']",
+                ".filters__tab:not(.selected)"
+            ]
+            
+            for selector in scheduled_selectors:
+                try:
+                    scheduled_link = await self.page.query_selector(selector)
+                    if scheduled_link:
+                        await scheduled_link.click()
+                        await self.page.wait_for_timeout(2000)
+                        logger.info("Successfully filtered for scheduled matches")
+                        return
+                except:
+                    continue
+            
+            logger.info("No scheduled filter found, using current page state")
+            
+        except Exception as e:
+            logger.warning(f"Error filtering scheduled matches: {e}")
+
     async def navigate_to_football(self):
         """Navigate to football section."""
         try:
@@ -328,6 +441,135 @@ class FlashscoreFlow(BaseFlow):
         # Then filter for live games
         await self.navigate_to_live_matches()
     
+    async def navigate_to_match(self, match_id: str, max_retries: int = 3) -> PageState:
+        """Navigate to a specific match detail page with state verification and rate limiting."""
+        from src.observability.logger import get_logger
+        from datetime import datetime
+        import re
+        import asyncio
+        
+        logger = get_logger("flashscore.flow")
+        
+        # Rate limiting: 1 request per second
+        current_time = datetime.utcnow()
+        
+        # Check if we need to wait for rate limiting
+        if hasattr(self, '_last_match_navigation_time'):
+            time_since_last = (current_time - self._last_match_navigation_time).total_seconds()
+            if time_since_last < 1.0:  # Less than 1 second since last navigation
+                wait_time = 1.0 - time_since_last
+                logger.info(f"Rate limiting: waiting {wait_time:.2f}s before next match navigation")
+                await asyncio.sleep(wait_time)
+        
+        logger.info(f"Navigating to match detail page for match ID: {match_id}")
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    backoff_time = 2 ** attempt  # Exponential backoff: 2s, 4s, 8s
+                    logger.info(f"Retry attempt {attempt + 1}/{max_retries} after {backoff_time}s backoff")
+                    await asyncio.sleep(backoff_time)
+                
+                # Step 1: Find match element using data-event-id attribute
+                match_selector = f".event__match[data-event-id='{match_id}']"
+                match_element = await self.page.query_selector(match_selector)
+                
+                if not match_element:
+                    # Fallback: try alternative selectors
+                    fallback_selectors = [
+                        f"[data-event-id='{match_id}']",
+                        f".eventRowLink[href*='{match_id}']",
+                        f"[aria-describedby*='{match_id}']"
+                    ]
+                    
+                    for selector in fallback_selectors:
+                        match_element = await self.page.query_selector(selector)
+                        if match_element:
+                            logger.info(f"Found match using fallback selector: {selector}")
+                            break
+                    
+                    if not match_element:
+                        raise Exception(f"Match element not found for ID: {match_id}")
+                
+                # Step 2: Click on match element
+                await match_element.click()
+                await self.page.wait_for_timeout(2000)
+                
+                # Step 3: Wait for match detail page to load
+                await self.page.wait_for_load_state('domcontentloaded')
+                
+                # Step 4: Verify match detail page URL pattern
+                current_url = self.page.url
+                url_verified = bool(re.search(r'/match/', current_url)) or bool(re.search(match_id, current_url))
+                
+                # Step 5: Confirm presence of match detail DOM markers
+                tabs_available = []
+                verified = False
+                
+                try:
+                    # Check for primary tab container
+                    tab_container = await self.page.query_selector('.tabs__detail')
+                    if tab_container:
+                        # Detect available tabs
+                        tab_selectors = {
+                            'summary': '.tab__title[data-tab-name="summary"]',
+                            'h2h': '.tab__title[data-tab-name="h2h"]', 
+                            'odds': '.tab__title[data-tab-name="odds"]',
+                            'stats': '.tab__title[data-tab-name="stats"]'
+                        }
+                        
+                        for tab_name, selector in tab_selectors.items():
+                            tab_element = await self.page.query_selector(selector)
+                            if tab_element:
+                                tabs_available.append(tab_name)
+                        
+                        verified = len(tabs_available) > 0
+                        logger.info(f"Found {len(tabs_available)} tabs: {tabs_available}")
+                    else:
+                        # Alternative: check for any match-specific content
+                        match_content = await self.page.query_selector('.matchDetail')
+                        verified = match_content is not None
+                        if verified:
+                            tabs_available = ['summary']  # Default assumption
+                            
+                except Exception as e:
+                    logger.warning(f"Error verifying match detail page structure: {e}")
+                
+                # Update rate limiting timestamp
+                self._last_match_navigation_time = datetime.utcnow()
+                
+                page_state = PageState(
+                    match_id=match_id,
+                    url=current_url,
+                    tabs_available=tabs_available,
+                    verified=verified and url_verified,
+                    timestamp=datetime.utcnow()
+                )
+                
+                if page_state.verified:
+                    logger.info(f"Successfully navigated to match detail page: {match_id}")
+                    return page_state
+                else:
+                    logger.warning(f"Match detail navigation completed with verification issues: {match_id}")
+                    if attempt < max_retries - 1:
+                        continue  # Try again
+                    return page_state
+                    
+            except Exception as e:
+                logger.error(f"Error navigating to match {match_id} (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    continue  # Try again
+                else:
+                    # Return failed state after all retries exhausted
+                    logger.error(f"All {max_retries} attempts failed for match {match_id}")
+                    return PageState(
+                        match_id=match_id,
+                        url=self.page.url,
+                        tabs_available=[],
+                        verified=False,
+                        timestamp=datetime.utcnow()
+                    )
+
     async def navigate_to_finished_games(self, sport_path: str):
         """Navigate to finished games for a specific sport."""
         from src.observability.logger import get_logger

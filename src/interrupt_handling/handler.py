@@ -6,6 +6,8 @@ import signal
 import threading
 import logging
 import time
+import sys
+import asyncio
 from typing import Callable, List, Optional, Dict, Any
 from enum import Enum
 from dataclasses import dataclass
@@ -115,12 +117,107 @@ class InterruptHandler:
             )
             shutdown_thread.start()
     
+    def _log_diagnostics(self, context: str):
+        """Log diagnostic information about threads and async tasks."""
+        self.logger.info(f"=== DIAGNOSTIC: {context} ===")
+        
+        # Log active threads
+        active_threads = threading.enumerate()
+        self.logger.info(f"Active threads ({len(active_threads)}):")
+        for thread in active_threads:
+            self.logger.info(f"  - {thread.name} (ID: {thread.ident}, Daemon: {thread.daemon})")
+        
+        # Log async tasks if event loop exists
+        try:
+            if asyncio.get_event_loop().is_running():
+                tasks = asyncio.all_tasks()
+                self.logger.info(f"Pending async tasks ({len(tasks)}):")
+                for task in tasks:
+                    self.logger.info(f"  - {task.get_name()} (Done: {task.done()})")
+            else:
+                self.logger.info("No active event loop")
+        except Exception as e:
+            self.logger.info(f"Could not check async tasks: {e}")
+        
+        self.logger.info("=== END DIAGNOSTIC ===")
+
+    def _close_event_loops(self):
+        """Close all running event loops properly with timeout."""
+        try:
+            self.logger.info("Starting event loop closure")
+            
+            # Since we're in the interrupt thread, we need to find the main thread's event loop
+            try:
+                # Try to get the main thread's event loop
+                import threading
+                main_thread = threading.main_thread()
+                
+                # Check if we can access the main thread's event loop
+                try:
+                    # This will work if we're in the same process and the loop is accessible
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        self.logger.info(f"Found accessible event loop: {loop}")
+                        
+                        # Get all tasks in the loop
+                        tasks = [task for task in asyncio.all_tasks(loop) if not task.done()]
+                        if tasks:
+                            self.logger.info(f"Cancelling {len(tasks)} pending tasks")
+                            for task in tasks:
+                                task.cancel()
+                                
+                            # Wait for tasks to complete with timeout
+                            try:
+                                # Use asyncio.wait_for for timeout
+                                async def wait_for_tasks():
+                                    return await asyncio.gather(*tasks, return_exceptions=True)
+                                
+                                # 5 second timeout for task cancellation
+                                loop.run_until_complete(
+                                    asyncio.wait_for(wait_for_tasks(), timeout=5.0)
+                                )
+                                self.logger.info("All tasks cancelled successfully")
+                            except asyncio.TimeoutError:
+                                self.logger.warning("Timeout while cancelling tasks - forcing continuation")
+                            except Exception as e:
+                                self.logger.warning(f"Error while cancelling tasks: {e}")
+                        else:
+                            self.logger.info("No pending tasks to cancel")
+                    else:
+                        self.logger.info("Event loop found but not running")
+                        
+                except RuntimeError:
+                    self.logger.info("No accessible event loop found - may be in main thread")
+                    
+            except Exception as e:
+                self.logger.warning(f"Error accessing event loop: {e}")
+            
+            # Since we can't directly close the main thread's event loop from this thread,
+            # we'll add explicit process exit to force termination
+            self.logger.info("Event loop closure completed - will use explicit process exit")
+                
+        except Exception as e:
+            self.logger.error(f"Error in event loop closure: {e}")
+        
+        # Additional force cleanup - try to get current loop and stop it
+        try:
+            import asyncio
+            current_loop = asyncio.get_running_loop()
+            if current_loop and not current_loop.is_closed():
+                self.logger.info("Force stopping current event loop")
+                current_loop.stop()
+        except Exception as e:
+            self.logger.debug(f"Could not stop current loop: {e}")
+
     def _perform_shutdown(self):
         """Perform the actual shutdown process."""
         with self._shutdown_lock:
             try:
                 self.state = InterruptState.SHUTTING_DOWN
                 self.logger.info("Starting graceful shutdown")
+                
+                # Log diagnostics at shutdown start
+                self._log_diagnostics("SHUTDOWN_START")
                 
                 # Execute interrupt callbacks
                 self._execute_interrupt_callbacks()
@@ -135,11 +232,29 @@ class InterruptHandler:
                 self.state = InterruptState.SHUTDOWN_COMPLETE
                 self.logger.info("Graceful shutdown completed")
                 
+                # Log diagnostics after cleanup
+                self._log_diagnostics("POST_CLEANUP")
+                
+                # Close event loops properly
+                self._close_event_loops()
+                
                 # Provide completion feedback
                 self.feedback_provider.shutdown_complete()
                 
                 # Set flag for main thread to exit instead of raising SystemExit in daemon thread
                 self._should_exit = True
+                
+                # Add explicit process exit after a short delay to ensure cleanup completes
+                import threading
+                import time
+                
+                def delayed_exit():
+                    time.sleep(1.0)  # Give 1 second for any final cleanup
+                    self.logger.info("Executing explicit process exit")
+                    sys.exit(0)
+                
+                exit_thread = threading.Thread(target=delayed_exit, daemon=True)
+                exit_thread.start()
                 
             except Exception as e:
                 self.logger.error(f"Error during shutdown: {e}")

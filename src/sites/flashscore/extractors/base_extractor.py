@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List
 from playwright.async_api import ElementHandle
 
 from src.sites.flashscore.scraper import FlashscoreScraper
+from src.sites.flashscore.models import MatchListing
 
 
 class BaseExtractor(ABC):
@@ -30,7 +31,7 @@ class BaseExtractor(ABC):
         """Check if a match element has the correct status for this extractor."""
         pass
     
-    async def extract_match_data(self, element: ElementHandle, expected_status: str) -> Optional[Dict[str, Any]]:
+    async def extract_match_data(self, element: ElementHandle, expected_status: str) -> Optional[MatchListing]:
         """Extract data from a single match element."""
         try:
             # Extract basic match information
@@ -47,27 +48,22 @@ class BaseExtractor(ABC):
             
             # Extract scores
             home_score, away_score = await self._extract_scores(element)
-            
-            # Extract URL
-            match_url = await self._extract_url(element)
+            score = f"{home_score}-{away_score}" if home_score and away_score else None
             
             # Extract time/stage based on status
             time_info = await self._extract_time_info(element, expected_status)
             
-            # Build match data
-            match_data = {
-                'match_id': match_id,
-                'home_team': home_team,
-                'away_team': away_team,
-                'home_score': home_score,
-                'away_score': away_score,
-                'url': match_url,
-                'time': time_info,
-                'status': expected_status
-            }
+            # Build match listing
+            match_listing = MatchListing(
+                match_id=match_id,
+                teams={'home': home_team, 'away': away_team},
+                time=time_info or '',
+                status=expected_status,
+                score=score
+            )
             
-            self.logger.info(f"Successfully extracted match data: {home_team} vs {away_team}")
-            return match_data
+            self.logger.info(f"Successfully extracted match listing: {home_team} vs {away_team}")
+            return match_listing
             
         except Exception as e:
             self.logger.error(f"Error extracting match data: {e}")

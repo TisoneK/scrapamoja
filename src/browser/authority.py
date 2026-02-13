@@ -605,16 +605,17 @@ class BrowserAuthority(IBrowserAuthority):
             
             # Add stealth options if enabled
             if self.config.browser.stealth_enabled:
+                stealth_args = [
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-accelerated-2d-canvas",
+                    "--no-first-run",
+                    "--disable-gpu"
+                ]
+                # Note: --no-zygote is intentionally omitted as it can cause hangs on Windows
                 launch_options.update({
-                    "args": [
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-accelerated-2d-canvas",
-                        "--no-first-run",
-                        "--no-zygote",
-                        "--disable-gpu"
-                    ]
+                    "args": stealth_args
                 })
                 
             browser = await browser_launcher.launch(**launch_options)

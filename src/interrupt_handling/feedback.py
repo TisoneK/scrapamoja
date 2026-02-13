@@ -106,6 +106,37 @@ class FeedbackProvider:
             
             self._print_message(message)
             self._feedback_count += 1
+            
+            # Add diagnostic logging at graceful shutdown completion
+            try:
+                import threading
+                import asyncio
+                
+                # Use the logger directly instead of self._logger
+                import logging
+                logger = logging.getLogger(__name__)
+                
+                logger.info("=== DIAGNOSTIC: GRACEFUL_SHUTDOWN_COMPLETED ===")
+                active_threads = threading.enumerate()
+                logger.info(f"Active threads at shutdown completion ({len(active_threads)}):")
+                for thread in active_threads:
+                    logger.info(f"  - {thread.name} (ID: {thread.ident}, Daemon: {thread.daemon})")
+                
+                try:
+                    if asyncio.get_event_loop().is_running():
+                        tasks = asyncio.all_tasks()
+                        logger.info(f"Pending async tasks at shutdown completion ({len(tasks)}):")
+                        for task in tasks:
+                            logger.info(f"  - {task.get_name()} (Done: {task.done()})")
+                    else:
+                        logger.info("No active event loop at shutdown completion")
+                except Exception as e:
+                    logger.info(f"Could not check async tasks at shutdown completion: {e}")
+                logger.info("=== END DIAGNOSTIC ===")
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to log diagnostics at shutdown completion: {e}")
     
     def shutdown_error(self, error: Exception):
         """Provide error feedback."""

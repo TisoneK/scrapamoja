@@ -12,9 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 from contextvars import ContextVar
-import structlog
-from rich.console import Console
-from rich.logging import RichHandler
+# Removed structlog import to prevent double JSON encoding
 
 
 # Context variables for correlation tracking
@@ -62,57 +60,60 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_entry)
 
 
+class ContextualLogger:
+    """Logger wrapper that automatically includes context."""
+    
+    def __init__(self, logger: logging.Logger, context: Dict[str, Any]):
+        self.logger = logger
+        self.context = context
+    
+    def info(self, message: str, **kwargs):
+        """Log info message with context."""
+        extra = self.context.copy()
+        extra.update(kwargs)
+        self.logger.info(message, extra=extra)
+    
+    def warning(self, message: str, **kwargs):
+        """Log warning message with context."""
+        extra = self.context.copy()
+        extra.update(kwargs)
+        self.logger.warning(message, extra=extra)
+    
+    def error(self, message: str, **kwargs):
+        """Log error message with context."""
+        extra = self.context.copy()
+        extra.update(kwargs)
+        self.logger.error(message, extra=extra)
+    
+    def debug(self, message: str, **kwargs):
+        """Log debug message with context."""
+        extra = self.context.copy()
+        extra.update(kwargs)
+        self.logger.debug(message, extra=extra)
+
+
 class SelectorEngineLogger:
-    """Centralized logger for Selector Engine with correlation tracking."""
+    """Selector Engine logger with correlation context support."""
     
     def __init__(self, name: str = "selector_engine"):
         self.name = name
-        self.logger = structlog.get_logger(name)
-        self._setup_logging()
+        self.logger = logging.getLogger(name)
+        # Removed structlog to prevent double JSON encoding
     
-    def _setup_logging(self):
-        """Configure structured logging with JSON output."""
-        # Configure structlog
-        structlog.configure(
-            processors=[
-                structlog.stdlib.filter_by_level,
-                structlog.stdlib.add_logger_name,
-                structlog.stdlib.add_log_level,
-                structlog.stdlib.PositionalArgumentsFormatter(),
-                structlog.processors.TimeStamper(fmt="iso"),
-                structlog.processors.StackInfoRenderer(),
-                structlog.processors.format_exc_info,
-                structlog.processors.UnicodeDecoder(),
-                structlog.processors.JSONRenderer()
-            ],
-            context_class=dict,
-            logger_factory=structlog.stdlib.LoggerFactory(),
-            wrapper_class=structlog.stdlib.BoundLogger,
-            cache_logger_on_first_use=True,
-        )
-        
-        # Configure standard logging
-        # Don't set level here to respect CLI configuration
-        logging.basicConfig(
-            format="%(message)s",
-            handlers=[
-                logging.StreamHandler(),
-                logging.FileHandler("data/logs/selector_engine.log")
-            ]
-        )
-        
-        # Apply JSON formatter to file handler
-        file_handler = logging.FileHandler("data/logs/selector_engine.log")
-        file_handler.setFormatter(JSONFormatter())
-        
-        root_logger = logging.getLogger()
-        root_logger.handlers.clear()
-        root_logger.addHandler(RichHandler(console=Console(stderr=True)))
-        root_logger.addHandler(file_handler)
-    
-    def with_context(self, **kwargs) -> structlog.BoundLogger:
+    def with_context(self, **kwargs):
         """Create logger with additional context."""
-        return self.logger.bind(**kwargs)
+        # Merge context with correlation variables
+        context = {}
+        if correlation_id.get():
+            context['correlation_id'] = correlation_id.get()
+        if run_id.get():
+            context['run_id'] = run_id.get()
+        if selector_name.get():
+            context['selector_name'] = selector_name.get()
+        context.update(kwargs)
+        
+        # Return a new logger instance with merged context
+        return ContextualLogger(self.logger, context)
     
     def info(self, message: str, **kwargs):
         """Log info message with correlation context."""
@@ -145,9 +146,9 @@ class SelectorEngineLogger:
         # Add provided kwargs
         context.update(kwargs)
         
-        # Log the message
+        # Log the message using extra= parameter
         logger_method = getattr(self.logger, level)
-        logger_method(message, **context)
+        logger_method(message, extra=context)
 
 
 class CorrelationContext:
@@ -291,25 +292,26 @@ def get_logger(name: str = "selector_engine") -> SelectorEngineLogger:
 
 def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None):
     """Setup logging configuration."""
-    # Create logs directory if it doesn't exist
-    log_dir = Path("data/logs")
-    log_dir.mkdir(parents=True, exist_ok=True)
+    # TODO: Remove this - replaced by JsonLoggingConfigurator
+    # # Create logs directory if it doesn't exist
+    # log_dir = Path("data/logs")
+    # log_dir.mkdir(parents=True, exist_ok=True)
     
-    # Configure logging level
-    level = getattr(logging, log_level.upper(), logging.INFO)
+    # # Configure logging level
+    # level = getattr(logging, log_level.upper(), logging.INFO)
     
-    # Configure handlers
-    handlers = [
-        RichHandler(console=Console(stderr=True)),
-        logging.FileHandler(log_file or log_dir / "selector_engine.log")
-    ]
+    # # Configure handlers
+    # handlers = [
+    #     RichHandler(console=Console(stderr=True)),
+    #     logging.FileHandler(log_file or log_dir / "selector_engine.log")
+    # ]
     
-    # Apply configuration
-    logging.basicConfig(
-        level=level,
-        handlers=handlers,
-        format="%(message)s"
-    )
+    # # Apply configuration
+    # logging.basicConfig(
+    #     level=level,
+    #     handlers=handlers,
+    #     format="%(message)s"
+    # )
     
     # Apply JSON formatter to file handler
     for handler in logging.getLogger().handlers:

@@ -408,19 +408,29 @@ class TelemetryReportingLogger:
         # Update statistics
         self._update_stats(level)
         
-        # Log to Python logger
-        log_message = self._format_log_message(log_entry)
+        # Log to Python logger using extra= pattern instead of JSON string
+        log_data = asdict(log_entry)
+        
+        # Convert datetime to string for JSON serialization
+        log_data['timestamp'] = log_entry.timestamp.isoformat()
+        log_data['level'] = log_entry.level.value
+        
+        # Remove None values
+        log_data = {k: v for k, v in log_data.items() if v is not None}
+        
+        # Use message + extra pattern instead of JSON string
+        message = log_data.pop('message', 'telemetry_reporting_event')
         
         if level == LogLevel.DEBUG:
-            self.logger.debug(log_message)
+            self.logger.debug(message, extra=log_data)
         elif level == LogLevel.INFO:
-            self.logger.info(log_message)
+            self.logger.info(message, extra=log_data)
         elif level == LogLevel.WARNING:
-            self.logger.warning(log_message)
+            self.logger.warning(message, extra=log_data)
         elif level == LogLevel.ERROR:
-            self.logger.error(log_message)
+            self.logger.error(message, extra=log_data)
         elif level == LogLevel.CRITICAL:
-            self.logger.critical(log_message)
+            self.logger.critical(message, extra=log_data)
     
     def _should_log(self, level: LogLevel) -> bool:
         """Check if message should be logged based on level"""
@@ -433,21 +443,6 @@ class TelemetryReportingLogger:
         }
         
         return level_order[level] >= level_order[self.log_level]
-    
-    def _format_log_message(self, log_entry: LogEntry) -> str:
-        """Format log message for output"""
-        # Create structured log data
-        log_data = asdict(log_entry)
-        
-        # Convert datetime to string for JSON serialization
-        log_data['timestamp'] = log_entry.timestamp.isoformat()
-        log_data['level'] = log_entry.level.value
-        
-        # Remove None values
-        log_data = {k: v for k, v in log_data.items() if v is not None}
-        
-        # Return formatted message
-        return json.dumps(log_data, default=str)
     
     def _update_stats(self, level: LogLevel) -> None:
         """Update logging statistics"""

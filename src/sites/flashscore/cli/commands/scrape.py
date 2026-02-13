@@ -76,6 +76,11 @@ class ScrapeCommand:
             action='store_true',
             help='Run browser in non-headless mode (show window)'
         )
+        parser.add_argument(
+            '--full-workflow',
+            action='store_true',
+            help='Enable full workflow with match detail extraction'
+        )
     
     async def execute(self, args: argparse.Namespace) -> int:
         """Run scrape command with interrupt handling support."""

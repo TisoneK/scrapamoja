@@ -444,25 +444,11 @@ class StorageTelemetryLogger:
             level=level,
             message=message,
             correlation_id=self.get_correlation_id(),
-            **context
+            operation_id=context.get('operation_id'),
+            **{k: v for k, v in context.items() if k not in ['operation_id']}
         )
         
-        # Update statistics
-        self._update_stats(level)
-        
-        # Log to Python logger
-        log_message = self._format_log_message(log_entry)
-        
-        if level == LogLevel.DEBUG:
-            self.logger.debug(log_message)
-        elif level == LogLevel.INFO:
-            self.logger.info(log_message)
-        elif level == LogLevel.WARNING:
-            self.logger.warning(log_message)
-        elif level == LogLevel.ERROR:
-            self.logger.error(log_message)
-        elif level == LogLevel.CRITICAL:
-            self.logger.critical(log_message)
+        self._log_to_python_logger(level, log_entry)
     
     def _should_log(self, level: LogLevel) -> bool:
         """Check if message should be logged based on level"""
@@ -476,9 +462,12 @@ class StorageTelemetryLogger:
         
         return level_order[level] >= level_order[self.log_level]
     
-    def _format_log_message(self, log_entry: StorageLogEntry) -> str:
-        """Format log message for output"""
-        # Create structured log data
+    def _log_to_python_logger(self, level: LogLevel, log_entry: StorageLogEntry) -> None:
+        """Log entry to Python's standard logging system"""
+        # Update statistics
+        self._update_stats(level)
+        
+        # Create structured log data for extra fields
         log_data = asdict(log_entry)
         
         # Convert datetime to string for JSON serialization
@@ -488,8 +477,19 @@ class StorageTelemetryLogger:
         # Remove None values
         log_data = {k: v for k, v in log_data.items() if v is not None}
         
-        # Return formatted message
-        return json.dumps(log_data, default=str)
+        # Use message + extra pattern instead of JSON string
+        message = log_data.pop('message', 'telemetry_log_event')
+        
+        if level == LogLevel.DEBUG:
+            self.logger.debug(message, extra=log_data)
+        elif level == LogLevel.INFO:
+            self.logger.info(message, extra=log_data)
+        elif level == LogLevel.WARNING:
+            self.logger.warning(message, extra=log_data)
+        elif level == LogLevel.ERROR:
+            self.logger.error(message, extra=log_data)
+        elif level == LogLevel.CRITICAL:
+            self.logger.critical(message, extra=log_data)
     
     def _update_stats(self, level: LogLevel) -> None:
         """Update logging statistics"""
