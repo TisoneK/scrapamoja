@@ -144,7 +144,10 @@ class ScrapeCommand:
                     loop = asyncio.get_event_loop()
                     if loop and not loop.is_closed():
                         # Run a final iteration to process any remaining callbacks
-                        await asyncio.sleep(0)
+                        try:
+                            await asyncio.sleep(0)
+                        except asyncio.CancelledError:
+                            pass  # Expected during cleanup
                         
                         # Close the event loop properly
                         loop.close()
