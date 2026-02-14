@@ -134,51 +134,28 @@ class FlashscoreFlow(BaseFlow):
             logger.error(f"Failed to navigate to home page: {e}")
             raise
         
-        # Wait for main content to be present using selector system
+        # Handle cookie consent FIRST before trying to interact with page content
+        logger.info("Proceeding to handle cookie consent...")
+        await self._handle_cookie_consent()
+        
+        # Wait for main content using primary selectors (direct Playwright, no selector engine)
         try:
-            from src.selectors.context import DOMContext
-            from datetime import datetime
+            # Get primary selectors from match_items config
+            primary_selectors = self._get_match_items_primary_selectors()
+            match_element = primary_selectors.get("match_element", ".event__match")
             
-            dom_context = DOMContext(
-                page=self.page,
-                tab_context="flashscore_extraction",
-                url=self.page.url,
-                timestamp=datetime.utcnow()
-            )
-            
-            logger.info("Looking for main content using selector engine...")
-            # Add timeout to prevent hanging
-            try:
-                main_content_result = await asyncio.wait_for(
-                    self.selector_engine.resolve("match_items", dom_context),
-                    timeout=30.0  # 30 second timeout
-                )
-                logger.info("Main content selector resolution completed")
-            except asyncio.TimeoutError:
-                logger.warning("Main content selector resolution timed out after 30 seconds")
-                main_content_result = None
-            except Exception as e:
-                logger.warning(f"Main content selector resolution failed: {e}")
-                main_content_result = None
-            if main_content_result and main_content_result.element_info:
-                logger.info("Main content found using selector engine")
-            else:
-                logger.info("Selector engine didn't find main content, trying fallback...")
-                # Wait for any match element as fallback
-                await self.page.wait_for_selector('.event__match', timeout=5000)
-                logger.info("Found match elements with fallback selector")
+            logger.info(f"Waiting for main content with primary selector: {match_element}")
+            await self.page.wait_for_selector(match_element, timeout=5000, state="attached")
+            logger.info("Main content found using primary selector")
         except Exception as e:
-            logger.error(f"Selector engine error: {e}")
-            # Final fallback: wait for any match element
+            logger.warning(f"Primary selector failed: {e}, trying fallback...")
+            # Fallback: wait for any match element
             try:
                 await self.page.wait_for_selector('.event__match', timeout=3000)
-                logger.info("Found match elements with final fallback")
+                logger.info("Found match elements with fallback selector")
             except:
                 logger.warning("No match elements found, continuing anyway")
         
-        # Handle cookie consent if present
-        logger.info("Proceeding to handle cookie consent...")
-        await self._handle_cookie_consent()
         logger.info("Home page navigation completed")
     
     async def _handle_cookie_consent(self):
@@ -302,6 +279,40 @@ class FlashscoreFlow(BaseFlow):
             "banner_timeout": 15000
         }
     
+    def _get_match_items_primary_selectors(self) -> dict:
+        """Get primary selectors from match_items config."""
+        try:
+            selector = self.selector_engine.get_selector("match_items")
+            if selector and hasattr(selector, 'metadata') and selector.metadata:
+                primary = selector.metadata.get('primary_selectors', {})
+                if primary:
+                    return primary
+        except Exception:
+            pass
+        
+        # Default values if config not found
+        return {
+            "match_element": ".event__match",
+            "match_container": ".container__liveTableWrapper"
+        }
+    
+    def _get_basketball_link_primary_selectors(self) -> dict:
+        """Get primary selectors from basketball_link config."""
+        try:
+            selector = self.selector_engine.get_selector("navigation.sport_selection.basketball_link")
+            if selector and hasattr(selector, 'metadata') and selector.metadata:
+                primary = selector.metadata.get('primary_selectors', {})
+                if primary:
+                    return primary
+        except Exception:
+            pass
+        
+        # Default values if config not found
+        return {
+            "basketball_link": "a.menuTop__item[data-sport-id='3']",
+            "basketball_menu_item": ".menuTop__item[href*='basketball']"
+        }
+    
     async def search_sport(self, sport_name: str):
         """Search for a specific sport."""
         try:
@@ -347,20 +358,10 @@ class FlashscoreFlow(BaseFlow):
         logger.info("Starting basketball workflow navigation...")
         
         try:
-            # Step 1: Navigate to home page
+            # Step 1: Navigate to home page (handles cookie consent internally)
             await self.open_home()
             
-            # Step 2: Handle cookie consent
-            await self._handle_cookie_consent()
-            
-            # Step 3: Navigate to basketball section through proper menu navigation
-            dom_context = DOMContext(
-                page=self.page,
-                tab_context="flashscore_navigation",
-                url=self.page.url,
-                timestamp=datetime.utcnow()
-            )
-            
+            # Step 2: Navigate to basketball section through proper menu navigation
             # Wait for the menu to be ready and basketball link to be visible
             try:
                 # Wait for the top menu to be present
@@ -369,36 +370,33 @@ class FlashscoreFlow(BaseFlow):
             except Exception as menu_error:
                 logger.warning("Navigation menu not found", error=str(menu_error))
             
-            # Try to find basketball link using selector engine
-            basketball_result = await self.selector_engine.resolve("navigation.sport_selection.basketball_link", dom_context)
-            if basketball_result and basketball_result.element_info:
-                basketball_element = basketball_result.element_info.element
-                # Ensure element is visible and clickable
-                try:
-                    await basketball_element.wait_for_element_state("visible", timeout=5000)
-                    await basketball_element.click()
-                    await self.page.wait_for_timeout(self._get_timeout_ms("basketball_link", 2.0))
-                    logger.info("Successfully clicked basketball link", method="selector_engine")
-                except Exception as click_error:
-                    logger.warning("Basketball link click failed, trying direct navigation", error=str(click_error))
-                    await self.page.goto("https://www.flashscore.com/basketball/", wait_until="domcontentloaded")
-            else:
-                logger.warning("Basketball link not found via selector engine")
-                # Fallback: try direct Playwright selector
-                basketball_link = await self.page.query_selector("a.menuTop__item[data-sport-id='3']")
+            # Try to find basketball link using primary selectors (direct Playwright)
+            basketball_clicked = False
+            try:
+                # Get primary selectors from basketball_link config
+                primary_selectors = self._get_basketball_link_primary_selectors()
+                basketball_selector = primary_selectors.get("basketball_link", "a.menuTop__item[data-sport-id='3']")
+                
+                logger.info(f"Looking for basketball link with primary selector: {basketball_selector}")
+                basketball_link = await self.page.wait_for_selector(basketball_selector, timeout=5000, state="visible")
                 if basketball_link:
                     await basketball_link.click()
                     await self.page.wait_for_timeout(2000)
                     logger.info("Successfully clicked basketball link", method="direct_playwright")
-                else:
-                    # Final fallback: direct navigation
-                    await self.page.goto("https://www.flashscore.com/basketball/", wait_until="domcontentloaded")
+                    basketball_clicked = True
+            except Exception as e:
+                logger.warning(f"Primary basketball selector failed: {e}")
             
-            # Step 4: Verify basketball page loaded via URL pattern
+            if not basketball_clicked:
+                # Fallback: direct navigation
+                logger.warning("Basketball link not found, using direct navigation")
+                await self.page.goto("https://www.flashscore.com/basketball/", wait_until="domcontentloaded")
+            
+            # Step 3: Verify basketball page loaded via URL pattern
             current_url = self.page.url
             url_verified = bool(re.search(r'/basketball/', current_url))
             
-            # Step 5: Verify presence of match listing container
+            # Step 4: Verify presence of match listing container
             elements_present = False
             try:
                 match_container = await self.page.wait_for_selector('.container__liveTableWrapper', timeout=5000)
@@ -413,7 +411,7 @@ class FlashscoreFlow(BaseFlow):
                 except:
                     logger.warning("No match elements found")
             
-            # Step 6: Filter for scheduled matches
+            # Step 5: Filter for scheduled matches
             await self._filter_scheduled_matches()
             
             navigation_state = NavigationState(
@@ -696,18 +694,24 @@ class FlashscoreFlow(BaseFlow):
                 
                 try:
                     # Multiple verification strategies for different page layouts
+                    # Note: _verify_tabs_container and _verify_match_detail_content are async
                     verification_strategies = [
-                        # Strategy 1: Check for tabs container
-                        lambda: self._verify_tabs_container(),
-                        # Strategy 2: Check for match detail content
-                        lambda: self._verify_match_detail_content(),
-                        # Strategy 3: Check for URL-based verification only
+                        # Strategy 1: Check for tabs container (async)
+                        self._verify_tabs_container,
+                        # Strategy 2: Check for match detail content (async)
+                        self._verify_match_detail_content,
+                        # Strategy 3: Check for URL-based verification only (sync)
                         lambda: self._verify_url_only(current_url, match_id)
                     ]
                     
                     for strategy_func in verification_strategies:
                         try:
-                            result = strategy_func()
+                            # Handle async functions properly
+                            import asyncio
+                            if asyncio.iscoroutinefunction(strategy_func):
+                                result = await strategy_func()
+                            else:
+                                result = strategy_func()
                             if result:
                                 tabs_available = result if isinstance(result, list) else ['summary']
                                 verified = True

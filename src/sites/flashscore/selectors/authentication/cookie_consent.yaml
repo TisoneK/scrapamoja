@@ -7,43 +7,14 @@ strategies:
   - type: "css"
     selector: "#onetrust-banner-sdk:not(.ot-hide) #onetrust-accept-btn-handler"
     weight: 1.0
+  # Secondary: Direct accept button
   - type: "css"
     selector: "#onetrust-accept-btn-handler"
     weight: 0.98
-  # Banner visibility check
+  # Tertiary: Banner visibility check
   - type: "css"
     selector: "#onetrust-banner-sdk:not(.ot-hide)"
     weight: 0.95
-  - type: "css"
-    selector: ".save-preference-btn-handler"
-    weight: 0.92
-  - type: "css"
-    selector: ".onetrust-accept-btn-handler"
-    weight: 0.9
-  - type: "css"
-    selector: "#accept-recommended-btn-handler"
-    weight: 0.85
-  - type: "css"
-    selector: ".ot-pc-refuse-all-handler"
-    weight: 0.8
-  - type: "css"
-    selector: ".ot-button-group button"
-    weight: 0.75
-  - type: "css"
-    selector: ".ot-btn-container button"
-    weight: 0.7
-  - type: "css"
-    selector: "#onetrust-pc-btn-handler"
-    weight: 0.65
-  - type: "xpath"
-    selector: "//button[contains(@class, 'accept') or contains(@id, 'accept')]"
-    weight: 0.6
-  - type: "xpath"
-    selector: "//button[contains(text(), 'Accept All') or contains(text(), 'Allow All') or contains(text(), 'Confirm My Choices') or contains(text(), 'I Accept')]"
-    weight: 0.55
-  - type: "css"
-    selector: ".cookie-consent-accept"
-    weight: 0.5
 metadata:
   wait_for_element: true
   required_for_navigation: true
@@ -66,9 +37,5 @@ metadata:
     - "network_latency"
     - "async_sdk_loading"
     - "animation_in_progress"
-  change_rationale: "Added primary_selectors in metadata for direct Playwright access. Added combined banner visibility + accept button selector as primary strategy. Added wait_strategy for clickability verification. Added cookie_check for OptanonAlertBoxClosed state."
-  last_updated: "2026-02-14T20:28:00"
-    - "async_sdk_loading"
-    - "animation_in_progress"
-  change_rationale: "Added combined banner visibility + accept button selector as primary strategy. Added wait_strategy for clickability verification. Added cookie_check for OptanonAlertBoxClosed state. Added 'I Accept' to XPath text matching. Added scroll_into_view and retry_on_failure options."
-  last_updated: "2026-02-14T20:09:00"
+  change_rationale: "Reduced from 13 to 3 strategies for faster resolution. Added primary_selectors in metadata for direct Playwright access."
+  last_updated: "2026-02-14T20:45:00"

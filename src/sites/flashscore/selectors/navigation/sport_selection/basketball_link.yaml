@@ -2,37 +2,23 @@ description: "Basketball sport navigation link"
 confidence_threshold: 0.9
 timeout: 10.0
 retry_count: 5
+# Primary selectors for direct Playwright access (used by flow.py)
+primary_selectors:
+  menu_item: "a.menuTop__item[data-sport-id='3']"
+  basketball_link: "a.menuTop__item[href='/basketball/']"
 strategies:
+  # Primary: Most specific and reliable selector
   - type: "css"
     selector: "a.menuTop__item[data-sport-id='3']:not([style*='display: none']):not(.hidden)"
     weight: 1.0
-  - type: "css"
-    selector: "a.menuTop__item[data-sport-id='3'][href='/basketball/']:not([style*='display: none']):not(.hidden)"
-    weight: 0.95
+  # Secondary: href-based selector
   - type: "css"
     selector: "a.menuTop__item[href='/basketball/']:not([style*='display: none']):not(.hidden)"
     weight: 0.9
+  # Tertiary: Generic basketball href
   - type: "css"
-    selector: "[data-sport-id='3']:not([style*='display: none']):not(.hidden)"
-    weight: 0.85
-  - type: "css"
-    selector: ".menuTop__item[href*='basketball']:not([style*='display: none']):not(.hidden)"
+    selector: "[href*='basketball']:not([style*='display: none']):not(.hidden)"
     weight: 0.8
-  - type: "xpath"
-    selector: "//a[@data-sport-id='3' and @href='/basketball/']"
-    weight: 0.75
-  - type: "xpath"
-    selector: "//a[@data-sport-id='3']"
-    weight: 0.7
-  - type: "xpath"
-    selector: "//a[contains(text(), 'Basketball') or contains(@href, 'basketball')]"
-    weight: 0.65
-  - type: "css"
-    selector: "[href*='basketball']"
-    weight: 0.6
-  - type: "css"
-    selector: ".menuTop__item--active[href*='basketball']"
-    weight: 0.5
 metadata:
   wait_for_element: true
   required_for_navigation: true
@@ -47,5 +33,5 @@ metadata:
   known_blockers:
     - "cookie_consent_overlay"
     - "dynamic_content_loading"
-  change_rationale: "Added preconditions for cookie consent handling. Increased timeout to 10s. Added wait_strategy for clickability verification. This ensures the cookie consent overlay is handled before attempting to click the basketball link."
-  last_updated: "2026-02-14T20:08:00"
+  change_rationale: "Reduced from 10 to 3 strategies for faster resolution. Added primary_selectors for direct Playwright access. Added preconditions for cookie consent handling."
+  last_updated: "2026-02-14T20:43:00"

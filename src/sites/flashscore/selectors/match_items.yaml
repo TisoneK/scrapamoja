@@ -1,23 +1,24 @@
 description: "Alias for match items container - redirects to extraction.match_list.match_items"
 confidence_threshold: 0.8
-timeout: 10.0
-retry_count: 3
+timeout: 5.0
+retry_count: 2
+# Primary selectors for direct Playwright access
+primary_selectors:
+  match_element: ".event__match"
+  match_container: ".container__liveTableWrapper"
 strategies:
+  # Primary: Most reliable selector
   - type: "css"
     selector: ".event__match"
     weight: 1.0
+  # Secondary: Class contains match
   - type: "css"
     selector: "[class*='event__match']"
     weight: 0.9
-  - type: "css"
-    selector: ".liveTable .event__match"
-    weight: 0.8
-  - type: "xpath"
-    selector: "//div[contains(@class, 'event__match')]"
-    weight: 0.7
+  # Tertiary: Container-based selector
   - type: "css"
     selector: ".container__liveTableWrapper .event__match"
-    weight: 0.6
+    weight: 0.8
 metadata:
   wait_for_element: true
   required_for_navigation: true
@@ -25,3 +26,5 @@ metadata:
     live: ["event__match", "live"]
     scheduled: ["event__match"]
     finished: ["event__match"]
+  change_rationale: "Reduced from 5 to 3 strategies for faster resolution. Reduced timeout from 10s to 5s. Added primary_selectors for direct Playwright access."
+  last_updated: "2026-02-14T20:44:00"

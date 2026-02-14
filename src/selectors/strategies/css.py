@@ -84,11 +84,33 @@ class CSSStrategy(BaseStrategyPattern):
                 )
             
             # Execute CSS selector with timeout protection
+            # First, wait for the element to appear (with short timeout)
+            # Then query all matching elements
             try:
-                # Use asyncio.wait_for to prevent hanging
+                # Wait for at least one element to appear (5 second timeout)
+                wait_timeout = 5.0
+                try:
+                    await asyncio.wait_for(
+                        page.wait_for_selector(css_selector, state="attached", timeout=wait_timeout * 1000),
+                        timeout=wait_timeout + 1
+                    )
+                except (asyncio.TimeoutError, Exception) as wait_error:
+                    # Element not found within wait timeout
+                    return SelectorResult(
+                        selector_name=selector.name,
+                        strategy_used=self.id,
+                        element_info=None,
+                        confidence_score=0.0,
+                        resolution_time=(datetime.utcnow() - start_time).total_seconds(),
+                        validation_results=[],
+                        success=False,
+                        failure_reason=f"Element not found within {wait_timeout}s: {css_selector}"
+                    )
+                
+                # Now query all matching elements
                 elements = await asyncio.wait_for(
                     page.query_selector_all(css_selector),
-                    timeout=10.0  # 10 second timeout
+                    timeout=2.0  # Short timeout since element should already be there
                 )
             except asyncio.TimeoutError:
                 return SelectorResult(
