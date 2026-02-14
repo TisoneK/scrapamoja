@@ -21,6 +21,7 @@
 - [Configuration](#-configuration)
 - [Development](#-development)
 - [Testing](#-testing)
+- [Documentation](#-documentation)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -61,6 +62,8 @@ Scrapamoja is a sophisticated web scraping framework designed for production env
 - **Structured Logging**: JSON-based logs with correlation IDs
 - **Error Classification**: Intelligent error categorization and recovery
 - **Performance Analytics**: Execution time and success rate tracking
+- **🔍 Snapshot Debugging**: Complete failure analysis with HTML/screenshots/logs
+- **📋 Workflow Integration**: Standardized debugging and maintenance procedures
 
 ### 🚀 Performance
 - **Async/Await**: Non-blocking I/O for maximum speed
@@ -190,6 +193,24 @@ scrapamoja/
 ├── scripts/                     # Utility scripts
 └── requirements.txt              # Dependencies
 ```
+
+---
+
+## 📚 Documentation
+
+- **[Snapshot System Status](docs/SNAPSHOT_SYSTEM_STATUS.md)** - Complete implementation and performance details
+- **[Selector Debugging Workflow](docs/workflows/selectors/debugging.md)** - Evidence-based selector failure analysis
+- **[Workflow Procedures](docs/workflows/)** - Standardized debugging and maintenance workflows
+
+### 🔍 Debugging Resources
+
+The snapshot observability system provides comprehensive debugging capabilities:
+
+- **Failure Analysis**: Automatic snapshot capture with full DOM state
+- **Visual Evidence**: Screenshots at exact failure moments  
+- **Performance Tracking**: Resolution times and success rates
+- **Historical Data**: Complete failure pattern analysis
+- **Standardized Workflows**: Reproducible debugging procedures
 
 ---
 
