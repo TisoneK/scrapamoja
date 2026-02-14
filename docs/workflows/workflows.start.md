@@ -4,7 +4,7 @@ This directory contains standardized workflows for system operations and debuggi
 
 ---
 
-## � System Status
+## 📊 System Status
 
 | Component | Status | Details | Action |
 |-----------|--------|---------|--------|
@@ -15,56 +15,56 @@ This directory contains standardized workflows for system operations and debuggi
 
 ---
 
-## 🎯 Recommended for You
+## Workflow Options
 
-### � High Priority (Based on current state)
+### Most Used
 
-**1. [Automated Debugging](scripts/selectors/Debug-Selectors.ps1)** ← **Most Common (80% usage)**
+**1. [Automated Debugging](scripts/selectors/Debug-Selectors.ps1)** ← **80% of usage**
 - Smart clustering, faster processing
 - Auto-detects environment, prevents shell errors
-- **Best for:** Most debugging scenarios
+- **Use for:** Most debugging scenarios
 
-### 📋 Common Tasks
+### Common Tasks
 
-**2. [Design Standards](selectors/workflows.selectors.design.standards.md)** ← **Engineering (15% usage)**
+**2. [Design Standards](selectors/workflows/selectors.design.standards.md)** ← **15% of usage**
 - Engineering rules, anti-patterns, performance budgets
-- **Best for:** New selector development
+- **Use for:** New selector development
 
-**3. [System Maintenance](system-maintenance.md)** ← **Maintenance (5% usage)**
+**3. [System Maintenance](system-maintenance.md)** ← **5% of usage**
 - Cleanup, optimization, monitoring
-- **Best for:** Regular system health
+- **Use for:** Regular system health
 
-### 🔧 Advanced Options
+### Additional Options
 
-**4. [Manual Debugging](selectors/workflows.selectors.debug.md)** ← **Learning Mode**
+**4. [Manual Debugging](selectors/workflows/selectors.debug.md)** ← **Learning mode**
 - Original workflow for learning and detailed analysis
-- **Best for:** Understanding debugging process
+- **Use for:** Understanding debugging process
 
-**5. [Complete Analysis](selectors/workflows.selectors.debug.complete.md)** ← **Complex Issues**
+**5. [Complete Analysis](selectors/workflows/selectors.debug.complete.md)** ← **Complex issues**
 - Comprehensive methodology for difficult problems
-- **Best for:** Complex or persistent failures
+- **Use for:** Complex or persistent failures
 
-**6. [Snapshot Analysis](snapshot-analysis.md)** ← **Performance Analysis**
+**6. [Snapshot Analysis](snapshot-analysis.md)** ← **Performance analysis**
 - System performance, failure patterns
-- **Best for:** Performance investigation
+- **Use for:** Performance investigation
 
 ---
 
-## ⚡ Quick Actions
+## Quick Actions
 
-### 🚀 Start Debugging (One command)
+### Start Debugging
 ```bash
 # Auto-detect failures, cluster them, fix in batches
 ./docs/scripts/selectors/Debug-Selectors.ps1
 ```
 
-### 📁 Check System Health
+### Check System Health
 ```bash
 # Validate all components, report issues
 ./docs/workflows/system-maintenance.md
 ```
 
-### 🔧 Review Design Rules
+### Review Design Rules
 ```bash
 # Check selector engineering standards
 ./docs/workflows/selectors/workflows.selectors.design.standards.md
@@ -87,7 +87,7 @@ docs/workflows/
 
 ---
 
-## 🎯 What Do You Want to Do?
+## What Do You Want to Do?
 
 ### [🐛 Fix a Problem](#1-automated-debugging)
 - **Selector failures?** → Automated Debugging
@@ -110,9 +110,9 @@ docs/workflows/
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
-**New Users:** Start with [Automated Debugging](#1-automated-debugging) - it handles 80% of use cases automatically.
+**New Users:** Start with [Automated Debugging](#1-automated-debugging) - it handles 80% of use cases.
 
 **Experienced Users:** Jump directly to your needed workflow using the links above.
 
