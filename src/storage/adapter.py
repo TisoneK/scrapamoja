@@ -75,12 +75,12 @@ class FileSystemStorageAdapter(IStorageAdapter):
         self.compression = False  # Set to False to match expected .json file extension
         self._logger = get_logger("file_storage")
         
-        # Ensure base directory exists
-        self.snapshot_storage.base_path.mkdir(parents=True, exist_ok=True)
+        # Don't create duplicate directories - let core snapshot system handle it
+        # self.snapshot_storage.base_path.mkdir(parents=True, exist_ok=True)
         
-        # Create subdirectories (without duplicate 'snapshots' folder)
-        (self.snapshot_storage.base_path / "metrics").mkdir(exist_ok=True)
-        (self.snapshot_storage.base_path / "indexes").mkdir(exist_ok=True)
+        # Don't create duplicate subdirectories - core snapshot system handles this
+        # (self.snapshot_storage.base_path / "metrics").mkdir(exist_ok=True)
+        # (self.snapshot_storage.base_path / "indexes").mkdir(exist_ok=True)
     
     def _get_hierarchical_path(self, snapshot: DOMSnapshot) -> Path:
         """Generate hierarchical path based on selector_name and timestamp.

@@ -34,6 +34,7 @@ class SnapshotCapture:
                              context: SnapshotContext,
                              config: SnapshotConfig) -> SnapshotBundle:
         """Capture complete snapshot with parallel artifact processing."""
+        print(f"🔍 DIAGNOSTIC: CAPTURE SNAPSHOT STARTED - context: {context}, config: {config}")
         start_time = datetime.now()
         
         try:
