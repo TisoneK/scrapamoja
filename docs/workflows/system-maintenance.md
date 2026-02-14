@@ -12,6 +12,31 @@ description: System maintenance and cleanup procedures for snapshot system
 
 ## Purpose
 
+Maintain system health and organization through periodic cleanup and validation tasks.
+
+---
+
+## Archive Old Snapshots
+
+**Only when:**
+- Data exceeds 500MB, OR
+- Directories older than 60 days, OR
+- Workspace navigation becomes difficult
+
+1. Verify no active debugging in progress
+2. Compress old session:
+   ```powershell
+   Compress-Archive -Path "data/snapshots/flashscore/selector_engine/snapshot_storage/20260214" `
+                    -DestinationPath "archive/session_20260214.zip"
+   ```
+3. Verify archive integrity
+4. Delete original directory
+5. Update workflow_status.json if needed
+
+---
+
+## Regular Maintenance Tasks
+
 1. **Cleanup Legacy Directories**
    ```bash
    # Remove unknown/ directory if empty
@@ -21,19 +46,13 @@ description: System maintenance and cleanup procedures for snapshot system
    rm .checkpoints/checkpoint_interrupt_*.json
    ```
 
-2. **Archive Old Snapshots**
-   ```bash
-   # Move snapshots older than 30 days to archive
-   find data/snapshots -mtime +30 -exec mv {} archive/ \;
-   ```
-
-3. **Validate System Health**
+2. **Validate System Health**
    - Check disk space usage
    - Verify all snapshot types working
    - Test browser session storage
    - Validate flow snapshot creation
 
-4. **Update Documentation**
+3. **Update Documentation**
    - Record maintenance activities
    - Update performance metrics
    - Document any system changes
