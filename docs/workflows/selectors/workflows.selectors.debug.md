@@ -390,10 +390,22 @@ Available failures to debug:
 
 **C. Check Design Standards** - Review selector engineering rules
 
-**If no failures remain (select option 1 or 2):**
+**If no failures remain (select option 1, 2, or 3):**
 
 **1. Return to Main Menu** - Go back to workflow selection
 **2. Exit Workflow** - Complete debugging session
+**3. Archive Session** - Clean up completed session data
+   ```
+   All failures resolved! Consider archiving the session:
+   
+   Check thresholds:
+   - Data exceeds 500MB?
+   - Directories older than 60 days?
+   - Workspace navigation difficult?
+   
+   If yes, run:
+   docs\workflows\system-maintenance.md → "Archive Old Snapshots" section
+   ```
 
 **Select option letter or number to continue:**
 
