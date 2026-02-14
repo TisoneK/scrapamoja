@@ -98,7 +98,7 @@ class SnapshotStorage:
             await self.create_bundle_directory(bundle_path)
             
             # Save metadata
-            self.save_bundle_metadata(bundle)
+            await self.save_bundle_metadata(bundle)
             
             # Save artifacts - artifacts can be strings (file paths) or objects with content
             for artifact in bundle.artifacts:

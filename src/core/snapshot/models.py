@@ -139,10 +139,23 @@ class SnapshotBundle:
     
     def _calculate_content_hash(self) -> str:
         """Calculate MD5 hash of bundle content."""
+        print(f"🔍 DIAGNOSTIC: timestamp type: {type(self.timestamp)}, value: {self.timestamp}")
+        print(f"🔍 DIAGNOSTIC: config type: {type(self.config)}, value: {self.config}")
+        
         content = {
             "context": asdict(self.context),
             "timestamp": self.timestamp.isoformat(),
-            "config": asdict(self.config),
+            "config": {
+                "mode": self.config.mode.value,
+                "capture_html": self.config.capture_html,
+                "capture_screenshot": self.config.capture_screenshot,
+                "capture_network": self.config.capture_network,
+                "capture_console": self.config.capture_console,
+                "selector": self.config.selector,
+                "capture_full_page": self.config.capture_full_page,
+                "deduplication_enabled": self.config.deduplication_enabled,
+                "async_save": self.config.async_save
+            },
             "artifacts": sorted(self.artifacts),
             "metadata": self.metadata
         }
