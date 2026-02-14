@@ -7,26 +7,32 @@ strategies:
     selector: "#onetrust-accept-btn-handler"
     weight: 1.0
   - type: "css"
-    selector: ".onetrust-accept-btn-handler"
+    selector: ".save-preference-btn-handler"
     weight: 0.95
   - type: "css"
-    selector: "#accept-recommended-btn-handler"
+    selector: ".onetrust-accept-btn-handler"
     weight: 0.9
   - type: "css"
-    selector: ".ot-button-group button"
+    selector: "#accept-recommended-btn-handler"
     weight: 0.85
   - type: "css"
-    selector: ".ot-btn-container button"
+    selector: ".ot-pc-refuse-all-handler"
     weight: 0.8
   - type: "css"
-    selector: "#onetrust-pc-btn-handler"
+    selector: ".ot-button-group button"
+    weight: 0.75
+  - type: "css"
+    selector: ".ot-btn-container button"
     weight: 0.7
-  - type: "xpath"
-    selector: "//button[contains(@class, 'accept') or contains(@id, 'accept')]"
+  - type: "css"
+    selector: "#onetrust-pc-btn-handler"
     weight: 0.65
   - type: "xpath"
-    selector: "//button[contains(text(), 'Accept All') or contains(text(), 'Accept')]"
+    selector: "//button[contains(@class, 'accept') or contains(@id, 'accept')]"
     weight: 0.6
+  - type: "xpath"
+    selector: "//button[contains(text(), 'Accept All') or contains(text(), 'Allow All') or contains(text(), 'Confirm My Choices')]"
+    weight: 0.55
   - type: "css"
     selector: ".cookie-consent-accept"
     weight: 0.5
@@ -39,5 +45,5 @@ metadata:
     - "dynamic_content_loading"
     - "javascript_delay"
     - "network_latency"
-  change_rationale: "Increased timeout from 5.0s to 10.0s and retry count from 3 to 5 to handle OneTrust dynamic loading delays. Added fallback selectors for different consent button states: .onetrust-accept-btn-handler, #accept-recommended-btn-handler, and generic button selectors within OT containers. Added XPath fallbacks for class-based and text-based matching to handle various consent dialog implementations."
-  last_updated: "2026-02-14T18:25:00"
+  change_rationale: "Added .save-preference-btn-handler as second-highest priority selector (weight 0.95) based on actual HTML analysis showing this is the primary button class present in DOM. Added .ot-pc-refuse-all-handler as alternative fallback. Updated XPath text matching to include 'Allow All' and 'Confirm My Choices' button text found in snapshot. Reordered strategies to prioritize actual DOM elements over generic selectors."
+  last_updated: "2026-02-14T19:27:00"

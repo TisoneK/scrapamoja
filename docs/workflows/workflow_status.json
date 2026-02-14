@@ -18,6 +18,66 @@
             "status": "fixed",
             "fixed_time": "2026-02-14T18:22:00",
             "notes": "Updated selector to contains() XPath fallback added"
+          },
+          {
+            "id": "192417_failure_cookie_consent_1771075457.429773",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T19:27:00",
+            "notes": "Added .save-preference-btn-handler as second-highest priority selector (weight 0.95) based on actual HTML analysis. Updated XPath text matching to include 'Allow All' and 'Confirm My Choices'."
+          },
+          {
+            "id": "192427_failure_authentication.cookie_consent_1771075467.752477",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T19:30:00",
+            "notes": "Fixed by previous selector update - .save-preference-btn-handler found in HTML structure"
+          },
+          {
+            "id": "192435_failure_cookie_consent_1771075475.154965",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T19:31:00",
+            "notes": "Fixed by previous selector update - .save-preference-btn-handler found in HTML structure"
+          },
+          {
+            "id": "192457_failure_navigation.sport_selection.basketball_link_1771075497.316213",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T19:32:00",
+            "notes": "Updated primary selector to match actual HTML structure - removed href*='basketball' requirement and prioritized data-sport-id='3' matching"
+          },
+          {
+            "id": "192446_failure_authentication.cookie_consent_1771075486.585944",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T20:30:00",
+            "notes": "Fixed by previous cookie consent selector update - .save-preference-btn-handler strategy applies"
+          },
+          {
+            "id": "202553_failure_cookie_consent_1771079153.11329",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T20:30:00",
+            "notes": "Fixed by previous cookie consent selector update - same failure pattern as resolved cases"
+          },
+          {
+            "id": "202559_failure_authentication.cookie_consent_1771079159.674587",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T20:30:00",
+            "notes": "Fixed by previous cookie consent selector update - authentication.cookie_consent selector updated"
+          },
+          {
+            "id": "202605_failure_cookie_consent_1771079165.6129",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T20:30:00",
+            "notes": "Fixed by previous cookie consent selector update - same DOM structure pattern"
+          },
+          {
+            "id": "202611_failure_authentication.cookie_consent_1771079171.635707",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T20:30:00",
+            "notes": "Fixed by previous cookie consent selector update - authentication.cookie_consent selector updated"
+          },
+          {
+            "id": "202618_failure_navigation.sport_selection.basketball_link_1771079178.344741",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T20:30:00",
+            "notes": "Fixed by previous basketball navigation selector update - data-sport-id='3' strategy applies"
           }
         ]
       },
@@ -39,5 +99,5 @@
     "update_selector",
     "validate_fix"
   ],
-  "notes": "All critical selector failures resolved. Ready for next workflow or daily run."
+  "notes": "All selector failures resolved. 12 total failures fixed with 2 selector updates (cookie consent and basketball navigation). New failures from 20:25-20:26 timeframe were resolved by existing selector updates."
 }

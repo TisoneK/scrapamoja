@@ -4,23 +4,29 @@ timeout: 8.0
 retry_count: 5
 strategies:
   - type: "css"
-    selector: "a.menuTop__item[data-sport-id='3'][href*='basketball']:not([style*='display: none']):not(.hidden)"
+    selector: "a.menuTop__item[data-sport-id='3']:not([style*='display: none']):not(.hidden)"
     weight: 1.0
   - type: "css"
-    selector: "a.menuTop__item[data-sport-id='3']:not([style*='display: none']):not(.hidden)"
+    selector: "a.menuTop__item[data-sport-id='3'][href='/basketball/']:not([style*='display: none']):not(.hidden)"
     weight: 0.95
   - type: "css"
-    selector: "[data-sport-id='3']:not([style*='display: none']):not(.hidden)"
+    selector: "a.menuTop__item[href='/basketball/']:not([style*='display: none']):not(.hidden)"
     weight: 0.9
+  - type: "css"
+    selector: "[data-sport-id='3']:not([style*='display: none']):not(.hidden)"
+    weight: 0.85
   - type: "css"
     selector: ".menuTop__item[href*='basketball']:not([style*='display: none']):not(.hidden)"
     weight: 0.8
   - type: "xpath"
-    selector: "//a[@data-sport-id='3' and contains(@href, 'basketball')]"
+    selector: "//a[@data-sport-id='3' and @href='/basketball/']"
     weight: 0.75
   - type: "xpath"
-    selector: "//a[contains(text(), 'Basketball') or contains(@href, 'basketball')]"
+    selector: "//a[@data-sport-id='3']"
     weight: 0.7
+  - type: "xpath"
+    selector: "//a[contains(text(), 'Basketball') or contains(@href, 'basketball')]"
+    weight: 0.65
   - type: "css"
     selector: "[href*='basketball']"
     weight: 0.6
@@ -34,5 +40,5 @@ metadata:
   known_blockers:
     - "cookie_consent_overlay"
     - "dynamic_content_loading"
-  change_rationale: "Updated primary selector to use contains() for href matching instead of exact match to handle dynamic URL variations. Increased timeout from 5.0s to 8.0s and retry count from 3 to 5 to account for JavaScript rendering delays. Added additional XPath fallback with exact attribute matching for robustness."
-  last_updated: "2026-02-14T18:22:00"
+  change_rationale: "Updated primary selector to match actual HTML structure: removed href*='basketball' requirement from top selector since basketball link only has data-sport-id='3' and href='/basketball/'. Added exact href='/basketball/' matcher as second priority. Added XPath selector for @data-sport-id='3' only as fallback. Reordered strategies to prioritize actual DOM structure over pattern matching."
+  last_updated: "2026-02-14T19:32:00"
