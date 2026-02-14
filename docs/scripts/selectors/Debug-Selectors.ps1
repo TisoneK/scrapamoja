@@ -354,4 +354,13 @@ Write-Host "`nℹ️  Remember to:"
 Write-Host "   1. Update workflow_status.json with your fixes"
 Write-Host "   2. Commit selector changes to version control"
 Write-Host "   3. Run integration tests before deploying"
-Write-Host "   4. Archive session if thresholds met (see system-maintenance.md)"
+
+# Check archiving thresholds
+$snapshotSize = (Get-ChildItem data/snapshots -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB
+$oldestSnapshot = Get-ChildItem data/snapshots -Recurse -ErrorAction SilentlyContinue | Sort-Object CreationTime | Select-Object -First 1
+$daysOld = if ($oldestSnapshot) { (Get-Date) - $oldestSnapshot.CreationTime } else { [TimeSpan]::Zero }
+
+# Only show archiving suggestion if thresholds met
+if ($snapshotSize -gt 500 -or $daysOld.Days -gt 60) {
+    Write-Host "   4. Archive session (data: $([Math]::Round($snapshotSize, 0))MB, age: $($daysOld.Days) days) - see system-maintenance.md"
+}
