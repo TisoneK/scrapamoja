@@ -199,8 +199,8 @@ scrapamoja/
 ## 📚 Documentation
 
 - **[Snapshot System Status](docs/SNAPSHOT_SYSTEM_STATUS.md)** - Complete implementation and performance details
-- **[Selector Debugging Workflow](docs/workflows/selectors/debugging.md)** - Evidence-based selector failure analysis
-- **[Workflow Procedures](docs/workflows/)** - Standardized debugging and maintenance workflows
+- **[Selector Debugging Workflow](docs/workflows/selectors/workflows.selectors.debug.md)** - Evidence-based selector failure analysis
+- **[Workflow Procedures](docs/workflows/workflows.start.md)** - Standardized debugging and maintenance workflows
 
 ### 🔍 Debugging Resources
 

@@ -130,7 +130,7 @@ data/snapshots/
 
 ### Debugging Workflow Integration
 
-- **Standardized Process**: See `docs/SELECTOR_DEBUGGING_WORKFLOW.md`
+- **Standardized Process**: See `docs/workflows/selectors/workflows.selectors.debug.md`
 - **CLI Integration**: `/selector-debugging` workflow command available
 - **Evidence-Based Updates**: All changes traceable to failure snapshots
 - **Performance Monitoring**: Resolution times tracked automatically
