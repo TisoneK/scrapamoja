@@ -451,22 +451,27 @@ class FileSystemStorageAdapter(IStorageAdapter):
             
             # Special handling for browser sessions - put them in hierarchical structure
             if key.startswith('browser_sessions/'):
-                # Create browser_sessions as a "site" with proper hierarchy
-                session_id = key.split('/')[-1].replace('.json', '')
-                timestamp = datetime.now()
-                
-                # Create context for browser session
-                context = SnapshotContext(
-                    site='browser_sessions',
-                    module='session_management',
-                    component='browser_session',
-                    session_id=session_id
-                )
-                
-                # Use hierarchical path generation
-                hierarchical_dir = Path(self.snapshot_storage.base_path) / context.generate_hierarchical_path(timestamp)
-                hierarchical_dir.mkdir(parents=True, exist_ok=True)
-                file_path = hierarchical_dir / f"{session_id}.json"
+                # Check if this is a site-specific browser session (e.g., "flashscore/browser_sessions/")
+                if '/' in key[:-5]:  # Has site prefix
+                    # Already in correct format: site/browser_sessions/session_id.json
+                    file_path = self.base_path / key
+                else:
+                    # Legacy format - use hierarchical structure
+                    session_id = key.split('/')[-1].replace('.json', '')
+                    timestamp = datetime.now()
+                    
+                    # Create context for browser session
+                    context = SnapshotContext(
+                        site='browser_sessions',
+                        module='session_management',
+                        component='browser_session',
+                        session_id=session_id
+                    )
+                    
+                    # Use hierarchical path generation
+                    hierarchical_dir = Path(self.snapshot_storage.base_path) / context.generate_hierarchical_path(timestamp)
+                    hierarchical_dir.mkdir(parents=True, exist_ok=True)
+                    file_path = hierarchical_dir / f"{session_id}.json"
             
             # Ensure directory exists
             file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -497,6 +502,45 @@ class FileSystemStorageAdapter(IStorageAdapter):
             else:
                 file_path = self.base_path / f"{key}.json"
                 
+            # Special handling for browser sessions - check for site-specific paths
+            if key.startswith('browser_sessions/') and '/' in key[:-5]:
+                # Site-specific browser session - check hierarchical location
+                site = key.split('/')[0]
+                session_id = key.split('/')[-1].replace('.json', '')
+                timestamp = datetime.now()
+                
+                # Create context to find hierarchical path
+                context = SnapshotContext(
+                    site=site,
+                    module='session_management',
+                    component='browser_session',
+                    session_id=session_id
+                )
+                
+                # Check both old and new locations
+                hierarchical_path = Path(self.snapshot_storage.base_path) / context.generate_hierarchical_path(timestamp)
+                old_path = self.base_path / key
+                
+                # Delete from both locations if they exist
+                deleted_files = []
+                if old_path.exists():
+                    old_path.unlink()
+                    deleted_files.append(str(old_path))
+                if hierarchical_path.exists():
+                    for json_file in hierarchical_path.glob("*.json"):
+                        json_file.unlink()
+                        deleted_files.append(str(json_file))
+                        
+                # Log deletion from hierarchical path (preferred location)
+                if deleted_files:
+                    self._logger.info(
+                        "data_deleted",
+                        key=key,
+                        file_path=str(hierarchical_path),
+                        deleted_files=deleted_files
+                    )
+                    return
+                    
             if file_path.exists():
                 file_path.unlink()
                 

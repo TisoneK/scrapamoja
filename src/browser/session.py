@@ -524,8 +524,14 @@ class BrowserSession:
     async def persist_state(self) -> None:
         """Persist session state to storage."""
         try:
+            # Use site context for hierarchical storage if available
+            if self.site:
+                storage_key = f"{self.site}/browser_sessions/{self.session_id}.json"
+            else:
+                storage_key = f"browser_sessions/{self.session_id}.json"
+                
             await self._storage.store(
-                f"browser_sessions/{self.session_id}.json",
+                storage_key,
                 self.to_dict()
             )
             

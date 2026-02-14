@@ -42,7 +42,7 @@ class SessionStatistics:
 class BrowserManager:
     """Centralized browser session management with concurrent access."""
     
-    def __init__(self):
+    def __init__(self, site_id: str = 'unknown'):
         self._logger = get_logger("browser_manager")
         self._storage = get_storage_adapter()
         self._sessions: Dict[str, BrowserSession] = {}
@@ -51,6 +51,7 @@ class BrowserManager:
         self._cleanup_task: Optional[asyncio.Task] = None
         self._cleanup_interval = 60  # 1 minute
         self._max_concurrent_sessions = 50
+        self._site_id = site_id  # Store site context for hierarchical storage
     
     async def initialize(self) -> None:
         """Initialize the browser manager."""
@@ -89,7 +90,8 @@ class BrowserManager:
             # Create session
             session = BrowserSession(
                 session_id=session_id,
-                configuration=configuration or BrowserConfiguration()
+                configuration=configuration or BrowserConfiguration(),
+                site=getattr(self, '_site_id', 'unknown')  # Pass site context for hierarchical storage
             )
             
             # Add to manager

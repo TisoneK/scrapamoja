@@ -147,7 +147,8 @@ class BrowserAuthority(IBrowserAuthority):
             session = BrowserSession(
                 session_id=session_id,
                 browser_type=browser_type,
-                configuration=configuration
+                configuration=configuration,
+                site=self.site_id  # Pass site context for hierarchical storage
             )
             
             # Create session manager

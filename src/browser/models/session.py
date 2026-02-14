@@ -124,10 +124,12 @@ class BrowserSession:
         session_id: str,
         browser_type: str,
         configuration: Optional[BrowserConfiguration] = None,
-        process_id: Optional[int] = None
+        process_id: Optional[int] = None,
+        site: Optional[str] = None  # Add site context for hierarchical storage
     ):
         self.session_id = session_id
         self.browser_type = browser_type
+        self.site = site  # Store site context for hierarchical storage
         self.configuration = configuration or BrowserConfiguration(
             config_id=f"default_{session_id}",
             browser_type=browser_type
