@@ -449,6 +449,25 @@ class FileSystemStorageAdapter(IStorageAdapter):
             else:
                 file_path = self.base_path / f"{key}.json"
             
+            # Special handling for browser sessions - put them in hierarchical structure
+            if key.startswith('browser_sessions/'):
+                # Create browser_sessions as a "site" with proper hierarchy
+                session_id = key.split('/')[-1].replace('.json', '')
+                timestamp = datetime.now()
+                
+                # Create context for browser session
+                context = SnapshotContext(
+                    site='browser_sessions',
+                    module='session_management',
+                    component='browser_session',
+                    session_id=session_id
+                )
+                
+                # Use hierarchical path generation
+                hierarchical_dir = Path(self.snapshot_storage.base_path) / context.generate_hierarchical_path(timestamp)
+                hierarchical_dir.mkdir(parents=True, exist_ok=True)
+                file_path = hierarchical_dir / f"{session_id}.json"
+            
             # Ensure directory exists
             file_path.parent.mkdir(parents=True, exist_ok=True)
                 
