@@ -803,6 +803,9 @@ class SelectorEngine(ISelectorEngine):
             # Capture DOM content
             dom_content = await context.get_page_content()
             
+            # Capture screenshot for visual debugging
+            screenshot = await context.capture_screenshot()
+            
             # Create snapshot ID first (before snapshot object)
             snapshot_id_value = f"failure_{selector.name}_{datetime.utcnow().timestamp()}"
             
@@ -818,14 +821,15 @@ class SelectorEngine(ISelectorEngine):
                 file_size=len(dom_content.encode('utf-8'))
             )
             
-            # Store snapshot
-            snapshot_id = await self._storage_adapter.store_snapshot(snapshot)
+            # Store snapshot with screenshot
+            snapshot_id = await self._storage_adapter.store_snapshot(snapshot, screenshot)
             
             self._logger.info(
                 "failure_snapshot_captured",
                 selector_name=selector.name,
                 snapshot_id=snapshot_id,
-                file_size=snapshot.file_size
+                file_size=snapshot.file_size,
+                has_screenshot=bool(screenshot)
             )
             
             return snapshot_id

@@ -80,7 +80,7 @@ class StealthSettings:
     accept_encoding_normalization: bool = True
     
     # Behavioral patterns
-    human_like_scrolling: bool = True
+    scroll_simulation: bool = True
     random_mouse_movements: bool = True
     natural_typing_rhythm: bool = True
     page_interaction_simulation: bool = True
@@ -335,13 +335,8 @@ class StealthSettings:
             "scroll_distance": random.randint(100, 500),
             "scroll_duration_ms": random.uniform(200, 800),
             "delay_before_ms": self.get_random_delay(100),
-            "human_like": self.human_like_scrolling
+            "scroll_simulation": self.scroll_simulation
         }
-        
-    @property
-    def human_like_scrolling(self) -> bool:
-        """Check if human-like scrolling should be simulated."""
-        return self.human_like_scrolling
         
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -374,7 +369,7 @@ class StealthSettings:
             "connection_type_normalization": self.connection_type_normalization,
             "accept_language_normalization": self.accept_language_normalization,
             "accept_encoding_normalization": self.accept_encoding_normalization,
-            "human_like_scrolling": self.human_like_scrolling,
+            "scroll_simulation": self.scroll_simulation,
             "random_mouse_movements": self.random_mouse_movements,
             "natural_typing_rhythm": self.natural_typing_rhythm,
             "page_interaction_simulation": self.page_interaction_simulation,
@@ -435,7 +430,6 @@ class StealthSettings:
             connection_type_normalization=data.get("connection_type_normalization", True),
             accept_language_normalization=data.get("accept_language_normalization", True),
             accept_encoding_normalization=data.get("accept_encoding_normalization", True),
-            human_like_scrolling=data.get("human_like_scrolling", True),
             random_mouse_movements=data.get("random_mouse_movements", True),
             natural_typing_rhythm=data.get("natural_typing_rhythm", True),
             page_interaction_simulation=data.get("page_interaction_simulation", True),
@@ -483,6 +477,18 @@ class StealthSettings:
                 canvas_fingerprint_protection=True,
                 webgl_fingerprint_protection=True,
                 timing_randomization=True
+            ),
+            "max": cls(
+                stealth_level=StealthLevel.HIGH,
+                fingerprint_randomization=True,
+                user_agent_rotation=True,
+                mouse_movement_simulation=True,
+                typing_simulation=True,
+                scroll_simulation=True,
+                canvas_fingerprint_protection=True,
+                webgl_protection=True,
+                audio_context_protection=True,
+                font_fingerprint_protection=True
             ),
             "maximum": cls(
                 stealth_level=StealthLevel.MAXIMUM,

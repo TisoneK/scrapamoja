@@ -25,8 +25,14 @@ class FlashscoreScraper(InterruptAwareScraper):
 
     def __init__(self, page, selector_engine):
         super().__init__(page, selector_engine)
-        self.flow = FlashscoreFlow(page, selector_engine)
+        self.flow = FlashscoreFlow(self.page, self.selector_engine)
         self.logger = get_logger("flashscore.scraper")
+        
+        # Initialize snapshot system
+        from src.core.snapshot.manager import SnapshotManager
+        from src.core.snapshot.config import get_settings
+        self.snapshot_settings = get_settings()
+        self.snapshot_manager = SnapshotManager(self.snapshot_settings.base_path)
         
         # Initialize hierarchical selector system
         selectors_root = Path(__file__).parent / "selectors"
@@ -387,11 +393,14 @@ class FlashscoreScraper(InterruptAwareScraper):
                 "finished_count": len(finished_matches),
                 "upcoming_count": len(upcoming_matches)
             }
-        
-        return normalized
-
-    async def extract_match_details(self, match_url: str, detail_type: str = "summary"):
-        """Extract detailed data from a specific match page."""
+            
+            return normalized
+            
+            return {"error": f"Failed to normalize scheduled matches: {str(e)}"}
+            return {"error": f"Failed to normalize scheduled matches: {str(e)}"}
+    
+    async def extract_match_statistics(self, match_url: str, tertiary_context: str = None):
+        """Extract detailed statistics from a match page."""
         try:
             # Navigate to match page
             await self.page.goto(match_url)
@@ -402,53 +411,77 @@ class FlashscoreScraper(InterruptAwareScraper):
             dom_state = await self.context_manager.detect_dom_state(page_content)
             
             # Set context based on detail type
-            if detail_type == "summary":
+            if tertiary_context == "summary":
                 await self._set_context("extraction", "match_summary", dom_state=dom_state)
-            elif detail_type == "h2h":
+            elif tertiary_context == "h2h":
                 await self._set_context("extraction", "match_h2h", dom_state=dom_state)
-            elif detail_type == "odds":
+            elif tertiary_context == "odds":
                 await self._set_context("extraction", "match_odds", dom_state=dom_state)
-            elif detail_type == "stats":
+            elif tertiary_context == "stats":
                 await self._set_context("extraction", "match_stats", dom_state=dom_state)
+            
+            # Capture snapshot before extraction
+            await self.capture_operation_snapshot("match_statistics_extraction", {
+                "match_url": match_url,
+                "context": tertiary_context,
+                "dom_state": dom_state.state if dom_state else "unknown"
+            })
             
             # Extract data based on context
             return await self._extract_context_data()
             
         except Exception as e:
-            return {"error": f"Failed to extract match details: {str(e)}"}
-
-    async def extract_match_statistics(self, match_url: str, tertiary_context: str = None):
-        """Extract detailed statistics from a match page."""
-        try:
-            # Navigate to match page
-            await self.page.goto(match_url)
-            await self.page.wait_for_load_state('networkidle')
-            
-            # Navigate to stats tab first
-            await self._set_context("navigation", "tab_switching")
-            stats_tab = await self.selector_engine.find(self.page, "stats_tab")
-            if stats_tab:
-                await stats_tab.click()
-                await self.page.wait_for_timeout(2000)
-            
-            # Detect DOM state
-            page_content = await self.page.content()
-            dom_state = await self.context_manager.detect_dom_state(page_content)
-            
-            # Set tertiary context if specified
-            if tertiary_context:
-                await self._set_context("extraction", "match_stats", tertiary_context, dom_state=dom_state)
-            else:
-                await self._set_context("extraction", "match_stats", dom_state=dom_state)
-            
-            # Extract statistics data
-            return await self._extract_context_data()
-            
-        except Exception as e:
+            # Capture snapshot on error
+            await self.capture_operation_snapshot("match_statistics_error", {
+                "match_url": match_url,
+                "context": tertiary_context,
+                "error": str(e)
+            })
             return {"error": f"Failed to extract match statistics: {str(e)}"}
 
+    async def capture_operation_snapshot(self, operation: str, metadata: dict = None):
+        """Capture snapshot during scraper operations."""
+        try:
+            if self.snapshot_settings.enable_metrics:
+                from src.core.snapshot.models import SnapshotContext, SnapshotConfig, SnapshotMode
+                from datetime import datetime
+                
+                context = SnapshotContext(
+                    site="flashscore",
+                    module="scraper",
+                    component="flashscore_scraper",
+                    session_id=getattr(self, 'session_id', 'unknown'),
+                    function=operation,
+                    additional_metadata=metadata or {}
+                )
+                
+                config = SnapshotConfig(
+                    mode=SnapshotMode.FULL_PAGE,  # Use FULL_PAGE mode since no specific selector is provided
+                    capture_html=True,
+                    capture_screenshot=self.snapshot_settings.default_capture_screenshot,
+                    capture_console=self.snapshot_settings.default_capture_console
+                )
+                
+                snapshot_id = await self.snapshot_manager.capture_snapshot(
+                    page=self.page,
+                    context=context,
+                    config=config
+                )
+                
+                self.logger.info(f"Captured snapshot for operation {operation}: {snapshot_id}")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to capture snapshot for {operation}: {e}")
+    
+    async def shutdown_snapshots(self):
+        """Shutdown snapshot system gracefully."""
+        try:
+            if hasattr(self, 'snapshot_manager'):
+                await self.snapshot_manager.shutdown()
+        except Exception as e:
+            self.logger.error(f"Error shutting down snapshots: {e}")
+
     async def _extract_context_data(self):
-        """Extract data using current context selectors."""
         try:
             selectors = await self._get_context_selectors()
             extracted_data = {}

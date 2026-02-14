@@ -66,7 +66,7 @@ class FlashscoreOrchestrator:
         try:
             # Step 1: Navigate to basketball section
             navigation_state = await self.flow.navigate_to_basketball()
-            if not navigation_state.verified:
+            if not navigation_state or not hasattr(navigation_state, 'verified') or not navigation_state.verified:
                 self.scraper.logger.error("Failed to navigate to basketball section")
                 return []
             
@@ -166,7 +166,7 @@ class FlashscoreOrchestrator:
                 # Navigate to match detail page
                 page_state = await self.flow.navigate_to_match(match_listing.match_id, max_retries=1)
                 
-                if not page_state.verified:
+                if not page_state or not hasattr(page_state, 'verified') or not page_state.verified:
                     self.scraper.logger.warning(f"Failed to navigate to match {match_listing.match_id} (attempt {attempt + 1})")
                     if attempt < max_retries - 1:
                         continue  # Retry

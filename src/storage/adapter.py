@@ -19,13 +19,15 @@ from src.models.selector_models import (
 )
 from src.observability.logger import get_logger
 from src.utils.exceptions import StorageError
+from ..core.snapshot.storage import SnapshotStorage
+from ..core.snapshot.models import SnapshotBundle, SnapshotContext, SnapshotConfig, SnapshotMode, EnumEncoder
 
 
 class IStorageAdapter(ABC):
     """Interface for storage operations."""
     
     @abstractmethod
-    async def store_snapshot(self, snapshot: DOMSnapshot) -> str:
+    async def store_snapshot(self, snapshot: DOMSnapshot, screenshot: bytes = None) -> str:
         """Store DOM snapshot."""
         pass
     
@@ -64,108 +66,153 @@ class IStorageAdapter(ABC):
 
 
 class FileSystemStorageAdapter(IStorageAdapter):
-    """File system-based storage adapter."""
+    """File system-based storage adapter using core snapshot system."""
     
-    def __init__(self, base_path: str = "data/storage", compression: bool = True):
-        self.base_path = Path(base_path)
-        self.compression = compression
+    def __init__(self, base_path: str = None, compression: bool = True):
+        # Use core snapshot storage with base path
+        self.base_path = Path(base_path or "data/snapshots")
+        self.snapshot_storage = SnapshotStorage(base_path or "data/snapshots")
+        self.compression = False  # Set to False to match expected .json file extension
         self._logger = get_logger("file_storage")
         
         # Ensure base directory exists
-        self.base_path.mkdir(parents=True, exist_ok=True)
+        self.snapshot_storage.base_path.mkdir(parents=True, exist_ok=True)
         
-        # Create subdirectories
-        (self.base_path / "snapshots").mkdir(exist_ok=True)
-        (self.base_path / "metrics").mkdir(exist_ok=True)
-        (self.base_path / "indexes").mkdir(exist_ok=True)
+        # Create subdirectories (without duplicate 'snapshots' folder)
+        (self.snapshot_storage.base_path / "metrics").mkdir(exist_ok=True)
+        (self.snapshot_storage.base_path / "indexes").mkdir(exist_ok=True)
     
-    async def store_snapshot(self, snapshot: DOMSnapshot) -> str:
-        """Store DOM snapshot to file system."""
+    def _get_hierarchical_path(self, snapshot: DOMSnapshot) -> Path:
+        """Generate hierarchical path based on selector_name and timestamp.
+        
+        Structure: {site}/{module}/{component}/{YYYYMMDD}/{HHMMSS}_{session_id}/
+        """
+        # Parse selector_name to get module and component
+        # e.g., "navigation.sport_selection.basketball_link" -> module="navigation", component="sport_selection.basketball_link"
+        selector_parts = snapshot.selector_name.split(".")
+        
+        # Default to "unknown" if parsing fails
+        if len(selector_parts) >= 2:
+            module = selector_parts[0]
+            component = ".".join(selector_parts[1:])
+        else:
+            module = "default"
+            component = snapshot.selector_name
+        
+        # Get site from metadata or default
+        site = "flashscore"  # Could be extracted from page_url in metadata
+        
+        # Generate timestamp-based path
+        timestamp = snapshot.created_at
+        date_str = timestamp.strftime("%Y%m%d")
+        time_str = timestamp.strftime("%H%M%S")
+        
+        # Extract session_id from snapshot id (last part after last underscore)
+        snapshot_id_parts = snapshot.id.split("_")
+        session_id = snapshot_id_parts[-1] if snapshot_id_parts else "unknown"
+        
+        # Build hierarchical path
+        hierarchical_path = (
+            self.base_path / "snapshots" /
+            site / module / component /
+            f"{date_str}" /
+            f"{time_str}_{session_id}"
+        )
+        
+        return hierarchical_path
+    
+    async def store_snapshot(self, snapshot: DOMSnapshot, screenshot: bytes = None) -> str:
+        """Store DOM snapshot using core snapshot system."""
         try:
-            # Create file path
-            file_name = f"{snapshot.id}.json{'gz' if self.compression else ''}"
-            file_path = self.base_path / "snapshots" / file_name
+            # Convert DOMSnapshot to SnapshotContext
+            context = SnapshotContext(
+                site="flashscore",  # Could be extracted from URL or metadata
+                module="selector_engine",
+                component="snapshot_storage",
+                session_id="unknown",  # Could be passed as parameter
+                function="store_snapshot",
+                additional_metadata={
+                    "original_selector": snapshot.selector_name,
+                    "snapshot_type": snapshot.snapshot_type.value,
+                    "file_size": snapshot.file_size
+                }
+            )
             
-            # Prepare snapshot data
-            snapshot_data = {
-                "id": snapshot.id,
-                "selector_name": snapshot.selector_name,
-                "snapshot_type": snapshot.snapshot_type.value,
-                "dom_content": snapshot.dom_content,
-                "metadata": asdict(snapshot.metadata),
-                "file_path": str(file_path),
-                "created_at": snapshot.created_at.isoformat(),
-                "file_size": snapshot.file_size
-            }
+            # Create SnapshotConfig for full page capture
+            config = SnapshotConfig(
+                mode=SnapshotMode.FULL_PAGE,
+                capture_html=True,
+                capture_screenshot=bool(screenshot),
+                capture_console=False,
+                capture_network=False,
+                async_save=True,  # Enable async save
+                deduplication_enabled=True
+            )
             
-            # Compress if enabled
-            if self.compression:
-                content = gzip.compress(json.dumps(snapshot_data).encode('utf-8'))
-            else:
-                content = json.dumps(snapshot_data, indent=2).encode('utf-8')
+            # Create SnapshotBundle
+            bundle = SnapshotBundle(
+                context=context,
+                config=config,
+                timestamp=datetime.now(),  # Add required timestamp
+                bundle_path="test_path",  # Add required bundle_path
+                artifacts=[]  # HTML and screenshots will be added by storage system
+            )
             
-            # Write to file
-            file_path.write_bytes(content)
+            # Store bundle using core snapshot storage
+            bundle_path = await self.snapshot_storage.store_bundle(bundle)
             
-            # Update index
-            await self._update_snapshot_index(snapshot)
+            # Update snapshot with bundle path
+            snapshot.file_path = str(bundle_path.relative_to(self.snapshot_storage.base_path))
             
             self._logger.debug(
                 "snapshot_stored",
                 snapshot_id=snapshot.id,
-                file_path=str(file_path),
-                file_size=len(content)
+                bundle_path=str(bundle_path),
+                file_size=snapshot.file_size,
+                has_screenshot=bool(screenshot)
             )
             
             return snapshot.id
             
         except Exception as e:
+            self._logger.error(
+                "snapshot_storage_failed",
+                snapshot_id=snapshot.id,
+                error=str(e)
+            )
             raise StorageError(
                 "store", "snapshot", snapshot.id, str(e)
             )
     
     async def retrieve_snapshot(self, snapshot_id: str) -> Optional[DOMSnapshot]:
-        """Retrieve DOM snapshot from file system."""
+        """Retrieve DOM snapshot from core snapshot system."""
         try:
-            # Try compressed version first
-            file_path = self.base_path / "snapshots" / f"{snapshot_id}.json.gz"
-            if not file_path.exists():
-                # Try uncompressed version
-                file_path = self.base_path / "snapshots" / f"{snapshot_id}.json"
-                if not file_path.exists():
-                    return None
+            # Try to load bundle from core storage
+            bundle = await self.snapshot_storage.load_bundle(snapshot_id)
             
-            # Read file content
-            content = file_path.read_bytes()
+            if not bundle:
+                self._logger.warning(
+                    "snapshot_not_found",
+                    snapshot_id=snapshot_id
+                )
+                return None
             
-            # Decompress if needed
-            if file_path.suffix == '.gz':
-                content = gzip.decompress(content).decode('utf-8')
-            else:
-                content = content.decode('utf-8')
-            
-            # Parse JSON
-            data = json.loads(content)
-            
-            # Reconstruct metadata
-            metadata = SnapshotMetadata(**data["metadata"])
-            
-            # Reconstruct snapshot
+            # Convert SnapshotBundle back to DOMSnapshot
             snapshot = DOMSnapshot(
-                id=data["id"],
-                selector_name=data["selector_name"],
-                snapshot_type=SnapshotType(data["snapshot_type"]),
-                dom_content=data["dom_content"],
-                metadata=metadata,
-                file_path=data["file_path"],
-                created_at=datetime.fromisoformat(data["created_at"]),
-                file_size=data["file_size"]
+                id=bundle.content_hash[:8] if bundle.content_hash else snapshot_id,
+                selector_name=bundle.context.selector_name,
+                snapshot_type=bundle.config.mode.value if bundle.config else SnapshotType.MANUAL,
+                dom_content=bundle.html_content,
+                metadata=SnapshotMetadata(**bundle.metadata),
+                file_path=bundle.bundle_path,
+                created_at=bundle.context.timestamp,
+                file_size=bundle.content_size if hasattr(bundle, 'content_size') else 0
             )
             
             self._logger.debug(
                 "snapshot_retrieved",
                 snapshot_id=snapshot_id,
-                file_path=str(file_path)
+                file_path=snapshot.file_path
             )
             
             return snapshot
@@ -217,7 +264,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
                 "metrics": existing_metrics
             }
             
-            file_path.write_text(json.dumps(data, indent=2))
+            file_path.write_text(json.dumps(data, indent=2, cls=EnumEncoder))
             
             self._logger.debug(
                 "metrics_stored",
@@ -295,68 +342,76 @@ class FileSystemStorageAdapter(IStorageAdapter):
             )
     
     async def delete_snapshot(self, snapshot_id: str) -> bool:
-        """Delete DOM snapshot from file system."""
+        """Delete DOM snapshot using core snapshot system."""
         try:
-            deleted = False
+            # Delete snapshot bundle from core storage
+            success = await self.snapshot_storage.delete_bundle(snapshot_id)
             
-            # Try compressed version
-            file_path = self.base_path / "snapshots" / f"{snapshot_id}.json.gz"
-            if file_path.exists():
-                file_path.unlink()
-                deleted = True
-            else:
-                # Try uncompressed version
-                file_path = self.base_path / "snapshots" / f"{snapshot_id}.json"
-                if file_path.exists():
-                    file_path.unlink()
-                    deleted = True
-            
-            if deleted:
+            if success:
                 # Remove from index
-                await self._remove_from_snapshot_index(snapshot_id)
+                index = await self._load_snapshot_index()
+                if snapshot_id in index:
+                    del index[snapshot_id]
                 
-                self._logger.debug(
+                # Save updated index
+                await self._update_snapshot_index(None)
+                
+                self._logger.info(
                     "snapshot_deleted",
                     snapshot_id=snapshot_id
                 )
             
-            return deleted
+            return success
             
         except Exception as e:
+            self._logger.error(
+                "snapshot_deletion_failed",
+                snapshot_id=snapshot_id,
+                error=str(e)
+            )
             raise StorageError(
                 "delete", "snapshot", snapshot_id, str(e)
             )
-    
+
     async def list_snapshots(self, selector_name: Optional[str] = None,
                            snapshot_type: Optional[SnapshotType] = None,
                            limit: Optional[int] = None) -> List[str]:
-        """List snapshot IDs."""
+        """List snapshot IDs using core snapshot system."""
         try:
-            # Load index
-            index = await self._load_snapshot_index()
+            # Get snapshot IDs from core storage index
+            snapshot_ids = await self.snapshot_storage.list_snapshots()
             
-            # Filter results
-            filtered_ids = []
-            for snapshot_id, metadata in index.items():
-                if selector_name and metadata.get("selector_name") != selector_name:
-                    continue
-                if snapshot_type and metadata.get("snapshot_type") != snapshot_type.value:
-                    continue
-                filtered_ids.append(snapshot_id)
+            # Filter results if criteria provided
+            if selector_name:
+                snapshot_ids = [sid for sid in snapshot_ids 
+                              if self._matches_selector_name(sid, selector_name)]
             
-            # Sort by creation time (newest first)
-            filtered_ids.sort(key=lambda sid: index[sid].get("created_at", ""), reverse=True)
+            if snapshot_type:
+                snapshot_ids = [sid for sid in snapshot_ids 
+                              if self._matches_snapshot_type(sid, snapshot_type)]
             
             # Apply limit
             if limit:
-                filtered_ids = filtered_ids[:limit]
+                snapshot_ids = snapshot_ids[:limit]
             
+            self._logger.debug(
+                "snapshots_listed",
+                count=len(snapshot_ids),
+                selector_name=selector_name,
+                snapshot_type=snapshot_type,
+                limit=limit
+            )
+            
+            return snapshot_ids
             
         except Exception as e:
+            self._logger.error(
+                "snapshot_list_failed",
+                error=str(e)
+            )
             raise StorageError(
                 "list", "snapshots", "all", str(e)
             )
-            return []
     
     async def list_files(self, pattern: str = "*") -> List[str]:
         """List files matching pattern in storage directory."""
@@ -394,7 +449,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
             file_path.parent.mkdir(parents=True, exist_ok=True)
                 
             with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(value, f, indent=2)
+                json.dump(value, f, indent=2, cls=EnumEncoder)
             
             self._logger.info(
                 "data_stored",
@@ -442,25 +497,35 @@ class FileSystemStorageAdapter(IStorageAdapter):
             raise StorageError("delete", "data", key, str(e))
     
     async def cleanup_old_snapshots(self, older_than: datetime) -> int:
-        """Clean up old snapshots."""
+        """Clean up old snapshots using core snapshot system."""
         try:
-            # Get all snapshots
-            all_snapshot_ids = await self.list_snapshots()
+            # Get all snapshot IDs from core storage
+            snapshot_ids = await self.snapshot_storage.list_snapshots()
             
             deleted_count = 0
-            for snapshot_id in all_snapshot_ids:
-                # Get snapshot metadata
+            
+            for snapshot_id in snapshot_ids:
+                # Get snapshot metadata to check creation time
                 index = await self._load_snapshot_index()
                 metadata = index.get(snapshot_id, {})
                 
-                if "created_at" in metadata:
-                    created_at = datetime.fromisoformat(metadata["created_at"])
+                if metadata:
+                    created_at = datetime.fromisoformat(metadata.get("created_at", ""))
                     if created_at < older_than:
-                        if await self.delete_snapshot(snapshot_id):
-                            deleted_count += 1
+                        # Delete snapshot bundle
+                        await self.snapshot_storage.delete_bundle(snapshot_id)
+                        deleted_count += 1
+                        
+                        # Remove from index
+                        if snapshot_id in index:
+                            del index[snapshot_id]
+            
+            # Save updated index
+            if deleted_count > 0:
+                await self._update_snapshot_index(None)
             
             self._logger.info(
-                "snapshots_cleanup_completed",
+                "old_snapshots_cleaned",
                 deleted_count=deleted_count,
                 cutoff_date=older_than.isoformat()
             )
@@ -468,6 +533,10 @@ class FileSystemStorageAdapter(IStorageAdapter):
             return deleted_count
             
         except Exception as e:
+            self._logger.error(
+                "cleanup_failed",
+                error=str(e)
+            )
             raise StorageError(
                 "cleanup", "snapshots", "all", str(e)
             )
@@ -477,7 +546,6 @@ class FileSystemStorageAdapter(IStorageAdapter):
         try:
             index_file = self.base_path / "indexes" / "snapshots.json"
             
-            # Load existing index
             index = {}
             if index_file.exists():
                 try:
@@ -485,31 +553,8 @@ class FileSystemStorageAdapter(IStorageAdapter):
                     index = json.loads(content)
                 except Exception:
                     index = {}
-            
-            # Add/update entry
-            index[snapshot.id] = {
-                "selector_name": snapshot.selector_name,
-                "snapshot_type": snapshot.snapshot_type.value,
-                "created_at": snapshot.created_at.isoformat(),
-                "file_size": snapshot.file_size,
-                "file_path": snapshot.file_path
-            }
-            
-            # Save index
-            index_file.write_text(json.dumps(index, indent=2))
-            
-        except Exception as e:
-            self._logger.warning(
-                "snapshot_index_update_failed",
-                snapshot_id=snapshot.id,
-                error=str(e)
-            )
-    
-    async def _remove_from_snapshot_index(self, snapshot_id: str) -> None:
-        """Remove snapshot from index."""
-        try:
-            index_file = self.base_path / "indexes" / "snapshots.json"
-            
+            else:
+                index = {}
             if not index_file.exists():
                 return
             
@@ -522,7 +567,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
                 del index[snapshot_id]
                 
                 # Save updated index
-                index_file.write_text(json.dumps(index, indent=2))
+                index_file.write_text(json.dumps(index, indent=2, cls=EnumEncoder))
             
         except Exception as e:
             self._logger.warning(
@@ -560,7 +605,7 @@ class MemoryStorageAdapter(IStorageAdapter):
         self._metrics: Dict[str, List[ConfidenceMetrics]] = defaultdict(list)
         self._logger = get_logger("memory_storage")
     
-    async def store_snapshot(self, snapshot: DOMSnapshot) -> str:
+    async def store_snapshot(self, snapshot: DOMSnapshot, screenshot: bytes = None) -> str:
         """Store DOM snapshot in memory."""
         try:
             # Check capacity
@@ -575,7 +620,8 @@ class MemoryStorageAdapter(IStorageAdapter):
             self._logger.debug(
                 "snapshot_stored_memory",
                 snapshot_id=snapshot.id,
-                total_snapshots=len(self._snapshots)
+                total_snapshots=len(self._snapshots),
+                has_screenshot=bool(screenshot)
             )
             
             return snapshot.id
@@ -692,6 +738,7 @@ def get_storage_adapter() -> IStorageAdapter:
     """Get global storage adapter instance."""
     global _storage_adapter
     if _storage_adapter is None:
+        # Use the new context-aware snapshot system directly
         _storage_adapter = create_storage_adapter("filesystem")
     return _storage_adapter
 

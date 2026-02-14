@@ -128,7 +128,7 @@ class MatchDetailExtractor(ABC):
     async def _validate_page_structure(self, page_state: PageState) -> bool:
         """Validate that the match detail page has the expected structure."""
         try:
-            if not page_state.verified:
+            if not page_state or not hasattr(page_state, 'verified') or not page_state.verified:
                 return False
             
             # Check for match-specific content

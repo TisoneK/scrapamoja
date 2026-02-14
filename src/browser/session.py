@@ -30,9 +30,12 @@ from src.observability.events import (
 from src.observability.metrics import get_browser_metrics_collector
 from src.storage.adapter import get_storage_adapter
 from src.utils.exceptions import BrowserSessionError
-from .snapshot import snapshot_manager
 from .models.context import TabContext
 from .models.enums import ContextStatus
+
+# Import core snapshot system
+from src.core.snapshot.manager import get_snapshot_manager
+from src.core.snapshot.handlers.session import SessionSnapshot
 
 
 # Optional shutdown coordinator import (will be None if not available)
@@ -72,6 +75,10 @@ class BrowserSession:
         self._storage = get_storage_adapter()
         self._correlation_id = self.session_id[:8]  # Use session ID prefix as correlation ID
         self._metrics_collector = get_browser_metrics_collector()
+        
+        # Initialize core snapshot handler
+        self._snapshot_manager = get_snapshot_manager()
+        self._session_snapshot = SessionSnapshot(self._snapshot_manager)
         
         # Track subprocess handles for cleanup
         self._subprocess_handles = []
@@ -348,13 +355,24 @@ class BrowserSession:
         """Cleanup all pages for shutdown."""
         for page in self.pages:
             try:
-                await page.close()
+                # Check if page is already closed before attempting to close
+                if hasattr(page, 'is_closed') and not page.is_closed():
+                    await page.close()
             except Exception as e:
-                self._logger.warning(
-                    "page_cleanup_error",
-                    session_id=self.session_id,
-                    error=str(e)
-                )
+                error_msg = str(e).lower()
+                # Check if this is a connection closed error (expected during shutdown)
+                if any(keyword in error_msg for keyword in ['connection closed', 'target closed', 'context closed', 'browser closed']):
+                    self._logger.info(
+                        "page_already_closed_via_driver_disconnect",
+                        session_id=self.session_id,
+                        error="Page already closed via driver disconnect"
+                    )
+                else:
+                    self._logger.warning(
+                        "page_close_error",
+                        session_id=self.session_id,
+                        error=str(e)
+                    )
         self.pages.clear()
     
     async def _cleanup_all_contexts(self) -> None:
@@ -524,24 +542,32 @@ class BrowserSession:
             )
     
     async def _capture_failure_snapshot(self, failure_type: str, error: str) -> None:
-        """Capture DOM snapshot for failure analysis."""
+        """Capture DOM snapshot for failure analysis using core snapshot system."""
         try:
             # Try to capture snapshot from any available page
             for page in self.pages:
                 try:
-                    await snapshot_manager.capture_snapshot(
-                        page,
-                        f"{self.session_id}_{failure_type}",
-                        include_screenshot=True,
-                        custom_selectors=["body", "html", "head"]
+                    # Use the core snapshot handler
+                    context_data = {
+                        "site": "browser",
+                        "module": "session",
+                        "component": failure_type,
+                        "session_id": self.session_id,
+                        "error": error
+                    }
+                    snapshot_id = await self._session_snapshot._capture_session_snapshot(
+                        trigger_source=f"session_{failure_type}",
+                        context_data=context_data
                     )
-                    self._logger.info(
-                        "failure_snapshot_captured",
-                        session_id=self.session_id,
-                        failure_type=failure_type,
-                        page_id=str(id(page))
-                    )
-                    break  # Only need one snapshot
+                    if snapshot_id:
+                        self._logger.info(
+                            "failure_snapshot_captured",
+                            session_id=self.session_id,
+                            failure_type=failure_type,
+                            snapshot_id=snapshot_id,
+                            page_id=str(id(page))
+                        )
+                        break  # Only need one snapshot
                 except Exception as snapshot_error:
                     self._logger.warning(
                         "snapshot_capture_failed",
@@ -611,11 +637,20 @@ class BrowserSession:
                         session_id=self.session_id
                     )
                 except Exception as e:
-                    self._logger.warning(
-                        "browser_close_error",
-                        session_id=self.session_id,
-                        error=str(e)
-                    )
+                    error_msg = str(e).lower()
+                    # Check if this is a connection closed error (expected during shutdown)
+                    if any(keyword in error_msg for keyword in ['connection closed', 'target closed', 'context closed', 'browser closed']):
+                        self._logger.info(
+                            "browser_already_closed_via_driver_disconnect",
+                            session_id=self.session_id,
+                            error="Browser already closed via driver disconnect"
+                        )
+                    else:
+                        self._logger.warning(
+                            "browser_close_error",
+                            session_id=self.session_id,
+                            error=str(e)
+                        )
             
             # Enhanced subprocess cleanup
             self._cleanup_subprocess_handles()

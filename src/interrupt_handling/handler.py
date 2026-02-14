@@ -149,7 +149,6 @@ class InterruptHandler:
             # Since we're in the interrupt thread, we need to find the main thread's event loop
             try:
                 # Try to get the main thread's event loop
-                import threading
                 main_thread = threading.main_thread()
                 
                 # Check if we can access the main thread's event loop
@@ -201,7 +200,6 @@ class InterruptHandler:
         
         # Additional force cleanup - try to get current loop and stop it
         try:
-            import asyncio
             current_loop = asyncio.get_running_loop()
             if current_loop and not current_loop.is_closed():
                 self.logger.info("Force stopping current event loop")
@@ -245,9 +243,6 @@ class InterruptHandler:
                 self._should_exit = True
                 
                 # Add explicit process exit after a short delay to ensure cleanup completes
-                import threading
-                import time
-                
                 def delayed_exit():
                     time.sleep(1.0)  # Give 1 second for any final cleanup
                     self.logger.info("Executing explicit process exit")
@@ -283,7 +278,6 @@ class InterruptHandler:
     
     def _restore_signal_handlers(self):
         """Restore original signal handlers."""
-        import threading
         main_thread = threading.main_thread()
         current_thread = threading.current_thread()
         

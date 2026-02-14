@@ -31,7 +31,7 @@ class TelemetryConfiguration:
         
         # Storage settings
         "storage_type": "json",  # json, influxdb
-        "storage_path": "data/telemetry",
+        "storage_path": "data/snapshots",
         "retention_days": 30,
         "compression_enabled": True,
         "encryption_enabled": False,

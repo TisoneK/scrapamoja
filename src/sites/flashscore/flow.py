@@ -12,6 +12,82 @@ from src.sites.flashscore.models import NavigationState, PageState
 class FlashscoreFlow(BaseFlow):
     """Navigation flow for Flashscore scraper."""
     
+    def __init__(self, page, selector_engine):
+        """Initialize Flashscore flow with page and selector engine."""
+        super().__init__(page, selector_engine)
+        # Initialize snapshot system for debugging
+        from src.core.snapshot.manager import SnapshotManager
+        from src.core.snapshot.config import get_settings
+        self.snapshot_settings = get_settings()
+        self.snapshot_manager = SnapshotManager(self.snapshot_settings.base_path)
+    
+    async def _capture_debug_snapshot(self, operation: str, metadata: dict = None):
+        """Capture debug snapshot during flow operations."""
+        try:
+            if self.snapshot_settings.enable_metrics:
+                from src.core.snapshot.models import SnapshotContext, SnapshotConfig, SnapshotMode
+                from datetime import datetime
+                import inspect
+                
+                # Filter metadata to remove non-serializable objects
+                filtered_metadata = {}
+                if metadata:
+                    for key, value in metadata.items():
+                        # Skip asyncio objects, functions, and other non-serializable types
+                        if (not inspect.iscoroutine(value) and 
+                            not inspect.iscoroutinefunction(value) and
+                            not inspect.isfunction(value) and
+                            not inspect.ismethod(value) and
+                            'asyncio' not in str(type(value)) and
+                            'Future' not in str(type(value))):
+                            filtered_metadata[key] = value
+                
+                context = SnapshotContext(
+                    site="flashscore",
+                    module="flow",
+                    component="navigation",
+                    session_id=f"flow_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    function=operation,
+                    additional_metadata=filtered_metadata
+                )
+                
+                config = SnapshotConfig(
+                    mode=SnapshotMode.FULL_PAGE,  # Use FULL_PAGE mode since no specific selector is provided
+                    capture_html=True,
+                    capture_screenshot=self.snapshot_settings.default_capture_screenshot,
+                    capture_console=self.snapshot_settings.default_capture_console
+                )
+                
+                snapshot_result = await self.snapshot_manager.capture_snapshot(
+                    page=self.page,
+                    context=context,
+                    config=config
+                )
+                
+                # Extract the full bundle path from the result
+                bundle_path = "unknown"
+                if snapshot_result:
+                    if hasattr(snapshot_result, 'bundle_path'):
+                        bundle_path = snapshot_result.bundle_path
+                    elif hasattr(snapshot_result, 'content_hash'):
+                        # Fallback: construct path from content hash
+                        try:
+                            from pathlib import Path
+                            timestamp = datetime.now().strftime("%Y%m%d")
+                            possible_path = f"data/snapshots/flashscore/flow/navigation/{timestamp}/flow_{timestamp}_{snapshot_result.content_hash[:8]}"
+                            bundle_path = str(Path(possible_path).resolve())
+                        except:
+                            pass
+                
+                from src.observability.logger import get_logger
+                logger = get_logger("flashscore.flow")
+                logger.info(f"Captured debug snapshot for {operation}: {snapshot_result.content_hash[:8] if snapshot_result else 'unknown'} at {bundle_path}")
+                
+        except Exception as e:
+            from src.observability.logger import get_logger
+            logger = get_logger("flashscore.flow")
+            logger.error(f"Failed to capture debug snapshot for {operation}: {e}")
+    
     def _get_timeout_ms(self, selector_name: str, default_timeout: float = 3.0) -> int:
         """
         Get timeout from selector definition and convert to milliseconds.
@@ -113,6 +189,20 @@ class FlashscoreFlow(BaseFlow):
                     return True
                 else:
                     logger.info("cookie_consent_dialog_not_found", method="selector_engine")
+                    # Capture snapshot when cookie consent dialog not found
+                    await self._capture_debug_snapshot("cookie_consent_not_found", {
+                        "method": "selector_engine",
+                        "dom_context": dom_context.__dict__,
+                        "selector_result": cookie_result.__dict__ if cookie_result else None
+                    })
+            except Exception as e:
+                logger.warning("cookie_consent_handling_failed", method="selector_engine", error=str(e))
+                # Capture snapshot on cookie consent handling error
+                await self._capture_debug_snapshot("cookie_consent_error", {
+                    "method": "selector_engine", 
+                    "error": str(e),
+                    "dom_context": dom_context.__dict__
+                })
             except Exception as e:
                 logger.warning("cookie_consent_handling_failed", method="selector_engine", error=str(e))
             
@@ -470,16 +560,29 @@ class FlashscoreFlow(BaseFlow):
                     logger.info(f"Retry attempt {attempt + 1}/{max_retries} after {backoff_time}s backoff")
                     await asyncio.sleep(backoff_time)
                 
-                # Step 1: Find match element using data-event-id attribute
-                match_selector = f".event__match[data-event-id='{match_id}']"
-                match_element = await self.page.query_selector(match_selector)
+                # Step 1: Find match element using correct selectors based on extraction logic
+                # Match extraction uses ?mid= parameter or aria-describedby, so we need to find elements accordingly
+                match_selectors = [
+                    f".eventRowLink[href*='mid={match_id}']",  # Primary: URL contains mid= parameter
+                    f".eventRowLink[aria-describedby*='{match_id}']",  # Fallback: aria-describedby contains match ID
+                    f".event__match .eventRowLink[href*='mid={match_id}']",  # More specific version
+                    f"[href*='mid={match_id}']",  # Generic fallback
+                    f"[aria-describedby*='{match_id}']"  # Generic fallback
+                ]
+                
+                match_element = None
+                for selector in match_selectors:
+                    match_element = await self.page.query_selector(selector)
+                    if match_element:
+                        logger.info(f"Found match using selector: {selector}")
+                        break
                 
                 if not match_element:
-                    # Fallback: try alternative selectors
+                    # Additional fallback: try data-event-id (in case the site structure changed)
                     fallback_selectors = [
+                        f".event__match[data-event-id='{match_id}']",
                         f"[data-event-id='{match_id}']",
-                        f".eventRowLink[href*='{match_id}']",
-                        f"[aria-describedby*='{match_id}']"
+                        f".eventRowLink[href*='{match_id}']"
                     ]
                     
                     for selector in fallback_selectors:
@@ -507,30 +610,27 @@ class FlashscoreFlow(BaseFlow):
                 verified = False
                 
                 try:
-                    # Check for primary tab container
-                    tab_container = await self.page.query_selector('.tabs__detail')
-                    if tab_container:
-                        # Detect available tabs
-                        tab_selectors = {
-                            'summary': '.tab__title[data-tab-name="summary"]',
-                            'h2h': '.tab__title[data-tab-name="h2h"]', 
-                            'odds': '.tab__title[data-tab-name="odds"]',
-                            'stats': '.tab__title[data-tab-name="stats"]'
-                        }
-                        
-                        for tab_name, selector in tab_selectors.items():
-                            tab_element = await self.page.query_selector(selector)
-                            if tab_element:
-                                tabs_available.append(tab_name)
-                        
-                        verified = len(tabs_available) > 0
-                        logger.info(f"Found {len(tabs_available)} tabs: {tabs_available}")
-                    else:
-                        # Alternative: check for any match-specific content
-                        match_content = await self.page.query_selector('.matchDetail')
-                        verified = match_content is not None
-                        if verified:
-                            tabs_available = ['summary']  # Default assumption
+                    # Multiple verification strategies for different page layouts
+                    verification_strategies = [
+                        # Strategy 1: Check for tabs container
+                        lambda: self._verify_tabs_container(),
+                        # Strategy 2: Check for match detail content
+                        lambda: self._verify_match_detail_content(),
+                        # Strategy 3: Check for URL-based verification only
+                        lambda: self._verify_url_only(current_url, match_id)
+                    ]
+                    
+                    for strategy_func in verification_strategies:
+                        try:
+                            result = strategy_func()
+                            if result:
+                                tabs_available = result if isinstance(result, list) else ['summary']
+                                verified = True
+                                logger.info(f"Verification successful using strategy, found tabs: {tabs_available}")
+                                break
+                        except Exception as e:
+                            logger.debug(f"Verification strategy failed: {e}")
+                            continue
                             
                 except Exception as e:
                     logger.warning(f"Error verifying match detail page structure: {e}")
@@ -678,3 +778,65 @@ class FlashscoreFlow(BaseFlow):
         # Skip scheduled filter click - page already shows scheduled matches by default
         # The scheduled filter selector was failing, but scheduled matches are found without it
         logger.info("Skipping scheduled filter click - page shows scheduled matches by default")
+    
+    async def _verify_tabs_container(self) -> Optional[list]:
+        """Verify tabs container exists and extract available tabs."""
+        try:
+            tab_container = await self.page.query_selector('.tabs__detail')
+            if tab_container:
+                tab_selectors = {
+                    'summary': '.tab__title[data-tab-name="summary"]',
+                    'h2h': '.tab__title[data-tab-name="h2h"]', 
+                    'odds': '.tab__title[data-tab-name="odds"]',
+                    'stats': '.tab__title[data-tab-name="stats"]'
+                }
+                
+                tabs_available = []
+                for tab_name, selector in tab_selectors.items():
+                    tab_element = await self.page.query_selector(selector)
+                    if tab_element:
+                        tabs_available.append(tab_name)
+                
+                return tabs_available if tabs_available else None
+            return None
+        except Exception:
+            return None
+    
+    async def _verify_match_detail_content(self) -> Optional[bool]:
+        """Verify match detail content exists."""
+        try:
+            # Multiple possible content containers
+            content_selectors = [
+                '.matchDetail',
+                '.match-detail',
+                '.event__match--detail',
+                '[class*="matchDetail"]',
+                '[class*="match-detail"]',
+                '.detailContainer',
+                '[class*="detail"]'
+            ]
+            
+            for selector in content_selectors:
+                content = await self.page.query_selector(selector)
+                if content:
+                    return True
+            return False
+        except Exception:
+            return False
+    
+    def _verify_url_only(self, current_url: str, match_id: str) -> Optional[bool]:
+        """Verify URL contains match indicators."""
+        try:
+            # Multiple URL patterns for match detail pages
+            match_patterns = [
+                f'/match/',
+                f'/game/',
+                f'/event/',
+                match_id,
+                'flashscore.com/match',
+                'flashscore.com/game'
+            ]
+            
+            return any(pattern in current_url for pattern in match_patterns)
+        except Exception:
+            return False

@@ -12,6 +12,8 @@ from playwright.async_api import Page, ElementHandle
 
 from src.models.selector_models import ElementInfo, TabContext
 from src.utils.exceptions import ContextValidationError
+from ..core.snapshot.handlers import SelectorSnapshot
+from ..core.snapshot.manager import SnapshotManager
 
 
 @dataclass
@@ -33,6 +35,12 @@ class DOMContext:
             raise ContextValidationError(
                 self.tab_context, "URL cannot be empty"
             )
+        
+        # Initialize selector snapshot handler
+        from src.core.snapshot.config import get_settings
+        snapshot_settings = get_settings()
+        self.snapshot_manager = SnapshotManager(snapshot_settings.base_path)
+        self.selector_snapshot = SelectorSnapshot(self.snapshot_manager)
     
     async def get_page_content(self) -> str:
         """Get current page HTML content."""
@@ -70,6 +78,33 @@ class DOMContext:
     def get_metadata(self, key: str, default: Any = None) -> Any:
         """Get metadata value."""
         return self.metadata.get(key, default)
+    
+    async def capture_screenshot(self) -> bytes:
+        """Capture screenshot of current page using core snapshot system."""
+        try:
+            # Use selector snapshot handler for consistent capture
+            context_data = {
+                "site": "unknown",
+                "module": "selector_context",
+                "component": "screenshot_capture",
+                "function": "capture_screenshot",
+                "tab_context": self.tab_context,
+                "url": self.url
+            }
+            
+            # Trigger snapshot through selector handler
+            snapshot_id = await self.selector_snapshot._capture_selector_snapshot(
+                trigger_source="screenshot_requested",
+                context_data=context_data
+            )
+            
+            # Still return direct screenshot for backward compatibility
+            return await self.page.screenshot(type='png')
+            
+        except Exception as e:
+            raise ContextValidationError(
+                self.tab_context, f"Failed to capture screenshot: {e}"
+            )
 
 
 class ElementInfoExtractor:

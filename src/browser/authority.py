@@ -24,11 +24,12 @@ from .monitoring import ResourceMonitor, get_resource_monitor
 from .state_manager import StateManager
 from .session_manager import BrowserSessionManager
 from .configuration import get_configuration_manager
-from .exceptions import BrowserError, SessionCreationError, ResourceExhaustionError, ConfigurationError
+from .exceptions import BrowserError, BrowserSessionError, ResourceExhaustionError, ConfigurationError
 from .lifecycle import ModuleState, lifecycle_manager
 from .resilience import resilience_manager
 from ..config.settings import get_config
-from .snapshot import DOMSnapshotManager, get_snapshot_manager
+from ..core.snapshot.handlers import BrowserSnapshot
+from ..core.snapshot.manager import SnapshotManager
 
 
 class BrowserAuthority(IBrowserAuthority):
@@ -50,7 +51,10 @@ class BrowserAuthority(IBrowserAuthority):
         self.resource_monitor = get_resource_monitor()
         self.state_manager = StateManager()
         self.configuration_manager = get_configuration_manager()
-        self.snapshot_manager = get_snapshot_manager()
+        from src.core.snapshot.config import get_settings
+        snapshot_settings = get_settings()
+        self.snapshot_manager = SnapshotManager(snapshot_settings.base_path)
+        self.browser_snapshot = BrowserSnapshot(self.snapshot_manager)
         
         # Lifecycle state
         self.lifecycle_state = lifecycle_manager.register_module("browser_authority")
@@ -188,10 +192,10 @@ class BrowserAuthority(IBrowserAuthority):
                 error=str(e),
                 error_type=type(e).__name__
             )
-            raise SessionCreationError(
+            raise BrowserSessionError(
                 "SESSION_CREATION_FAILED",
                 f"Failed to create session: {str(e)}",
-                session_id=session_id if 'session_id' in locals() else None
+                {"session_id": session_id if 'session_id' in locals() else None}
             )
             
     async def get_session(self, session_id: str) -> Optional[BrowserSession]:

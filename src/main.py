@@ -10,6 +10,44 @@ import sys
 import importlib
 import signal
 import logging
+import warnings
+import os
+
+# Suppress asyncio cleanup warnings on Windows
+if sys.platform == "win32":
+    warnings.filterwarnings("ignore", category=ResourceWarning)
+    warnings.filterwarnings("ignore", message=".*unclosed transport.*")
+    warnings.filterwarnings("ignore", message=".*I/O operation on closed pipe.*")
+    
+    # Directly suppress asyncio proactor cleanup errors
+    try:
+        import asyncio.proactor_events
+        # Override the _warn function to suppress transport cleanup errors
+        original_warn = asyncio.proactor_events._warn
+        
+        def suppressed_warn(message, category=None, source=None):
+            if (isinstance(message, str) and 
+                ("unclosed transport" in message or "closed pipe" in message)):
+                return
+            return original_warn(message, category, source)
+        
+        asyncio.proactor_events._warn = suppressed_warn
+    except (ImportError, AttributeError):
+        pass
+    
+    # Also suppress the print statements for these specific errors
+    import builtins
+    original_print = builtins.print
+    
+    def suppressed_print(*args, **kwargs):
+        # Filter out asyncio cleanup errors
+        if args and any("Exception ignored while calling deallocator" in str(arg) for arg in args):
+            return
+        if args and any("I/O operation on closed pipe" in str(arg) for arg in args):
+            return
+        return original_print(*args, **kwargs)
+    
+    builtins.print = suppressed_print
 
 # Import logging configuration first
 from src.core.logging_config import JsonLoggingConfigurator

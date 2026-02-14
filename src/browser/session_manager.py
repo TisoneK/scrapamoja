@@ -23,8 +23,9 @@ from .models.state import BrowserState
 from .models.metrics import ResourceMetrics
 from .models.enums import ContextStatus
 from .state_manager import StateManager
-from .snapshot import DOMSnapshotManager
-from .exceptions import BrowserError, SessionCreationError, NavigationError
+from ..core.snapshot.handlers import BrowserSnapshot
+from ..core.snapshot.manager import SnapshotManager
+from .exceptions import BrowserError, BrowserSessionError
 from .lifecycle import ModuleState, lifecycle_manager
 from .resilience import resilience_manager
 from ..config.settings import get_config
@@ -38,7 +39,7 @@ class BrowserSessionManager(IBrowserSession):
         session: BrowserSession,
         playwright_browser: Optional[Browser] = None,
         state_manager: Optional[StateManager] = None,
-        snapshot_manager: Optional[DOMSnapshotManager] = None
+        snapshot_manager: Optional[SnapshotManager] = None
     ):
         self.session = session
         self._playwright_browser = playwright_browser
@@ -47,7 +48,10 @@ class BrowserSessionManager(IBrowserSession):
         
         # Managers
         self.state_manager = state_manager or StateManager()
-        self.snapshot_manager = snapshot_manager or DOMSnapshotManager()
+        from src.core.snapshot.config import get_settings
+        snapshot_settings = get_settings()
+        self.snapshot_manager = snapshot_manager or SnapshotManager(snapshot_settings.base_path)
+        self.browser_snapshot = BrowserSnapshot(self.snapshot_manager)
         
         # Configuration
         self.config = get_config()
@@ -94,10 +98,10 @@ class BrowserSessionManager(IBrowserSession):
                 error_type=type(e).__name__
             )
             
-            raise SessionCreationError(
+            raise BrowserSessionError(
                 "SESSION_INIT_FAILED",
                 f"Failed to initialize session {self.session.session_id}: {str(e)}",
-                session_id=self.session.session_id
+                {"session_id": self.session.session_id}
             )
             
     async def create_context(self, url: Optional[str] = None) -> TabContext:
@@ -156,10 +160,10 @@ class BrowserSessionManager(IBrowserSession):
                 error_type=type(e).__name__
             )
             
-            raise BrowserError(
-                "CONTEXT_CREATION_FAILED",
+            raise BrowserSessionError(
+                "SESSION_CREATION_FAILED",
                 f"Failed to create context: {str(e)}",
-                session_id=self.session.session_id
+                {"session_id": self.session.session_id}
             )
             
     async def get_context(self, context_id: str) -> Optional[TabContext]:
@@ -323,14 +327,37 @@ class BrowserSessionManager(IBrowserSession):
         """Take screenshot of session or specific context."""
         try:
             if context_id and self._active_context_id == context_id:
-                # Take screenshot of specific context
-                # This would need to be implemented with actual screenshot logic
-                pass
+                # Take screenshot of specific context using core snapshot system
+                if self._playwright_context:
+                    page = self._playwright_context.pages[0] if self._playwright_context.pages else None
+                    if page:
+                        # Use browser snapshot handler for consistent capture
+                        context_data = {
+                            "site": "unknown",
+                            "module": "browser_session",
+                            "component": "screenshot_capture",
+                            "session_id": self.session.session_id,
+                            "function": "take_screenshot",
+                            "context_id": context_id
+                        }
+                        
+                        # Trigger snapshot through browser handler
+                        await self.browser_snapshot._handle_browser_event(
+                            event_type="screenshot_requested",
+                            session_id=self.session.session_id,
+                            page_url=page.url,
+                            metadata=context_data
+                        )
+                        
+                        return await page.screenshot(type='png')
             else:
                 # Take screenshot of active context
-                pass
+                if self._playwright_context and self._playwright_context.pages:
+                    page = self._playwright_context.pages[0]
+                    if page:
+                        return await page.screenshot(type='png')
                 
-            # Return empty bytes for now
+            # Return empty bytes if no page available
             return b""
             
         except Exception as e:
@@ -346,8 +373,37 @@ class BrowserSessionManager(IBrowserSession):
     async def get_dom_snapshot(self, context_id: Optional[str] = None) -> Dict[str, Any]:
         """Get DOM snapshot for debugging."""
         try:
-            # This would implement DOM snapshot logic
-            # For now, return empty dict
+            if self._playwright_context and self._playwright_context.pages:
+                page = self._playwright_context.pages[0]
+                if page:
+                    # Use browser snapshot handler for consistent DOM capture
+                    context_data = {
+                        "site": "unknown",
+                        "module": "browser_session",
+                        "component": "dom_snapshot",
+                        "session_id": self.session.session_id,
+                        "function": "get_dom_snapshot",
+                        "context_id": context_id
+                    }
+                    
+                    # Trigger snapshot through browser handler
+                    await self.browser_snapshot._handle_browser_event(
+                        event_type="dom_snapshot_requested",
+                        session_id=self.session.session_id,
+                        page_url=page.url,
+                        metadata=context_data
+                    )
+                    
+                    # Get basic DOM content for immediate return
+                    content = await page.content()
+                    return {
+                        "url": page.url,
+                        "title": await page.title(),
+                        "content_length": len(content),
+                        "timestamp": datetime.now().isoformat()
+                    }
+            
+            # Return empty dict if no page available
             return {}
             
         except Exception as e:
