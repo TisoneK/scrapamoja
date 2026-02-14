@@ -17,7 +17,9 @@ Prevents stale procedures, establishes responsibility, and supports auditability
 ## Steps
 
 1. **Analyze Snapshot Artifacts**
-   - Open `data/snapshots/<site>/selector_engine/<timestamp>/`
+   - **Selector Engine Failures**: `data/snapshots/<site>/selector_engine/<timestamp>/`
+   - **Flow-Level Failures**: `data/snapshots/<site>/flow/<timestamp>/`
+   - **Browser Session Issues**: `data/snapshots/<site>/browser_sessions/<timestamp>/`
    - Review metadata.json for failure context
    - Inspect HTML for actual DOM structure
    - Check screenshots for visual state
@@ -25,6 +27,10 @@ Prevents stale procedures, establishes responsibility, and supports auditability
 
 2. **Classify Failure Type**
    - `selector_not_found`: Target element absent
+   - `blocked`: Element present but inaccessible (cookie consent, overlays)
+   - `timeout`: Selector resolution exceeded time limit
+   - `multiple_matches`: Too many elements found
+   - `invalid_selector`: Syntax or structure errors
    - `timeout`: Element exists but resolution timed out
    - `layout_shift`: DOM structure changed
    - `blocked`: Content hidden by overlay
@@ -46,24 +52,34 @@ Prevents stale procedures, establishes responsibility, and supports auditability
 ### Step 1: Find Recent Failures
 
 ```bash
-# List recent selector failures
+# Check all selector-related snapshot types
 ls data/snapshots/flashscore/selector_engine/snapshot_storage/20260214/
+ls data/snapshots/flashscore/flow/20260214/
+ls data/snapshots/flashscore/browser_sessions/20260214/
 
-# Find most recent failure
+# Find most recent failure across all types
 dir /od data/snapshots/flashscore/selector_engine/snapshot_storage/20260214/
+dir /od data/snapshots/flashscore/flow/20260214/
+dir /od data/snapshots/flashscore/browser_sessions/20260214/
 ```
 
 ### Step 2: Analyze Specific Failure
 
 ```bash
-# Navigate to failure directory
+# For selector engine failures
 cd "data/snapshots/flashscore/selector_engine/snapshot_storage/20260214/<timestamp>/"
-
-# Check metadata for failure details
 type metadata.json
-
-# Examine HTML structure
 type html/fullpage_failure_.html | findstr /c:"selector_pattern"
+
+# For flow-level failures  
+cd "data/snapshots/flashscore/flow/20260214/<timestamp>/"
+type metadata.json
+type html/fullpage.html | findstr /c:"target_element"
+
+# For browser session issues
+cd "data/snapshots/flashscore/browser_sessions/20260214/<timestamp>/"
+type metadata.json
+type html/page.html | findstr /c:"navigation"
 ```
 
 ### Step 3: Update Selector
@@ -105,18 +121,26 @@ cat evolution.txt >> data/snapshots/flashscore/selector_evolution.txt
 ## Quick Commands
 
 ```bash
-# List all failures
+# List all failures across snapshot types
 ls data/snapshots/flashscore/selector_engine/snapshot_storage/
+ls data/snapshots/flashscore/flow/
+ls data/snapshots/flashscore/browser_sessions/
 
-# Check if snapshot already fixed
+# Check if snapshot already fixed (any type)
 if exist "data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt" (
-    echo "Already fixed - skip"
+    echo "Selector engine already fixed - skip"
+) else if exist "data/snapshots/flashscore/flow/<timestamp>/snapshot_status.txt" (
+    echo "Flow already fixed - skip"
+) else if exist "data/snapshots/flashscore/browser_sessions/<timestamp>/snapshot_status.txt" (
+    echo "Browser session already fixed - skip"
 ) else (
     echo "Needs debugging"
 )
 
-# Validate selector
+# Validate selector against different snapshot types
 findstr /c:"data-sport-id=\"3\"" html/fullpage_failure_.html
+findstr /c:"data-sport-id=\"3\"" html/fullpage.html
+findstr /c:"data-sport-id=\"3\"" html/page.html
 ```
 
 ---
