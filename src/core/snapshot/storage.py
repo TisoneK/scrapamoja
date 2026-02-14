@@ -39,6 +39,10 @@ class SnapshotStorage:
         """Create bundle directory atomically."""
         
         try:
+            # Validate bundle_path is not a placeholder
+            if not bundle_path or str(bundle_path) in ('test_path', '', 'None'):
+                raise SnapshotError(f"Invalid bundle_path: {bundle_path} - must be a valid directory path")
+            
             # Use temporary directory for atomic creation
             temp_path = bundle_path.parent / f".tmp_{bundle_path.name}"
             
@@ -49,6 +53,11 @@ class SnapshotStorage:
             (temp_path / "html").mkdir(exist_ok=True)
             (temp_path / "screenshots").mkdir(exist_ok=True)
             (temp_path / "logs").mkdir(exist_ok=True)
+            
+            # FIX: Handle Windows atomic rename - remove existing destination first
+            if bundle_path.exists():
+                # On Windows, can't rename to existing path - remove it first
+                shutil.rmtree(bundle_path, ignore_errors=True)
             
             # Atomic rename
             temp_path.rename(bundle_path)
@@ -63,6 +72,7 @@ class SnapshotStorage:
     
     async def save_bundle_metadata(self, bundle: SnapshotBundle) -> bool:
         """Save bundle metadata atomically."""
+        temp_path: Optional[Path] = None  # Initialize to satisfy type checker
         try:
             bundle_path = Path(bundle.bundle_path)
             metadata_path = bundle_path / "metadata.json"
@@ -76,6 +86,11 @@ class SnapshotStorage:
             with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(bundle.to_dict(), f, indent=2, ensure_ascii=False, cls=EnumEncoder)
             
+            # FIX: Handle Windows atomic rename - remove existing destination first
+            if metadata_path.exists():
+                # On Windows, can't rename to existing path - remove it first
+                metadata_path.unlink(missing_ok=True)
+            
             # Atomic rename
             temp_path.rename(metadata_path)
             
@@ -84,7 +99,7 @@ class SnapshotStorage:
             
         except Exception as e:
             # Cleanup temp file
-            if temp_path.exists():
+            if temp_path and temp_path.exists():
                 temp_path.unlink(missing_ok=True)
             print(f"🔍 DIAGNOSTIC: Failed to save metadata: {e}")
             raise SnapshotError(f"Failed to save bundle metadata: {e}")

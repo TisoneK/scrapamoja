@@ -149,12 +149,16 @@ class FileSystemStorageAdapter(IStorageAdapter):
                 deduplication_enabled=True
             )
             
+            # Generate proper bundle path using core snapshot system
+            timestamp = datetime.now()
+            bundle_path = self.snapshot_storage.get_bundle_path(context, timestamp)
+            
             # Create SnapshotBundle
             bundle = SnapshotBundle(
                 context=context,
                 config=config,
-                timestamp=datetime.now(),  # Add required timestamp
-                bundle_path="test_path",  # Add required bundle_path
+                timestamp=timestamp,
+                bundle_path=str(bundle_path),  # Use proper path from snapshot storage
                 artifacts=[]  # HTML and screenshots will be added by storage system
             )
             
