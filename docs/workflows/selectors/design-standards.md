@@ -403,7 +403,7 @@ fi
 - **Add New Anti-Patterns**: Include emerging failure patterns
 - **Improve Examples**: Add real-world selector scenarios
 - **Update Performance Targets**: Adjust budgets based on measured data
-- **Enhance Validation**: Add new testing strategies
+- **Add Validation Strategies**: Include new testing approaches
 
 #### 🚫 Restricted Modifications
 - **Remove Budget Enforcement**: Cannot eliminate performance gates

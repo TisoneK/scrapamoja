@@ -91,8 +91,8 @@ cat data/snapshots/flashscore/selector_engine/20260214/*/metadata.json
 #### ✅ Allowed Modifications
 - **Add New Examples**: Include recent debugging scenarios
 - **Update Commands**: Keep CLI commands current
-- **Improve Clarity**: Add explanations for complex steps
-- **Enhance Cross-References**: Add new related workflow links
+- **Improve Step Descriptions**: Add explanations for complex steps
+- **Add Cross-References**: Include new related workflow links
 
 #### 🚫 Restricted Modifications
 - **Remove Snapshot Analysis**: Cannot eliminate core debugging steps

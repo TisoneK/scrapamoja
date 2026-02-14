@@ -259,23 +259,23 @@ Planned enhancements to this workflow:
 
 ## LLM Governance & Constraints
 
-### LLM Creation Guidelines
+### 📋 LLM Creation Guidelines
 
 **When creating or modifying this workflow:**
 
-#### Required Structure
+#### ✅ Required Structure
 - **YAML Frontmatter**: Must include owner, scope, status, last reviewed
 - **Step-by-Step Format**: Numbered or bulleted procedures
 - **Cross-References**: Link to related workflows
 - **Expected Outcomes**: Clear success criteria
 
-#### Forbidden Changes
+#### 🚫 Forbidden Changes
 - **Remove Core Steps**: Cannot eliminate essential debugging procedures
 - **Change Purpose**: Cannot alter fundamental workflow intent
 - **Break Cross-References**: Cannot remove links to other workflows
 - **Alter Hierarchy**: Cannot change workflow categorization
 
-#### Quality Gates
+#### 🎯 Quality Gates
 - **Clarity Check**: Each step must be understandable to developers
 - **Completeness**: All required sections must be present
 - **Consistency**: Follow same format as other workflows
