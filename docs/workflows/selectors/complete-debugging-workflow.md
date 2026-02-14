@@ -150,7 +150,21 @@ Based on observed DOM structure:
 
 ### Step 7 — Validate Fix Against Snapshot
 
-Use captured HTML as deterministic test input.
+**Simple validation commands:**
+
+```bash
+# Navigate to snapshot directory
+cd "data/snapshots/flashscore/selector_engine/<timestamp>/"
+
+# Test if selector exists in HTML
+findstr /c:"selector_pattern" fullpage.html
+
+# Check for specific element
+findstr /c:"data-sport-id=\"3\"" fullpage.html
+
+# Record test result
+echo "Result: SUCCESS if pattern found, FAILED if not found" > test_result.txt
+```
 
 **Validation rule:** Updated selector must resolve successfully against stored HTML snapshot.
 
@@ -158,19 +172,28 @@ Use captured HTML as deterministic test input.
 
 ### Step 8 — Record Selector Evolution
 
-When modifying a selector, record metadata:
+**Simple recording commands:**
 
-```json
-{
-  "selector_version": "v2.1",
-  "previous_selector": ".event__match .eventRowLink",
-  "snapshot_reference": "20260214_154054_failure_cookie_consent_1771062054.61608",
-  "change_reason": "DOM structure changed - container div added",
-  "date": "2026-02-14T15:40:54Z"
-}
+```bash
+# Create evolution record
+echo "Selector: basketball_link" > evolution.txt
+echo "Date: $(date)" >> evolution.txt
+echo "Snapshot: <timestamp>" >> evolution.txt
+echo "Result: SUCCESS/FAILED" >> evolution.txt
+echo "Reason: <why_changed>" >> evolution.txt
+
+# Store in ledger
+cat evolution.txt >> data/snapshots/flashscore/selector_evolution.txt
 ```
 
-**Selector changes must be traceable to a failure snapshot.**
+**Required fields:**
+- Selector name
+- Change date  
+- Snapshot reference
+- Test result
+- Change reason
+
+**This maintains complete history.**
 
 ---
 
@@ -209,11 +232,11 @@ Historical snapshots are required for regression analysis.
 
 After applying this workflow:
 
-- ✅ Selector fixes are evidence-based
-- ✅ Failures are reproducible  
-- ✅ Debugging time is reduced
-- ✅ Selector stability improves over time
-- ✅ DOM change patterns become measurable
+- Selector fixes are evidence-based
+- Failures are reproducible  
+- Debugging time is reduced
+- Selector stability improves over time
+- DOM change patterns become measurable
 
 ---
 
@@ -234,7 +257,7 @@ Planned enhancements to this workflow:
 **Scenario:** Cookie consent selector failing
 
 ```
-📁 data/snapshots/flashscore/selector_engine/20260214/154054_failure_cookie_consent_*/
+ data/snapshots/flashscore/selector_engine/20260214/154054_failure_cookie_consent_*/
 ├── metadata.json     ← "All 6 strategies failed, resolution_time: 88.982s"
 ├── html/
 │   └── fullpage_failure_.html  ← "4034633 bytes of actual DOM"

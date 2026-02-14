@@ -1,24 +1,31 @@
 description: "Basketball sport navigation link"
 confidence_threshold: 0.9
-timeout: 3.0
-retry_count: 2
+timeout: 5.0
+retry_count: 3
 strategies:
   - type: "css"
-    selector: "[data-sport-id='3']"
+    selector: "a.menuTop__item[data-sport-id='3'][href='/basketball/']"
     weight: 1.0
   - type: "css"
-    selector: ".menuTop__item[href*='basketball']"
+    selector: "[data-sport-id='3']"
     weight: 0.9
+  - type: "css"
+    selector: ".menuTop__item[href*='basketball']"
+    weight: 0.8
   - type: "xpath"
     selector: "//a[contains(text(), 'Basketball') or contains(@href, 'basketball')]"
-    weight: 0.8
-  - type: "css"
-    selector: "[href*='basketball']"
     weight: 0.7
   - type: "css"
-    selector: ".menuTop__item--active[href*='basketball']"
+    selector: "[href*='basketball']"
     weight: 0.6
+  - type: "css"
+    selector: ".menuTop__item--active[href*='basketball']"
+    weight: 0.5
 metadata:
   wait_for_element: true
   required_for_navigation: true
   sport_context: "basketball"
+  known_blockers:
+    - "cookie_consent_overlay"
+  change_rationale: "Added more specific primary selector to handle cookie consent overlay blocking scenarios"
+  last_updated: "2026-02-14"
