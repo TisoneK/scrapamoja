@@ -118,6 +118,17 @@ cat evolution.txt >> data/snapshots/flashscore/selector_evolution.txt
 
 ---
 
+## 🎯 Debugging Complete - Next Steps
+
+**Select what to do next (1-4):**
+
+1. **Debug Next Failure** - Continue with remaining selector failures
+2. **Run Complete Analysis** - Use comprehensive debugging workflow
+3. **Check Design Standards** - Review selector engineering rules
+4. **Exit Workflow** - Return to main workflow menu
+
+---
+
 ## Quick Commands
 
 ```bash

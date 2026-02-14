@@ -1,17 +1,23 @@
 description: "Basketball sport navigation link"
 confidence_threshold: 0.9
-timeout: 5.0
-retry_count: 3
+timeout: 8.0
+retry_count: 5
 strategies:
   - type: "css"
-    selector: "a.menuTop__item[data-sport-id='3'][href='/basketball/']"
+    selector: "a.menuTop__item[data-sport-id='3'][href*='basketball']:not([style*='display: none']):not(.hidden)"
     weight: 1.0
   - type: "css"
-    selector: "[data-sport-id='3']"
+    selector: "a.menuTop__item[data-sport-id='3']:not([style*='display: none']):not(.hidden)"
+    weight: 0.95
+  - type: "css"
+    selector: "[data-sport-id='3']:not([style*='display: none']):not(.hidden)"
     weight: 0.9
   - type: "css"
-    selector: ".menuTop__item[href*='basketball']"
+    selector: ".menuTop__item[href*='basketball']:not([style*='display: none']):not(.hidden)"
     weight: 0.8
+  - type: "xpath"
+    selector: "//a[@data-sport-id='3' and contains(@href, 'basketball')]"
+    weight: 0.75
   - type: "xpath"
     selector: "//a[contains(text(), 'Basketball') or contains(@href, 'basketball')]"
     weight: 0.7
@@ -27,5 +33,6 @@ metadata:
   sport_context: "basketball"
   known_blockers:
     - "cookie_consent_overlay"
-  change_rationale: "Added more specific primary selector to handle cookie consent overlay blocking scenarios"
-  last_updated: "2026-02-14"
+    - "dynamic_content_loading"
+  change_rationale: "Updated primary selector to use contains() for href matching instead of exact match to handle dynamic URL variations. Increased timeout from 5.0s to 8.0s and retry count from 3 to 5 to account for JavaScript rendering delays. Added additional XPath fallback with exact attribute matching for robustness."
+  last_updated: "2026-02-14T18:22:00"
