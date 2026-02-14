@@ -1,28 +1,57 @@
 description: "Alias for cookie consent dialog - redirects to authentication.cookie_consent"
 confidence_threshold: 0.9
-timeout: 5.0
-retry_count: 3
+timeout: 10.0
+retry_count: 5
 strategies:
+  # Primary: Check banner is visible first, then accept button
   - type: "css"
-    selector: "#onetrust-accept-btn-handler"
+    selector: "#onetrust-banner-sdk:not(.ot-hide) #onetrust-accept-btn-handler"
     weight: 1.0
   - type: "css"
-    selector: ".ot-button-group"
+    selector: "#onetrust-accept-btn-handler"
+    weight: 0.95
+  # Banner visibility check strategies
+  - type: "css"
+    selector: "#onetrust-banner-sdk:not(.ot-hide)"
     weight: 0.9
   - type: "css"
-    selector: ".ot-btn-container"
+    selector: ".ot-sdk-show"
+    weight: 0.85
+  # Button container strategies
+  - type: "css"
+    selector: ".ot-button-group"
     weight: 0.8
+  - type: "css"
+    selector: ".ot-btn-container"
+    weight: 0.75
+  # Alternative buttons
   - type: "css"
     selector: "#onetrust-pc-btn-handler"
     weight: 0.7
   - type: "xpath"
-    selector: "//button[contains(text(), 'Accept All') or contains(text(), 'Accept')]"
-    weight: 0.6
+    selector: "//button[contains(text(), 'Accept All') or contains(text(), 'Accept') or contains(text(), 'I Accept')]"
+    weight: 0.65
   - type: "css"
     selector: ".cookie-consent-accept"
     weight: 0.5
 metadata:
   wait_for_element: true
   required_for_navigation: true
+  wait_strategy: "visible_and_clickable"
+  scroll_into_view: true
+  retry_on_failure: true
+  # Check cookie state before attempting
+  cookie_check: "OptanonAlertBoxClosed"
+  # Primary selectors for direct Playwright access (used by flow.py)
+  primary_selectors:
+    banner_container: "#onetrust-banner-sdk"
+    accept_button: "#onetrust-accept-btn-handler"
+    banner_visible_state: "visible"
+    banner_timeout: 15000
   dom_state_indicators:
     unknown: ["cookie", "consent", "privacy"]
+  known_blockers:
+    - "async_sdk_loading"
+    - "animation_in_progress"
+  change_rationale: "Added primary_selectors in metadata for direct Playwright access. Added visible banner check combined with accept button selector. Increased timeout and retry count for async OneTrust SDK loading. Added wait_strategy for clickability verification."
+  last_updated: "2026-02-14T20:28:00"

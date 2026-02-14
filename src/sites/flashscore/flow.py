@@ -182,7 +182,7 @@ class FlashscoreFlow(BaseFlow):
         logger.info("Home page navigation completed")
     
     async def _handle_cookie_consent(self):
-        """Handle cookie consent dialog if present using selector engine."""
+        """Handle cookie consent dialog if present using proper Playwright element waiting."""
         from src.observability.logger import get_logger
         from src.selectors.context import DOMContext
         from datetime import datetime
@@ -192,10 +192,35 @@ class FlashscoreFlow(BaseFlow):
         logger.info("cookie_consent_handling_initiated")
         
         try:
-            # Wait a moment for the cookie dialog to appear
-            await self.page.wait_for_timeout(2000)
+            # Get primary selectors from config (loaded from YAML)
+            primary_selectors = self._get_cookie_consent_primary_selectors()
+            banner_selector = primary_selectors.get("banner_container", "#onetrust-banner-sdk")
+            accept_selector = primary_selectors.get("accept_button", "#onetrust-accept-btn-handler")
+            banner_timeout = primary_selectors.get("banner_timeout", 15000)
             
-            # Primary Method: Use selector engine (comprehensive approach)
+            # Wait for the OneTrust dialog to appear (it's loaded via external script)
+            # Using Playwright's built-in wait for element visibility
+            try:
+                await self.page.wait_for_selector(banner_selector, state="visible", timeout=banner_timeout)
+                logger.info("cookie_consent_banner_visible", banner_selector=banner_selector)
+            except Exception as e:
+                logger.info("cookie_consent_no_dialog", reason=str(e))
+                return True  # No dialog appeared, proceed
+            
+            # Now try to click the accept button directly
+            accept_button = await self.page.query_selector(accept_selector)
+            if accept_button:
+                # Ensure button is visible and clickable
+                try:
+                    await accept_button.wait_for_element_state("visible", timeout=5000)
+                    await accept_button.click()
+                    logger.info("cookie_consent_accepted", method="direct_playwright", accept_selector=accept_selector)
+                    await self.page.wait_for_timeout(1000)
+                    return True
+                except Exception as click_error:
+                    logger.warning("cookie_consent_click_failed", error=str(click_error))
+            
+            # Fallback Method: Use selector engine (comprehensive approach)
             try:
                 dom_context = DOMContext(
                     page=self.page,
@@ -210,35 +235,14 @@ class FlashscoreFlow(BaseFlow):
                     logger.info("cookie_consent_dialog_found", method="selector_engine", selector_used=cookie_result.strategy_used)
                     await cookie_result.element_info.element.click()
                     logger.info("cookie_consent_accepted", method="selector_engine")
-                    await self.page.wait_for_timeout(2000)
+                    await self.page.wait_for_timeout(1000)
                     return True
                 else:
                     logger.info("cookie_consent_dialog_not_found", method="selector_engine")
-                    print(f"FLOW SNAPSHOT: About to call _capture_debug_snapshot for cookie_consent_not_found")
-                    # Capture snapshot when cookie consent dialog not found
-                    try:
-                        await self._capture_debug_snapshot("cookie_consent_not_found", {
-                            "method": "selector_engine",
-                            "dom_context": dom_context.__dict__,
-                            "selector_result": cookie_result.__dict__ if cookie_result else None
-                        })
-                        print(f"FLOW SNAPSHOT: Successfully completed _capture_debug_snapshot call")
-                    except Exception as snapshot_e:
-                        print(f"FLOW SNAPSHOT: ERROR in _capture_debug_snapshot: {snapshot_e}")
-                        import traceback
-                        print(f"FLOW SNAPSHOT: Traceback: {traceback.format_exc()}")
-            except Exception as e:
-                logger.warning("cookie_consent_handling_failed", method="selector_engine", error=str(e))
-                # Capture snapshot on cookie consent handling error
-                await self._capture_debug_snapshot("cookie_consent_error", {
-                    "method": "selector_engine", 
-                    "error": str(e),
-                    "dom_context": dom_context.__dict__
-                })
             except Exception as e:
                 logger.warning("cookie_consent_handling_failed", method="selector_engine", error=str(e))
             
-            # Fallback Method: Try authentication.cookie_consent selector
+            # Second Fallback: Try authentication.cookie_consent selector
             try:
                 logger.info("cookie_consent_handling_started", method="authentication_selector")
                 auth_cookie_result = await self.selector_engine.resolve("authentication.cookie_consent", dom_context)
@@ -246,7 +250,7 @@ class FlashscoreFlow(BaseFlow):
                     logger.info("cookie_consent_dialog_found", method="authentication_selector", selector_used=auth_cookie_result.strategy_used)
                     await auth_cookie_result.element_info.element.click()
                     logger.info("cookie_consent_accepted", method="authentication_selector")
-                    await self.page.wait_for_timeout(2000)
+                    await self.page.wait_for_timeout(1000)
                     return True
                 else:
                     logger.info("cookie_consent_dialog_not_found", method="authentication_selector")
@@ -270,6 +274,33 @@ class FlashscoreFlow(BaseFlow):
         except Exception as e:
             logger.error("cookie_consent_handling_unexpected_error", error=str(e))
             return False
+    
+    def _get_cookie_consent_primary_selectors(self) -> dict:
+        """Get primary selectors from cookie consent config."""
+        try:
+            # Try to get from authentication.cookie_consent selector metadata
+            selector = self.selector_engine.get_selector("authentication.cookie_consent")
+            if selector and hasattr(selector, 'metadata') and selector.metadata:
+                primary = selector.metadata.get('primary_selectors', {})
+                if primary:
+                    return primary
+            
+            # Fallback: Try cookie_consent selector
+            selector = self.selector_engine.get_selector("cookie_consent")
+            if selector and hasattr(selector, 'metadata') and selector.metadata:
+                primary = selector.metadata.get('primary_selectors', {})
+                if primary:
+                    return primary
+        except Exception:
+            pass
+        
+        # Default values if config not found
+        return {
+            "banner_container": "#onetrust-banner-sdk",
+            "accept_button": "#onetrust-accept-btn-handler",
+            "banner_visible_state": "visible",
+            "banner_timeout": 15000
+        }
     
     async def search_sport(self, sport_name: str):
         """Search for a specific sport."""
@@ -330,16 +361,38 @@ class FlashscoreFlow(BaseFlow):
                 timestamp=datetime.utcnow()
             )
             
+            # Wait for the menu to be ready and basketball link to be visible
+            try:
+                # Wait for the top menu to be present
+                await self.page.wait_for_selector(".menuTop__item", state="visible", timeout=10000)
+                logger.info("Navigation menu is visible")
+            except Exception as menu_error:
+                logger.warning("Navigation menu not found", error=str(menu_error))
+            
             # Try to find basketball link using selector engine
             basketball_result = await self.selector_engine.resolve("navigation.sport_selection.basketball_link", dom_context)
             if basketball_result and basketball_result.element_info:
-                await basketball_result.element_info.element.click()
-                await self.page.wait_for_timeout(self._get_timeout_ms("basketball_link", 2.0))
-                logger.info("Successfully clicked basketball link")
+                basketball_element = basketball_result.element_info.element
+                # Ensure element is visible and clickable
+                try:
+                    await basketball_element.wait_for_element_state("visible", timeout=5000)
+                    await basketball_element.click()
+                    await self.page.wait_for_timeout(self._get_timeout_ms("basketball_link", 2.0))
+                    logger.info("Successfully clicked basketball link", method="selector_engine")
+                except Exception as click_error:
+                    logger.warning("Basketball link click failed, trying direct navigation", error=str(click_error))
+                    await self.page.goto("https://www.flashscore.com/basketball/", wait_until="domcontentloaded")
             else:
                 logger.warning("Basketball link not found via selector engine")
-                # Fallback: try direct navigation
-                await self.page.goto("https://www.flashscore.com/basketball/", wait_until="domcontentloaded")
+                # Fallback: try direct Playwright selector
+                basketball_link = await self.page.query_selector("a.menuTop__item[data-sport-id='3']")
+                if basketball_link:
+                    await basketball_link.click()
+                    await self.page.wait_for_timeout(2000)
+                    logger.info("Successfully clicked basketball link", method="direct_playwright")
+                else:
+                    # Final fallback: direct navigation
+                    await self.page.goto("https://www.flashscore.com/basketball/", wait_until="domcontentloaded")
             
             # Step 4: Verify basketball page loaded via URL pattern
             current_url = self.page.url

@@ -1,6 +1,6 @@
 description: "Basketball sport navigation link"
 confidence_threshold: 0.9
-timeout: 8.0
+timeout: 10.0
 retry_count: 5
 strategies:
   - type: "css"
@@ -36,9 +36,16 @@ strategies:
 metadata:
   wait_for_element: true
   required_for_navigation: true
+  wait_strategy: "visible_and_clickable"
+  scroll_into_view: true
   sport_context: "basketball"
+  # Preconditions - must be handled before this selector
+  preconditions:
+    - selector: "cookie_consent"
+      state: "handled"
+      description: "Cookie consent must be accepted/dismissed before navigation"
   known_blockers:
     - "cookie_consent_overlay"
     - "dynamic_content_loading"
-  change_rationale: "Updated primary selector to match actual HTML structure: removed href*='basketball' requirement from top selector since basketball link only has data-sport-id='3' and href='/basketball/'. Added exact href='/basketball/' matcher as second priority. Added XPath selector for @data-sport-id='3' only as fallback. Reordered strategies to prioritize actual DOM structure over pattern matching."
-  last_updated: "2026-02-14T19:32:00"
+  change_rationale: "Added preconditions for cookie consent handling. Increased timeout to 10s. Added wait_strategy for clickability verification. This ensures the cookie consent overlay is handled before attempting to click the basketball link."
+  last_updated: "2026-02-14T20:08:00"

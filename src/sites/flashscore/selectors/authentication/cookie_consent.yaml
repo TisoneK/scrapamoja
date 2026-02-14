@@ -3,12 +3,20 @@ confidence_threshold: 0.9
 timeout: 10.0
 retry_count: 5
 strategies:
+  # Primary: Combined banner visibility + accept button
   - type: "css"
-    selector: "#onetrust-accept-btn-handler"
+    selector: "#onetrust-banner-sdk:not(.ot-hide) #onetrust-accept-btn-handler"
     weight: 1.0
   - type: "css"
-    selector: ".save-preference-btn-handler"
+    selector: "#onetrust-accept-btn-handler"
+    weight: 0.98
+  # Banner visibility check
+  - type: "css"
+    selector: "#onetrust-banner-sdk:not(.ot-hide)"
     weight: 0.95
+  - type: "css"
+    selector: ".save-preference-btn-handler"
+    weight: 0.92
   - type: "css"
     selector: ".onetrust-accept-btn-handler"
     weight: 0.9
@@ -31,7 +39,7 @@ strategies:
     selector: "//button[contains(@class, 'accept') or contains(@id, 'accept')]"
     weight: 0.6
   - type: "xpath"
-    selector: "//button[contains(text(), 'Accept All') or contains(text(), 'Allow All') or contains(text(), 'Confirm My Choices')]"
+    selector: "//button[contains(text(), 'Accept All') or contains(text(), 'Allow All') or contains(text(), 'Confirm My Choices') or contains(text(), 'I Accept')]"
     weight: 0.55
   - type: "css"
     selector: ".cookie-consent-accept"
@@ -39,11 +47,28 @@ strategies:
 metadata:
   wait_for_element: true
   required_for_navigation: true
+  wait_strategy: "visible_and_clickable"
+  scroll_into_view: true
+  retry_on_failure: true
+  # Check cookie state before attempting
+  cookie_check: "OptanonAlertBoxClosed"
+  # Primary selectors for direct Playwright access (used by flow.py)
+  primary_selectors:
+    banner_container: "#onetrust-banner-sdk"
+    accept_button: "#onetrust-accept-btn-handler"
+    banner_visible_state: "visible"
+    banner_timeout: 15000
   dom_state_indicators:
     unknown: ["cookie", "consent", "privacy"]
   known_blockers:
     - "dynamic_content_loading"
     - "javascript_delay"
     - "network_latency"
-  change_rationale: "Added .save-preference-btn-handler as second-highest priority selector (weight 0.95) based on actual HTML analysis showing this is the primary button class present in DOM. Added .ot-pc-refuse-all-handler as alternative fallback. Updated XPath text matching to include 'Allow All' and 'Confirm My Choices' button text found in snapshot. Reordered strategies to prioritize actual DOM elements over generic selectors."
-  last_updated: "2026-02-14T19:27:00"
+    - "async_sdk_loading"
+    - "animation_in_progress"
+  change_rationale: "Added primary_selectors in metadata for direct Playwright access. Added combined banner visibility + accept button selector as primary strategy. Added wait_strategy for clickability verification. Added cookie_check for OptanonAlertBoxClosed state."
+  last_updated: "2026-02-14T20:28:00"
+    - "async_sdk_loading"
+    - "animation_in_progress"
+  change_rationale: "Added combined banner visibility + accept button selector as primary strategy. Added wait_strategy for clickability verification. Added cookie_check for OptanonAlertBoxClosed state. Added 'I Accept' to XPath text matching. Added scroll_into_view and retry_on_failure options."
+  last_updated: "2026-02-14T20:09:00"
