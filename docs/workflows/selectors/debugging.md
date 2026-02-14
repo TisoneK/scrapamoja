@@ -41,66 +41,82 @@ Prevents stale procedures, establishes responsibility, and supports auditability
    - Record selector evolution metadata
    - Track performance metrics over time
 
-5. **Quick Debugging Workflow**
+## Quick Debug Workflow
 
-**Simple validation commands:**
-
-```bash
-# Test selector against snapshot HTML
-cd "data/snapshots/flashscore/selector_engine/<timestamp>/"
-findstr /c:"selector_pattern" fullpage.html
-
-# Check if element exists in snapshot
-findstr /c:"data-sport-id=\"3\"" fullpage.html
-
-# Run selector test (if available)
-python -m src.sites.flashscore.test_selector "basketball_link" "fullpage.html"
-
-# Record result with state tracking
-echo "Result: SUCCESS/FAILED" > validation_result.txt
-echo "State: FIXED/OPEN" >> validation_result.txt
-
-# Mark snapshot status
-echo "status: FIXED" > data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt
-```
-
-**State tracking prevents re-analyzing fixed snapshots.**
-
-6. **Check Snapshot Status**
-
-**Before starting, check if already fixed:**
+### Step 1: Find Recent Failures
 
 ```bash
-# Check snapshot status first
-if exist "data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt" (
-    findstr /c:"FIXED" "data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt"
-    if %errorlevel% equ 0 (
-        echo "✅ Snapshot already FIXED - skip debugging"
-        exit /b
-    )
-)
+# List recent selector failures
+ls data/snapshots/flashscore/selector_engine/snapshot_storage/20260214/
+
+# Find most recent failure
+dir /od data/snapshots/flashscore/selector_engine/snapshot_storage/20260214/
 ```
 
-**This prevents infinite debugging loops.**
+### Step 2: Analyze Specific Failure
 
-## Expected Outcomes
+```bash
+# Navigate to failure directory
+cd "data/snapshots/flashscore/selector_engine/snapshot_storage/20260214/<timestamp>/"
 
-- Evidence-based selector fixes
-- Reproducible debugging results
-- Improved selector stability
-- Historical failure analysis capability
+# Check metadata for failure details
+type metadata.json
+
+# Examine HTML structure
+type html/fullpage_failure_.html | findstr /c:"selector_pattern"
+```
+
+### Step 3: Update Selector
+
+```bash
+# Edit selector file
+notepad src/sites/flashcore/selectors/navigation/sport_selection/<selector>.yaml
+
+# Add more specific primary selector
+# Increase timeout and retry count
+# Document known blockers
+```
+
+### Step 4: Validate Fix
+
+```bash
+# Test selector against snapshot
+findstr /c:"selector_pattern" html/fullpage_failure_.html
+
+# Mark as fixed if successful
+echo "status: FIXED" > snapshot_status.txt
+```
+
+### Step 5: Record Changes
+
+```bash
+# Record evolution
+echo "Selector: <name>" > evolution.txt
+echo "Date: %date%" >> evolution.txt
+echo "Result: SUCCESS" >> evolution.txt
+echo "State: FIXED" >> evolution.txt
+
+# Store in ledger
+cat evolution.txt >> data/snapshots/flashscore/selector_evolution.txt
+```
+
+---
 
 ## Quick Commands
 
 ```bash
-# List recent selector failures
-ls data/snapshots/flashscore/selector_engine/
+# List all failures
+ls data/snapshots/flashscore/selector_engine/snapshot_storage/
 
-# Analyze specific failure
-cat data/snapshots/flashscore/selector_engine/20260214/*/metadata.json
+# Check if snapshot already fixed
+if exist "data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt" (
+    echo "Already fixed - skip"
+) else (
+    echo "Needs debugging"
+)
 
-# Validate selector against snapshot
-# Use snapshot HTML as test input for selector updates
+# Validate selector
+findstr /c:"data-sport-id=\"3\"" html/fullpage_failure_.html
 ```
 
 ---
