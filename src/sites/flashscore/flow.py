@@ -34,12 +34,21 @@ class FlashscoreFlow(BaseFlow):
                 if metadata:
                     for key, value in metadata.items():
                         # Skip asyncio objects, functions, and other non-serializable types
+                        value_type = type(value)
+                        value_type_str = str(value_type)
+                        
+                        # Check for asyncio-related types
                         if (not inspect.iscoroutine(value) and 
                             not inspect.iscoroutinefunction(value) and
                             not inspect.isfunction(value) and
                             not inspect.ismethod(value) and
-                            'asyncio' not in str(type(value)) and
-                            'Future' not in str(type(value))):
+                            not inspect.isgenerator(value) and
+                            not inspect.isgeneratorfunction(value) and
+                            'asyncio' not in value_type_str and
+                            'Future' not in value_type_str and
+                            'Task' not in value_type_str and
+                            'coroutine' not in value_type_str.lower() and
+                            value_type.__module__ != 'asyncio' if hasattr(value_type, '__module__') else True):
                             filtered_metadata[key] = value
                 
                 context = SnapshotContext(

@@ -79,7 +79,7 @@ class TestCommand:
         print(f"Testing navigation for {args.sport} {args.status} matches...")
         
         # Initialize browser manager and session
-        browser_manager = BrowserManager()
+        browser_manager = BrowserManager(site_id='flashscore')  # Pass site ID for hierarchical storage
         config = CHROMIUM_HEADLESS_CONFIG
         config.headless = True
         

@@ -89,7 +89,7 @@ class ScrapeCommand:
         try:
             # Initialize browser manager
             from src.browser.manager import BrowserManager
-            browser_manager = BrowserManager()
+            browser_manager = BrowserManager(site_id='flashscore')  # Pass site ID for hierarchical storage
             
             # Initialize scraper with interrupt handling
             from src.browser.config import BrowserConfiguration

@@ -35,9 +35,10 @@ from ..core.snapshot.manager import SnapshotManager
 class BrowserAuthority(IBrowserAuthority):
     """Central authority for browser instance management and lifecycle control."""
     
-    def __init__(self):
+    def __init__(self, site_id: str = 'unknown'):
         # Configuration
         self.config = get_config()
+        self.site_id = site_id  # Store site ID for hierarchical storage
         
         # Browser instances
         self.playwright: Optional[Playwright] = None
