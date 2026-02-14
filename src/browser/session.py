@@ -53,6 +53,7 @@ class BrowserSession:
     status: SessionStatus = SessionStatus.INITIALIZING
     created_at: datetime = field(default_factory=datetime.utcnow)
     last_activity: datetime = field(default_factory=datetime.utcnow)
+    site: Optional[str] = None  # Add site context for hierarchical storage
     
     # Runtime state
     browser: Optional[Browser] = None
