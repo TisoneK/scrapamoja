@@ -138,39 +138,71 @@ class SnapshotBundle:
             self.content_hash = self._calculate_content_hash()
     
     def _calculate_content_hash(self) -> str:
-        """Calculate MD5 hash of bundle content."""
-        print(f"🔍 DIAGNOSTIC: timestamp type: {type(self.timestamp)}, value: {self.timestamp}")
-        print(f"🔍 DIAGNOSTIC: config type: {type(self.config)}, value: {self.config}")
+        """
+        Calculate deterministic hash of serializable snapshot content.
+        Non-JSON-serializable objects (e.g., Playwright Page) are excluded.
+        """
         
-        content = {
-            "context": asdict(self.context),
-            "timestamp": self.timestamp.isoformat(),
-            "config": {
-                "mode": self.config.mode.value,
-                "capture_html": self.config.capture_html,
-                "capture_screenshot": self.config.capture_screenshot,
-                "capture_network": self.config.capture_network,
-                "capture_console": self.config.capture_console,
-                "selector": self.config.selector,
-                "capture_full_page": self.config.capture_full_page,
-                "deduplication_enabled": self.config.deduplication_enabled,
-                "async_save": self.config.async_save
-            },
-            "artifacts": sorted(self.artifacts),
-            "metadata": self.metadata
-        }
-        content_str = json.dumps(content, sort_keys=True, cls=EnumEncoder)
-        return hashlib.md5(content_str.encode()).hexdigest()
+        def make_serializable(obj):
+            try:
+                json.dumps(obj)
+                return obj
+            except (TypeError, ValueError):
+                return repr(obj)
+
+        bundle_dict = self.to_dict()
+
+        # Sanitize artifacts recursively
+        def sanitize(value):
+            if isinstance(value, dict):
+                return {k: sanitize(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [sanitize(v) for v in value]
+            else:
+                return make_serializable(value)
+
+        safe_bundle = sanitize(bundle_dict)
+
+        content = json.dumps(safe_bundle, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert bundle to dictionary representation."""
+        """Convert bundle to dictionary representation with serialization safety."""
+        
+        def make_serializable(obj):
+            """Convert non-serializable objects to repr strings."""
+            try:
+                json.dumps(obj)
+                return obj
+            except (TypeError, ValueError):
+                return repr(obj)
+        
+        def sanitize_dict(value):
+            """Recursively sanitize dictionary values."""
+            if isinstance(value, dict):
+                return {k: sanitize_dict(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [sanitize_dict(v) for v in value]
+            else:
+                return make_serializable(value)
+        
+        # Manually build context dict to avoid asdict issues with non-serializable objects
+        context_dict = {
+            "site": self.context.site,
+            "module": self.context.module,
+            "component": self.context.component,
+            "session_id": self.context.session_id,
+            "function": self.context.function,
+            "additional_metadata": sanitize_dict(self.context.additional_metadata)
+        }
+        
         return {
-            "context": asdict(self.context),
+            "context": context_dict,
             "timestamp": self.timestamp.isoformat(),
             "config": asdict(self.config),
             "bundle_path": self.bundle_path,
             "artifacts": self.artifacts,
-            "metadata": self.metadata,
+            "metadata": sanitize_dict(self.metadata),
             "content_hash": self.content_hash,
             "bundle_version": self.bundle_version
         }

@@ -4,6 +4,7 @@ Flashscore navigation flow.
 Handles navigation and interaction with Flashscore sports pages.
 """
 
+import asyncio
 from src.sites.base.flow import BaseFlow
 from src.selectors.context_manager import SelectorContext, DOMState
 from src.sites.flashscore.models import NavigationState, PageState
@@ -23,6 +24,8 @@ class FlashscoreFlow(BaseFlow):
     
     async def _capture_debug_snapshot(self, operation: str, metadata: dict = None):
         """Capture debug snapshot during flow operations."""
+        print(f"FLOW SNAPSHOT: _capture_debug_snapshot called for operation: {operation}")
+        print(f"FLOW SNAPSHOT: enable_metrics = {self.snapshot_settings.enable_metrics}")
         try:
             if self.snapshot_settings.enable_metrics:
                 from src.core.snapshot.models import SnapshotContext, SnapshotConfig, SnapshotMode
@@ -73,20 +76,18 @@ class FlashscoreFlow(BaseFlow):
                     config=config
                 )
                 
-                # Extract the full bundle path from the result
+                # Extract the bundle path from the SnapshotBundle result
                 bundle_path = "unknown"
                 if snapshot_result:
                     if hasattr(snapshot_result, 'bundle_path'):
                         bundle_path = snapshot_result.bundle_path
-                    elif hasattr(snapshot_result, 'content_hash'):
-                        # Fallback: construct path from content hash
-                        try:
-                            from pathlib import Path
-                            timestamp = datetime.now().strftime("%Y%m%d")
-                            possible_path = f"data/snapshots/flashscore/flow/navigation/{timestamp}/flow_{timestamp}_{snapshot_result.content_hash[:8]}"
-                            bundle_path = str(Path(possible_path).resolve())
-                        except:
-                            pass
+                        print(f"FLOW SNAPSHOT: Successfully captured flow snapshot at {bundle_path}")
+                    else:
+                        print(f"FLOW SNAPSHOT: Snapshot created but bundle_path not found in result")
+                        print(f"FLOW SNAPSHOT: Result type: {type(snapshot_result)}")
+                        print(f"FLOW SNAPSHOT: Result attributes: {dir(snapshot_result)}")
+                else:
+                    print(f"FLOW SNAPSHOT: Failed to capture snapshot - result is None")
                 
                 from src.observability.logger import get_logger
                 logger = get_logger("flashscore.flow")
@@ -146,8 +147,19 @@ class FlashscoreFlow(BaseFlow):
             )
             
             logger.info("Looking for main content using selector engine...")
-            # Try to resolve the main content selector
-            main_content_result = await self.selector_engine.resolve("match_items", dom_context)
+            # Add timeout to prevent hanging
+            try:
+                main_content_result = await asyncio.wait_for(
+                    self.selector_engine.resolve("match_items", dom_context),
+                    timeout=30.0  # 30 second timeout
+                )
+                logger.info("Main content selector resolution completed")
+            except asyncio.TimeoutError:
+                logger.warning("Main content selector resolution timed out after 30 seconds")
+                main_content_result = None
+            except Exception as e:
+                logger.warning(f"Main content selector resolution failed: {e}")
+                main_content_result = None
             if main_content_result and main_content_result.element_info:
                 logger.info("Main content found using selector engine")
             else:
@@ -202,12 +214,19 @@ class FlashscoreFlow(BaseFlow):
                     return True
                 else:
                     logger.info("cookie_consent_dialog_not_found", method="selector_engine")
+                    print(f"FLOW SNAPSHOT: About to call _capture_debug_snapshot for cookie_consent_not_found")
                     # Capture snapshot when cookie consent dialog not found
-                    await self._capture_debug_snapshot("cookie_consent_not_found", {
-                        "method": "selector_engine",
-                        "dom_context": dom_context.__dict__,
-                        "selector_result": cookie_result.__dict__ if cookie_result else None
-                    })
+                    try:
+                        await self._capture_debug_snapshot("cookie_consent_not_found", {
+                            "method": "selector_engine",
+                            "dom_context": dom_context.__dict__,
+                            "selector_result": cookie_result.__dict__ if cookie_result else None
+                        })
+                        print(f"FLOW SNAPSHOT: Successfully completed _capture_debug_snapshot call")
+                    except Exception as snapshot_e:
+                        print(f"FLOW SNAPSHOT: ERROR in _capture_debug_snapshot: {snapshot_e}")
+                        import traceback
+                        print(f"FLOW SNAPSHOT: Traceback: {traceback.format_exc()}")
             except Exception as e:
                 logger.warning("cookie_consent_handling_failed", method="selector_engine", error=str(e))
                 # Capture snapshot on cookie consent handling error

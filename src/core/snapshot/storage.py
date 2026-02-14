@@ -86,9 +86,6 @@ class SnapshotStorage:
             bundle_path = Path(bundle.bundle_path)
             metadata_path = bundle_path / "metadata.json"
             
-            print(f"🔍 DIAGNOSTIC: Attempting to save metadata to {metadata_path}")
-            print(f"🔍 DIAGNOSTIC: Bundle data: {bundle.to_dict()}")
-            
             # Save to temporary file first
             temp_path = metadata_path.with_suffix(".tmp")
             
