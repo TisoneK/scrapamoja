@@ -131,7 +131,17 @@ ls data/snapshots/flashscore/selector_engine/snapshot_storage/20260214/failure_*
 ```
 
 **If failures remain (1-3):**
-1. **Debug Next Failure** - Continue with remaining selector failures
+
+1. **Debug Next Failure** - Choose from remaining selector failures:
+   ```
+   Available failures to debug:
+   1. 181436_failure_cookie_consent_1771071276.696055
+   2. 181442_failure_authentication.cookie_consent_1771071282.029415  
+   3. 181449_failure_cookie_consent_1771071289.201868
+   4. 181455_failure_authentication.cookie_consent_1771071295.088147
+   ```
+   (Select failure number to debug)
+
 2. **Run Complete Analysis** - Use comprehensive debugging workflow  
 3. **Check Design Standards** - Review selector engineering rules
 
