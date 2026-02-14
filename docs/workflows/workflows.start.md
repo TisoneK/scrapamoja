@@ -7,13 +7,13 @@ This directory contains standardized workflows for system operations and debuggi
 ### 🔍 Debug Selector Issues
 **Most Common Task** - 80% of workflow usage
 
-- **[Quick Debug](selectors/debugging.md)** - Simple selector problems, fast resolution
-- **[Complete Analysis](selectors/complete-debugging-workflow.md)** - Complex issues, comprehensive methodology
+- **[Quick Debug](selectors/workflows.selectors.debug.md)** - Simple selector problems, fast resolution
+- **[Complete Analysis](selectors/workflows.selectors.debug.complete.md)** - Complex issues, comprehensive methodology
 
 ### 🏗️ Design New Selectors  
 **Engineering Task** - 15% of workflow usage
 
-- **[Design Standards](selectors/design-standards.md)** - Engineering-grade rules, anti-patterns, performance budgets
+- **[Design Standards](selectors/workflows.selectors.design.standards.md)** - Engineering-grade rules, anti-patterns, performance budgets
 
 ### 📊 Analyze System Health
 **Maintenance Task** - 5% of workflow usage
