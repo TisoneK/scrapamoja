@@ -257,4 +257,57 @@ Planned enhancements to this workflow:
 
 ---
 
-*This workflow transforms selector maintenance from reactive debugging to proactive, data-driven engineering.*
+## LLM Governance & Constraints
+
+### LLM Creation Guidelines
+
+**When creating or modifying this workflow:**
+
+#### Required Structure
+- **YAML Frontmatter**: Must include owner, scope, status, last reviewed
+- **Step-by-Step Format**: Numbered or bulleted procedures
+- **Cross-References**: Link to related workflows
+- **Expected Outcomes**: Clear success criteria
+
+#### Forbidden Changes
+- **Remove Core Steps**: Cannot eliminate essential debugging procedures
+- **Change Purpose**: Cannot alter fundamental workflow intent
+- **Break Cross-References**: Cannot remove links to other workflows
+- **Alter Hierarchy**: Cannot change workflow categorization
+
+#### Quality Gates
+- **Clarity Check**: Each step must be understandable to developers
+- **Completeness**: All required sections must be present
+- **Consistency**: Follow same format as other workflows
+- **Validation**: Steps must be technically accurate and testable
+
+### LLM Modification Constraints
+
+#### Allowed Modifications
+- **Add Examples**: Include real-world usage examples
+- **Improve Clarity**: Make complex steps more understandable
+- **Update Commands**: Keep CLI commands current and accurate
+- **Enhance Cross-References**: Add new relevant workflow links
+
+#### Restricted Modifications
+- **Remove Essential Debugging**: Cannot eliminate core analysis steps
+- **Change Technical Accuracy**: Cannot alter snapshot analysis procedures
+- **Simplify Beyond Recognition**: Cannot remove critical technical details
+- **Break Decision Logic**: Cannot alter fundamental workflow flow
+
+### Compliance Validation
+
+#### Before Commit:
+- [ ] Structure follows governance guidelines?
+- [ ] All required sections present?
+- [ ] Cross-references working?
+- [ ] Technical accuracy maintained?
+- [ ] No forbidden changes made?
+
+#### Before Merge:
+- [ ] Peer review completed?
+- [ ] Technical validation passed?
+- [ ] LLM compliance verified?
+- [ ] No governance violations?
+
+*This governance ensures LLMs enhance workflows without compromising their integrity or effectiveness.*

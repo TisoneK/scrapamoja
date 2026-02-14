@@ -61,7 +61,60 @@ cat data/snapshots/flashscore/selector_engine/20260214/*/metadata.json
 # Use snapshot HTML as test input for selector updates
 ```
 
-## Related Workflows
+---
 
-- **[../snapshot-analysis.md](../snapshot-analysis.md)** - Analyze snapshot artifacts and system health
-- **[../system-maintenance.md](../system-maintenance.md)** - System maintenance and cleanup procedures
+## 🔧 LLM Governance & Constraints
+
+### 📋 LLM Creation Guidelines
+
+**When creating or modifying this workflow:**
+
+#### ✅ Required Structure
+- **Clear Purpose**: Simple, focused debugging steps
+- **Direct Commands**: CLI commands must be accurate and testable
+- **Cross-References**: Link to comprehensive workflow and design standards
+
+#### 🚫 Forbidden Changes
+- **Remove Core Steps**: Cannot eliminate essential debugging procedures
+- **Over-simplify**: Cannot remove critical analysis steps
+- **Break Navigation**: Cannot alter links to other workflows
+- **Change Scope**: Cannot expand beyond selector debugging
+
+#### 🎯 Quality Gates
+- **Command Accuracy**: All CLI examples must be tested
+- **Step Clarity**: Each step must be actionable
+- **Path Validation**: All file paths must be correct
+- **Link Integrity**: All references must work
+
+### 🤖 LLM Modification Constraints
+
+#### ✅ Allowed Modifications
+- **Add New Examples**: Include recent debugging scenarios
+- **Update Commands**: Keep CLI commands current
+- **Improve Clarity**: Add explanations for complex steps
+- **Enhance Cross-References**: Add new related workflow links
+
+#### 🚫 Restricted Modifications
+- **Remove Snapshot Analysis**: Cannot eliminate core debugging steps
+- **Simplify Beyond Recognition**: Cannot remove technical details
+- **Break Command Structure**: Cannot alter essential CLI workflows
+- **Change Fundamental Flow**: Cannot modify step-by-step process
+
+### 📊 Compliance Validation
+
+#### Before Commit:
+- [ ] Commands tested and accurate?
+- [ ] All steps clear and actionable?
+- [ ] Cross-references working?
+- [ ] No essential steps removed?
+- [ ] Governance guidelines followed?
+
+#### Before Merge:
+- [ ] Debugging scenarios validated?
+- [ ] CLI commands verified?
+- [ ] Technical accuracy maintained?
+- [ ] LLM compliance confirmed?
+
+---
+
+*This governance ensures LLMs maintain debugging workflow effectiveness while preserving essential functionality.*

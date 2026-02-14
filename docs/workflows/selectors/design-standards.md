@@ -371,4 +371,61 @@ fi
 
 ---
 
-*This transforms selector development from reactive debugging to proactive engineering discipline with automated enforcement and complete traceability.*
+---
+
+## 🔧 LLM Governance & Constraints
+
+### 📋 LLM Creation Guidelines
+
+**When creating or modifying this workflow:**
+
+#### ✅ Required Structure
+- **YAML Frontmatter**: Must include owner, scope, status, last reviewed
+- **Technical Accuracy**: All formulas, rules, and examples must be correct
+- **Measurable Metrics**: Performance targets must be quantifiable
+- **Cross-References**: Link to related workflows
+
+#### 🚫 Forbidden Changes
+- **Remove Core Standards**: Cannot eliminate essential engineering rules
+- **Alter Performance Budgets**: Cannot change measurable targets without justification
+- **Break Anti-Patterns**: Cannot remove critical quality constraints
+- **Change Validation Matrix**: Cannot alter deterministic testing requirements
+
+#### 🎯 Quality Gates
+- **Technical Review**: All engineering concepts must be accurate
+- **Practical Application**: Rules must be implementable in real systems
+- **Consistency Check**: Follow same governance as other workflows
+- **Documentation Quality**: Examples must be clear and correct
+
+### 🤖 LLM Modification Constraints
+
+#### ✅ Allowed Modifications
+- **Add New Anti-Patterns**: Include emerging failure patterns
+- **Improve Examples**: Add real-world selector scenarios
+- **Update Performance Targets**: Adjust budgets based on measured data
+- **Enhance Validation**: Add new testing strategies
+
+#### 🚫 Restricted Modifications
+- **Remove Budget Enforcement**: Cannot eliminate performance gates
+- **Weaken Anti-Patterns**: Cannot allow prohibited selector types
+- **Break Fallback Hierarchy**: Cannot alter structured resilience patterns
+- **Change Stability Formula**: Cannot modify measurable scoring without validation
+
+### 📊 Compliance Validation
+
+#### Before Commit:
+- [ ] Technical accuracy verified?
+- [ ] Performance targets realistic?
+- [ ] Anti-patterns comprehensive?
+- [ ] Validation matrix complete?
+- [ ] Governance guidelines followed?
+
+#### Before Merge:
+- [ ] Engineering review completed?
+- [ ] Performance impact assessed?
+- [ ] Implementation feasibility verified?
+- [ ] LLM compliance confirmed?
+
+---
+
+*This governance ensures LLMs enhance engineering standards while maintaining technical rigor and implementability.*
