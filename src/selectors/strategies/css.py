@@ -5,6 +5,7 @@ Implements CSS-based element location using standard CSS selectors
 as specified in the strategy pattern interface.
 """
 
+import asyncio
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -82,8 +83,24 @@ class CSSStrategy(BaseStrategyPattern):
                     failure_reason="No page context available"
                 )
             
-            # Execute CSS selector
-            elements = await page.query_selector_all(css_selector)
+            # Execute CSS selector with timeout protection
+            try:
+                # Use asyncio.wait_for to prevent hanging
+                elements = await asyncio.wait_for(
+                    page.query_selector_all(css_selector),
+                    timeout=10.0  # 10 second timeout
+                )
+            except asyncio.TimeoutError:
+                return SelectorResult(
+                    selector_name=selector.name,
+                    strategy_used=self.id,
+                    element_info=None,
+                    confidence_score=0.0,
+                    resolution_time=(datetime.utcnow() - start_time).total_seconds(),
+                    validation_results=[],
+                    success=False,
+                    failure_reason=f"CSS selector query timed out after 10s: {css_selector}"
+                )
             
             if not elements:
                 return SelectorResult(

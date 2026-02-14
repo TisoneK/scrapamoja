@@ -159,15 +159,15 @@ class FileSystemStorageAdapter(IStorageAdapter):
             )
             
             # Store bundle using core snapshot storage
-            bundle_path = await self.snapshot_storage.store_bundle(bundle)
+            await self.snapshot_storage.save_bundle(bundle)
             
             # Update snapshot with bundle path
-            snapshot.file_path = str(bundle_path.relative_to(self.snapshot_storage.base_path))
+            snapshot.file_path = str(bundle.bundle_path)
             
             self._logger.debug(
                 "snapshot_stored",
                 snapshot_id=snapshot.id,
-                bundle_path=str(bundle_path),
+                bundle_path=str(bundle.bundle_path),
                 file_size=snapshot.file_size,
                 has_screenshot=bool(screenshot)
             )
