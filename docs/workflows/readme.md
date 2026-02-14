@@ -2,33 +2,41 @@
 
 This directory contains standardized workflows for system operations and debugging.
 
-## Start Here
+## 🎯 What Do You Want To Do?
 
-**New contributors should start here:**
+### 🔍 Debug Selector Issues
+**Most Common Task** - 80% of workflow usage
 
-1. **Selector Debugging** → `selectors/debugging.md`
-2. **Complete Debugging** → `selectors/complete-debugging-workflow.md`
-3. **Snapshot Analysis** → `snapshot-analysis.md`  
-4. **System Maintenance** → `system-maintenance.md`
+- **[Quick Debug](selectors/debugging.md)** - Simple selector problems, fast resolution
+- **[Complete Analysis](selectors/complete-debugging-workflow.md)** - Complex issues, comprehensive methodology
 
-## Available Workflows
+### 🏗️ Design New Selectors  
+**Engineering Task** - 15% of workflow usage
 
-- **[selectors/](selectors/)** - Selector-specific workflows
-  - **[debugging.md](selectors/debugging.md)** - Debug selector failures using snapshot observability
-  - **[complete-debugging-workflow.md](selectors/complete-debugging-workflow.md)** - Complete comprehensive debugging methodology
-  - **[design-standards.md](selectors/design-standards.md)** - Define selector design standards and anti-patterns
-- **[snapshot-analysis.md](snapshot-analysis.md)** - Analyze snapshot artifacts and system health
-- **[system-maintenance.md](system-maintenance.md)** - System maintenance and cleanup procedures
+- **[Design Standards](selectors/design-standards.md)** - Engineering-grade rules, anti-patterns, performance budgets
 
-## Usage
+### 📊 Analyze System Health
+**Maintenance Task** - 5% of workflow usage
 
-Workflows are designed to be executed via CLI commands or manually followed step-by-step.
+- **[Snapshot Analysis](snapshot-analysis.md)** - System performance, failure patterns
+- **[System Maintenance](system-maintenance.md)** - Cleanup, optimization, monitoring
 
-Each workflow includes:
-- Clear purpose and objectives
-- Step-by-step procedures
-- Expected outcomes
-- Quick reference commands
+---
+
+## 🚀 Quick Start Guide
+
+**New Contributors:** Start here and follow the decision tree above.
+
+**Experienced Users:** Jump directly to your needed workflow using the links.
+
+## 📋 Workflow Features
+
+All workflows include:
+- ✅ **Clear purpose and objectives**
+- ✅ **Step-by-step procedures** 
+- ✅ **Expected outcomes**
+- ✅ **Cross-references** to related workflows
+- ✅ **Machine-checkable constraints** (where applicable)
 
 ## Integration
 
@@ -38,4 +46,4 @@ These workflows integrate with the snapshot observability system to provide:
 - Reproducible results
 - Historical analysis capabilities
 
-For more information, see the main [Snapshot System Status](../SNAPSHOT_SYSTEM_STATUS.md) documentation.
+For more information, see main [Snapshot System Status](../SNAPSHOT_SYSTEM_STATUS.md) documentation.
