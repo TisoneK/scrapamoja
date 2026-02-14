@@ -31,9 +31,7 @@ Prevents stale procedures, establishes responsibility, and supports auditability
    - `timeout`: Selector resolution exceeded time limit
    - `multiple_matches`: Too many elements found
    - `invalid_selector`: Syntax or structure errors
-   - `timeout`: Element exists but resolution timed out
    - `layout_shift`: DOM structure changed
-   - `blocked`: Content hidden by overlay
    - `stale_dom`: Selector references outdated structure
 
 3. **Update Selector Strategy**
@@ -48,6 +46,22 @@ Prevents stale procedures, establishes responsibility, and supports auditability
    - Track performance metrics over time
 
 ## Quick Debug Workflow
+
+### Variable Initialization
+
+```bash
+# Set dynamic variables (update these for your session)
+set SITE=<site_name_from_step1>
+set DATE=%LATEST_DATE%
+set FAILURE_ID=<selected_failure_id>
+set SELECTOR_FILE=<selector_filename>
+
+echo "🔧 Debug Configuration:"
+echo "Site: %SITE%"
+echo "Date: %DATE%"
+echo "Failure ID: %FAILURE_ID%"
+echo "Selector File: %SELECTOR_FILE%"
+```
 
 ### Step 1: Find Recent Failures
 
@@ -87,9 +101,9 @@ ls data/snapshots/*/browser_sessions/%LATEST_DATE%/failure_* 2>nul
 ### Step 2: Analyze Specific Failure
 
 ```bash
-# Get current date and site (from Step 1)
-set SITE=<site_name_from_step1>
-set DATE=%LATEST_DATE%
+# Use dynamic variables from initialization
+set SITE=%SITE%
+set DATE=%DATE%
 
 # For selector engine failures
 cd "data/snapshots/%SITE%/selector_engine/snapshot_storage/%DATE%/<timestamp>/"
@@ -129,8 +143,8 @@ if exist "metadata.json" (
 ### Step 3: Update Selector
 
 ```bash
-# Edit selector file
-notepad src/sites/flashcore/selectors/navigation/sport_selection/<selector>.yaml
+# Edit selector file using dynamic variable
+notepad src/sites/%SITE%/selectors/navigation/sport_selection/%SELECTOR_FILE%.yaml
 
 # Add more specific primary selector
 # Increase timeout and retry count
@@ -147,12 +161,10 @@ cd "data/snapshots/%SITE%/selector_engine/snapshot_storage/%DATE%/<timestamp>/"
 if exist "html/fullpage_failure_.html" (
     findstr /c:"selector_pattern" html/fullpage_failure_.html
     if %errorlevel% equ 0 (
-        echo "✅ Selector validation PASSED"
-        # Mark as fixed if successful
-        echo "status: FIXED" > snapshot_status.txt
-        echo "✅ Snapshot marked as FIXED"
+        echo "✅ Selector validation PASSED for %SELECTOR_FILE%"
+        echo "✅ Ready to update JSON tracking"
     ) else (
-        echo "❌ Selector validation FAILED"
+        echo "❌ Selector validation FAILED for %SELECTOR_FILE%"
         echo "Please update selector strategy and try again"
     )
 ) else (
@@ -163,23 +175,13 @@ if exist "html/fullpage_failure_.html" (
 ### Step 5: Record Changes
 
 ```bash
-# Record evolution with dynamic paths
-echo "Selector: <name>" > evolution.txt
-echo "Date: %date%" >> evolution.txt
-echo "Site: %SITE%" >> evolution.txt
-echo "Snapshot: %DATE%_<timestamp>" >> evolution.txt
-echo "Result: SUCCESS" >> evolution.txt
-echo "State: FIXED" >> evolution.txt
+# Update JSON tracking file with dynamic variables
+echo "✅ Update docs/workflows/workflow_status.json with:"
+echo "- Failure ID: %FAILURE_ID%"
+echo "- Status: fixed"
+echo "- Notes: <description of changes made to %SELECTOR_FILE%>"
 
-# Store in ledger (create if doesn't exist)
-if not exist "data/snapshots/%SITE%/selector_evolution.txt" (
-    echo "# Selector Evolution Ledger" > data/snapshots/%SITE%/selector_evolution.txt
-    echo "# Generated: %date%" >> data/snapshots/%SITE%/selector_evolution.txt
-    echo "" >> data/snapshots/%SITE%/selector_evolution.txt
-)
-cat evolution.txt >> data/snapshots/%SITE%/selector_evolution.txt
-
-echo "✅ Changes recorded in evolution ledger"
+echo "✅ Changes recorded in JSON tracking"
 ```
 
 ---
@@ -189,16 +191,12 @@ echo "✅ Changes recorded in evolution ledger"
 **Check for remaining failures:**
 
 ```bash
-# Count remaining failures dynamically
-set REMAINING=0
-for /f %%i in ('dir /b data/snapshots/%SITE%/selector_engine/snapshot_storage/%DATE%/failure_* 2^>nul') do (
-    if not exist "data/snapshots/%SITE%/selector_engine/snapshot_storage/%DATE%/%%i/snapshot_status.txt" (
-        set /a REMAINING+=1
-        echo %%i
-    )
-)
+# Check JSON tracking for remaining failures
+echo "📊 Current status from docs/workflows/workflow_status.json:"
+type docs\workflows\workflow_status.json | findstr /c:"pending"
 
-echo "Remaining failures: %REMAINING%"
+echo "🔍 Check snapshot directories for untracked failures:"
+dir /b data\snapshots\%SITE%\selector_engine\snapshot_storage\%DATE%\failure_*
 ```
 
 **If failures remain (select option A, B, or C):**
@@ -239,22 +237,69 @@ ls data/snapshots/*/flow/*/failure_* 2>nul
 echo "Browser session failures:"
 ls data/snapshots/*/browser_sessions/*/failure_* 2>nul
 
-# Check if snapshot already fixed (any type)
-if exist "data/snapshots/%SITE%/selector_engine/%DATE%/<timestamp>/snapshot_status.txt" (
-    echo "Selector engine already fixed - skip"
-) else if exist "data/snapshots/%SITE%/flow/%DATE%/<timestamp>/snapshot_status.txt" (
-    echo "Flow already fixed - skip"
-) else if exist "data/snapshots/%SITE%/browser_sessions/%DATE%/<timestamp>/snapshot_status.txt" (
-    echo "Browser session already fixed - skip"
-) else (
-    echo "Needs debugging"
-)
+# Check if failure already tracked in JSON
+powershell "Get-Content 'docs/workflows/workflow_status.json' | ConvertFrom-Json | Select-Object -ExpandProperty site_status | Select-Object -ExpandProperty %SITE% | Select-Object -ExpandProperty selector_engine | Select-Object -ExpandProperty failures | Where-Object {$_.id -eq '%FAILURE_ID%' -and $_.status -eq 'fixed'}"
 
 # Validate selector against different snapshot types
 findstr /c:"data-sport-id=\"3\"" html/fullpage_failure_.html
 findstr /c:"data-sport-id=\"3\"" html/fullpage.html
 findstr /c:"data-sport-id=\"3\"" html/page.html
 ```
+
+---
+
+## JSON-Based Tracking
+
+Track debugging progress using the centralized `docs/workflows/workflow_status.json` file.
+
+### File Location
+
+```
+docs/workflows/workflow_status.json
+```
+
+### Manual JSON Updates
+
+Edit the JSON file directly to track failures:
+
+```json
+{
+  "workflow": "selector_debugging",
+  "start_time": "2026-02-14T18:30:00",
+  "current_date": "20260214",
+  "site_status": {
+    "flashscore": {
+      "selector_engine": {
+        "latest_snapshot": "20260214",
+        "failures": [
+          {
+            "id": "basketball_link_181502",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T18:45:00",
+            "notes": "Updated selector to use contains() matching"
+          }
+        ]
+      }
+    }
+  },
+  "completed_steps": ["find_failures", "analyze_failure"],
+  "notes": "All critical failures resolved"
+}
+```
+
+### Status Values
+
+- `pending` - Failure identified but not yet fixed
+- `fixed` - Successfully resolved
+- `skipped` - Intentionally not addressed
+
+### Advantages
+
+1. **Centralized** - All workflow state in one file
+2. **Stateful** - Track pending, fixed, and skipped failures  
+3. **Multi-site** - Support for multiple sites
+4. **Auditable** - Timestamps, notes, and history
+5. **Extensible** - Can add new workflows
 
 ---
 

@@ -1,0 +1,43 @@
+{
+  "workflow": "selector_debugging",
+  "start_time": "2026-02-14T18:30:00",
+  "current_date": "20260214",
+  "site_status": {
+    "flashscore": {
+      "selector_engine": {
+        "latest_snapshot": "20260214",
+        "failures": [
+          {
+            "id": "181436_failure_cookie_consent_1771071276.696055",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T18:45:00",
+            "notes": "Cookie consent overlay handled"
+          },
+          {
+            "id": "181502_failure_navigation.sport_selection.basketball_link_1771071302.19205",
+            "status": "fixed",
+            "fixed_time": "2026-02-14T18:22:00",
+            "notes": "Updated selector to contains() XPath fallback added"
+          }
+        ]
+      },
+      "flow": {
+        "latest_snapshot": null,
+        "failures": []
+      }
+    },
+    "othersite": {
+      "selector_engine": {
+        "latest_snapshot": null,
+        "failures": []
+      }
+    }
+  },
+  "completed_steps": [
+    "find_failures",
+    "analyze_failure",
+    "update_selector",
+    "validate_fix"
+  ],
+  "notes": "All critical selector failures resolved. Ready for next workflow or daily run."
+}
