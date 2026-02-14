@@ -87,6 +87,10 @@ class FlashscoreFlow(BaseFlow):
             from src.observability.logger import get_logger
             logger = get_logger("flashscore.flow")
             logger.error(f"Failed to capture debug snapshot for {operation}: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception details: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
     
     def _get_timeout_ms(self, selector_name: str, default_timeout: float = 3.0) -> int:
         """

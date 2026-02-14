@@ -43,6 +43,15 @@ class SnapshotStorage:
             if not bundle_path or str(bundle_path) in ('test_path', '', 'None'):
                 raise SnapshotError(f"Invalid bundle_path: {bundle_path} - must be a valid directory path")
             
+            # If directory already exists, just ensure subdirectories exist
+            if bundle_path.exists():
+                print(f"🔍 DEBUG: Bundle directory already exists: {bundle_path}")
+                # Ensure subdirectories exist
+                (bundle_path / "html").mkdir(exist_ok=True)
+                (bundle_path / "screenshots").mkdir(exist_ok=True)
+                (bundle_path / "logs").mkdir(exist_ok=True)
+                return True
+            
             # Use temporary directory for atomic creation
             temp_path = bundle_path.parent / f".tmp_{bundle_path.name}"
             

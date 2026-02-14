@@ -129,7 +129,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
                 site="flashscore",  # Could be extracted from URL or metadata
                 module="selector_engine",
                 component="snapshot_storage",
-                session_id="unknown",  # Could be passed as parameter
+                session_id=snapshot.id or f"snapshot_{datetime.now().strftime('%H%M%S')}",  # Use snapshot ID or timestamp
                 function="store_snapshot",
                 additional_metadata={
                     "original_selector": snapshot.selector_name,
@@ -153,13 +153,51 @@ class FileSystemStorageAdapter(IStorageAdapter):
             timestamp = datetime.now()
             bundle_path = self.snapshot_storage.get_bundle_path(context, timestamp)
             
-            # Create SnapshotBundle
+            # Create SnapshotBundle with actual artifacts
+            artifacts = []
+            
+            # Create bundle directory and subdirectories first
+            bundle_path.mkdir(parents=True, exist_ok=True)
+            (bundle_path / "html").mkdir(exist_ok=True)
+            (bundle_path / "screenshots").mkdir(exist_ok=True)
+            (bundle_path / "logs").mkdir(exist_ok=True)
+            
+            # Capture HTML content
+            if snapshot.dom_content:
+                print(f"🔍 DEBUG: Creating HTML artifact for snapshot {snapshot.id}")
+                html_filename = f"fullpage_{snapshot.id[:8]}.html"
+                html_path = bundle_path / "html" / html_filename
+                
+                print(f"🔍 DEBUG: HTML path: {html_path}")
+                print(f"🔍 DEBUG: DOM content length: {len(snapshot.dom_content) if snapshot.dom_content else 'None'}")
+                
+                # Write HTML content
+                with open(html_path, 'w', encoding='utf-8') as f:
+                    f.write(snapshot.dom_content)
+                
+                print(f"🔍 DEBUG: HTML file exists after write: {html_path.exists()}")
+                artifacts.append(f"html/{html_filename}")
+            else:
+                print(f"🔍 DEBUG: No DOM content found in snapshot")
+            
+            # Capture screenshot if provided
+            if screenshot:
+                screenshots_dir = bundle_path / "screenshots"
+                screenshots_dir.mkdir(parents=True, exist_ok=True)
+                screenshot_filename = f"viewport_{datetime.now().strftime('%H%M%S')}.png"
+                screenshot_path = screenshots_dir / screenshot_filename
+                
+                # Write screenshot content
+                with open(screenshot_path, 'wb') as f:
+                    f.write(screenshot)
+                artifacts.append(f"screenshots/{screenshot_filename}")
+            
             bundle = SnapshotBundle(
                 context=context,
                 config=config,
                 timestamp=timestamp,
                 bundle_path=str(bundle_path),  # Use proper path from snapshot storage
-                artifacts=[]  # HTML and screenshots will be added by storage system
+                artifacts=artifacts,  # Add actual captured artifacts
             )
             
             # Store bundle using core snapshot storage
