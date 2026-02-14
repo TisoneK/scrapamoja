@@ -2,7 +2,24 @@
 
 This directory contains standardized workflows for system operations and debugging.
 
-## 🎯 What Do You Want To Do?
+## 📂 Current Structure
+
+```
+docs/workflows/
+├── workflows.start.md                    # Main entry point (this file)
+├── selectors/
+│   ├── workflows.selectors.debug.md       # Quick debugging
+│   ├── workflows.selectors.debug.complete.md  # Comprehensive analysis
+│   └── workflows.selectors.design.standards.md  # Engineering rules
+├── snapshot-analysis.md                   # System health analysis
+└── system-maintenance.md                  # Maintenance procedures
+```
+
+**Note:** `workflows.selectors.start.md` was intentionally removed to eliminate duplicate entry points. Use this file as the single entry point.
+
+---
+
+## 🎯 What Do You Do?
 
 **Select a number (1-5) to start the corresponding workflow:**
 
