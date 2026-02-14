@@ -16,6 +16,18 @@ Defines enforceable selector engineering discipline with machine-checkable const
 
 ---
 
+## 🎯 What Design Task Do You Need?
+
+**Select a number (1-5) to jump to relevant standards:**
+
+1. **[Create New Selectors](#implementation-checklist)** - Design new selectors with proper standards
+2. **[Review Existing Quality](#machine-checkable-constraints)** - Check current selectors against standards
+3. **[Set Performance Budgets](#performance-budget-enforcement)** - Define timing requirements
+4. **[Implement Fallbacks](#formal-fallback-contract)** - Add resilience hierarchies
+5. **[Fix Anti-Patterns](#anti-pattern-exceptions-policy)** - Resolve selector violations
+
+---
+
 ## 1️⃣ Machine-Checkable Constraints
 
 ### Selector Lint Rules

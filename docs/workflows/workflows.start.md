@@ -26,7 +26,7 @@ docs/workflows/
 ### 🔍 Debug Selector Issues
 **Most Common Task** - 80% of workflow usage
 
-1. **[Quick Debug](selectors/workflows.selectors.debug.md)** - Simple selector problems, fast resolution
+1. **[Check & Fix Failed Selectors](selectors/workflows.selectors.debug.md)** - Find broken selectors, analyze failures, and fix them using debugging workflow
 2. **[Complete Analysis](selectors/workflows.selectors.debug.complete.md)** - Complex issues, comprehensive methodology
 
 ### 🏗️ Design New Selectors  
