@@ -4,22 +4,24 @@ This directory contains standardized workflows for system operations and debuggi
 
 ## 🎯 What Do You Want To Do?
 
+**Select a number (1-5) to start the corresponding workflow:**
+
 ### 🔍 Debug Selector Issues
 **Most Common Task** - 80% of workflow usage
 
-- **[Quick Debug](selectors/workflows.selectors.debug.md)** - Simple selector problems, fast resolution
-- **[Complete Analysis](selectors/workflows.selectors.debug.complete.md)** - Complex issues, comprehensive methodology
+1. **[Quick Debug](selectors/workflows.selectors.debug.md)** - Simple selector problems, fast resolution
+2. **[Complete Analysis](selectors/workflows.selectors.debug.complete.md)** - Complex issues, comprehensive methodology
 
 ### 🏗️ Design New Selectors  
 **Engineering Task** - 15% of workflow usage
 
-- **[Design Standards](selectors/workflows.selectors.design.standards.md)** - Engineering-grade rules, anti-patterns, performance budgets
+3. **[Design Standards](selectors/workflows.selectors.design.standards.md)** - Engineering-grade rules, anti-patterns, performance budgets
 
 ### 📊 Analyze System Health
 **Maintenance Task** - 5% of workflow usage
 
-- **[Snapshot Analysis](snapshot-analysis.md)** - System performance, failure patterns
-- **[System Maintenance](system-maintenance.md)** - Cleanup, optimization, monitoring
+4. **[Snapshot Analysis](snapshot-analysis.md)** - System performance, failure patterns
+5. **[System Maintenance](system-maintenance.md)** - Cleanup, optimization, monitoring
 
 ---
 
