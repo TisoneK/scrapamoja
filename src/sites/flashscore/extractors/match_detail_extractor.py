@@ -131,8 +131,12 @@ class MatchDetailExtractor(ABC):
             if not page_state or not hasattr(page_state, 'verified') or not page_state.verified:
                 return False
             
-            # Check for match-specific content
-            match_content = await self.page.query_selector('.matchDetail, .matchHeader, .event')
+            # Check for match-specific content using Flashscore-specific selectors
+            # Flashscore uses duelParticipant__startTime, detailScore__status, etc.
+            match_content = await self.page.query_selector(
+                '.duelParticipant__startTime, .detailScore__status, .wcl-colXs-12, '
+                '[data-testid="match-status"], .tournamentHeader__content'
+            )
             if not match_content:
                 self.logger.warning("No match-specific content found on page")
                 return False
