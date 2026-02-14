@@ -91,6 +91,7 @@ class SnapshotStorage:
     
     async def save_bundle(self, bundle: SnapshotBundle) -> bool:
         """Save complete bundle with all artifacts."""
+        print(f"🔍🔍🔍 SAVE_BUNDLE CALLED: {bundle.bundle_path}")
         try:
             bundle_path = Path(bundle.bundle_path)
             
@@ -98,7 +99,9 @@ class SnapshotStorage:
             await self.create_bundle_directory(bundle_path)
             
             # Save metadata
+            print(f"🔍🔍🔍 ABOUT TO CALL SAVE_BUNDLE_METADATA")
             await self.save_bundle_metadata(bundle)
+            print(f"🔍🔍🔍 SAVE_BUNDLE_METADATA COMPLETED")
             
             # Save artifacts - artifacts can be strings (file paths) or objects with content
             for artifact in bundle.artifacts:
