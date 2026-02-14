@@ -120,12 +120,26 @@ cat evolution.txt >> data/snapshots/flashscore/selector_evolution.txt
 
 ## 🎯 Debugging Complete - Next Steps
 
-**Select what to do next (1-4):**
+**Check for remaining failures:**
 
+```bash
+# Count remaining failures
+ls data/snapshots/flashscore/selector_engine/snapshot_storage/20260214/ | find /c "failure_"
+
+# List specific failures
+ls data/snapshots/flashscore/selector_engine/snapshot_storage/20260214/failure_*
+```
+
+**If failures remain (1-3):**
 1. **Debug Next Failure** - Continue with remaining selector failures
-2. **Run Complete Analysis** - Use comprehensive debugging workflow
+2. **Run Complete Analysis** - Use comprehensive debugging workflow  
 3. **Check Design Standards** - Review selector engineering rules
-4. **Exit Workflow** - Return to main workflow menu
+
+**If no failures remain (1-2):**
+1. **Return to Main Menu** - Go back to workflow selection
+2. **Exit Workflow** - Complete debugging session
+
+**Select option number to continue:**
 
 ---
 

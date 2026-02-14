@@ -1,20 +1,29 @@
 description: "Cookie consent dialog and accept button"
 confidence_threshold: 0.9
-timeout: 5.0
-retry_count: 3
+timeout: 10.0
+retry_count: 5
 strategies:
   - type: "css"
     selector: "#onetrust-accept-btn-handler"
     weight: 1.0
   - type: "css"
-    selector: ".ot-button-group"
+    selector: ".onetrust-accept-btn-handler"
+    weight: 0.95
+  - type: "css"
+    selector: "#accept-recommended-btn-handler"
     weight: 0.9
   - type: "css"
-    selector: ".ot-btn-container"
+    selector: ".ot-button-group button"
+    weight: 0.85
+  - type: "css"
+    selector: ".ot-btn-container button"
     weight: 0.8
   - type: "css"
     selector: "#onetrust-pc-btn-handler"
     weight: 0.7
+  - type: "xpath"
+    selector: "//button[contains(@class, 'accept') or contains(@id, 'accept')]"
+    weight: 0.65
   - type: "xpath"
     selector: "//button[contains(text(), 'Accept All') or contains(text(), 'Accept')]"
     weight: 0.6
@@ -26,3 +35,9 @@ metadata:
   required_for_navigation: true
   dom_state_indicators:
     unknown: ["cookie", "consent", "privacy"]
+  known_blockers:
+    - "dynamic_content_loading"
+    - "javascript_delay"
+    - "network_latency"
+  change_rationale: "Increased timeout from 5.0s to 10.0s and retry count from 3 to 5 to handle OneTrust dynamic loading delays. Added fallback selectors for different consent button states: .onetrust-accept-btn-handler, #accept-recommended-btn-handler, and generic button selectors within OT containers. Added XPath fallbacks for class-based and text-based matching to handle various consent dialog implementations."
+  last_updated: "2026-02-14T18:25:00"
