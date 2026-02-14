@@ -1,0 +1,67 @@
+{
+  "clusters_processed": 10,
+  "session_date": "2026-02-14T22:31:49",
+  "failures_fixed": 0,
+  "clusters": [
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\192417_failure_cookie_consent_1771075457.429773"
+    },
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\192427_failure_authentication.cookie_consent_1771075467.752477"
+    },
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\192435_failure_cookie_consent_1771075475.154965"
+    },
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\192446_failure_authentication.cookie_consent_1771075486.585944"
+    },
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\192457_failure_navigation.sport_selection.basketball_link_1771075497.316213"
+    },
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\202553_failure_cookie_consent_1771079153.11329"
+    },
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\202559_failure_authentication.cookie_consent_1771079159.674587"
+    },
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\202605_failure_cookie_consent_1771079165.6129"
+    },
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\202611_failure_authentication.cookie_consent_1771079171.635707"
+    },
+    {
+      "selector": "unknown",
+      "count": 1,
+      "failure_type": "unknown",
+      "site": "flashscore\\selector_engine\\snapshot_storage\\20260214\\202618_failure_navigation.sport_selection.basketball_link_1771079178.344741"
+    }
+  ]
+}
