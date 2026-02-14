@@ -175,15 +175,19 @@ echo "Result: SUCCESS if pattern found, FAILED if not found" > test_result.txt
 **Simple recording commands:**
 
 ```bash
-# Create evolution record
+# Create evolution record with state tracking
 echo "Selector: basketball_link" > evolution.txt
 echo "Date: $(date)" >> evolution.txt
 echo "Snapshot: <timestamp>" >> evolution.txt
 echo "Result: SUCCESS/FAILED" >> evolution.txt
+echo "State: FIXED/OPEN" >> evolution.txt
 echo "Reason: <why_changed>" >> evolution.txt
 
-# Store in ledger
+# Store in ledger with state
 cat evolution.txt >> data/snapshots/flashscore/selector_evolution.txt
+
+# Mark snapshot as fixed in metadata
+echo "status: FIXED" > data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt
 ```
 
 **Required fields:**
@@ -191,9 +195,29 @@ cat evolution.txt >> data/snapshots/flashscore/selector_evolution.txt
 - Change date  
 - Snapshot reference
 - Test result
+- **State: FIXED/OPEN** ← NEW: Tracks if issue is resolved
 - Change reason
 
-**This maintains complete history.**
+**State tracking prevents re-analyzing fixed snapshots.**
+
+---
+
+## 🔍 Step 9 — Check Snapshot Status
+
+**Before analyzing any snapshot, check if already fixed:**
+
+```bash
+# Check if snapshot is already marked as fixed
+if exist "data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt" (
+    findstr /c:"FIXED" "data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt"
+    if %errorlevel% equ 0 (
+        echo "✅ Snapshot already FIXED - skip analysis"
+        exit /b
+    )
+)
+```
+
+**This prevents infinite debugging loops.**
 
 ---
 

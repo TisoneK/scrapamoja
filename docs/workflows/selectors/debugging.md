@@ -41,6 +41,48 @@ Prevents stale procedures, establishes responsibility, and supports auditability
    - Record selector evolution metadata
    - Track performance metrics over time
 
+5. **Quick Debugging Workflow**
+
+**Simple validation commands:**
+
+```bash
+# Test selector against snapshot HTML
+cd "data/snapshots/flashscore/selector_engine/<timestamp>/"
+findstr /c:"selector_pattern" fullpage.html
+
+# Check if element exists in snapshot
+findstr /c:"data-sport-id=\"3\"" fullpage.html
+
+# Run selector test (if available)
+python -m src.sites.flashscore.test_selector "basketball_link" "fullpage.html"
+
+# Record result with state tracking
+echo "Result: SUCCESS/FAILED" > validation_result.txt
+echo "State: FIXED/OPEN" >> validation_result.txt
+
+# Mark snapshot status
+echo "status: FIXED" > data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt
+```
+
+**State tracking prevents re-analyzing fixed snapshots.**
+
+6. **Check Snapshot Status**
+
+**Before starting, check if already fixed:**
+
+```bash
+# Check snapshot status first
+if exist "data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt" (
+    findstr /c:"FIXED" "data/snapshots/flashscore/selector_engine/<timestamp>/snapshot_status.txt"
+    if %errorlevel% equ 0 (
+        echo "✅ Snapshot already FIXED - skip debugging"
+        exit /b
+    )
+)
+```
+
+**This prevents infinite debugging loops.**
+
 ## Expected Outcomes
 
 - Evidence-based selector fixes
