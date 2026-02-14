@@ -5,6 +5,7 @@ This directory contains workflows specifically for selector development, debuggi
 ## Available Workflows
 
 - **[debugging.md](debugging.md)** - Debug selector failures using snapshot observability
+- **[complete-debugging-workflow.md](complete-debugging-workflow.md)** - Complete comprehensive debugging methodology
 - **[design-standards.md](design-standards.md)** - Define selector design standards and anti-patterns
 
 ## Usage
