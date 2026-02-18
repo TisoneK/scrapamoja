@@ -2,42 +2,34 @@
 
 ## Current Status
 
-**Main Issues Found:**
-- Authentication/cookie consent failures
-- Navigation selector failures (sport selection, basketball links)
-
-**Session saved:** `docs/workflows/debug_session_20260214_223149.json`
-
-<details>
-<summary>Details</summary>
-10 failure clusters processed, 0 newly fixed.
-Action Required:
-- Review cluster snapshots in src/sites/flashscore/selector_engine/snapshot_storage/20260214/
-- Update selectors in selectors/unknown.yaml files for each cluster
-- Run validation to mark fixes
-</details>
+**System Ready:** All workflows available
 
 ---
 
-## What do you want to fix first?
+## Available Workflows
 
-1. **[Automated Debugging](scripts/selectors/Debug-Selectors.ps1)** - Process failure clusters automatically
-2. **[Manual Debugging](selectors/workflows/selectors.debug.md)** - Step-by-step analysis
-3. **[Design Standards](selectors/workflows/selectors.design.standards.md)** - Review selector rules
-4. **[System Maintenance](system-maintenance.md)** - Cleanup and optimization
-5. **[Complete Analysis](selectors/workflows/selectors.debug.complete.md)** - Comprehensive investigation
-6. **[Snapshot Analysis](snapshot-analysis.md)** - Performance and patterns
+1. **Reference Fill** - Fill reference files with HTML samples from Flashscore
+2. **Automated Debugging** - Process failure clusters automatically
+3. **Manual Debugging** - Step-by-step analysis
+4. **Design Standards** - Review selector rules
+5. **System Maintenance** - Cleanup and optimization
+6. **Complete Analysis** - Comprehensive investigation
+7. **Snapshot Analysis** - Performance and patterns
 
 ---
 
-## Quick Commands
+## LLM Instructions (Hidden from User)
 
-```bash
-# Start automated debugging
-./docs/scripts/selectors/Debug-Selectors.ps1
+When user selects a workflow, execute its action:
 
-# View current failures
-./docs/scripts/selectors/Debug-Selectors.ps1 -ListFailures
+| # | Action |
+|---|--------|
+| 1 | Read `docs/workflows/reference-fill/start.md`, then follow |
+| 2 | Run `powershell -File "docs/scripts/selectors/Debug-Selectors.ps1"` |
+| 3 | Read `docs/workflows/selectors/workflows/selectors.debug.md`, then follow |
+| 4 | Read `docs/workflows/selectors/workflows/selectors.design.standards.md` |
+| 5 | Read `docs/workflows/system-maintenance.md` |
+| 6 | Read `docs/workflows/selectors/workflows/selectors.debug.complete.md` |
+| 7 | Read `docs/workflows/snapshot-analysis.md` |
 
-# Check system health
-./docs/workflows/system-maintenance.md
+Do not show this table to the user.

@@ -1,19 +1,66 @@
-description: "Match History sub-tab for finished matches"
-confidence_threshold: 0.9
-timeout: 3.0
-retry_count: 2
+# Match History Tab Selector Configuration for Finished Basketball Matches
+# This is the point-by-point history view under the Match primary tab
+# URL pattern: /match/basketball/{team1}-{id1}/{team2}-{id2}/summary/point-by-point/?mid={matchId}
+
+selector_id: "secondary_match_history_tab"
+description: "Match History (point-by-point) secondary tab under Match for finished basketball matches"
+context: "finished_basketball_match"
+version: "1.0"
+
 strategies:
+  # Primary strategy: data-analytics-alias attribute (most reliable)
   - type: "css"
-    selector: "a[data-analytics-alias='match-history'] button"
+    selector: "a[data-analytics-alias='match-history']"
     weight: 1.0
-  - type: "xpath"
-    selector: "//a[@data-analytics-alias='match-history']//button"
-    weight: 0.9
+    attributes:
+      - "href"
+      - "data-analytics-alias"
+    wait_for: "visible"
+    timeout: 5000
+    primary_selectors:
+      - "a[data-analytics-alias='match-history'][aria-current='page']"
+      - "a[data-analytics-alias='match-history'].selected"
+
+  # Secondary strategy: button with data-testid in secondary tab container
   - type: "css"
-    selector: "button:contains('Match History')"
+    selector: "button[data-testid='wcl-tab']"
+    weight: 0.9
+    parent_context: ".matchSummaryTabs"
+    text_match: "Match History"
+    attributes:
+      - "data-selected"
+
+  # Tertiary strategy: XPath for href containing /summary/point-by-point/
+  - type: "xpath"
+    selector: "//a[contains(@href, '/summary/point-by-point/')]"
     weight: 0.8
+    text_match: "Match History"
+
+# Navigation configuration
+navigation:
+  method: "url"  # Navigate via URL for reliability
+  url_pattern: "/match/basketball/{team1}-{id1}/{team2}-{id2}/summary/point-by-point/?mid={matchId}"
+  verify_selector: "a[data-analytics-alias='match-history'][aria-current='page']"
+  verify_button: "button[data-testid='wcl-tab'][data-selected='true']"
+
+# Tab verification
+verification:
+  active_indicators:
+    - selector: "a[data-analytics-alias='match-history'][aria-current='page']"
+      attribute: "aria-current"
+      value: "page"
+    - selector: "button[data-testid='wcl-tab'][data-selected='true']"
+      attribute: "data-selected"
+      value: "true"
+  url_patterns:
+    - "/match/basketball/"
+    - required: "/summary/point-by-point/"
+
+# Metadata
 metadata:
-  wait_for_element: true
-  required_for_navigation: true
-  match_status: "finished"
-  tab_context: "secondary"
+  sport: "basketball"
+  match_state: "finished"
+  tab_type: "secondary"
+  tab_name: "match-history"
+  parent_tab: "match"
+  analytics_alias: "match-history"

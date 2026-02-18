@@ -1,19 +1,44 @@
-description: "H2H tab for live matches"
-confidence_threshold: 0.9
-timeout: 3.0
-retry_count: 2
+# Live Basketball Match H2H Tab Selector
+# Flashscore uses data-analytics-alias for tab identification
+# Primary tabs: Match, Odds, H2H, Standings
+
+selector_type: "css"
+description: "H2H (Head-to-Head) tab selector for live basketball matches on Flashscore"
+
 strategies:
-  - type: "css"
-    selector: "a[data-analytics-alias='h2h'] button"
+  # Primary: data-analytics-alias selector (most reliable)
+  - selector: "a[data-analytics-alias='h2h']"
     weight: 1.0
-  - type: "xpath"
-    selector: "//a[@data-analytics-alias='h2h']//button"
+    description: "Primary analytics alias selector for H2H tab"
+    
+  # Secondary: button with data-testid
+  - selector: "a[data-analytics-alias='h2h'] button[data-testid='wcl-tab']"
     weight: 0.9
-  - type: "css"
-    selector: "button:contains('H2H')"
+    description: "Tab button inside analytics alias link"
+    
+  # Tertiary: XPath for href matching
+  - selector: "xpath://a[contains(@href, '/h2h/')]"
     weight: 0.8
-metadata:
-  wait_for_element: true
-  required_for_navigation: true
-  match_status: "live"
-  tab_context: "primary"
+    description: "URL-based fallback selector"
+
+# Primary selectors for direct Playwright access
+primary_selectors:
+  tab_link: "a[data-analytics-alias='h2h']"
+  tab_button: "a[data-analytics-alias='h2h'] button[data-testid='wcl-tab']"
+  active_indicator: "a[data-analytics-alias='h2h'] button[data-selected='true']"
+
+# Tab state verification
+verification:
+  active_states:
+    - "button[data-selected='true']"
+    - "a[data-analytics-alias='h2h'].selected"
+  url_patterns:
+    - "/h2h/"
+
+# Navigation context
+context:
+  match_state: "live"
+  sport: "basketball"
+  tab_type: "primary"
+  tab_name: "h2h"
+  analytics_alias: "h2h"

@@ -19,12 +19,47 @@ class PrimaryTabExtractor(ABC):
     def __init__(self, scraper: FlashscoreScraper):
         self.scraper = scraper
         self.logger = self._get_logger()
-        self.page = scraper.page
+        self.page: Page = scraper.page  # type: ignore[assignment]
     
     def _get_logger(self):
         """Get logger instance."""
         from src.observability.logger import get_logger
         return get_logger(f"flashscore.primary_tab_extractor.{self.__class__.__name__.lower()}")
+    
+    # Mapping of tab names to Flashscore data-analytics-alias values
+    # Primary tabs: Match, Odds, H2H, Standings
+    # Secondary tabs (under Match): Summary, Player stats, Stats, Lineups, Match History
+    TAB_ANALYTICS_ALIAS = {
+        # Primary tabs
+        'summary': 'match-summary',
+        'odds': 'odds-comparison',
+        'h2h': 'h2h',
+        'stats': 'stats-detail',
+        'standings': 'stats-detail',
+        # Secondary tabs (under Match)
+        'player-stats': 'player-statistics',
+        'player-statistics': 'player-statistics',
+        'match-stats': 'match-statistics',
+        'match-statistics': 'match-statistics',
+        'lineups': 'lineups',
+        'match-history': 'match-history'
+    }
+    
+    # Tab URL suffixes for navigation
+    TAB_URL_SUFFIX = {
+        'summary': '',
+        'odds': 'odds',
+        'h2h': 'h2h',
+        'stats': 'standings',
+        'standings': 'standings',
+        # Secondary tabs URL suffixes
+        'player-stats': 'summary/player-stats',
+        'player-statistics': 'summary/player-stats',
+        'match-stats': 'summary/stats',
+        'match-statistics': 'summary/stats',
+        'lineups': 'summary/lineups',
+        'match-history': 'summary/point-by-point'
+    }
     
     async def navigate_to_tab(self, tab_name: str) -> bool:
         """
@@ -37,28 +72,54 @@ class PrimaryTabExtractor(ABC):
             True if navigation successful, False otherwise
         """
         try:
-            # Try multiple selector patterns for tab navigation
+            tab_name_lower = tab_name.lower()
+            analytics_alias = self.TAB_ANALYTICS_ALIAS.get(tab_name_lower, tab_name_lower)
+            
+            # Flashscore tabs are navigation links with data-analytics-alias
             tab_selectors = [
-                f'.tab__title[data-tab-name="{tab_name}"]',
-                f'.tab__title[href*="#/{tab_name}"]',
-                f'.tabs__detail .tab[href*="{tab_name}"]',
-                f'[data-tab="{tab_name}"]'
+                # Primary: data-analytics-alias selector (most reliable)
+                f'a[data-analytics-alias="{analytics_alias}"]',
+                # Secondary: tab button with testid
+                f'button[data-testid="wcl-tab"][data-analytics-alias="{analytics_alias}"]',
+                # Tertiary: href-based navigation
+                f'a[href*="/{tab_name_lower}/?mid="]',
+                f'a[href*="/{tab_name_lower}"][data-testid="wcl-tab"]'
             ]
             
             for selector in tab_selectors:
-                tab_element = await self.page.query_selector(selector)
-                if tab_element:
-                    await tab_element.click()
-                    await self.page.wait_for_timeout(1000)
-                    
-                    # Verify tab is active
-                    is_active = await self._verify_tab_active(tab_name)
-                    if is_active:
-                        self.logger.info(f"Successfully navigated to {tab_name} tab")
-                        return True
-                    else:
-                        self.logger.warning(f"Tab clicked but not active: {tab_name}")
-                        continue
+                try:
+                    # Wait for selector to be visible and clickable
+                    tab_element = await self.page.wait_for_selector(
+                        selector, 
+                        state="visible", 
+                        timeout=5000
+                    )
+                    if tab_element:
+                        # Get the href for URL-based navigation (more reliable)
+                        href = await tab_element.get_attribute('href')
+                        if href:
+                            # Navigate directly via URL - this is more reliable
+                            await self.page.goto(f"https://www.flashscore.com{href}")
+                            await self.page.wait_for_load_state("networkidle", timeout=10000)
+                        else:
+                            # Fallback to click
+                            await tab_element.click()
+                            await self.page.wait_for_timeout(1000)
+                        
+                        # Wait for tab content to load
+                        await self._wait_for_tab_content_load(tab_name_lower)
+                        
+                        # Verify tab is active
+                        is_active = await self._verify_tab_active(tab_name_lower)
+                        if is_active:
+                            self.logger.info(f"Successfully navigated to {tab_name} tab")
+                            return True
+                        else:
+                            self.logger.warning(f"Tab clicked but not active: {tab_name}")
+                            continue
+                except Exception as selector_error:
+                    self.logger.debug(f"Selector {selector} failed: {selector_error}")
+                    continue
             
             self.logger.warning(f"Could not find or navigate to {tab_name} tab")
             return False
@@ -67,14 +128,46 @@ class PrimaryTabExtractor(ABC):
             self.logger.error(f"Error navigating to {tab_name} tab: {e}")
             return False
     
+    async def _wait_for_tab_content_load(self, tab_name: str, timeout: int = 10000) -> bool:
+        """Wait for tab content to load after navigation."""
+        try:
+            # Wait for tab content container
+            content_selectors = [
+                f'.tabContent__{self.TAB_ANALYTICS_ALIAS.get(tab_name, tab_name)}',
+                '.tabContent',
+                '[data-testid="tab-content"]',
+                '.wcl-colXs-12'
+            ]
+            
+            for selector in content_selectors:
+                try:
+                    await self.page.wait_for_selector(selector, state="visible", timeout=timeout)
+                    return True
+                except:
+                    continue
+            
+            # Fallback: just wait for network to settle
+            await self.page.wait_for_load_state("networkidle", timeout=5000)
+            return True
+            
+        except Exception as e:
+            self.logger.debug(f"Tab content wait completed with exception: {e}")
+            return True  # Continue anyway
+    
     async def _verify_tab_active(self, tab_name: str) -> bool:
         """Verify that the specified tab is currently active."""
         try:
+            analytics_alias = self.TAB_ANALYTICS_ALIAS.get(tab_name, tab_name)
+            
+            # Flashscore uses data-selected="true" on button tabs
+            # and data-analytics-alias for navigation links
             active_selectors = [
-                f'.tab__title[data-tab-name="{tab_name}"].active',
-                f'.tab__title[data-tab-name="{tab_name}"].selected',
-                f'.tab__title[href*="#/{tab_name}"].active',
-                f'[data-tab="{tab_name}"].active'
+                # Primary: button with data-selected
+                f'button[data-testid="wcl-tab"][data-selected="true"][data-analytics-alias="{analytics_alias}"]',
+                # Secondary: navigation link with aria-selected
+                f'a[data-analytics-alias="{analytics_alias}"][aria-selected="true"]',
+                # Tertiary: check URL contains tab path
+                f'a[data-analytics-alias="{analytics_alias}"].active'
             ]
             
             for selector in active_selectors:
@@ -82,11 +175,22 @@ class PrimaryTabExtractor(ABC):
                 if active_element:
                     return True
             
+            # Fallback: check URL path contains tab indicator
+            current_url = self.page.url
+            if tab_name == 'summary' and '/odds/' not in current_url and '/h2h/' not in current_url and '/standings/' not in current_url:
+                return True
+            if tab_name == 'odds' and '/odds/' in current_url:
+                return True
+            if tab_name == 'h2h' and '/h2h/' in current_url:
+                return True
+            if tab_name in ('stats', 'standings') and '/standings/' in current_url:
+                return True
+            
             # Fallback: check if tab content is visible
             content_selectors = [
-                f'.tab__content[data-tab="{tab_name}"]',
+                f'.tabContent__{analytics_alias}',
                 f'.{tab_name}__content',
-                f'[data-content="{tab_name}"]'
+                '[data-testid="tab-content"]'
             ]
             
             for selector in content_selectors:
@@ -115,18 +219,29 @@ class PrimaryTabExtractor(ABC):
             True if content loaded, False otherwise
         """
         try:
+            analytics_alias = self.TAB_ANALYTICS_ALIAS.get(tab_name, tab_name)
+            
+            # Flashscore tab content selectors
             content_selectors = [
-                f'.tab__content[data-tab="{tab_name}"]',
-                f'.{tab_name}__content',
-                f'[data-content="{tab_name}"]'
+                f'.tabContent__{analytics_alias}',
+                '.tabContent',
+                '[data-testid="tab-content"]',
+                '.wcl-colXs-12',
+                '.duelParticipant__startTime'
             ]
             
             for selector in content_selectors:
                 try:
-                    await self.page.wait_for_selector(selector, timeout=timeout)
+                    await self.page.wait_for_selector(selector, state="visible", timeout=timeout)
                     return True
                 except:
                     continue
+            
+            # Fallback: wait for network idle
+            try:
+                await self.page.wait_for_load_state("networkidle", timeout=3000)
+            except:
+                pass
             
             self.logger.warning(f"Tab content did not load for {tab_name}")
             return False
@@ -170,16 +285,26 @@ class PrimaryTabExtractor(ABC):
     async def _get_current_active_tab(self) -> Optional[str]:
         """Get the currently active tab name."""
         try:
-            # Check for active tab indicators
+            # Flashscore uses data-selected="true" on button tabs
             active_selectors = [
+                'button[data-testid="wcl-tab"][data-selected="true"]',
+                'a[data-analytics-alias][aria-selected="true"]',
                 '.tab__title.active',
-                '.tab__title.selected',
-                '.tab__title[data-active="true"]'
+                '.tab__title.selected'
             ]
             
             for selector in active_selectors:
                 active_element = await self.page.query_selector(selector)
                 if active_element:
+                    # Try data-analytics-alias first (Flashscore specific)
+                    analytics_alias = await active_element.get_attribute('data-analytics-alias')
+                    if analytics_alias:
+                        # Map back to tab name
+                        for tab_name, alias in self.TAB_ANALYTICS_ALIAS.items():
+                            if alias == analytics_alias:
+                                return tab_name
+                    
+                    # Try data-tab-name
                     tab_name = await active_element.get_attribute('data-tab-name')
                     if tab_name:
                         return tab_name
@@ -189,7 +314,16 @@ class PrimaryTabExtractor(ABC):
                     if tab_text:
                         return tab_text.strip().lower()
             
-            return None
+            # Fallback: check URL
+            current_url = self.page.url
+            if '/odds/' in current_url:
+                return 'odds'
+            elif '/h2h/' in current_url:
+                return 'h2h'
+            elif '/standings/' in current_url:
+                return 'stats'
+            else:
+                return 'summary'  # Default to summary
             
         except Exception as e:
             self.logger.error(f"Error getting current active tab: {e}")

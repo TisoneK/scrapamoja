@@ -1,0 +1,44 @@
+# Live Basketball Match Odds Tab Selector
+# Flashscore uses data-analytics-alias for tab identification
+# Primary tabs: Match, Odds, H2H, Standings
+
+selector_type: "css"
+description: "Odds tab selector for live basketball matches on Flashscore"
+
+strategies:
+  # Primary: data-analytics-alias selector (most reliable)
+  - selector: "a[data-analytics-alias='odds-comparison']"
+    weight: 1.0
+    description: "Primary analytics alias selector for Odds tab"
+    
+  # Secondary: button with data-testid
+  - selector: "a[data-analytics-alias='odds-comparison'] button[data-testid='wcl-tab']"
+    weight: 0.9
+    description: "Tab button inside analytics alias link"
+    
+  # Tertiary: XPath for href matching
+  - selector: "xpath://a[contains(@href, '/odds/')]"
+    weight: 0.8
+    description: "URL-based fallback selector"
+
+# Primary selectors for direct Playwright access
+primary_selectors:
+  tab_link: "a[data-analytics-alias='odds-comparison']"
+  tab_button: "a[data-analytics-alias='odds-comparison'] button[data-testid='wcl-tab']"
+  active_indicator: "a[data-analytics-alias='odds-comparison'] button[data-selected='true']"
+
+# Tab state verification
+verification:
+  active_states:
+    - "button[data-selected='true']"
+    - "a[data-analytics-alias='odds-comparison'].selected"
+  url_patterns:
+    - "/odds/"
+
+# Navigation context
+context:
+  match_state: "live"
+  sport: "basketball"
+  tab_type: "primary"
+  tab_name: "odds"
+  analytics_alias: "odds-comparison"

@@ -1,22 +1,66 @@
-description: "Summary sub-tab for finished matches"
-confidence_threshold: 0.9
-timeout: 3.0
-retry_count: 2
+# Summary Secondary Tab Selector Configuration for Finished Basketball Matches
+# This is the default view under the Match primary tab
+# URL pattern: /match/basketball/{team1}-{id1}/{team2}-{id2}/?mid={matchId}
+
+selector_id: "secondary_summary_tab"
+description: "Summary secondary tab under Match for finished basketball matches"
+context: "finished_basketball_match"
+version: "1.0"
+
 strategies:
+  # Primary strategy: data-analytics-alias attribute (most reliable)
   - type: "css"
-    selector: "a[data-analytics-alias='match-summary'] button[data-selected='true']"
+    selector: "a[data-analytics-alias='match-summary']"
     weight: 1.0
+    attributes:
+      - "href"
+      - "data-analytics-alias"
+    wait_for: "visible"
+    timeout: 5000
+    primary_selectors:
+      - "a[data-analytics-alias='match-summary'][aria-current='page']"
+      - "a[data-analytics-alias='match-summary'].selected"
+
+  # Secondary strategy: button with data-testid in secondary tab container
   - type: "css"
-    selector: "a[data-analytics-alias='match-summary'] button.wcl-tabSelected_rHdTM"
+    selector: "button[data-testid='wcl-tab']"
     weight: 0.9
+    parent_context: ".matchSummaryTabs"
+    text_match: "Summary"
+    attributes:
+      - "data-selected"
+
+  # Tertiary strategy: XPath for text content
   - type: "xpath"
-    selector: "//a[@data-analytics-alias='match-summary']//button[contains(@class, 'wcl-tabSelected')]"
+    selector: "//a[contains(@href, '/match/basketball/')][not(contains(@href, '/summary/point-by-point/'))]"
     weight: 0.8
-  - type: "css"
-    selector: "button:contains('Summary')"
-    weight: 0.7
+    text_match: "Summary"
+
+# Navigation configuration
+navigation:
+  method: "url"  # Navigate via URL for reliability
+  url_pattern: "/match/basketball/{team1}-{id1}/{team2}-{id2}/?mid={matchId}"
+  verify_selector: "a[data-analytics-alias='match-summary'][aria-current='page']"
+  verify_button: "button[data-testid='wcl-tab'][data-selected='true']"
+
+# Tab verification
+verification:
+  active_indicators:
+    - selector: "a[data-analytics-alias='match-summary'][aria-current='page']"
+      attribute: "aria-current"
+      value: "page"
+    - selector: "button[data-testid='wcl-tab'][data-selected='true']"
+      attribute: "data-selected"
+      value: "true"
+  url_patterns:
+    - "/match/basketball/"
+    - excluded: "/summary/point-by-point/"
+
+# Metadata
 metadata:
-  wait_for_element: true
-  required_for_navigation: true
-  match_status: "finished"
-  tab_context: "secondary"
+  sport: "basketball"
+  match_state: "finished"
+  tab_type: "secondary"
+  tab_name: "summary"
+  parent_tab: "match"
+  analytics_alias: "match-summary"

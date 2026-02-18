@@ -1,0 +1,66 @@
+# Summary/Match Tab Selector Configuration for Finished Basketball Matches
+# Flashscore uses data-analytics-alias for tab identification
+# URL pattern: /match/basketball/{team1}-{id1}/{team2}-{id2}/?mid={matchId}
+
+selector_id: "primary_summary_tab"
+description: "Primary Match/Summary tab for finished basketball matches"
+context: "finished_basketball_match"
+version: "1.0"
+
+strategies:
+  # Primary strategy: data-analytics-alias attribute (most reliable)
+  - type: "css"
+    selector: "a[data-analytics-alias='match-summary']"
+    weight: 1.0
+    attributes:
+      - "href"
+      - "data-analytics-alias"
+    wait_for: "visible"
+    timeout: 5000
+    primary_selectors:
+      - "a[data-analytics-alias='match-summary'][aria-current='page']"
+      - "a[data-analytics-alias='match-summary'].selected"
+
+  # Secondary strategy: button with data-testid
+  - type: "css"
+    selector: "button[data-testid='wcl-tab'][data-selected='true']"
+    weight: 0.9
+    parent_context: ".detailOver"
+    attributes:
+      - "data-selected"
+
+  # Tertiary strategy: XPath for text content
+  - type: "xpath"
+    selector: "//a[contains(@href, '/match/basketball/')][not(contains(@href, '/odds/'))][not(contains(@href, '/h2h/'))][not(contains(@href, '/standings/'))]"
+    weight: 0.8
+    text_match: "Match"
+
+# Navigation configuration
+navigation:
+  method: "url"  # Navigate via URL for reliability
+  url_pattern: "/match/basketball/{team1}-{id1}/{team2}-{id2}/?mid={matchId}"
+  verify_selector: "a[data-analytics-alias='match-summary'][aria-current='page']"
+  verify_button: "button[data-testid='wcl-tab'][data-selected='true']"
+
+# Tab verification
+verification:
+  active_indicators:
+    - selector: "a[data-analytics-alias='match-summary'][aria-current='page']"
+      attribute: "aria-current"
+      value: "page"
+    - selector: "button[data-testid='wcl-tab'][data-selected='true']"
+      attribute: "data-selected"
+      value: "true"
+  url_patterns:
+    - "/match/basketball/"
+    - excluded: "/odds/"
+    - excluded: "/h2h/"
+    - excluded: "/standings/"
+
+# Metadata
+metadata:
+  sport: "basketball"
+  match_state: "finished"
+  tab_type: "primary"
+  tab_name: "summary"
+  analytics_alias: "match-summary"

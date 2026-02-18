@@ -1,0 +1,47 @@
+# Live Basketball Match Summary Tab Selector
+# Flashscore uses data-analytics-alias for tab identification
+# Primary tabs: Match, Odds, H2H, Standings
+
+selector_type: "css"
+description: "Summary tab selector for live basketball matches on Flashscore"
+
+strategies:
+  # Primary: data-analytics-alias selector (most reliable)
+  - selector: "a[data-analytics-alias='match-summary']"
+    weight: 1.0
+    description: "Primary analytics alias selector for Match tab"
+    
+  # Secondary: button with data-testid
+  - selector: "button[data-testid='wcl-tab'][data-selected='true']"
+    weight: 0.9
+    description: "Selected tab button indicator"
+    
+  # Tertiary: XPath for href matching
+  - selector: "xpath://a[contains(@href, '/match/') and not(contains(@href, '/odds/')) and not(contains(@href, '/h2h/')) and not(contains(@href, '/standings/'))]"
+    weight: 0.8
+    description: "URL-based fallback selector"
+
+# Primary selectors for direct Playwright access
+primary_selectors:
+  tab_link: "a[data-analytics-alias='match-summary']"
+  tab_button: "a[data-analytics-alias='match-summary'] button[data-testid='wcl-tab']"
+  active_indicator: "a[data-analytics-alias='match-summary'] button[data-selected='true']"
+
+# Tab state verification
+verification:
+  active_states:
+    - "button[data-selected='true']"
+    - "a[data-analytics-alias='match-summary'].selected"
+  url_patterns:
+    - "/match/"
+    - not: "/odds/"
+    - not: "/h2h/"
+    - not: "/standings/"
+
+# Navigation context
+context:
+  match_state: "live"
+  sport: "basketball"
+  tab_type: "primary"
+  tab_name: "summary"
+  analytics_alias: "match-summary"

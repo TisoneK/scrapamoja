@@ -1,0 +1,22 @@
+description: "Odds tab for scheduled matches"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: "a[data-analytics-alias='odds-comparison']"
+    weight: 1.0
+  - type: "css"
+    selector: "button[data-testid='wcl-tab'][data-analytics-alias='odds-comparison']"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//a[contains(@href, '/odds/')]"
+    weight: 0.8
+metadata:
+  wait_for_element: true
+  required_for_navigation: true
+  match_status: "scheduled"
+  tab_context: "primary"
+  primary_selectors:
+    - "a[data-analytics-alias='odds-comparison']"
+    - "button[data-testid='wcl-tab'][data-analytics-alias='odds-comparison']"

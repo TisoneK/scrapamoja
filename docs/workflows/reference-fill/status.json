@@ -1,0 +1,130 @@
+﻿{
+    "workflow":  "reference-fill",
+    "version":  "1.0.0",
+    "created":  "2026-02-15T11:16:00Z",
+    "last_updated":  "2026-02-15T12:45:00Z",
+    "status":  "ready",
+    "llm_guidance_system":  true,
+    "steps_completed":  [
+                            "workflow_structure_created",
+                            "entry_point_created",
+                            "llm_templates_created",
+                            "output_structure_organized",
+                            "documentation_updated",
+                            "fill_template_created",
+                            "template_files_cleaned"
+                        ],
+    "current_mode":  "ready",
+    "current_step":  null,
+    "progress":  {
+                     "total_files":  28,
+                     "completed":  7,
+                     "in_progress":  0,
+                     "need_attention":  21,
+                     "completion_percentage":  25
+                 },
+    "by_category":  {
+                        "scheduled":  {
+                                          "total":  9,
+                                          "completed":  0,
+                                          "in_progress":  0,
+                                          "need_attention":  9
+                                      },
+                        "live":  {
+                                     "total":  9,
+                                     "completed":  0,
+                                     "in_progress":  0,
+                                     "need_attention":  9
+                                 },
+                        "finished":  {
+                                         "total":  9,
+                                         "completed":  0,
+                                         "in_progress":  0,
+                                         "need_attention":  9
+                                     }
+                    },
+    "by_tab_level":  {
+                         "primary":  {
+                                         "total":  3,
+                                         "completed":  0,
+                                         "need_attention":  3
+                                     },
+                         "secondary":  {
+                                           "total":  12,
+                                           "completed":  0,
+                                           "need_attention":  12
+                                       },
+                         "tertiary":  {
+                                          "total":  12,
+                                          "completed":  0,
+                                          "need_attention":  12
+                                      }
+                     },
+    "last_run":  {
+                     "date":  "2026-02-15T15:06:11Z",
+                     "mode":  "discovery",
+                     "script":  "scanner.ps1",
+                     "scan_id":  "scan_20260215_150611",
+                     "files_processed":  28,
+                     "issues_found":  28,
+                     "output_file":  "outputs/scans/scan_results.json"
+                 },
+    "quality_metrics":  {
+                            "template_compliance":  0,
+                            "html_quality":  0,
+                            "documentation_quality":  0,
+                            "validation_pass_rate":  0
+                        },
+    "configuration":  {
+                          "target_directory":  "docs/references/flashscore/html_samples/",
+                          "template_reference":  "docs/references/flashscore/html_samples/README.md",
+                          "validation_level":  "standard",
+                          "output_structure":  {
+                                                   "scans":  "outputs/scans/",
+                                                   "validation":  "outputs/validation/",
+                                                   "reports":  "outputs/reports/"
+                                               },
+                          "llm_settings":  {
+                                               "auto_fix_simple_issues":  true,
+                                               "guided_html_collection":  true,
+                                               "template_validation":  true,
+                                               "progress_tracking":  true
+                                           }
+                      },
+    "workflow_modes":  {
+                           "discovery":  {
+                                             "available":  true,
+                                             "template":  "templates/reference-fill.discovery.md",
+                                             "script":  "scripts/pwsh/scanner.ps1"
+                                         },
+                           "fill":  {
+                                        "available":  true,
+                                        "template":  "templates/reference-fill.fill.md",
+                                        "script":  null
+                                    },
+                           "validate":  {
+                                            "available":  true,
+                                            "template":  "templates/reference-fill.validate.md",
+                                            "script":  "scripts/pwsh/validator.ps1"
+                                        },
+                           "status":  {
+                                          "available":  true,
+                                          "template":  "templates/reference-fill.status.md",
+                                          "script":  "scripts/pwsh/status_updater.ps1"
+                                      }
+                       },
+    "health":  {
+                   "status":  "operational",
+                   "blockers":  [
+
+                                ],
+                   "warnings":  [
+
+                               ],
+                   "recommendations":  [
+                                           "Run discovery mode to identify files needing attention",
+                                           "Start fill mode to populate reference files with HTML samples",
+                                           "Use validation mode to check template compliance"
+                                       ]
+               }
+}

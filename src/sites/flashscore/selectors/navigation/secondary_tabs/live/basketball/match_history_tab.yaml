@@ -1,19 +1,46 @@
-description: "Match History sub-tab for live matches"
-confidence_threshold: 0.9
-timeout: 3.0
-retry_count: 2
+# Live Basketball Match History Tab Selector (Secondary Tab)
+# Flashscore uses data-analytics-alias for tab identification
+# Secondary tabs under Match: Summary, Player stats, Stats, Lineups, Match History
+
+selector_type: "css"
+description: "Match History secondary tab selector for live basketball matches on Flashscore"
+
 strategies:
-  - type: "css"
-    selector: "a[data-analytics-alias='match-history'] button"
+  # Primary: data-analytics-alias selector (most reliable)
+  - selector: "a[data-analytics-alias='match-history']"
     weight: 1.0
-  - type: "xpath"
-    selector: "//a[@data-analytics-alias='match-history']//button"
+    description: "Primary analytics alias selector for Match History tab"
+    
+  # Secondary: button with data-testid
+  - selector: "a[data-analytics-alias='match-history'] button[data-testid='wcl-tab']"
     weight: 0.9
-  - type: "css"
-    selector: "button:contains('Match History')"
+    description: "Tab button inside analytics alias link"
+    
+  # Tertiary: XPath for href matching
+  - selector: "xpath://a[contains(@href, '/point-by-point/') or contains(@href, '/match-history/')]"
     weight: 0.8
-metadata:
-  wait_for_element: true
-  required_for_navigation: true
-  match_status: "live"
-  tab_context: "secondary"
+    description: "URL-based fallback selector"
+
+# Primary selectors for direct Playwright access
+primary_selectors:
+  tab_link: "a[data-analytics-alias='match-history']"
+  tab_button: "a[data-analytics-alias='match-history'] button[data-testid='wcl-tab']"
+  active_indicator: "a[data-analytics-alias='match-history'] button[data-selected='true']"
+
+# Tab state verification
+verification:
+  active_states:
+    - "button[data-selected='true']"
+    - "a[data-analytics-alias='match-history'].selected"
+  url_patterns:
+    - "/point-by-point/"
+    - "/match-history/"
+
+# Navigation context
+context:
+  match_state: "live"
+  sport: "basketball"
+  tab_type: "secondary"
+  parent_tab: "match"
+  tab_name: "match-history"
+  analytics_alias: "match-history"

@@ -1,19 +1,65 @@
-description: "H2H tab for finished matches"
-confidence_threshold: 0.9
-timeout: 3.0
-retry_count: 2
+# H2H (Head-to-Head) Tab Selector Configuration for Finished Basketball Matches
+# Flashscore uses data-analytics-alias for tab identification
+# URL pattern: /match/basketball/{team1}-{id1}/{team2}-{id2}/h2h/?mid={matchId}
+
+selector_id: "primary_h2h_tab"
+description: "Primary H2H (Head-to-Head) tab for finished basketball matches"
+context: "finished_basketball_match"
+version: "1.0"
+
 strategies:
+  # Primary strategy: data-analytics-alias attribute (most reliable)
   - type: "css"
-    selector: "a[data-analytics-alias='h2h'] button"
+    selector: "a[data-analytics-alias='h2h']"
     weight: 1.0
-  - type: "xpath"
-    selector: "//a[@data-analytics-alias='h2h']//button"
-    weight: 0.9
+    attributes:
+      - "href"
+      - "data-analytics-alias"
+    wait_for: "visible"
+    timeout: 5000
+    primary_selectors:
+      - "a[data-analytics-alias='h2h'][aria-current='page']"
+      - "a[data-analytics-alias='h2h'].selected"
+
+  # Secondary strategy: button with data-testid
   - type: "css"
-    selector: "button:contains('H2H')"
+    selector: "button[data-testid='wcl-tab']"
+    weight: 0.9
+    parent_context: ".detailOver"
+    text_match: "H2H"
+    attributes:
+      - "data-selected"
+
+  # Tertiary strategy: XPath for href containing /h2h/
+  - type: "xpath"
+    selector: "//a[contains(@href, '/h2h/')]"
     weight: 0.8
+    text_match: "H2H"
+
+# Navigation configuration
+navigation:
+  method: "url"  # Navigate via URL for reliability
+  url_pattern: "/match/basketball/{team1}-{id1}/{team2}-{id2}/h2h/?mid={matchId}"
+  verify_selector: "a[data-analytics-alias='h2h'][aria-current='page']"
+  verify_button: "button[data-testid='wcl-tab'][data-selected='true']"
+
+# Tab verification
+verification:
+  active_indicators:
+    - selector: "a[data-analytics-alias='h2h'][aria-current='page']"
+      attribute: "aria-current"
+      value: "page"
+    - selector: "button[data-testid='wcl-tab'][data-selected='true']"
+      attribute: "data-selected"
+      value: "true"
+  url_patterns:
+    - "/match/basketball/"
+    - required: "/h2h/"
+
+# Metadata
 metadata:
-  wait_for_element: true
-  required_for_navigation: true
-  match_status: "finished"
-  tab_context: "primary"
+  sport: "basketball"
+  match_state: "finished"
+  tab_type: "primary"
+  tab_name: "h2h"
+  analytics_alias: "h2h"

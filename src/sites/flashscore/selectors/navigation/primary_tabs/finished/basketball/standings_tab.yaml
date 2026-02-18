@@ -1,19 +1,65 @@
-description: "Standings tab for finished matches"
-confidence_threshold: 0.9
-timeout: 3.0
-retry_count: 2
+# Standings Tab Selector Configuration for Finished Basketball Matches
+# Flashscore uses data-analytics-alias for tab identification
+# URL pattern: /match/basketball/{team1}-{id1}/{team2}-{id2}/standings/?mid={matchId}
+
+selector_id: "primary_standings_tab"
+description: "Primary Standings tab for finished basketball matches"
+context: "finished_basketball_match"
+version: "1.0"
+
 strategies:
+  # Primary strategy: data-analytics-alias attribute (most reliable)
   - type: "css"
-    selector: "a[data-analytics-alias='stats-detail'] button"
+    selector: "a[data-analytics-alias='stats-detail']"
     weight: 1.0
-  - type: "xpath"
-    selector: "//a[@data-analytics-alias='stats-detail']//button"
-    weight: 0.9
+    attributes:
+      - "href"
+      - "data-analytics-alias"
+    wait_for: "visible"
+    timeout: 5000
+    primary_selectors:
+      - "a[data-analytics-alias='stats-detail'][aria-current='page']"
+      - "a[data-analytics-alias='stats-detail'].selected"
+
+  # Secondary strategy: button with data-testid
   - type: "css"
-    selector: "button:contains('Standings')"
+    selector: "button[data-testid='wcl-tab']"
+    weight: 0.9
+    parent_context: ".detailOver"
+    text_match: "Standings"
+    attributes:
+      - "data-selected"
+
+  # Tertiary strategy: XPath for href containing /standings/
+  - type: "xpath"
+    selector: "//a[contains(@href, '/standings/')]"
     weight: 0.8
+    text_match: "Standings"
+
+# Navigation configuration
+navigation:
+  method: "url"  # Navigate via URL for reliability
+  url_pattern: "/match/basketball/{team1}-{id1}/{team2}-{id2}/standings/?mid={matchId}"
+  verify_selector: "a[data-analytics-alias='stats-detail'][aria-current='page']"
+  verify_button: "button[data-testid='wcl-tab'][data-selected='true']"
+
+# Tab verification
+verification:
+  active_indicators:
+    - selector: "a[data-analytics-alias='stats-detail'][aria-current='page']"
+      attribute: "aria-current"
+      value: "page"
+    - selector: "button[data-testid='wcl-tab'][data-selected='true']"
+      attribute: "data-selected"
+      value: "true"
+  url_patterns:
+    - "/match/basketball/"
+    - required: "/standings/"
+
+# Metadata
 metadata:
-  wait_for_element: true
-  required_for_navigation: true
-  match_status: "finished"
-  tab_context: "primary"
+  sport: "basketball"
+  match_state: "finished"
+  tab_type: "primary"
+  tab_name: "standings"
+  analytics_alias: "stats-detail"

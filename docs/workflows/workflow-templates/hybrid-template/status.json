@@ -1,0 +1,31 @@
+{
+  "workflow": "hybrid-template",
+  "created": "2026-02-15T12:43:00Z",
+  "last_updated": "2026-02-15T12:43:00Z",
+  "status": "template",
+  "steps_completed": [],
+  "current_step": null,
+  "progress": {
+    "total_steps": 0,
+    "completed_steps": 0,
+    "percentage": 0
+  },
+  "configuration": {
+    "workflow_type": "hybrid",
+    "requires_llm": true,
+    "requires_scripts": true,
+    "supports_automation": true,
+    "template_version": "1.0"
+  },
+  "metrics": {
+    "files_processed": 0,
+    "decisions_made": 0,
+    "errors_encountered": 0,
+    "human_interventions": 0
+  },
+  "integration": {
+    "dependencies": [],
+    "consumes": [],
+    "produces": []
+  }
+}
