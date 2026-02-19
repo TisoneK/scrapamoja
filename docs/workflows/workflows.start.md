@@ -8,13 +8,16 @@
 
 ## Available Workflows
 
-1. **Reference Fill** - Fill reference files with HTML samples from Flashscore
-2. **Automated Debugging** - Process failure clusters automatically
-3. **Manual Debugging** - Step-by-step analysis
-4. **Design Standards** - Review selector rules
-5. **System Maintenance** - Cleanup and optimization
-6. **Complete Analysis** - Comprehensive investigation
-7. **Snapshot Analysis** - Performance and patterns
+A) **Reference Fill** - Fill reference files with HTML samples from Flashscore
+B) **Automated Debugging** - Process failure clusters automatically
+C) **Manual Debugging** - Step-by-step analysis
+D) **Design Standards** - Review selector rules
+E) **System Maintenance** - Cleanup and optimization
+F) **Complete Analysis** - Comprehensive investigation
+G) **Snapshot Analysis** - Performance and patterns
+
+⚠️ GATE: Validate format before sending - MUST be lettered A, B, C...
+🔍 **CRITICAL CHECK:** Are these options lettered? If not, FIX before sending.
 
 ---
 

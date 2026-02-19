@@ -78,6 +78,29 @@ This balances safety with practical workflow efficiency.
 
 **🚨 CRITICAL: USE LETTERS FOR OPTIONS, NUMBERS FOR STEPS 🚨**
 
+**TWO-TIER RULE STRUCTURE:**
+
+**Tier 1: General Rules** (`docs/workflows/rules.md`)
+- Apply globally: Letter/number formatting, gates, issue logging
+- Cover: All workflows, universal conventions
+
+**Tier 2: Workflow-Specific Rules** (`docs/workflows/[workflow]/rules.md`)
+- Inherit general rules
+- Add: Workflow-specific behaviors, templates, quality standards
+- No duplication of general rules
+
+**EXAMPLE:**
+```
+docs/workflows/
+├── rules.md          ← Tier 1: General (letter/number formatting, gates)
+├── workflows.start.md  ← Tier 1 selection: A) B) C) + gate
+└── reference-fill/
+    ├── rules.md      ← Tier 2: Inherits Tier 1 + adds reference-fill specifics
+    └── templates/     ← Tier 2: Specific HTML collection, validation, etc.
+```
+
+This prevents duplication and ensures consistent enforcement across all workflows.
+
 **USER OPTIONS (Always use letters):**
 A) Fill files - Add HTML samples to 13 files that need filling
 B) Validate - Check 2 unknown status files  
