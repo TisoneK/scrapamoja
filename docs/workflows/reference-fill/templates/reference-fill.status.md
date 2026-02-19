@@ -108,7 +108,9 @@ Present exactly these options to user:
 ```
 Would you like me to:
 A) Fill files - Add HTML samples to {number} files that need filling
+
 B) Validate - Check {number} unknown status files  
+
 C) Status - View detailed progress information
 ```
 
