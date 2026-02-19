@@ -85,22 +85,6 @@ Show progress organized by categories:
 **Tertiary Tabs:** {completed}/{total} ({percentage}%)
 ```
 
-### 5. Recommendations and Next Steps
-Based on status, provide actionable recommendations:
-
-**Recommendations Format:**
-```
-🎯 Recommendations
-
-**High Priority:**
-1. {specific action with impact}
-2. {specific action with impact}
-
-**Medium Priority:**
-1. {specific action with impact}
-2. {specific action with impact}
-```
-
 ### 6. Present User Options
 **ABSOLUTE REQUIREMENT: Present EXACTLY these options - NO VARIATIONS ALLOWED**
 

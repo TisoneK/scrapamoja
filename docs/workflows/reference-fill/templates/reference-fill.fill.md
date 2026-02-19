@@ -45,9 +45,17 @@ Skip any files already marked "completed".
 ```
 Which reference file would you like to fill?
 
-{present list from discovery}
+🎯 Recommended (highest impact):
 
-Please select a number or I can suggest one.
+A) {highest_priority_file} - {reason}
+
+B) {second_priority_file} - {reason}
+
+📋 All files needing attention:
+
+{present remaining files with letters C) D) E)...}
+
+Please select a letter or I can suggest one.
 ```
 
 <!-- ⚠️ GATE: Wait for user answer. -->
