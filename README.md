@@ -76,33 +76,140 @@ scrapamoja/
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
-
-- Python 3.12+
+- Python 3.12 or higher
 - 2GB RAM minimum (4GB recommended)
+- Internet connection
+- Git (for cloning)
 
 ### Installation
 
+**Linux / macOS**
 ```bash
+# 1. Clone repository
 git clone https://github.com/TisoneK/scrapamoja.git
 cd scrapamoja
 
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+# 2. Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Install Playwright browsers
+playwright install chromium
+
+# 5. Run your first scrape
+python -m src.main flashscore scrape basketball live --limit 1
+```
+
+**Windows**
+```bash
+# 1. Clone repository
+git clone https://github.com/TisoneK/scrapamoja.git
+cd scrapamoja
+
+# 2. Create virtual environment
+python -m venv venv
+venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Install Playwright browsers
+playwright install chromium
+
+# 5. Run your first scrape
+python -m src.main flashscore scrape basketball live --limit 1
+```
+
+### First Results
+```json
+{
+  "sport": "Basketball",
+  "status": "live",
+  "matches": [
+    {
+      "home_team": "Los Angeles Lakers",
+      "away_team": "Boston Celtics",
+      "score": "89-87",
+      "time": "4th Quarter"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+## 📦 Installation
+
+### Option 1: Standard Installation
+
+**Linux / macOS**
+```bash
+git clone https://github.com/TisoneK/scrapamoja.git
+cd scrapamoja
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 ```
 
-### Run a scrape
-
+**Windows**
 ```bash
-# Using the unified CLI
-python -m src.main flashscore scrape basketball live --limit 5
-python -m src.main flashscore scrape football finished -o csv -f results.csv
-python -m src.main wikipedia extract "Python (programming language)"
+git clone https://github.com/TisoneK/scrapamoja.git
+cd scrapamoja
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+playwright install chromium
+```
+
+### Option 2: Docker Installation
+```dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY . .
+
+RUN pip install -r requirements.txt && \
+    playwright install chromium --with-deps
+
+ENTRYPOINT ["python", "-m", "src.main"]
+```
+```bash
+docker build -t scrapamoja .
+docker run scrapamoja flashscore scrape basketball live --limit 5
+```
+
+### Option 3: Development Installation
+
+**Linux / macOS**
+```bash
+git clone https://github.com/TisoneK/scrapamoja.git
+cd scrapamoja
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+pre-commit install
+pytest tests/
+```
+
+**Windows**
+```bash
+git clone https://github.com/TisoneK/scrapamoja.git
+cd scrapamoja
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e .
+pre-commit install
+pytest tests/
 ```
 
 ---
