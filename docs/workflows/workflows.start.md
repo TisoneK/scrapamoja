@@ -38,6 +38,8 @@ G) **Snapshot Analysis** — Performance and patterns
 
 ## LLM Instructions (Hidden from User)
 
+**SILENT EXECUTION:** Do not narrate what you are doing. Do not say "I need to read..." or "I'll read..." or "Reading file...". Just read the files silently and present the result.
+
 **MANDATORY: Present Available Workflows to User**
 
 When user requests workflows, you MUST:
