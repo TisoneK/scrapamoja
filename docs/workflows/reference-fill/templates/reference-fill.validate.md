@@ -76,8 +76,11 @@ For each file with issues, provide specific guidance:
 3. {specific action 3}
 
 Would you like me to:
-A) Auto-fix the simple issues?
+
+A) Auto-fix simple issues?
+
 B) Guide you through manual fixes?
+
 C) Skip this file for now?
 ```
 <!-- ⚠️ GATE: Validate format before sending - MUST be lettered A, B, C... -->
