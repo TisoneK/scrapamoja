@@ -1,370 +1,140 @@
-# Site Scraper Framework
+# Wikipedia Site Implementation 📖
 
-A template-driven system for creating and managing website scrapers with zero core framework modifications.
+> **The Wikipedia scraper is a reference implementation built on the Scrapamoja framework.** It demonstrates how to build a content-focused scraper with structured extraction, data validation, and link/infobox processing.
 
-## Overview
+---
 
-The Site Scraper Framework enables developers to add new websites by copying a template folder, filling YAML selectors, and writing minimal Python glue code. No deep knowledge of BrowserManager, selectors internals, or lifecycle is required.
+## What It Scrapes
 
-## Quick Start
+Wikipedia serves as a general-purpose knowledge source. This implementation extracts:
 
-### 1. Copy the Template
+- **Article content** — title, body text, and sections
+- **Infoboxes** — structured metadata panels (dates, locations, statistics, etc.)
+- **Tables** — tabular data within articles
+- **Links** — internal and external references
+- **Search results** — article titles, URLs, and result descriptions from Wikipedia search
+
+---
+
+## Structure
+
+```
+wikipedia/
+├── scraper.py              # WikipediaScraper — main scraper class
+├── flow.py                 # WikipediaFlow — page navigation logic
+├── config.py               # Site config (ID, base URL)
+├── selector_loader.py      # YAML selector integration
+├── integration_bridge.py   # Bridges selector engine with DOM context
+├── extraction/             # Extraction logic and data models
+│   ├── config.py           # Extraction configuration
+│   ├── models.py           # ArticleExtractionResult, SearchExtractionResult, InfoboxData
+│   ├── rules.py            # Extraction rules and heuristics
+│   ├── validators.py       # Data validation
+│   ├── statistics.py       # Extraction quality metrics
+│   ├── cache.py            # Result caching
+│   ├── infobox_processor.py  # Infobox parsing and normalization
+│   └── link_processor.py    # Link extraction and classification
+├── flows/
+│   └── extraction_flow.py  # Orchestrates the full extraction pipeline
+└── selectors/              # YAML selector definitions
+    ├── search_input.yaml
+    ├── search_results.yaml
+    ├── result_title.yaml
+    ├── result_url.yaml
+    ├── result_description.yaml
+    ├── article_title.yaml
+    └── article_content.yaml
+```
+
+---
+
+## How It Works
+
+### Navigation Flow
+
+The `WikipediaFlow` class handles page navigation:
+
+```
+Wikipedia search → Search results list → Article page → Content extraction
+```
+
+### Extraction Pipeline
+
+The `ExtractionFlow` orchestrates extraction in stages:
+
+1. **Basic content extraction** — title and body text via YAML selectors
+2. **Rule application** — heuristics for cleaning and structuring raw content
+3. **Specialized processing** — infobox parsing, link classification
+4. **Validation** — checks data completeness and quality
+5. **Quality metrics** — scores the extraction result
+
+### Integration Bridge
+
+Wikipedia uses a `WikipediaIntegrationBridge` that connects the YAML selector system with the DOM context — allowing selectors to be aware of page structure when resolving elements. This is initialized asynchronously after scraper creation via `initialize_yaml_selectors()`.
+
+### Data Models
+
+- `ArticleExtractionResult` — full article data including content, infobox, links, and quality metrics
+- `SearchExtractionResult` — list of search result items with title, URL, and description
+- `InfoboxData` — parsed key-value pairs from Wikipedia infobox panels
+- `QualityMetrics` — confidence and completeness scores for the extraction
+
+---
+
+## Usage
 
 ```bash
-cp -r src/sites/_template src/sites/your_site_name
+# From the project root using the unified CLI
+python -m src.main wikipedia extract "Python (programming language)"
+python -m src.main wikipedia extract "2024_Summer_Olympics" --type table
+
+# Or using the site CLI directly
+python -m src.sites.wikipedia.cli.main extract "Basketball" --limit 5
 ```
 
-### 2. Update Configuration
+---
 
-Edit `src/sites/your_site_name/config.py`:
+## Selector Configuration
 
-```python
-SITE_CONFIG = {
-    "id": "your_site_name",
-    "name": "Your Site Name",
-    "base_url": "https://example.com",
-    "version": "1.0.0",
-    "maintainer": "your-email@example.com",
-    "description": "Brief description of your scraper",
-    "tags": ["category1", "category2"]
-}
-```
-
-### 3. Implement Required Methods
-
-Edit `src/sites/your_site_name/scraper.py`:
-
-```python
-from src.sites.base.site_scraper import BaseSiteScraper
-from .flow import YourSiteFlow
-from .config import SITE_CONFIG
-
-class YourSiteScraper(BaseSiteScraper):
-    site_id = SITE_CONFIG["id"]
-    site_name = SITE_CONFIG["name"]
-    base_url = SITE_CONFIG["base_url"]
-
-    def __init__(self, page, selector_engine):
-        super().__init__(page, selector_engine)
-        self.flow = YourSiteFlow(page, selector_engine)
-
-    async def navigate(self):
-        await self.flow.open_home()
-
-    async def scrape(self, **kwargs):
-        # Your scraping logic here
-        return {"data": "example"}
-
-    def normalize(self, raw_data):
-        return {"normalized": raw_data}
-```
-
-### 4. Define Selectors
-
-Create YAML files in `src/sites/your_site_name/selectors/`:
+Selectors are defined in `selectors/` as YAML files. Example:
 
 ```yaml
-# selectors/search_input.yaml
-description: "Search input field"
-confidence_threshold: 0.7
+# selectors/article_title.yaml
+description: "Wikipedia article title"
 strategies:
   - type: "css"
-    selector: "input[type='search']"
+    selector: "#firstHeading"
     weight: 1.0
+  - type: "css"
+    selector: "h1.firstHeading"
+    weight: 0.9
   - type: "xpath"
-    selector: "//input[@type='search']"
+    selector: "//h1[@id='firstHeading']"
     weight: 0.8
 ```
 
-### 5. Register Your Scraper
+---
 
-Add to `src/sites/registry.py`:
+## Extending
 
-```python
-from src.sites.your_site_name.scraper import YourSiteScraper
+**Add a new extraction type (e.g. references section):**
+1. Add a selector YAML under `selectors/`
+2. Add a processing method in the relevant extractor or create a new processor class
+3. Add a field to the appropriate data model in `extraction/models.py`
+4. Update `extraction_flow.py` to include the new step
 
-# In your registry initialization
-registry.register("your_site_name", YourSiteScraper)
-```
+**Support a different language:**
+Wikipedia's URL structure supports language subdomains (`en.wikipedia.org`, `fr.wikipedia.org`, etc.). Update `config.py` with the target language base URL and adjust selectors if the HTML structure differs.
 
-## Architecture
-
-### Core Components
-
-- **BaseSiteScraper**: Abstract base class defining the scraper contract
-- **BaseFlow**: Abstract base class for navigation-only logic
-- **ScraperRegistry**: Central registry for discovery and management
-- **Validation System**: Comprehensive validation with helpful error messages
-
-### Template Structure
-
-```
-src/sites/_template/
-├── __init__.py          # Module initialization
-├── config.py           # Site configuration (SITE_CONFIG)
-├── scraper.py          # Main scraper implementation
-├── flow.py             # Navigation logic only
-├── models.py           # Optional: Site-specific data models
-├── selectors/         # YAML selector definitions
-│   └── example.yaml   # Example selector configuration
-└── README.md           # Template documentation
-```
-
-### Required Files
-
-- `config.py` - Must contain `SITE_CONFIG` dictionary
-- `flow.py` - Must contain navigation flow class
-- `scraper.py` - Must contain scraper implementation
-- `selectors/` - Must contain at least one YAML selector file
-
-### Optional Files
-
-- `models.py` - Site-specific data models (not required for simple scrapers)
-
-## API Reference
-
-### BaseSiteScraper
-
-Abstract base class that all scrapers must inherit from.
-
-#### Required Class Attributes
-
-- `site_id` (str): Unique identifier for the scraper
-- `site_name` (str): Human-readable name
-- `base_url` (str): Base URL for the site
-
-#### Required Methods
-
-```python
-async def navigate(self) -> None:
-    """Bring page to initial ready state for scraping."""
-    pass
-
-async def scrape(self, **kwargs) -> Dict[str, Any]:
-    """Perform scraping using configured selectors."""
-    pass
-
-def normalize(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Transform raw scraped data into structured output."""
-    pass
-```
-
-#### Optional Methods
-
-```python
-def get_site_info(self) -> Dict[str, str]:
-    """Get site information for debugging and logging."""
-    pass
-
-def validate_state(self) -> Dict[str, Any]:
-    """Validate scraper state and return status information."""
-    pass
-```
-
-### BaseFlow
-
-Abstract base class for navigation-only logic.
-
-#### Usage
-
-```python
-class YourSiteFlow(BaseFlow):
-    async def open_home(self):
-        await self.page.goto("https://example.com")
-        await self.page.wait_for_load_state('networkidle')
-    
-    async def perform_search(self, query: str):
-        search_input = await self.selector_engine.find(self.page, "search_input")
-        await search_input.type(query)
-        await search_input.press('Enter')
-```
-
-### ScraperRegistry
-
-Central registry for managing scrapers.
-
-#### Methods
-
-```python
-# Register a scraper
-registry.register("site_id", ScraperClass)
-
-# Get scraper class
-scraper_class = registry.get_scraper("site_id")
-
-# List all scrapers
-scrapers = registry.list_scrapers()
-
-# Get site metadata
-metadata = registry.get_metadata("site_id")
-
-# Validate all scrapers
-results = registry.validate_all()
-
-# Validate specific scraper
-result = registry.validate_scraper("site_id")
-```
-
-## Configuration
-
-### SITE_CONFIG Structure
-
-```python
-SITE_CONFIG = {
-    "id": "unique_site_id",           # Required: lowercase, numbers, underscores only
-    "name": "Human Readable Name",     # Required: non-empty string
-    "base_url": "https://example.com", # Required: valid URL with http/https
-    "version": "1.0.0",               # Required: semantic versioning
-    "maintainer": "email@example.com", # Required: non-empty string
-    "description": "Optional description", # Optional: string
-    "tags": ["tag1", "tag2"]           # Optional: list of strings
-}
-```
-
-### Selector Configuration
-
-```yaml
-description: "Human-readable description"
-confidence_threshold: 0.7  # Required: 0.0-1.0
-timeout: 5.0               # Optional: seconds
-retry_count: 3             # Optional: number of retries
-strategies:                # Required: non-empty list
-  - type: "css"             # Required: css, xpath, text, attribute, role
-    selector: ".example"    # Required: selector string
-    weight: 1.0             # Optional: 0.0-1.0
-```
-
-## Validation
-
-The framework provides comprehensive validation:
-
-### File Validation
-
-- Required files exist and are accessible
-- Selectors directory contains valid YAML files
-- YAML syntax and schema validation
-
-### Configuration Validation
-
-- All required fields present and valid
-- Field formats and types checked
-- URL and version format validation
-
-### Interface Compliance
-
-- Class inheritance from BaseSiteScraper
-- Required class attributes present
-- Required methods implemented with correct signatures
-
-### Error Messages
-
-Validation provides actionable error messages:
-
-```
-Missing required file: config.py
-Create the missing file in your scraper directory
-
-Invalid confidence_threshold in search.yaml: must be between 0.0 and 1.0
-Update the confidence threshold to a valid range
-
-Missing required method: navigate
-Implement the required abstract method in your scraper class
-```
-
-## Best Practices
-
-### 1. Separation of Concerns
-
-- **Flow classes**: Navigation only, no data extraction
-- **Scraper classes**: Orchestration and data extraction
-- **Selectors**: YAML-only, no Python logic
-
-### 2. Error Handling
-
-```python
-async def scrape(self, **kwargs):
-    try:
-        results = await self.selector_engine.extract_all(self.page, "results")
-        return {"results": results}
-    except Exception as e:
-        self.logger.error("Scraping failed", error=str(e))
-        return {"results": [], "error": str(e)}
-```
-
-### 3. Performance
-
-- Use selector engine caching
-- Implement appropriate timeouts
-- Handle network errors gracefully
-
-### 4. Testing
-
-```python
-# Test your scraper
-from src.sites.base.contract_validator import validate_and_create_scraper
-
-# This will validate contracts during instantiation
-scraper = validate_and_create_scraper(YourScraper, page, selector_engine)
-```
-
-## Examples
-
-See the example implementations:
-
-- `src/sites/wikipedia/` - Simple scraper with search functionality
-- `src/sites/flashscore/` - More complex scraper with multiple flows
+---
 
 ## Troubleshooting
 
-### Common Issues
+**Empty article content:**
+Wikipedia's page structure can vary by article type (disambiguation pages, redirects, stub articles). Run with `--verbose` to see which selectors are resolving and which are falling back.
 
-1. **Missing Required Files**: Ensure all required files exist in your scraper directory
-2. **Invalid YAML Syntax**: Check YAML indentation and structure
-3. **Wrong Method Signatures**: Follow the exact method signatures from BaseSiteScraper
-4. **Configuration Errors**: Validate SITE_CONFIG structure and values
+**Infobox not parsed:**
+Not all articles have infoboxes. The `InfoboxData` field will be `None` for articles without one — this is expected behaviour.
 
-### Debug Mode
-
-Enable debug logging:
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Validation will show detailed debug information
-results = registry.validate_all()
-```
-
-### Getting Help
-
-- Check the [validation troubleshooting guide](../../docs/validation-troubleshooting.md)
-- Review example implementations
-- Enable debug logging for detailed error information
-
-## Contributing
-
-When adding new scrapers:
-
-1. Copy the template and follow the structure
-2. Implement all required methods with correct signatures
-3. Add comprehensive YAML selectors
-4. Test with the validation system
-5. Register in the central registry
-
-## Performance
-
-- **Startup Validation**: <2 seconds for all scrapers
-- **Scraper Instantiation**: <100ms per scraper
-- **Validation Caching**: 5-minute cache for repeated validations
-- **Memory Usage**: Minimal overhead per scraper
-
-## Security
-
-- Input validation for all configuration
-- YAML parsing with safe loader
-- No code execution from configuration files
-- Sandboxed scraper execution
-
-## License
-
-This framework is part of the Scorewise Scraper project. See the main project license for details.
+**Search returning no results:**
+Verify the search term matches Wikipedia's expected input format. Quoted phrases and special characters may need encoding.
