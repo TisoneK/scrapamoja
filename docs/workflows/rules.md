@@ -12,6 +12,13 @@ This document defines universal rules that apply to ALL workflows in the Scrapam
 - Do NOT write "Reading file..."
 - Execute silently, present results directly.
 
+**🚨 FUNDAMENTAL RULE: MUST read file before editing it**
+- **ALWAYS**: Read file content first to understand current state
+- **ANALYZE**: Know what exists before making changes
+- **PLAN**: Edit based on actual content, not assumptions
+- **PREVENT**: Duplicates, conflicts, broken structure
+- **CONSEQUENCE**: Editing without reading = HIGH severity issue logged
+
 **🚨 CRITICAL: USE LETTERS FOR OPTIONS, NUMBERS FOR STEPS 🚨**
 
 **USER OPTIONS (Always use letters):**
