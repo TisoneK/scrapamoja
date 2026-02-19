@@ -21,6 +21,33 @@ This document defines how LLM should behave when assisting with filling referenc
 - **Rationale**: Reference files are used as authoritative documentation
 - **Example**: Include proper descriptions, examples, and usage notes
 
+### Assumption Guidelines
+
+**🎯 BALANCED APPROACH TO ASSUMPTIONS:**
+
+**Core Principle:** Avoid assumptions, BUT recognize when they're safe and necessary.
+
+**When to AVOID Assumptions:**
+- ❌ User-specific context (team names, URLs, match details)
+- ❌ Unusual HTML structures or edge cases
+- ❌ When user has provided specific contradictory information
+- ❌ Complex selector patterns that vary significantly
+
+**When SAFE Assumptions are ACCEPTABLE:**
+- ✅ Standard HTML patterns (common navigation structures)
+- ✅ Established naming conventions from existing files
+- ✅ Documentation style matching completed reference files
+- ✅ Common selector attributes (`data-testid`, `class` patterns)
+- ✅ Template structure following README guidelines
+
+**Decision Process:**
+1. **First**: Ask for clarification if uncertain
+2. **If no response**: Make safe assumption based on patterns
+3. **Document**: Note what was assumed and why
+4. **Proceed**: Continue with transparent assumption
+
+This balances safety with practical workflow efficiency.
+
 ## Response Guidelines
 
 ### Tone and Style
@@ -30,7 +57,7 @@ This document defines how LLM should behave when assisting with filling referenc
 
 ### Content Requirements
 - **Must include**: Complete metadata, HTML samples, descriptions, examples
-- **Must avoid**: Incomplete information, placeholder content, assumptions
+- **Must avoid**: Incomplete information, placeholder content
 - **Preferred structure**:
   1. Metadata section (complete)
   2. HTML sample (well-formatted)
@@ -71,6 +98,15 @@ Before sending any response with options, ask yourself:
 
 If answer to any question is "No", FIX IT before sending.
 
+**⚡ QUICK CHECK - After Each User Response:**
+```
+□ Did user correct me?      → Log issue → Continue corrected
+□ Did user redirect me?     → Log issue → Continue redirected  
+□ Did I assume wrong?       → Log issue → Ask for clarification
+□ Did I miss something?     → Log issue → Address the gap
+□ Did I use wrong format? → Log issue → Fix immediately
+```
+
 **GATE REQUIREMENT:**
 All workflow templates must include ⚠️ GATE markers before any user options:
 ```
@@ -87,11 +123,6 @@ This ensures LLM self-validates before presenting options to users.
 - **Conflicting templates**: When multiple templates could apply
 - **Ambiguous requirements**: When specific formatting is unclear
 - **Edge cases**: When encountering unusual HTML structures
-
-### When to Make Assumptions
-- **Standard patterns**: Safe to assume common HTML structures
-- **Naming conventions**: Safe to follow established naming patterns
-- **Documentation style**: Safe to match existing reference documentation
 
 ## Error Handling
 
@@ -225,11 +256,11 @@ Track LLM failures, ambiguities, and user corrections to identify patterns and i
 
 ### Severity Levels
 
-| Severity | When to Use |
-|----------|-------------|
-| `low` | Minor inconvenience, workflow continued with small adjustment |
-| `medium` | Required significant user intervention, slowed workflow |
-| `high` | Blocked workflow progress, required restart or major correction |
+| Severity | When to Use | Concrete Examples |
+|----------|-------------|-------------------|
+| `low` | Minor inconvenience, workflow continued with small adjustment | User corrected minor formatting, LLM self-corrected quickly |
+| `medium` | Required significant user intervention, slowed workflow | User had to redirect LLM approach, multiple clarifications needed |
+| `high` | Blocked workflow progress, required restart or major correction | LLM generated wrong content type, user had to restart entire step |
 
 ### Issue Logging Process
 
@@ -238,6 +269,18 @@ Track LLM failures, ambiguities, and user corrections to identify patterns and i
 3. **Log**: Create issue entry in `issues.json`
 4. **Update**: Increment statistics in `issues.json`
 5. **Continue**: Resume workflow with corrected behavior
+
+**⚠️ FALLBACK IF FILE WRITE UNAVAILABLE:**
+If unable to write to `issues.json` (no file access), immediately surface the issue inline:
+
+```
+🚨 **ISSUE DETECTED** - Unable to log to file
+Type: {issue_type} | Severity: {severity}
+Description: {what went wrong}
+User Action: {how user resolved it}
+```
+
+Then continue workflow. This ensures transparency even without logging capability.
 
 ### Issue Entry Format
 
@@ -282,15 +325,6 @@ Track LLM failures, ambiguities, and user corrections to identify patterns and i
   "resolution": "Corrected to enumerate tabs and request individually",
   "suggested_improvement": "Workflow should enumerate tabs before requesting HTML"
 }
-```
-
-### Quick Check After Each User Response
-
-```
-□ Did user correct me?      → Log issue → Continue corrected
-□ Did user redirect me?     → Log issue → Continue redirected  
-□ Did I assume wrong?       → Log issue → Ask for clarification
-□ Did I miss something?     → Log issue → Address the gap
 ```
 
 ---
