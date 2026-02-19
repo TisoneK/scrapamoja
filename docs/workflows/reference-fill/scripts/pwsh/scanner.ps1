@@ -108,10 +108,19 @@ try {
     foreach ($file in $files) {
         $content = Get-Content $file.FullName -Raw -ErrorAction SilentlyContinue
         
+        # Resolve InputPath to absolute path for comparison
+        $resolvedInputPath = (Resolve-Path $InputPath -ErrorAction SilentlyContinue).Path
+        if (-not $resolvedInputPath) {
+            $resolvedInputPath = $InputPath
+        }
+        
+        # Calculate relative path properly
+        $relativePath = $file.FullName.Replace($resolvedInputPath, "").TrimStart('\', '/')
+        
         $fileInfo = @{
             "path" = $file.FullName
             "name" = $file.Name
-            "relative_path" = $file.FullName.Replace($InputPath, "").TrimStart('\', '/')
+            "relative_path" = $relativePath
             "size_bytes" = $file.Length
             "last_modified" = $file.LastWriteTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
             "status" = "complete"
@@ -141,6 +150,12 @@ try {
         if ($relativePath -match "scheduled") { $fileInfo.category = "scheduled" }
         elseif ($relativePath -match "live") { $fileInfo.category = "live" }
         elseif ($relativePath -match "finished") { $fileInfo.category = "finished" }
+        
+        # Extract sport from path (e.g., "live\basketball\h2h\secondary.md" -> "basketball")
+        $fileInfo.sport = "unknown"
+        if ($relativePath -match "(live|scheduled|finished)[\\/](.+?)[\\/]") {
+            $fileInfo.sport = $matches[2]
+        }
         
         $fileInfo.tab_level = "unknown"
         if ($relativePath -match "primary") { $fileInfo.tab_level = "primary" }

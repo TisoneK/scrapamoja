@@ -126,5 +126,12 @@
                                            "Start fill mode to populate reference files with HTML samples",
                                            "Use validation mode to check template compliance"
                                        ]
-               }
+               },
+    "issues_tracking":  {
+                            "enabled":  true,
+                            "issues_file":  "docs/workflows/reference-fill/issues.json",
+                            "template_file":  "docs/workflows/reference-fill/templates/reference-fill.issues.md",
+                            "total_issues_logged":  0,
+                            "last_issue_timestamp":  null
+                        }
 }

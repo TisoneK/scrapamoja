@@ -73,12 +73,53 @@ reference-fill/
 ├── start.md              # Entry point with mode selection
 ├── reference-fill.md     # Main workflow documentation
 ├── README.md             # This overview file
-├── rules.md              # LLM behavior rules
+├── rules.md              # LLM behavior rules (includes issue tracking)
 ├── status.json           # Progress tracking
+├── issues.json           # LLM failure/ambiguity tracking
 ├── scripts/              # Automation scripts
 ├── templates/            # Reference file templates
+│   ├── reference-fill.discovery.md
+│   ├── reference-fill.fill.md
+│   ├── reference-fill.validate.md
+│   ├── reference-fill.status.md
+│   └── reference-fill.issues.md  # Issue logging template
 └── examples/             # Sample outputs
 ```
+
+## Issue Tracking
+
+This workflow includes an **Issue Tracking System** to capture LLM failures, ambiguities, and user corrections.
+
+### Purpose
+
+- Track when the LLM makes wrong assumptions or needs correction
+- Identify patterns to improve workflow templates
+- Provide data for continuous improvement
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| [`issues.json`](issues.json) | Database of logged issues |
+| [`templates/reference-fill.issues.md`](templates/reference-fill.issues.md) | Issue logging template |
+
+### Issue Types
+
+| Type | Description |
+|------|-------------|
+| `ambiguity` | LLM made wrong assumption |
+| `failure` | LLM failed to complete task |
+| `correction` | User corrected LLM behavior |
+| `clarification` | Multiple clarifications needed |
+
+### When Issues Are Logged
+
+- User corrects or redirects LLM behavior
+- LLM makes wrong assumptions
+- LLM needs multiple clarifications on same step
+- Manual intervention required
+
+See [`rules.md`](rules.md) for detailed issue logging procedures.
 
 ## Usage Examples
 

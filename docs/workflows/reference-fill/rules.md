@@ -38,6 +38,22 @@ This document defines how LLM should behave when assisting with filling referenc
   4. Usage examples
   5. Notes and considerations
 
+### Response Format Rules
+
+**CRITICAL:** Always use numbered lists for user options, never bullet points.
+
+**Correct:**
+1. Option one
+2. Option two
+3. Option three
+
+**Incorrect:**
+- Option one
+- Option two
+- Option three
+
+**Rationale:** Numbered options allow users to respond with just the number, speeding up interaction.
+
 ## Decision Making
 
 ### When to Ask for Clarification
@@ -158,6 +174,97 @@ This shows the score.
 - **Success metrics**: Reference files are complete and usable
 - **Failure indicators**: Missing sections, incorrect formatting
 - **Improvement process**: Update rules based on validation results
+
+## Issue Tracking
+
+### Purpose
+Track LLM failures, ambiguities, and user corrections to identify patterns and improve the workflow over time.
+
+### Issue Tracking File
+- **Location**: `docs/workflows/reference-fill/issues.json`
+- **Template**: `docs/workflows/reference-fill/templates/reference-fill.issues.md`
+
+### When to Log an Issue
+
+⚠️ **MANDATORY**: Log an issue when ANY of the following occur:
+
+| Trigger | Type | Description |
+|---------|------|-------------|
+| User corrects your behavior | `correction` | User says "No, do it this way..." |
+| User redirects your approach | `correction` | User says "Ask for HTML one tab at a time" |
+| You made a wrong assumption | `ambiguity` | You assumed something that wasn't true |
+| You failed to complete a task | `failure` | You couldn't finish what was asked |
+| You needed 2+ clarifications | `clarification` | Multiple questions on same step |
+
+### Severity Levels
+
+| Severity | When to Use |
+|----------|-------------|
+| `low` | Minor inconvenience, workflow continued with small adjustment |
+| `medium` | Required significant user intervention, slowed workflow |
+| `high` | Blocked workflow progress, required restart or major correction |
+
+### Issue Logging Process
+
+1. **Detect**: Recognize when user has corrected or redirected you
+2. **Pause**: Stop current action before continuing
+3. **Log**: Create issue entry in `issues.json`
+4. **Update**: Increment statistics in `issues.json`
+5. **Continue**: Resume workflow with corrected behavior
+
+### Issue Entry Format
+
+```json
+{
+  "id": "issue_YYYYMMDD_XXX",
+  "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+  "type": "ambiguity|failure|correction|clarification",
+  "severity": "low|medium|high",
+  "trigger": "user_correction|multiple_clarifications|incomplete_response|incorrect_response",
+  "context": {
+    "mode": "fill|discovery|validate|status",
+    "step": "step_name",
+    "target_file": "path/to/file.md",
+    "source_url": "https://..."
+  },
+  "description": "What went wrong",
+  "user_action": "What the user did to resolve",
+  "llm_behavior": "What the LLM did incorrectly",
+  "resolution": "How the issue was resolved",
+  "suggested_improvement": "Potential workflow improvement"
+}
+```
+
+### Example
+
+```json
+{
+  "id": "issue_20260219_001",
+  "timestamp": "2026-02-19T07:00:00Z",
+  "type": "correction",
+  "severity": "medium",
+  "trigger": "user_correction",
+  "context": {
+    "mode": "fill",
+    "step": "html_collection",
+    "target_file": "finished/basketball/odds/tertiary.md"
+  },
+  "description": "Requested HTML content without specifying which tab",
+  "user_action": "Instructed to request HTML one tab at a time",
+  "llm_behavior": "Asked for HTML for multiple tabs at once",
+  "resolution": "Corrected to enumerate tabs and request individually",
+  "suggested_improvement": "Workflow should enumerate tabs before requesting HTML"
+}
+```
+
+### Quick Check After Each User Response
+
+```
+□ Did user correct me?      → Log issue → Continue corrected
+□ Did user redirect me?     → Log issue → Continue redirected  
+□ Did I assume wrong?       → Log issue → Ask for clarification
+□ Did I miss something?     → Log issue → Address the gap
+```
 
 ---
 

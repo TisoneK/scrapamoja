@@ -1,0 +1,40 @@
+{
+    "workflow": "reference-fill",
+    "version": "1.0.0",
+    "created": "2026-02-19T07:05:00Z",
+    "last_updated": "2026-02-19T07:05:00Z",
+    "issues": [],
+    "statistics": {
+        "total_issues": 0,
+        "by_type": {
+            "ambiguity": 0,
+            "failure": 0,
+            "correction": 0,
+            "clarification": 0
+        },
+        "by_severity": {
+            "low": 0,
+            "medium": 0,
+            "high": 0
+        }
+    },
+    "schema_reference": {
+        "issue_types": {
+            "ambiguity": "LLM encountered unclear situation and made wrong assumption",
+            "failure": "LLM failed to complete a task correctly",
+            "correction": "User had to redirect or correct LLM behavior",
+            "clarification": "LLM requested clarification multiple times"
+        },
+        "triggers": {
+            "user_correction": "User explicitly corrected LLM behavior",
+            "multiple_clarifications": "LLM asked for clarification 2+ times on same topic",
+            "incomplete_response": "LLM response was incomplete, required manual intervention",
+            "incorrect_response": "LLM provided factually incorrect response"
+        },
+        "severity_levels": {
+            "low": "Minor inconvenience, workflow continued with small adjustment",
+            "medium": "Required significant user intervention, slowed workflow",
+            "high": "Blocked workflow progress, required restart or major correction"
+        }
+    }
+}
