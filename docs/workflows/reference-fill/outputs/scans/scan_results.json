@@ -6,290 +6,307 @@
                                                    "reference_type":  "flashscore"
                                                },
                           "note":  "This scanner lists all files. LLM must verify each file\u0027s status by reading it.",
-                          "scan_date":  "2026-02-18T19:09:35Z",
+                          "scan_date":  "2026-02-19T11:31:38Z",
                           "script_version":  "2.0.0",
-                          "scan_id":  "scan_20260218_190935"
+                          "scan_id":  "scan_20260219_113138"
                       },
     "files":  [
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\README.md",
-                      "last_modified":  "2026-02-18T19:03:36Z",
-                      "category":  "unknown",
-                      "name":  "README.md",
-                      "tab_level":  "unknown",
-                      "status":  "needs_fill",
-                      "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\README.md",
-                      "size_bytes":  9742
-                  },
-                  {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\primary_tabs.md",
+                      "relative_path":  "finished\\basketball\\primary_tabs.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "finished",
                       "name":  "primary_tabs.md",
                       "tab_level":  "primary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\primary_tabs.md",
-                      "size_bytes":  4077
+                      "size_bytes":  4077,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\h2h\\secondary.md",
+                      "relative_path":  "finished\\basketball\\h2h\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "finished",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\h2h\\secondary.md",
-                      "size_bytes":  2818
+                      "size_bytes":  2818,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\h2h\\tertiary.md",
+                      "relative_path":  "finished\\basketball\\h2h\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "finished",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
-                      "status":  "complete",
+                      "status":  "unknown",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\h2h\\tertiary.md",
-                      "size_bytes":  1273
+                      "size_bytes":  1273,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\match\\secondary.md",
+                      "relative_path":  "finished\\basketball\\match\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "finished",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\match\\secondary.md",
-                      "size_bytes":  5340
+                      "size_bytes":  5340,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\match\\tertiary.md",
+                      "relative_path":  "finished\\basketball\\match\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "finished",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
-                      "status":  "complete",
+                      "status":  "unknown",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\match\\tertiary.md",
-                      "size_bytes":  1218
+                      "size_bytes":  1218,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\odds\\secondary.md",
+                      "relative_path":  "finished\\basketball\\odds\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "finished",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\odds\\secondary.md",
-                      "size_bytes":  4691
+                      "size_bytes":  4691,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\odds\\tertiary.md",
+                      "relative_path":  "finished\\basketball\\odds\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "finished",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\odds\\tertiary.md",
-                      "size_bytes":  9743
+                      "size_bytes":  9743,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\standings\\secondary.md",
+                      "relative_path":  "finished\\basketball\\standings\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "finished",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\standings\\secondary.md",
-                      "size_bytes":  2357
+                      "size_bytes":  2357,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\standings\\tertiary.md",
+                      "relative_path":  "finished\\basketball\\standings\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "finished",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\finished\\basketball\\standings\\tertiary.md",
-                      "size_bytes":  4087
+                      "size_bytes":  4087,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\primary_tabs.md",
+                      "relative_path":  "live\\basketball\\primary_tabs.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "live",
                       "name":  "primary_tabs.md",
                       "tab_level":  "primary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\primary_tabs.md",
-                      "size_bytes":  4040
+                      "size_bytes":  4040,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\h2h\\secondary.md",
+                      "relative_path":  "live\\basketball\\h2h\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "live",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\h2h\\secondary.md",
-                      "size_bytes":  645
+                      "size_bytes":  645,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\h2h\\tertiary.md",
+                      "relative_path":  "live\\basketball\\h2h\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "live",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\h2h\\tertiary.md",
-                      "size_bytes":  847
+                      "size_bytes":  847,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\match\\secondary.md",
+                      "relative_path":  "live\\basketball\\match\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "live",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\match\\secondary.md",
-                      "size_bytes":  4104
+                      "size_bytes":  4104,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\match\\tertiary.md",
+                      "relative_path":  "live\\basketball\\match\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:36Z",
                       "category":  "live",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\match\\tertiary.md",
-                      "size_bytes":  1196
+                      "size_bytes":  1196,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\odds\\secondary.md",
+                      "relative_path":  "live\\basketball\\odds\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "live",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\odds\\secondary.md",
-                      "size_bytes":  2059
+                      "size_bytes":  2059,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\odds\\tertiary.md",
+                      "relative_path":  "live\\basketball\\odds\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "live",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\odds\\tertiary.md",
-                      "size_bytes":  2190
+                      "size_bytes":  2190,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\standings\\secondary.md",
+                      "relative_path":  "live\\basketball\\standings\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "live",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\standings\\secondary.md",
-                      "size_bytes":  661
+                      "size_bytes":  661,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\standings\\tertiary.md",
+                      "relative_path":  "live\\basketball\\standings\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "live",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\live\\basketball\\standings\\tertiary.md",
-                      "size_bytes":  836
+                      "size_bytes":  836,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\primary_tabs.md",
+                      "relative_path":  "scheduled\\basketball\\primary_tabs.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "scheduled",
                       "name":  "primary_tabs.md",
                       "tab_level":  "primary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\primary_tabs.md",
-                      "size_bytes":  4006
+                      "size_bytes":  4006,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\h2h\\secondary.md",
+                      "relative_path":  "scheduled\\basketball\\h2h\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "scheduled",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\h2h\\secondary.md",
-                      "size_bytes":  629
+                      "size_bytes":  629,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\h2h\\tertiary.md",
+                      "relative_path":  "scheduled\\basketball\\h2h\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "scheduled",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\h2h\\tertiary.md",
-                      "size_bytes":  849
+                      "size_bytes":  849,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\match\\secondary.md",
+                      "relative_path":  "scheduled\\basketball\\match\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "scheduled",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\match\\secondary.md",
-                      "size_bytes":  3160
+                      "size_bytes":  3160,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\match\\tertiary.md",
+                      "relative_path":  "scheduled\\basketball\\match\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "scheduled",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\match\\tertiary.md",
-                      "size_bytes":  855
+                      "size_bytes":  855,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\odds\\secondary.md",
+                      "relative_path":  "scheduled\\basketball\\odds\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "scheduled",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "complete",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\odds\\secondary.md",
-                      "size_bytes":  5420
+                      "size_bytes":  5420,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\odds\\tertiary.md",
+                      "relative_path":  "scheduled\\basketball\\odds\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "scheduled",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\odds\\tertiary.md",
-                      "size_bytes":  2254
+                      "size_bytes":  2254,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\standings\\secondary.md",
+                      "relative_path":  "scheduled\\basketball\\standings\\secondary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "scheduled",
                       "name":  "secondary.md",
                       "tab_level":  "secondary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\standings\\secondary.md",
-                      "size_bytes":  655
+                      "size_bytes":  655,
+                      "sport":  "basketball"
                   },
                   {
-                      "relative_path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\standings\\tertiary.md",
+                      "relative_path":  "scheduled\\basketball\\standings\\tertiary.md",
                       "last_modified":  "2026-02-18T19:03:37Z",
                       "category":  "scheduled",
                       "name":  "tertiary.md",
                       "tab_level":  "tertiary",
                       "status":  "needs_fill",
                       "path":  "C:\\Users\\tison\\Dev\\scorewise\\scrapamoja\\docs\\references\\flashscore\\html_samples\\scheduled\\basketball\\standings\\tertiary.md",
-                      "size_bytes":  831
+                      "size_bytes":  831,
+                      "sport":  "basketball"
                   }
               ]
 }

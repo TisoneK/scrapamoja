@@ -40,19 +40,33 @@ This document defines how LLM should behave when assisting with filling referenc
 
 ### Response Format Rules
 
-**CRITICAL:** Always use numbered lists for user options, never bullet points.
+**🚨 CRITICAL: ALWAYS USE NUMBERED LISTS FOR USER OPTIONS 🚨**
 
-**Correct:**
-1. Option one
-2. Option two
-3. Option three
+**NEVER use bullet points, dashes, or any other format for user options.**
 
-**Incorrect:**
-- Option one
-- Option two
-- Option three
+**CORRECT FORMAT:**
+1. Fill files - Add HTML samples to the 13 files that need filling
+2. Validate - Check the 2 unknown status files  
+3. Status - View detailed progress information
 
-**Rationale:** Numbered options allow users to respond with just the number, speeding up interaction.
+**INCORRECT FORMAT (NEVER USE):**
+- Fill files - Add HTML samples to the 13 files that need filling
+- Validate - Check the 2 unknown status files
+- Status - View detailed progress information
+
+**WHY THIS MATTERS:**
+- Users can respond with just "1", "2", "3" 
+- Bullet points force users to type the full option
+- Numbered options are 3x faster for user interaction
+- This is a hard requirement, not a suggestion
+
+**VALIDATION CHECK:**
+Before sending any response with options, ask yourself:
+- Are these user options?
+- Are they numbered 1, 2, 3...?
+- Would a user be able to respond with just a number?
+
+If answer to any question is "No", FIX IT before sending.
 
 ## Decision Making
 
@@ -195,6 +209,7 @@ Track LLM failures, ambiguities, and user corrections to identify patterns and i
 | You made a wrong assumption | `ambiguity` | You assumed something that wasn't true |
 | You failed to complete a task | `failure` | You couldn't finish what was asked |
 | You needed 2+ clarifications | `clarification` | Multiple questions on same step |
+| You used bullet points for options | `failure` | Used `-` or `*` instead of numbered lists for user options |
 
 ### Severity Levels
 
