@@ -31,8 +31,8 @@ F) **Complete Analysis** — Comprehensive investigation
 
 G) **Snapshot Analysis** — Performance and patterns
 
-⚠️ GATE: Validate format before sending - MUST be lettered A, B, C...
-🔍 **CRITICAL CHECK:** Are these options lettered? If not, FIX before sending.
+<!-- ⚠️ GATE: Validate format before sending - MUST be lettered A, B, C... -->
+<!-- 🔍 CRITICAL CHECK: Are these options lettered? If not, FIX before sending. -->
 
 ---
 

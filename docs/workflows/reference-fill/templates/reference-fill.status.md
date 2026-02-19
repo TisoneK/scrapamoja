@@ -174,8 +174,8 @@ A) Dive deeper into any specific area?
 B) Help you switch to a different mode?
 C) Generate a detailed report?
 ```
-⚠️ GATE: Validate format before sending - MUST be lettered A, B, C...
-🔍 **CRITICAL CHECK:** Are these options lettered? If not, FIX before sending.
+<!-- ⚠️ GATE: Validate format before sending - MUST be lettered A, B, C... -->
+<!-- 🔍 **CRITICAL CHECK:** Are these options lettered? If not, FIX before sending. -->
 
 **For Specific Issues:**
 ```

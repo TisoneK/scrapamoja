@@ -80,8 +80,8 @@ A) Auto-fix the simple issues?
 B) Guide you through manual fixes?
 C) Skip this file for now?
 ```
-⚠️ GATE: Validate format before sending - MUST be lettered A, B, C...
-🔍 **CRITICAL CHECK:** Are these options lettered? If not, FIX before sending.
+<!-- ⚠️ GATE: Validate format before sending - MUST be lettered A, B, C... -->
+<!-- 🔍 **CRITICAL CHECK:** Are these options lettered? If not, FIX before sending. -->
 
 ## Validation Criteria
 
