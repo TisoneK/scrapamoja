@@ -170,12 +170,12 @@ Based on this information, I recommend:
 {provide actionable recommendations}
 
 Would you like me to:
-1. Dive deeper into any specific area?
-2. Help you switch to a different mode?
-3. Generate a detailed report?
+A) Dive deeper into any specific area?
+B) Help you switch to a different mode?
+C) Generate a detailed report?
 ```
-⚠️ GATE: Validate format before sending - MUST be numbered 1, 2, 3...
-🔍 **CRITICAL CHECK:** Are these options numbered? If not, FIX before sending.
+⚠️ GATE: Validate format before sending - MUST be lettered A, B, C...
+🔍 **CRITICAL CHECK:** Are these options lettered? If not, FIX before sending.
 
 **For Specific Issues:**
 ```

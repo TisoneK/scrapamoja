@@ -40,39 +40,42 @@ This document defines how LLM should behave when assisting with filling referenc
 
 ### Response Format Rules
 
-**🚨 CRITICAL: ALWAYS USE NUMBERED LISTS FOR USER OPTIONS 🚨**
+**🚨 CRITICAL: USE LETTERS FOR OPTIONS, NUMBERS FOR STEPS 🚨**
 
-**NEVER use bullet points, dashes, or any other format for user options.**
+**USER OPTIONS (Always use letters):**
+A) Fill files - Add HTML samples to 13 files that need filling
+B) Validate - Check 2 unknown status files  
+C) Status - View detailed progress information
 
-**CORRECT FORMAT:**
-1. Fill files - Add HTML samples to the 13 files that need filling
-2. Validate - Check the 2 unknown status files  
-3. Status - View detailed progress information
+**PROCEDURES/STEPS (Always use numbers):**
+1. First, scan the directory
+2. Second, analyze results
+3. Third, present findings
 
-**INCORRECT FORMAT (NEVER USE):**
-- Fill files - Add HTML samples to the 13 files that need filling
-- Validate - Check the 2 unknown status files
-- Status - View detailed progress information
+**NEVER USE:**
+- Numbers for user options: 1. Option, 2. Option
+- Letters for steps: a) First step, b) Second step
 
 **WHY THIS MATTERS:**
-- Users can respond with just "1", "2", "3" 
-- Bullet points force users to type the full option
-- Numbered options are 3x faster for user interaction
-- This is a hard requirement, not a suggestion
+- Users can respond with just "A", "B", "C" (faster than typing)
+- Numbers clearly indicate procedural steps/sequences
+- Letters clearly indicate user choices/selections
+- Reduces confusion between actions and choices
 
 **VALIDATION CHECK:**
 Before sending any response with options, ask yourself:
 - Are these user options?
-- Are they numbered 1, 2, 3...?
-- Would a user be able to respond with just a number?
+- Are they lettered A, B, C...?
+- Are procedural steps numbered 1, 2, 3...?
+- Would a user be able to respond with just a letter?
 
 If answer to any question is "No", FIX IT before sending.
 
 **GATE REQUIREMENT:**
 All workflow templates must include ⚠️ GATE markers before any user options:
 ```
-⚠️ GATE: Validate format before sending - MUST be numbered 1, 2, 3...
-🔍 **CRITICAL CHECK:** Are these options numbered? If not, FIX before sending.
+⚠️ GATE: Validate format before sending - MUST be lettered A, B, C...
+🔍 **CRITICAL CHECK:** Are these options lettered? If not, FIX before sending.
 ```
 
 This ensures LLM self-validates before presenting options to users.
@@ -218,7 +221,7 @@ Track LLM failures, ambiguities, and user corrections to identify patterns and i
 | You made a wrong assumption | `ambiguity` | You assumed something that wasn't true |
 | You failed to complete a task | `failure` | You couldn't finish what was asked |
 | You needed 2+ clarifications | `clarification` | Multiple questions on same step |
-| You used bullet points for options | `failure` | Used `-` or `*` instead of numbered lists for user options |
+| You used wrong format for options | `failure` | Used numbers, bullets, or wrong format instead of letters A, B, C for user options |
 
 ### Severity Levels
 
