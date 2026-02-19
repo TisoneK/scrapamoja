@@ -74,7 +74,9 @@ Show progress organized by categories:
 🏀 Match State Progress
 
 **Scheduled Matches:** {total} total, {need} need attention
-**Live Matches:** {total} total, {need} need attention  
+
+**Live Matches:** {total} total, {need} need attention
+
 **Finished Matches:** {total} total, {need} need attention
 ```
 

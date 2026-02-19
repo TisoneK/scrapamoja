@@ -6,9 +6,9 @@
                                                    "reference_type":  "flashscore"
                                                },
                           "note":  "This scanner lists all files. LLM must verify each file\u0027s status by reading it.",
-                          "scan_date":  "2026-02-19T15:24:53Z",
+                          "scan_date":  "2026-02-19T15:29:29Z",
                           "script_version":  "2.0.0",
-                          "scan_id":  "scan_20260219_152453"
+                          "scan_id":  "scan_20260219_152929"
                       },
     "files":  [
                   {

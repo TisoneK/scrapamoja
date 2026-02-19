@@ -42,8 +42,14 @@ Read: `docs/workflows/reference-fill/status.json`
 Skip any files already marked "completed".
 
 ### Step 2: Select File
+<!-- ORDER: 1) Status → 2) Recommendations → 3) File list → 4) Prompt -->
 ```
-Which reference file would you like to fill?
+📊 Fill Mode Status
+
+**Current Progress:**
+- Total files needing attention: {number}
+- High priority files: {number}
+- Recommended next: {file}
 
 🎯 Recommended (highest impact):
 
@@ -54,6 +60,8 @@ B) {second_priority_file} - {reason}
 📋 All files needing attention:
 
 {present remaining files with letters C) D) E)...}
+
+Each file on its own line with blank line separation.
 
 Please select a letter or I can suggest one.
 ```
