@@ -102,6 +102,8 @@ Based on status, provide actionable recommendations:
 ```
 
 ### 6. Present User Options
+**ABSOLUTE REQUIREMENT: Present EXACTLY these options - NO VARIATIONS ALLOWED**
+
 Present exactly these options to user:
 
 **Options Format:**
@@ -114,10 +116,26 @@ B) Validate - Check {number} unknown status files
 C) Status - View detailed progress information
 ```
 
-<!-- ⚠️ CRITICAL: Options MUST be exactly as shown above -->
-<!-- DO NOT rename, reword, or change option descriptions -->
-<!-- Option C MUST be exactly: C) Status - View detailed progress information -->
-<!-- DO NOT add "Generate detailed report" or any other variation -->
+**🚨 ABSOLUTE ENFORCEMENT:**
+- **MUST** use exact text shown above
+- **FORBIDDEN**: Any rewording, renaming, or variations
+- **FORBIDDEN**: "Generate detailed report" or any other option text
+- **MANDATORY**: Option C must be exactly "C) Status - View detailed progress information"
+- **VIOLATION**: Any deviation = HIGH severity issue auto-logged
+
+**⚠️ GATE: Before sending response, validate:**
+1. Are options exactly as shown above?
+2. Is Option C exactly "C) Status - View detailed progress information"?
+3. Are there any variations or rewordings?
+4. If NO to any question, FIX before sending.
+
+**TEMPLATE COMPLIANCE CHECK:**
+□ Options match exactly?
+□ No variations added?
+□ Option C is exact text?
+□ No rewording or renaming?
+
+If any box is unchecked, DO NOT SEND RESPONSE.
 
 ## Status Commands and Scripts
 
