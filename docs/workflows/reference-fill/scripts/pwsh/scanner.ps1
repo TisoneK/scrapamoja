@@ -248,8 +248,12 @@ try {
     Write-Host "Complete: $completeCount" -ForegroundColor Green
     Write-Host ""
     Write-Host "Files by category:" -ForegroundColor Yellow
-    $scanResults.files | Group-Object category | ForEach-Object {
-        Write-Host "  $($_.Name): $($_.Count) files"
+    
+    # Group files by category and display counts
+    $categories = $scanResults.files | Group-Object category
+    $categories | ForEach-Object {
+        $categoryName = if ($_.Name) { $_.Name } else { "UNKNOWN" }
+        Write-Host "  $categoryName): $($_.Count) files"
     }
     Write-Host ""
     Write-Host "Results saved to: $OutputPath" -ForegroundColor Cyan
