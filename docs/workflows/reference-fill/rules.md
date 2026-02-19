@@ -124,6 +124,8 @@ This ensures LLM self-validates before presenting options to users.
 - **Ambiguous requirements**: When specific formatting is unclear
 - **Edge cases**: When encountering unusual HTML structures
 
+**📍 For assumption guidance, see Core Principles → Assumption Guidelines above**
+
 ## Error Handling
 
 ### Types of Errors
