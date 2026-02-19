@@ -126,22 +126,36 @@ try {
             "status" = "complete"
         }
         
-        # Check for placeholders FIRST - any file with placeholders needs filling
+        # Check for documentation files FIRST - these should be marked as complete
+        if ($file.Name.ToLower() -eq "readme.md" -or 
+            $relativePath -match "documentation|docs|guide|manual" -or
+            $content -match "# Documentation|# Guide|# Manual") {
+            $fileInfo.status = "complete"
+        }
+        # Check for placeholders - any file with placeholders needs filling
         # Specific patterns: *() text OR placeholder comments (Paste/NEEDS_FILL/Add/Collect/Provide/Enter/Fill)
-        if (($content -match "\*\([^)]+\)\*") -or ($content -match "<!-- (Paste|NEEDS_FILL|Add|Collect|Provide|Enter|Fill|TODO|Add URL|Add HTML|placeholder).+ -->")) {
+        elseif (($content -match "\*\([^)]+\)\*") -or ($content -match "<!-- (Paste|NEEDS_FILL|Add|Collect|Provide|Enter|Fill|TODO|Add URL|Add HTML|placeholder).+ -->")) {
             $fileInfo.status = "needs_fill"
         }
         # Check for NEEDS_FILL marker
         elseif ($content -match "<!-- NEEDS_FILL -->") {
             $fileInfo.status = "needs_fill"
         }
-        # Check if file is empty or very small
-        elseif ($file.Length -lt 200) {
+        # Check if file is empty or very small (but not documentation files)
+        elseif ($file.Length -lt 200 -and $file.Name.ToLower() -ne "readme.md") {
             $fileInfo.status = "needs_fill"
         }
         # Check for actual HTML content - must have HTML tags like <div, <a, <button, etc.
         elseif (($content -match "```html") -and ($content -match "<(div|a|button|span|ul|li|section)")) {
             $fileInfo.status = "complete"
+        }
+        # Documentation files with substantial content are complete
+        elseif ($file.Name.ToLower() -eq "readme.md" -and $file.Length -gt 1000) {
+            $fileInfo.status = "complete"
+        }
+        # Files that don't fit other categories and aren't documentation are unknown
+        else {
+            $fileInfo.status = "unknown"
         }
         
         # Extract path info for categorization
