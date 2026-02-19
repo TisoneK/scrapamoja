@@ -4,7 +4,11 @@
 
 This document defines how LLM should behave when assisting with filling reference files according to templates and conventions.
 
-## Core Principles
+## Inheritance
+
+**INHERITS GENERAL RULES FROM:** `docs/workflows/rules.md`
+
+## Core Principles (Inherited)
 
 ### 1. Template Adherence
 - **Rule**: Always follow the established reference file templates exactly
@@ -20,42 +24,6 @@ This document defines how LLM should behave when assisting with filling referenc
 - **Rule**: Ensure all generated content meets project quality standards
 - **Rationale**: Reference files are used as authoritative documentation
 - **Example**: Include proper descriptions, examples, and usage notes
-
-## Decision Making
-
-### When to Ask for Clarification
-- **Missing context**: When reference type or purpose is unclear
-- **Conflicting templates**: When multiple templates could apply
-- **Ambiguous requirements**: When specific formatting is unclear
-- **Edge cases**: When encountering unusual HTML structures
-
-**📍 For assumption guidance, see Decision Making → Assumption Guidelines below**
-
-### Assumption Guidelines
-**🎯 BALANCED APPROACH TO ASSUMPTIONS:**
-
-**Core Principle:** Avoid assumptions, BUT recognize when they're safe and necessary.
-
-**When to AVOID Assumptions:**
-- ❌ User-specific context (team names, URLs, match details)
-- ❌ Unusual HTML structures or edge cases
-- ❌ When user has provided specific contradictory information
-- ❌ Complex selector patterns that vary significantly
-
-**When SAFE Assumptions are ACCEPTABLE:**
-- ✅ Standard HTML patterns (common navigation structures)
-- ✅ Established naming conventions from existing files
-- ✅ Documentation style matching completed reference files
-- ✅ Common selector attributes (`data-testid`, `class` patterns)
-- ✅ Template structure following README guidelines
-
-**Decision Process:**
-1. **First**: Ask for clarification if uncertain
-2. **If no response**: Make safe assumption based on patterns
-3. **Document**: Note what was assumed and why
-4. **Proceed**: Continue with transparent assumption
-
-This balances safety with practical workflow efficiency.
 
 ## Response Guidelines
 
