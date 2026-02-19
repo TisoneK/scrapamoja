@@ -49,12 +49,20 @@ Provide file-by-file breakdown:
 
 **File Status Table:**
 ```
-📋 File Status Details
+📋 Files Needing Attention
 
-| File Path | Status | Completeness | Last Modified | Issues |
-|-----------|--------|--------------|---------------|---------|
-| {path} | {status} | {percentage}% | {date} | {count} |
+{category} ({count} files):
+
+{file_path}
+{file_path}
+{file_path}
 ```
+
+<!-- ⚠️ STRICT REQUIREMENTS: -->
+<!-- DO NOT include file sizes in user output -->
+<!-- DO NOT show internal data like bytes, modification dates -->
+<!-- ONLY show file paths that need attention -->
+<!-- Format: category (count files): followed by list of paths -->
 
 ### 4. Progress by Category
 Show progress organized by categories:
@@ -63,20 +71,9 @@ Show progress organized by categories:
 ```
 🏀 Match State Progress
 
-**Scheduled Matches:**
-- Completed: {number}/{total}
-- In Progress: {number}
-- Need Attention: {number}
-
-**Live Matches:**
-- Completed: {number}/{total}
-- In Progress: {number}
-- Need Attention: {number}
-
-**Finished Matches:**
-- Completed: {number}/{total}
-- In Progress: {number}
-- Need Attention: {number}
+**Scheduled Matches:** {total} total, {need} need attention
+**Live Matches:** {total} total, {need} need attention  
+**Finished Matches:** {total} total, {need} need attention
 ```
 
 **By Tab Level:**
@@ -88,30 +85,7 @@ Show progress organized by categories:
 **Tertiary Tabs:** {completed}/{total} ({percentage}%)
 ```
 
-### 5. Workflow Health Check
-Assess workflow health and identify blockers:
-
-**Health Indicators:**
-```
-🏥 Workflow Health
-
-**✅ Healthy Indicators:**
-- Files being completed regularly
-- Validation pass rate > 90%
-- No critical blockers
-
-**⚠️ Warning Indicators:**
-- Files stuck in "In Progress" > 24 hours
-- Validation failures increasing
-- Template compliance dropping
-
-**❌ Critical Issues:**
-- Workflow stalled
-- High error rates
-- Template inconsistencies
-```
-
-### 6. Recommendations and Next Steps
+### 5. Recommendations and Next Steps
 Based on status, provide actionable recommendations:
 
 **Recommendations Format:**
@@ -125,12 +99,23 @@ Based on status, provide actionable recommendations:
 **Medium Priority:**
 1. {specific action with impact}
 2. {specific action with impact}
-
-**Suggested Next Steps:**
-- Switch to {mode} for {reason}
-- Focus on {file type} files
-- Run {script} to {action}
 ```
+
+### 6. Present User Options
+Present exactly these options to user:
+
+**Options Format:**
+```
+Would you like me to:
+A) Fill files - Add HTML samples to {number} files that need filling
+B) Validate - Check {number} unknown status files  
+C) Status - View detailed progress information
+```
+
+<!-- ⚠️ CRITICAL: Options MUST be exactly as shown above -->
+<!-- DO NOT rename, reword, or change option descriptions -->
+<!-- Option C MUST be exactly: C) Status - View detailed progress information -->
+<!-- DO NOT add "Generate detailed report" or any other variation -->
 
 ## Status Commands and Scripts
 
