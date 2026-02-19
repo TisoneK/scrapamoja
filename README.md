@@ -11,9 +11,13 @@
 
 ## What is Scrapamoja?
 
-Scrapamoja is a **scraping framework**, not just a scraper. It gives you the infrastructure to build scrapers that actually hold up in production — handling anti-bot measures, selector drift, network failures, browser resource leaks, and all the other things that break naive scrapers over time.
+Scrapamoja blends the English word *Scrape* with the Swahili word *Pamoja* — meaning *together*. Scrape together. One scraper, many sites. One framework, many contributors.
 
-Out of the box it ships with two working site implementations (FlashScore and Wikipedia) that serve as both real scrapers and reference implementations for building your own.
+It's also a quiet nod to *Moja*, Swahili for *one* — the idea that you shouldn't need a different tool for every site you want to scrape. One framework should be enough, and it should be good enough that anyone can extend it.
+
+That philosophy shapes everything about how Scrapamoja is built. It's not a scraper — it's the infrastructure that makes scrapers reliable: handling anti-bot measures, selector drift, network failures, and browser resource leaks so you don't have to. New sites can be added by anyone, existing ones improved by the community, and the whole thing grows stronger the more people contribute to it.
+
+*Scrape together. Build together.*
 
 ---
 
@@ -147,8 +151,8 @@ strategies:
 
 | Site | Data | Sports/Topics | Status Types |
 |------|------|---------------|--------------|
-| **FlashScore** | Live scores, match stats, odds | Basketball, Football | Live, Finished, Scheduled |
-| **Wikipedia** | Article content, tables, references | Any | N/A |
+| [**FlashScore**](src/sites/flashscore/README.md) | Live scores, match stats, odds | Basketball, Football | Live, Finished, Scheduled |
+| [**Wikipedia**](src/sites/wikipedia/README.md) | Article content, tables, references | Any | N/A |
 
 Both are production implementations — the FlashScore scraper handles live match updates, status-aware extraction, and real-time polling. The Wikipedia scraper handles table parsing, multi-language articles, and reference extraction.
 
