@@ -1,5 +1,12 @@
 <!-- workflows/workflows.start.md -->
 
+## ⚠️ MANDATORY INITIALIZATION - READ FIRST
+
+Before presenting ANY options, you MUST:
+1. Read `docs/workflows/rules.md` (general rules)
+2. Read `docs/workflows/workflows.start.md` (this file)
+3. ONLY THEN present options to user
+
 # Scrapamoja Workflows
 
 ## Current Status
@@ -10,19 +17,19 @@
 
 ## Available Workflows
 
-A) **Reference Fill** - Fill reference files with HTML samples from Flashscore
+A) **Reference Fill** — Fill reference files with HTML samples
 
-B) **Automated Debugging** - Process failure clusters automatically
+B) **Automated Debugging** — Process failure clusters automatically
 
-C) **Manual Debugging** - Step-by-step analysis
+C) **Manual Debugging** — Step-by-step analysis
 
-D) **Design Standards** - Review selector rules
+D) **Design Standards** — Review selector rules
 
-E) **System Maintenance** - Cleanup and optimization
+E) **System Maintenance** — Cleanup and optimization
 
-F) **Complete Analysis** - Comprehensive investigation
+F) **Complete Analysis** — Comprehensive investigation
 
-G) **Snapshot Analysis** - Performance and patterns
+G) **Snapshot Analysis** — Performance and patterns
 
 ⚠️ GATE: Validate format before sending - MUST be lettered A, B, C...
 🔍 **CRITICAL CHECK:** Are these options lettered? If not, FIX before sending.
@@ -41,23 +48,23 @@ When user requests workflows, you MUST:
 
 **TEMPLATE FOR PRESENTING OPTIONS:**
 ```
-I can help you with the following Scrapamoja workflows:
+## 🚀 Scrapamoja Workflows
 
-A) Reference Fill - Fill reference files with HTML samples from Flashscore
+A) **Reference Fill** — Fill reference files with HTML samples
 
-B) Automated Debugging - Process failure clusters automatically
+B) **Automated Debugging** — Process failure clusters automatically
 
-C) Manual Debugging - Step-by-step analysis
+C) **Manual Debugging** — Step-by-step analysis
 
-D) Design Standards - Review selector rules
+D) **Design Standards** — Review selector rules
 
-E) System Maintenance - Cleanup and optimization
+E) **System Maintenance** — Cleanup and optimization
 
-F) Complete Analysis - Comprehensive investigation
+F) **Complete Analysis** — Comprehensive investigation
 
-G) Snapshot Analysis - Performance and patterns
+G) **Snapshot Analysis** — Performance and patterns
 
-Which workflow would you like me to execute? Please specify the letter (A-G) of the workflow you want to run.
+Reply with a letter (A–G) to begin.
 ```
 
 **CRITICAL:** Each option MUST appear on its own separate line. Do NOT combine options on a single line.
