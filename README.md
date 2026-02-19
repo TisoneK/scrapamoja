@@ -151,8 +151,8 @@ strategies:
 
 | Site | Data | Sports/Topics | Status Types |
 |------|------|---------------|--------------|
-| **FlashScore** | Live scores, match stats, odds | Basketball, Football | Live, Finished, Scheduled |
-| **Wikipedia** | Article content, tables, references | Any | N/A |
+| [**FlashScore**](src/sites/flashscore/README.md) | Live scores, match stats, odds | Basketball, Football | Live, Finished, Scheduled |
+| [**Wikipedia**](src/sites/wikipedia/README.md) | Article content, tables, references | Any | N/A |
 
 Both are production implementations — the FlashScore scraper handles live match updates, status-aware extraction, and real-time polling. The Wikipedia scraper handles table parsing, multi-language articles, and reference extraction.
 
