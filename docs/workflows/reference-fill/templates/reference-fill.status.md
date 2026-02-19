@@ -53,9 +53,11 @@ Provide file-by-file breakdown:
 
 {category} ({count} files):
 
-{file_path}
-{file_path}
-{file_path}
+- {file_path}
+
+- {file_path}
+
+- {file_path}
 ```
 
 <!-- ⚠️ STRICT REQUIREMENTS: -->
