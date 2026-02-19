@@ -23,7 +23,9 @@ This document defines universal rules that apply to ALL workflows in the Scrapam
 
 **USER OPTIONS (Always use letters):**
 A) Option one - Description
+
 B) Option two - Description  
+
 C) Option three - Description
 
 **PROCEDURES/STEPS (Always use numbers):**

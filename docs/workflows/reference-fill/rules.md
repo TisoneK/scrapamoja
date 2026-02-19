@@ -71,7 +71,9 @@ This prevents duplication and ensures consistent enforcement across all workflow
 
 **USER OPTIONS (Always use letters):**
 A) Fill files - Add HTML samples to 13 files that need filling
+
 B) Validate - Check 2 unknown status files  
+
 C) Status - View detailed progress information
 
 **PROCEDURES/STEPS (Always use numbers):**
