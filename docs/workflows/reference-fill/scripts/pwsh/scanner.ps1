@@ -212,9 +212,9 @@ try {
         elseif ($relativePath -match "live") { $fileInfo.category = "live" }
         elseif ($relativePath -match "finished") { $fileInfo.category = "finished" }
         
-        # Extract sport from path (e.g., "live\basketball\h2h\secondary.md" -> "basketball")
+        # Extract sport from path (e.g., "live\\basketball\\h2h\\secondary.md" -> "basketball")
         $fileInfo.sport = "unknown"
-        if ($relativePath -match "(live|scheduled|finished)[\\/](.+?)[\\/]") {
+        if ($relativePath -match "(live|scheduled|finished)[\\](.+?)[\\]") {
             $fileInfo.sport = $matches[2]
         }
         
@@ -222,6 +222,11 @@ try {
         if ($relativePath -match "primary") { $fileInfo.tab_level = "primary" }
         elseif ($relativePath -match "secondary") { $fileInfo.tab_level = "secondary" }
         elseif ($relativePath -match "tertiary") { $fileInfo.tab_level = "tertiary" }
+        
+        # Ensure category is never empty
+        if (-not $fileInfo.category) { $fileInfo.category = "unknown" }
+        if (-not $fileInfo.sport) { $fileInfo.sport = "unknown" }
+        if (-not $fileInfo.tab_level) { $fileInfo.tab_level = "unknown" }
         
         $scanResults.files += $fileInfo
     }
