@@ -68,6 +68,15 @@ Before sending any response with options, ask yourself:
 
 If answer to any question is "No", FIX IT before sending.
 
+**GATE REQUIREMENT:**
+All workflow templates must include ⚠️ GATE markers before any user options:
+```
+⚠️ GATE: Validate format before sending - MUST be numbered 1, 2, 3...
+🔍 **CRITICAL CHECK:** Are these options numbered? If not, FIX before sending.
+```
+
+This ensures LLM self-validates before presenting options to users.
+
 ## Decision Making
 
 ### When to Ask for Clarification

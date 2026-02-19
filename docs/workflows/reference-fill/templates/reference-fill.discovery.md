@@ -94,6 +94,8 @@ I found {number} files that need attention. Here's what I recommend we work on f
 
 Would you like me to start with Fill Mode for the highest priority files?
 ```
+⚠️ GATE: Validate format before sending - This should be a single question, not numbered options
+🔍 **CRITICAL CHECK:** Is this a single question? If you added numbered options, REMOVE them.
 
 ## Integration Notes
 

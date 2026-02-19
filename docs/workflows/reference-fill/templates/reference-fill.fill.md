@@ -239,5 +239,8 @@ Selectors:
 ## Go Back
 
 At confirmation (Step 5), user can:
-- Yes → Generate
-- No → Go back to correct a question (1-6)
+1. Yes → Generate
+2. No → Go back to correct a question (1-6)
+
+⚠️ GATE: Validate format before sending - MUST be numbered 1, 2...
+🔍 **CRITICAL CHECK:** Are these options numbered? If not, FIX before sending.

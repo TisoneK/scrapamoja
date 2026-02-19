@@ -174,6 +174,8 @@ Would you like me to:
 2. Help you switch to a different mode?
 3. Generate a detailed report?
 ```
+⚠️ GATE: Validate format before sending - MUST be numbered 1, 2, 3...
+🔍 **CRITICAL CHECK:** Are these options numbered? If not, FIX before sending.
 
 **For Specific Issues:**
 ```

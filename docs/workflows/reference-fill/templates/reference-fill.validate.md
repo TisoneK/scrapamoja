@@ -76,10 +76,12 @@ For each file with issues, provide specific guidance:
 3. {specific action 3}
 
 Would you like me to:
-- Auto-fix the simple issues?
-- Guide you through manual fixes?
-- Skip this file for now?
+1. Auto-fix the simple issues?
+2. Guide you through manual fixes?
+3. Skip this file for now?
 ```
+⚠️ GATE: Validate format before sending - MUST be numbered 1, 2, 3...
+🔍 **CRITICAL CHECK:** Are these options numbered? If not, FIX before sending.
 
 ## Validation Criteria
 
