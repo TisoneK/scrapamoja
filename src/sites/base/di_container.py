@@ -5,6 +5,7 @@ This module provides a lightweight dependency injection container that supports
 constructor injection, method injection, and lifecycle management for components.
 """
 
+import logging
 from typing import Dict, Any, List, Optional, Type, Callable, Union, get_type_hints
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -14,6 +15,9 @@ from enum import Enum
 import weakref
 
 from .component_interface import BaseComponent, ComponentContext
+
+# Module logger
+logger = logging.getLogger(__name__)
 
 
 class LifetimeScope(Enum):
@@ -116,11 +120,11 @@ class DIContainer:
             
             self._dependencies[name] = dependency
             
-            print(f"Registered dependency: {name} ({interface.__name__})")
+            logger.debug("Registered dependency", extra={"name": name, "interface": interface.__name__})
             return name
             
         except Exception as e:
-            print(f"Failed to register dependency: {str(e)}")
+            logger.error("Failed to register dependency", extra={"error": str(e)})
             raise
     
     def register_instance(
@@ -154,11 +158,11 @@ class DIContainer:
             
             self._dependencies[name] = dependency
             
-            print(f"Registered instance: {name}")
+            logger.debug("Registered instance", extra={"name": name})
             return name
             
         except Exception as e:
-            print(f"Failed to register instance: {str(e)}")
+            logger.error("Failed to register instance", extra={"error": str(e)})
             raise
     
     def create_scope(self, scope_id: str) -> 'DIContainer':
@@ -192,7 +196,7 @@ class DIContainer:
             return child_container
             
         except Exception as e:
-            print(f"Failed to create scope '{scope_id}': {str(e)}")
+            logger.error("Failed to create scope", extra={"scope_id": scope_id, "error": str(e)})
             raise
     
     def get(self, dependency_name: str) -> Any:
@@ -221,7 +225,7 @@ class DIContainer:
                 return self._get_transient_instance(dependency)
                 
         except Exception as e:
-            print(f"Failed to get dependency '{dependency_name}': {str(e)}")
+            logger.error("Failed to get dependency", extra={"dependency_name": dependency_name, "error": str(e)})
             raise
     
     async def get_async(self, dependency_name: str) -> Any:
@@ -256,7 +260,7 @@ class DIContainer:
                 return self._inject_into_object(target)
                 
         except Exception as e:
-            print(f"Failed to inject dependencies: {str(e)}")
+            logger.error("Failed to inject dependencies", extra={"error": str(e)})
             raise
     
     def resolve_dependencies(self, dependency_names: List[str]) -> Dict[str, Any]:
@@ -278,7 +282,7 @@ class DIContainer:
             return resolved
             
         except Exception as e:
-            print(f"Failed to resolve dependencies: {str(e)}")
+            logger.error("Failed to resolve dependencies", extra={"error": str(e)})
             raise
     
     def has_dependency(self, dependency_name: str) -> bool:
@@ -320,7 +324,7 @@ class DIContainer:
             return results
             
         except Exception as e:
-            print(f"Failed to validate dependencies: {str(e)}")
+            logger.error("Failed to validate dependencies", extra={"error": str(e)})
             return {}
     
     def get_statistics(self) -> Dict[str, Any]:
@@ -357,7 +361,7 @@ class DIContainer:
                             else:
                                 dependency.instance.cleanup()
                         except Exception as e:
-                            print(f"Error cleaning up singleton {dependency.interface.__name__}: {str(e)}")
+                            logger.error("Error cleaning up singleton", extra={"interface": dependency.interface.__name__, "error": str(e)})
                     dependency.instance = None
             
             # Clear contexts
@@ -367,10 +371,10 @@ class DIContainer:
             # Clear dependencies
             self._dependencies.clear()
             
-            print(f"DIContainer {self.container_id} cleanup completed")
+            logger.debug("DIContainer cleanup completed", extra={"container_id": self.container_id})
             
         except Exception as e:
-            print(f"Error during DIContainer cleanup: {str(e)}")
+            logger.error("Error during DIContainer cleanup", extra={"error": str(e)})
     
     def _get_current_context(self) -> Optional[InjectionContext]:
         """Get the current injection context."""
@@ -465,7 +469,7 @@ class DIContainer:
                 return target
                 
         except Exception as e:
-            print(f"Failed to inject into object: {str(e)}")
+            logger.error("Failed to inject into object", extra={"error": str(e)})
             raise
     
     def _inject_into_method(self, target: Any, method_name: str) -> Callable:
@@ -496,7 +500,7 @@ class DIContainer:
             return wrapper
             
         except Exception as e:
-            print(f"Failed to inject into method {method_name}: {str(e)}")
+            logger.error("Failed to inject into method", extra={"method_name": method_name, "error": str(e)})
             raise
     
     def _check_circular_dependency(self, dependency_name: str, visited: Set[str]) -> bool:
