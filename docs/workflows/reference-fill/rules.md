@@ -21,8 +21,17 @@ This document defines how LLM should behave when assisting with filling referenc
 - **Rationale**: Reference files are used as authoritative documentation
 - **Example**: Include proper descriptions, examples, and usage notes
 
-### Assumption Guidelines
+## Decision Making
 
+### When to Ask for Clarification
+- **Missing context**: When reference type or purpose is unclear
+- **Conflicting templates**: When multiple templates could apply
+- **Ambiguous requirements**: When specific formatting is unclear
+- **Edge cases**: When encountering unusual HTML structures
+
+**📍 For assumption guidance, see Decision Making → Assumption Guidelines below**
+
+### Assumption Guidelines
 **🎯 BALANCED APPROACH TO ASSUMPTIONS:**
 
 **Core Principle:** Avoid assumptions, BUT recognize when they're safe and necessary.
@@ -115,16 +124,6 @@ All workflow templates must include ⚠️ GATE markers before any user options:
 ```
 
 This ensures LLM self-validates before presenting options to users.
-
-## Decision Making
-
-### When to Ask for Clarification
-- **Missing context**: When reference type or purpose is unclear
-- **Conflicting templates**: When multiple templates could apply
-- **Ambiguous requirements**: When specific formatting is unclear
-- **Edge cases**: When encountering unusual HTML structures
-
-**📍 For assumption guidance, see Core Principles → Assumption Guidelines above**
 
 ## Error Handling
 
