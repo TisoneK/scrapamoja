@@ -229,6 +229,23 @@ This shows the score.
 ### Purpose
 Track LLM failures, ambiguities, and user corrections to identify patterns and improve the workflow over time.
 
+### Issue Tracking Integration
+
+**🚨 SCRIPT FAILURE LOGGING:**
+When scanner script returns `success: false`, LLM MUST:
+1. **STOP workflow immediately** - Do not attempt manual workarounds
+2. **Log script failure** to `issues.json` before any other action
+3. **Write HIGH severity issue** for script failure
+4. **Report exact error** from scanner output to user
+5. **Do not continue** until scanner is fixed
+
+**🚨 LLM RESPONSIBILITY:**
+- Script failure = Automatic HIGH severity issue
+- Manual workarounds = Additional HIGH severity issues
+- Both must be logged before any workflow continuation
+
+This ensures script failures are properly tracked and not bypassed.
+
 ### Issue Tracking File
 - **Location**: `docs/workflows/reference-fill/issues.json`
 - **Template**: `docs/workflows/reference-fill/templates/reference-fill.issues.md`

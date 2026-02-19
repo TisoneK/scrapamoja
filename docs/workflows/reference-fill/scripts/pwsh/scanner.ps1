@@ -250,10 +250,13 @@ try {
     Write-Host "Files by category:" -ForegroundColor Yellow
     
     # Group files by category and display counts
-    $categories = $scanResults.files | Group-Object category
-    $categories | ForEach-Object {
-        $categoryName = if ($_.Name) { $_.Name } else { "UNKNOWN" }
-        Write-Host "  $categoryName): $($_.Count) files"
+    $categories = $scanResults.files | Group-Object -Property category
+    $categories | Sort-Object Name | ForEach-Object {
+        $categoryName = $_.Name
+        if ([string]::IsNullOrEmpty($categoryName)) {
+            $categoryName = "UNKNOWN"
+        }
+        Write-Host "  ${categoryName}: $($_.Count) files"
     }
     Write-Host ""
     Write-Host "Results saved to: $OutputPath" -ForegroundColor Cyan
