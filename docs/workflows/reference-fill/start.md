@@ -54,7 +54,14 @@ This ensures consistent behavior and automatic quality control.
 
 ### Step 2: Present Results
 
-**ON SCANNER SUCCESS → Read and execute `templates/reference-fill.status.md` exactly.**
+**ON SCANNER SUCCESS → MUST read template first, then execute:**
+
+1. **READ**: `docs/workflows/reference-fill/templates/reference-fill.status.md` completely
+2. **UNDERSTAND**: All instructions and requirements in the template
+3. **EXECUTE**: Follow template exactly - no improvisation allowed
+4. **PRESENT**: Results and options exactly as specified in template
+
+**CRITICAL**: Do NOT present results until you have read and understood the entire status template.
 
 **ON COMPLETION → Present options A) B) C) to user and wait for selection.**
 
