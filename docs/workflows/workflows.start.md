@@ -48,6 +48,23 @@ Which workflow would you like me to execute? Please specify the letter (A-G) of 
 
 **CRITICAL:** Do NOT ask "Which workflow would you like me to execute?" without first showing the options list above.
 
+**TWO-STAGE INITIALIZATION PROCESS:**
+
+### Stage 1: System Startup (MANDATORY)
+When user requests workflows, you MUST:
+
+1. **Read Dashboard**: Check current system status
+2. **Read General Rules**: Load `docs/workflows/rules.md` for universal conventions
+3. **Present Main Menu**: Show workflow options A) B) C) D) E) F) G)
+
+### Stage 2: Workflow Execution (After User Selection)
+When user selects a workflow, you MUST:
+
+1. **Read Workflow Rules**: Load `docs/workflows/[workflow]/rules.md` (inherits from general)
+2. **Follow Instructions**: Execute workflow-specific steps and templates
+
+**CRITICAL:** Do NOT skip Stage 1. Always read general rules first to ensure proper formatting and behavior.
+
 **ACTION TABLE FOR EXECUTION:**
 | Letter | Workflow | Description |
 |--------|-----------|-------------|
