@@ -1,3 +1,5 @@
+<!-- workflows/workflows.start.md -->
+
 # Scrapamoja Workflows
 
 ## Current Status
@@ -9,11 +11,17 @@
 ## Available Workflows
 
 A) **Reference Fill** - Fill reference files with HTML samples from Flashscore
+
 B) **Automated Debugging** - Process failure clusters automatically
+
 C) **Manual Debugging** - Step-by-step analysis
+
 D) **Design Standards** - Review selector rules
+
 E) **System Maintenance** - Cleanup and optimization
+
 F) **Complete Analysis** - Comprehensive investigation
+
 G) **Snapshot Analysis** - Performance and patterns
 
 ⚠️ GATE: Validate format before sending - MUST be lettered A, B, C...
