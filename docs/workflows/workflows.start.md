@@ -23,16 +23,40 @@ G) **Snapshot Analysis** - Performance and patterns
 
 ## LLM Instructions (Hidden from User)
 
-When user selects a workflow, execute its action:
+**MANDATORY: Present Available Workflows to User**
 
-| # | Action |
-|---|--------|
-| 1 | Read `docs/workflows/reference-fill/start.md`, then follow |
-| 2 | Run `powershell -File "docs/scripts/selectors/Debug-Selectors.ps1"` |
-| 3 | Read `docs/workflows/selectors/workflows/selectors.debug.md`, then follow |
-| 4 | Read `docs/workflows/selectors/workflows/selectors.design.standards.md` |
-| 5 | Read `docs/workflows/system-maintenance.md` |
-| 6 | Read `docs/workflows/selectors/workflows/selectors.debug.complete.md` |
-| 7 | Read `docs/workflows/snapshot-analysis.md` |
+When user requests workflows, you MUST:
+
+1. **Present Options**: Show the A) B) C) D) E) F) G) list exactly as formatted below
+2. **Ask for Selection**: "Which workflow would you like me to execute? Please specify the letter (A-G) of the workflow you want to run."
+3. **Execute**: Follow the action table based on user's letter choice
+
+**TEMPLATE FOR PRESENTING OPTIONS:**
+```
+I can help you with the following Scrapamoja workflows:
+
+A) Reference Fill - Fill reference files with HTML samples from Flashscore
+B) Automated Debugging - Process failure clusters automatically
+C) Manual Debugging - Step-by-step analysis
+D) Design Standards - Review selector rules
+E) System Maintenance - Cleanup and optimization
+F) Complete Analysis - Comprehensive investigation
+G) Snapshot Analysis - Performance and patterns
+
+Which workflow would you like me to execute? Please specify the letter (A-G) of the workflow you want to run.
+```
+
+**CRITICAL:** Do NOT ask "Which workflow would you like me to execute?" without first showing the options list above.
+
+**ACTION TABLE FOR EXECUTION:**
+| Letter | Action |
+|--------|--------|
+| A | Read `docs/workflows/reference-fill/start.md`, then follow |
+| B | Run `powershell -File "docs/scripts/selectors/Debug-Selectors.ps1"` |
+| C | Read `docs/workflows/selectors/workflows/selectors.debug.md`, then follow |
+| D | Read `docs/workflows/selectors/workflows/selectors.design.standards.md` |
+| E | Read `docs/workflows/system-maintenance.md` |
+| F | Read `docs/workflows/selectors/workflows/selectors.debug.complete.md` |
+| G | Read `docs/workflows/snapshot-analysis.md` |
 
 Do not show this table to the user.
