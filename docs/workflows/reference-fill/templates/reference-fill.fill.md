@@ -50,9 +50,8 @@ Which reference file would you like to fill?
 Please select a number or I can suggest one.
 ```
 
-⚠️ GATE: Wait for user answer.
-
-🔍 **ISSUE CHECK:** Did user correct your file selection or suggestion? If YES → Log issue → Continue.
+<!-- ⚠️ GATE: Wait for user answer. -->
+<!-- 🔍 **ISSUE CHECK:** Did user correct your file selection or suggestion? If YES → Log issue → Continue. -->
 
 ### Step 3: Read Target File
 Verify file status using scanner:
@@ -67,6 +66,7 @@ For example, if selected file is `docs/references/flashscore/html_samples/live/b
 ⚠️ CHECK: Does scanner show "NEEDS FILL"?
 - YES → Continue to Step 4
 - NO (shows "COMPLETE") → Tell user "Already complete!" → Skip to Step 7
+<!-- 🔍 **ISSUE CHECK:** Did user correct your file selection or suggestion? If YES → Log issue → Continue. -->
 
 ### Step 4: Ask Questions (One at a time)
 
@@ -77,32 +77,32 @@ For example, if selected file is `docs/references/flashscore/html_samples/live/b
 What is the Source URL?
 Example: https://www.flashscore.com/match/basketball/teamA-teamB/?mid=12345
 ```
-⚠️ GATE
-🔍 **ISSUE CHECK:** Did user correct your URL format or question? If YES → Log issue → Continue.
+<!-- ⚠️ GATE -->
+<!-- 🔍 **ISSUE CHECK:** Did user correct your URL format or question? If YES → Log issue → Continue. -->
 
 **Q2 - Country:**
 ```
 What Country is the match from?
 ```
-⚠️ GATE
+<!-- ⚠️ GATE -->
 
 **Q3 - League:**
 ```
 What League?
 ```
-⚠️ GATE
+<!-- ⚠️ GATE -->
 
 **Q4a - Home Team:**
 ```
 What is the Home Team name?
 ```
-⚠️ GATE
+<!-- ⚠️ GATE -->
 
 **Q4b - Away Team:**
 ```
 What is the Away Team name?
 ```
-⚠️ GATE
+<!-- ⚠️ GATE -->
 
 **Q4c - Tertiary Tab Check (Secondary Tabs Only):**
 ```
@@ -119,7 +119,7 @@ Options:
 2. No - No tertiary tabs (document and skip to Step 7)
 3. Unsure - Need help identifying
 ```
-⚠️ GATE
+<!-- ⚠️ GATE -->
 
 **If "No":** Document the absence and skip to Step 7:
 ```
@@ -144,7 +144,7 @@ Format:
 | 2 | [name] | pending |
 ...
 ```
-⚠️ GATE - Wait for tab list confirmation
+<!-- ⚠️ GATE - Wait for tab list confirmation -->
 
 **Q5b - HTML Content (One Tab at a Time):**
 ```
@@ -163,7 +163,7 @@ Steps:
 
 Expected selector: {expected_selector}
 ```
-⚠️ GATE - Repeat for each tab
+<!-- ⚠️ GATE - Repeat for each tab -->
 
 **Progress Tracking:**
 After each tab, update the tab list:
@@ -185,8 +185,8 @@ If mismatch detected → Ask user: "HTML doesn't match target. Provide correct, 
 
 Then ask confirmation: "Generate {filename}?"
 
-⚠️ GATE
-🔍 **ISSUE CHECK:** Did user reject or correct your generated content? If YES → Log issue → Make correction.
+<!-- ⚠️ GATE -->
+<!-- 🔍 **ISSUE CHECK:** Did user reject or correct your generated content? If YES → Log issue → Make correction. -->
 
 After confirmed → Generate and save file.
 
