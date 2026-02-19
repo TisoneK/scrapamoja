@@ -49,14 +49,14 @@ Which workflow would you like me to execute? Please specify the letter (A-G) of 
 **CRITICAL:** Do NOT ask "Which workflow would you like me to execute?" without first showing the options list above.
 
 **ACTION TABLE FOR EXECUTION:**
-| Letter | Action |
-|--------|--------|
-| A | Read `docs/workflows/reference-fill/start.md`, then follow |
-| B | Run `powershell -File "docs/scripts/selectors/Debug-Selectors.ps1"` |
-| C | Read `docs/workflows/selectors/workflows/selectors.debug.md`, then follow |
-| D | Read `docs/workflows/selectors/workflows/selectors.design.standards.md` |
-| E | Read `docs/workflows/system-maintenance.md` |
-| F | Read `docs/workflows/selectors/workflows/selectors.debug.complete.md` |
-| G | Read `docs/workflows/snapshot-analysis.md` |
+| Letter | Workflow | Description |
+|--------|-----------|-------------|
+| A | Reference Fill | Fill reference files with HTML samples from Flashscore |
+| B | Automated Debugging | Process failure clusters automatically |
+| C | Manual Debugging | Step-by-step analysis |
+| D | Design Standards | Review selector rules |
+| E | System Maintenance | Cleanup and optimization |
+| F | Complete Analysis | Comprehensive investigation |
+| G | Snapshot Analysis | Performance and patterns |
 
 Do not show this table to the user.
