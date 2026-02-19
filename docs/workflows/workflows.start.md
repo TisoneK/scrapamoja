@@ -44,17 +44,23 @@ When user requests workflows, you MUST:
 I can help you with the following Scrapamoja workflows:
 
 A) Reference Fill - Fill reference files with HTML samples from Flashscore
+
 B) Automated Debugging - Process failure clusters automatically
+
 C) Manual Debugging - Step-by-step analysis
+
 D) Design Standards - Review selector rules
+
 E) System Maintenance - Cleanup and optimization
+
 F) Complete Analysis - Comprehensive investigation
+
 G) Snapshot Analysis - Performance and patterns
 
 Which workflow would you like me to execute? Please specify the letter (A-G) of the workflow you want to run.
 ```
 
-**CRITICAL:** Do NOT ask "Which workflow would you like me to execute?" without first showing the options list above.
+**CRITICAL:** Each option MUST appear on its own separate line. Do NOT combine options on a single line.
 
 **TWO-STAGE INITIALIZATION PROCESS:**
 
