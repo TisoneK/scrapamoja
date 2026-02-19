@@ -22,6 +22,9 @@ from src.utils.exceptions import StorageError
 from ..core.snapshot.storage import SnapshotStorage
 from ..core.snapshot.models import SnapshotBundle, SnapshotContext, SnapshotConfig, SnapshotMode, EnumEncoder
 
+# Module logger
+logger = get_logger("storage_adapter")
+
 
 class IStorageAdapter(ABC):
     """Interface for storage operations."""
@@ -164,21 +167,20 @@ class FileSystemStorageAdapter(IStorageAdapter):
             
             # Capture HTML content
             if snapshot.dom_content:
-                print(f"🔍 DEBUG: Creating HTML artifact for snapshot {snapshot.id}")
+                logger.debug("Creating HTML artifact for snapshot", extra={"snapshot_id": snapshot.id})
                 html_filename = f"fullpage_{snapshot.id[:8]}.html"
                 html_path = bundle_path / "html" / html_filename
                 
-                print(f"🔍 DEBUG: HTML path: {html_path}")
-                print(f"🔍 DEBUG: DOM content length: {len(snapshot.dom_content) if snapshot.dom_content else 'None'}")
+                logger.debug("HTML path resolved", extra={"html_path": str(html_path), "dom_content_length": len(snapshot.dom_content) if snapshot.dom_content else 0})
                 
                 # Write HTML content
                 with open(html_path, 'w', encoding='utf-8') as f:
                     f.write(snapshot.dom_content)
                 
-                print(f"🔍 DEBUG: HTML file exists after write: {html_path.exists()}")
+                logger.debug("HTML file written", extra={"html_path": str(html_path), "exists": html_path.exists()})
                 artifacts.append(f"html/{html_filename}")
             else:
-                print(f"🔍 DEBUG: No DOM content found in snapshot")
+                logger.debug("No DOM content found in snapshot", extra={"snapshot_id": snapshot.id})
             
             # Capture screenshot if provided
             if screenshot:

@@ -6,6 +6,7 @@ partitioning, and content management.
 """
 
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -16,6 +17,9 @@ import asyncio
 
 from .models import SnapshotBundle, SnapshotContext, BundleCorruptionError, SnapshotError, EnumEncoder
 from .exceptions import PartialSnapshotBundle
+
+# Module logger
+logger = logging.getLogger(__name__)
 
 
 class SnapshotStorage:
@@ -45,7 +49,7 @@ class SnapshotStorage:
             
             # If directory already exists, just ensure subdirectories exist
             if bundle_path.exists():
-                print(f"🔍 DEBUG: Bundle directory already exists: {bundle_path}")
+                logger.debug("Bundle directory already exists", extra={"bundle_path": str(bundle_path)})
                 # Ensure subdirectories exist
                 (bundle_path / "html").mkdir(exist_ok=True)
                 (bundle_path / "screenshots").mkdir(exist_ok=True)
@@ -100,19 +104,19 @@ class SnapshotStorage:
             # Atomic rename
             temp_path.rename(metadata_path)
             
-            print(f"🔍 DIAGNOSTIC: Successfully saved metadata to {metadata_path}")
+            logger.debug("Successfully saved metadata", extra={"metadata_path": str(metadata_path)})
             return True
             
         except Exception as e:
             # Cleanup temp file
             if temp_path and temp_path.exists():
                 temp_path.unlink(missing_ok=True)
-            print(f"🔍 DIAGNOSTIC: Failed to save metadata: {e}")
+            logger.error("Failed to save metadata", extra={"error": str(e)})
             raise SnapshotError(f"Failed to save bundle metadata: {e}")
     
     async def save_bundle(self, bundle: SnapshotBundle) -> bool:
         """Save complete bundle with all artifacts."""
-        print(f"🔍🔍🔍 SAVE_BUNDLE CALLED: {bundle.bundle_path}")
+        logger.debug("SAVE_BUNDLE CALLED", extra={"bundle_path": bundle.bundle_path})
         try:
             bundle_path = Path(bundle.bundle_path)
             
@@ -120,9 +124,9 @@ class SnapshotStorage:
             await self.create_bundle_directory(bundle_path)
             
             # Save metadata
-            print(f"🔍🔍🔍 ABOUT TO CALL SAVE_BUNDLE_METADATA")
+            logger.debug("ABOUT TO CALL SAVE_BUNDLE_METADATA")
             await self.save_bundle_metadata(bundle)
-            print(f"🔍🔍🔍 SAVE_BUNDLE_METADATA COMPLETED")
+            logger.debug("SAVE_BUNDLE_METADATA COMPLETED")
             
             # Save artifacts - artifacts can be strings (file paths) or objects with content
             for artifact in bundle.artifacts:
@@ -130,7 +134,7 @@ class SnapshotStorage:
                 if isinstance(artifact, str):
                     # Artifact is already a file path string, nothing to save
                     # The actual file was saved by the capture method
-                    print(f"🔍 DIAGNOSTIC: Artifact path (saved by capture): {artifact}")
+                    logger.debug("Artifact path (saved by capture)", extra={"artifact": artifact})
                     continue
                 else:
                     # Artifact is an object with filename/content
@@ -140,7 +144,7 @@ class SnapshotStorage:
             return True
             
         except Exception as e:
-            print(f"🔍 DIAGNOSTIC: save_bundle failed: {e}")
+            logger.error("save_bundle failed", extra={"error": str(e)}, exc_info=True)
             raise SnapshotError(f"Failed to save bundle: {e}")
     
     async def save_partial_bundle(self, partial_bundle: PartialSnapshotBundle) -> bool:

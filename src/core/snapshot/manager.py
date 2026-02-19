@@ -6,6 +6,7 @@ capture, storage, triggers, monitoring, and integration components.
 """
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 import uuid
@@ -26,6 +27,9 @@ from .exceptions import (
     SnapshotCircuitOpen
 )
 from .circuit_breaker import get_circuit_breaker, check_circuit_breaker
+
+# Module logger
+logger = logging.getLogger(__name__)
 
 
 class SnapshotManager:
@@ -94,7 +98,7 @@ class SnapshotManager:
             
             # Try each artifact independently
             # DIAGNOSTIC: Log the start of artifact capture
-            print(f"🔍 DIAGNOSTIC: Starting artifact capture with config: {config}")
+            logger.debug("Starting artifact capture", extra={"config": str(config)})
             
             # FIX: Compute html_dir properly before using it
             from datetime import datetime
@@ -105,22 +109,22 @@ class SnapshotManager:
             logs_dir = bundle_path / "logs"
             
             # FIX: Create bundle directory BEFORE capturing artifacts
-            print(f"🔍 DIAGNOSTIC: Creating bundle directory: {bundle_path}")
+            logger.debug("Creating bundle directory", extra={"bundle_path": str(bundle_path)})
             await self.storage.create_bundle_directory(bundle_path)
-            print(f"🔍 DIAGNOSTIC: Bundle directory created successfully")
+            logger.debug("Bundle directory created successfully")
             
-            print(f"🔍 DIAGNOSTIC: bundle_path={bundle_path}, html_dir={html_dir}")
+            logger.debug("Bundle paths resolved", extra={"bundle_path": str(bundle_path), "html_dir": str(html_dir)})
             
             if config.capture_html:
                 try:
                     html_artifact = await self.capture._capture_full_html(page, html_dir)
                     artifacts.append(html_artifact)
-                    print(f"🔍 DIAGNOSTIC: HTML capture result: {html_artifact}")
+                    logger.debug("HTML capture result", extra={"artifact": str(html_artifact)})
                 except Exception as e:
                     errors.append(("html", e))
-                    print(f"⚠️ Failed to capture HTML: {e}")
+                    logger.warning("Failed to capture HTML", extra={"error": str(e)})
                     import traceback
-                    print(f"🔍 DIAGNOSTIC: HTML capture traceback: {traceback.format_exc()}")
+                    logger.debug("HTML capture traceback", extra={"traceback": traceback.format_exc()})
             
             if config.capture_screenshot:
                 try:
@@ -128,7 +132,7 @@ class SnapshotManager:
                     artifacts.append(screenshot_artifact)
                 except Exception as e:
                     errors.append(("screenshot", e))
-                    print(f"⚠️ Failed to capture screenshot: {e}")
+                    logger.warning("Failed to capture screenshot", extra={"error": str(e)})
             
             if config.capture_console:
                 try:
@@ -136,7 +140,7 @@ class SnapshotManager:
                     artifacts.append(console_artifact)
                 except Exception as e:
                     errors.append(("console", e))
-                    print(f"⚠️ Failed to capture console: {e}")
+                    logger.warning("Failed to capture console", extra={"error": str(e)})
             
             if config.capture_network:
                 try:
@@ -144,7 +148,7 @@ class SnapshotManager:
                     artifacts.append(network_artifact)
                 except Exception as e:
                     errors.append(("network", e))
-                    print(f"⚠️ Failed to capture network: {e}")
+                    logger.warning("Failed to capture network", extra={"error": str(e)})
             
             # Check if we got any artifacts
             if not artifacts:
@@ -196,7 +200,7 @@ class SnapshotManager:
                         "partial": False
                     })
                     
-                    print(f"📸 Full snapshot saved: {len(artifacts)} artifacts at {bundle_path}")
+                    logger.info("Full snapshot saved", extra={"artifact_count": len(artifacts), "bundle_path": str(bundle_path)})
                     return bundle
                     
             except Exception as e:
@@ -220,7 +224,7 @@ class SnapshotManager:
                 
         except SnapshotCircuitOpen:
             # Circuit breaker is open - don't try to capture
-            print("🚨 Snapshot circuit breaker is OPEN - skipping capture")
+            logger.warning("Snapshot circuit breaker is OPEN - skipping capture")
             self.metrics_collector.record_failure("circuit_breaker", "Circuit breaker open")
             return None
             
@@ -230,7 +234,7 @@ class SnapshotManager:
             
         except Exception as e:
             # Unexpected error
-            print(f"❌ Unexpected error in snapshot capture: {e}")
+            logger.error("Unexpected error in snapshot capture", extra={"error": str(e)}, exc_info=True)
             circuit_breaker = get_circuit_breaker()
             circuit_breaker.record_failure("unexpected", str(e))
             self.metrics_collector.record_failure("unexpected", str(e))
@@ -261,11 +265,11 @@ class SnapshotManager:
             await self.storage.save_partial_bundle(partial_bundle)
             partial_bundle.bundle_path = str(bundle_path)
             
-            print(f"📸 Partial snapshot saved: {len(artifacts)} artifacts, {len(errors)} failed at {bundle_path}")
+            logger.info("Partial snapshot saved", extra={"artifact_count": len(artifacts), "error_count": len(errors), "bundle_path": str(bundle_path)})
             return partial_bundle
             
         except Exception as e:
-            print(f"❌ Failed to save partial snapshot: {e}")
+            logger.error("Failed to save partial snapshot", extra={"error": str(e)}, exc_info=True)
             # Still return the partial bundle even if save failed
             error_tuples: List[tuple] = [(str(err_type), err) for err_type, err in errors]
             return PartialSnapshotBundle(
@@ -286,7 +290,7 @@ class SnapshotManager:
         """Event-driven failure handling for selector failures."""
         # This is now handled by SnapshotCoordinator
         # Keeping method for backward compatibility
-        print(f"⚠️ Selector failure detected: {selector} (matched: {matched_count})")
+        logger.warning("Selector failure detected", extra={"selector": selector, "matched_count": matched_count})
         return False
     
     async def handle_retry_exhaustion(self,
@@ -302,7 +306,7 @@ class SnapshotManager:
         """Event-driven failure handling for retry exhaustion."""
         # This is now handled by SnapshotCoordinator
         # Keeping method for backward compatibility
-        print(f"⚠️ Retry exhaustion detected: {operation} (retries: {retry_count}/{max_retries})")
+        logger.warning("Retry exhaustion detected", extra={"operation": operation, "retry_count": retry_count, "max_retries": max_retries})
         return False
     
     async def handle_timeout(self,
@@ -317,7 +321,7 @@ class SnapshotManager:
         """Event-driven failure handling for timeouts."""
         # This is now handled by SnapshotCoordinator
         # Keeping method for backward compatibility
-        print(f"⚠️ Timeout detected: {operation} (duration: {timeout_duration}s)")
+        logger.warning("Timeout detected", extra={"operation": operation, "timeout_duration": timeout_duration})
         return False
     
     async def load_bundle(self, bundle_path: str) -> Optional[SnapshotBundle]:
@@ -335,7 +339,7 @@ class SnapshotManager:
                 raise
                 
         except Exception as e:
-            print(f"Error loading bundle: {e}")
+            logger.error("Error loading bundle", extra={"bundle_path": bundle_path, "error": str(e)})
             return None
     
     async def list_bundles(self,
@@ -347,7 +351,7 @@ class SnapshotManager:
         try:
             return await self.storage.list_bundles(site, module, component, limit)
         except Exception as e:
-            print(f"Error listing bundles: {e}")
+            logger.error("Error listing bundles", extra={"error": str(e)})
             return []
     
     async def delete_bundle(self, bundle_path: str) -> bool:
@@ -365,7 +369,7 @@ class SnapshotManager:
                 raise
                 
         except Exception as e:
-            print(f"Error deleting bundle: {e}")
+            logger.error("Error deleting bundle", extra={"bundle_path": bundle_path, "error": str(e)})
             return False
     
     async def cleanup_old_bundles(self, 
@@ -388,7 +392,7 @@ class SnapshotManager:
                 raise
                 
         except Exception as e:
-            print(f"Error cleaning up bundles: {e}")
+            logger.error("Error cleaning up bundles", extra={"error": str(e)})
             return {"deleted_count": 0, "errors": [str(e)]}
     
     def get_metrics(self) -> SnapshotMetrics:
@@ -470,7 +474,7 @@ class SnapshotManager:
             self.dashboard.export_metrics(filepath, hours)
             return True
         except Exception as e:
-            print(f"Error exporting metrics: {e}")
+            logger.error("Error exporting metrics", extra={"filepath": filepath, "error": str(e)})
             return False
     
     async def validate_system(self) -> Dict[str, Any]:
