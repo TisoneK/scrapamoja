@@ -28,7 +28,13 @@ The workflow cannot continue without a successful scan because:
 - We need reliable baseline data
 
 Please fix the scanner script first, then re-run this workflow.
-```
+
+**🚨 IF SCANNER FAILS:**
+- Do NOT attempt manual file reading as fallback
+- Do NOT continue workflow by any other means
+- FIRST: Log script failure to issues.json
+- THEN: Stop and tell user exactly what failed
+- Manual workarounds are FORBIDDEN and must also be logged
 
 **🚨 AUTO-LOGGING: Template violations automatically logged without user prompting**
 **🚨 CONSEQUENCES:**
