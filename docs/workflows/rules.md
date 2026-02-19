@@ -6,6 +6,12 @@ This document defines universal rules that apply to ALL workflows in the Scrapam
 
 ## Universal Formatting Rules
 
+**🚨 ABSOLUTE RULE:** Never narrate tool use or file reads.
+- Do NOT write "I'll read..."
+- Do NOT write "I need to read..."
+- Do NOT write "Reading file..."
+- Execute silently, present results directly.
+
 **🚨 CRITICAL: USE LETTERS FOR OPTIONS, NUMBERS FOR STEPS 🚨**
 
 **USER OPTIONS (Always use letters):**
