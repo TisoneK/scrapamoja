@@ -18,6 +18,8 @@ Execute scanner to assess current state:
 powershell -ExecutionPolicy Bypass -File "docs\workflows\reference-fill\scripts\pwsh\scanner.ps1"
 ```
 
+**ON SUCCESS → Immediately proceed to Step 2. Do not wait for user input.**
+
 **CRITICAL:** If scanner fails, STOP workflow immediately. Display this error:
 ```
 ❌ Scanner script failed to execute.
@@ -50,16 +52,21 @@ Before each response, LLM must self-check:
 
 This ensures consistent behavior and automatic quality control.
 
-### Step 2: Show Results
-Display scan results in table format, then STOP.
+### Step 2: Present Results
 
-DO NOT ask questions. Wait for user response.
+**ON SCANNER SUCCESS → Read and execute `templates/reference-fill.status.md` exactly.**
+
+**ON COMPLETION → Present options A) B) C) to user and wait for selection.**
 
 ### Step 3: Route Based on User Choice
-After showing results, wait for user to choose:
-- If user wants to fill files → Read and execute `docs/workflows/reference-fill/templates/reference-fill.fill.md`
-- If user wants validation → Read and execute `docs/workflows/reference-fill/templates/reference-fill.validate.md`
-- If user wants status → Read and execute `docs/workflows/reference-fill/templates/reference-fill.status.md`
+
+After user selects option, immediately execute corresponding template:
+
+- If user selects A) → Read and execute `docs/workflows/reference-fill/templates/reference-fill.fill.md`
+- If user selects B) → Read and execute `docs/workflows/reference-fill/templates/reference-fill.validate.md`
+- If user selects C) → Read and execute `docs/workflows/reference-fill/templates/reference-fill.status.md`
+
+**KEY: Each step must explicitly hand off to next step with clear instructions.**
 
 ---
 
