@@ -35,6 +35,23 @@ param(
 )
 
 try {
+    # Load ignore patterns from status file
+    $ignorePatterns = $null
+    $statusFile = "docs/workflows/reference-fill/status.json"
+    if (Test-Path $statusFile) {
+        try {
+            $statusContent = Get-Content $statusFile -Raw | ConvertFrom-Json
+            if ($statusContent.configuration.ignore_patterns.enabled) {
+                $ignorePatterns = $statusContent.configuration.ignore_patterns
+                Write-Host "Ignore patterns loaded from status.json" -ForegroundColor Green
+                Write-Host "Files to ignore: $($ignorePatterns.files.Count)" -ForegroundColor Cyan
+                Write-Host "Patterns to ignore: $($ignorePatterns.patterns.Count)" -ForegroundColor Cyan
+            }
+        } catch {
+            Write-Warning "Could not load ignore patterns from status.json: $_"
+        }
+    }
+    
     # Handle -ShowContent parameter: display specific file content for LLM verification
     if ($ShowContent) {
         $targetFile = $ShowContent
@@ -106,6 +123,36 @@ try {
     
     # Process each file - detect NEEDS_FILL marker and placeholders
     foreach ($file in $files) {
+        # Check if file should be ignored
+        $shouldIgnore = $false
+        if ($ignorePatterns) {
+            # Check exact file matches
+            foreach ($ignoreFile in $ignorePatterns.files) {
+                if ($file.Name -eq $ignoreFile) {
+                    $shouldIgnore = $true
+                    Write-Host "Ignoring file (exact match): $($file.Name)" -ForegroundColor Yellow
+                    break
+                }
+            }
+            
+            # Check pattern matches
+            if (-not $shouldIgnore) {
+                foreach ($pattern in $ignorePatterns.patterns) {
+                    # Convert wildcard pattern to regex
+                    $regexPattern = $pattern -replace '\*', '.*' -replace '\?', '.'
+                    if ($file.Name -match $regexPattern -or $file.FullName -match $regexPattern) {
+                        $shouldIgnore = $true
+                        Write-Host "Ignoring file (pattern match): $($file.Name) matches $pattern" -ForegroundColor Yellow
+                        break
+                    }
+                }
+            }
+        }
+        
+        if ($shouldIgnore) {
+            continue  # Skip this file
+        }
+        
         $content = Get-Content $file.FullName -Raw -ErrorAction SilentlyContinue
         
         # Resolve InputPath to absolute path for comparison

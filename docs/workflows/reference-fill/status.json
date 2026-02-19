@@ -79,6 +79,24 @@
                           "target_directory":  "docs/references/flashscore/html_samples/",
                           "template_reference":  "docs/references/flashscore/html_samples/README.md",
                           "validation_level":  "standard",
+                          "ignore_patterns":  {
+                                                "enabled":  true,
+                                                "description":  "Files and patterns to ignore during scanning",
+                                                "files":  [
+                                                            "README.md"
+                                                        ],
+                                                "patterns":  [
+                                                              "*.tmp",
+                                                              "*.bak",
+                                                              "*~",
+                                                              "*.log",
+                                                              "documentation/*",
+                                                              "docs/*",
+                                                              "guides/*",
+                                                              "*.draft.md"
+                                                          ],
+                                                "last_updated":  "2026-02-19T11:25:00Z"
+                                            },
                           "output_structure":  {
                                                    "scans":  "outputs/scans/",
                                                    "validation":  "outputs/validation/",
