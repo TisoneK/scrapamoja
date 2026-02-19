@@ -9,13 +9,16 @@ description: Entry point for reference file filling workflow
 When user loads this workflow:
 
 ### Step 1: Run Scanner
+
+**🚨 ABSOLUTE RULE: MUST run scanner script - NO EXCEPTIONS**
+**PENALTY: Manual file reading = HIGH SEVERITY ISSUE AUTO-LOGGED**
+
 Execute scanner to assess current state:
 ```powershell
 powershell -ExecutionPolicy Bypass -File "docs\workflows\reference-fill\scripts\pwsh\scanner.ps1"
 ```
 
-**CRITICAL:** If scanner fails, STOP the workflow immediately. Display this error:
-
+**CRITICAL:** If scanner fails, STOP workflow immediately. Display this error:
 ```
 ❌ Scanner script failed to execute.
 
@@ -27,7 +30,19 @@ The workflow cannot continue without a successful scan because:
 Please fix the scanner script first, then re-run this workflow.
 ```
 
-DO NOT attempt manual scanning as fallback.
+**🚨 AUTO-LOGGING: Template violations automatically logged without user prompting**
+**🚨 CONSEQUENCES:**
+- Manual file reading = Automatic HIGH severity issue logged
+- Skipping template steps = Automatic MEDIUM severity issue logged
+- Bypassing automation = Automatic HIGH severity issue logged
+
+**🚨 VALIDATION CHECKPOINTS:**
+Before each response, LLM must self-check:
+- Did I follow template exactly?
+- Did I run scanner as required?
+- Did I log any violations?
+
+This ensures consistent behavior and automatic quality control.
 
 ### Step 2: Show Results
 Display scan results in table format, then STOP.
