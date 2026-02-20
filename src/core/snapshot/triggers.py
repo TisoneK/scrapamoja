@@ -11,10 +11,14 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from .models import (
     SnapshotContext, SnapshotConfig, SnapshotMode, RateLimiter,
     SnapshotError
 )
+
+logger = get_logger(__name__)
 
 
 class SnapshotTrigger(ABC):
@@ -289,7 +293,7 @@ class TriggerManager:
                     })
             except Exception as e:
                 # Log error but continue with other triggers
-                print(f"Error evaluating trigger {trigger.get_trigger_type()}: {e}")
+                logger.error("Error evaluating trigger", trigger_type=trigger.get_trigger_type(), error=str(e))
                 continue
         
         return activated_triggers

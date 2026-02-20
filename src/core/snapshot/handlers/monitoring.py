@@ -10,9 +10,13 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from ..manager import SnapshotManager
 from ..models import SnapshotMetrics
 from ..config import get_settings
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -59,10 +63,10 @@ class MonitoringSnapshot:
             # For now, we'll create a placeholder that can be hooked into
             
             self._initialized = True
-            print("✅ Monitoring snapshot handler initialized")
+            logger.info("Monitoring snapshot handler initialized")
             
         except Exception as e:
-            print(f"❌ Failed to initialize monitoring snapshot handler: {e}")
+            logger.error("Failed to initialize monitoring snapshot handler", error=str(e))
             raise
     
     async def record_error(self, error_data: Dict[str, Any]):
@@ -82,14 +86,14 @@ class MonitoringSnapshot:
             }
             
             # This would integrate with your monitoring system
-            print(f"🚨 Error recorded: {error_info}")
+            logger.warning("Error recorded", error_info=error_info)
             
             # Notify callbacks
             for callback in self.on_snapshot_recorded:
                 await callback("error", error_info)
                 
         except Exception as e:
-            print(f"❌ Error recording to monitoring: {e}")
+            logger.error("Error recording to monitoring", error=str(e))
     
     async def record_snapshot(self, integration_source: str, bundle: Any):
         """Record snapshot from other integrations."""
@@ -115,14 +119,14 @@ class MonitoringSnapshot:
             self.recorded_snapshots[snapshot_id] = snapshot_info
             
             # This would integrate with your monitoring system
-            print(f"📊 Snapshot recorded: {snapshot_id} from {integration_source}")
+            logger.debug("Snapshot recorded", snapshot_id=snapshot_id, integration_source=integration_source)
             
             # Notify callbacks
             for callback in self.on_snapshot_recorded:
                 await callback("snapshot", snapshot_info)
                 
         except Exception as e:
-            print(f"❌ Error recording snapshot: {e}")
+            logger.error("Error recording snapshot", error=str(e))
     
     async def generate_metrics_report(self) -> Dict[str, Any]:
         """Generate comprehensive metrics report."""
@@ -149,7 +153,7 @@ class MonitoringSnapshot:
             }
             
             # This would integrate with your monitoring system
-            print(f"📈 Metrics report generated")
+            logger.debug("Metrics report generated")
             
             # Notify callbacks
             for callback in self.on_metrics_updated:
@@ -158,7 +162,7 @@ class MonitoringSnapshot:
             return report
             
         except Exception as e:
-            print(f"❌ Error generating metrics report: {e}")
+            logger.error("Error generating metrics report", error=str(e))
             return {"error": str(e)}
     
     def _get_snapshot_breakdown(self) -> Dict[str, Any]:
@@ -227,7 +231,7 @@ class MonitoringSnapshot:
             health_status["check_timestamp"] = datetime.now().isoformat()
             
             # This would integrate with your monitoring system
-            print(f"🏥 Health check completed: {health_status['overall_status']}")
+            logger.debug("Health check completed", overall_status=health_status['overall_status'])
             
             # Notify callbacks
             for callback in self.on_health_check:
@@ -236,7 +240,7 @@ class MonitoringSnapshot:
             return health_status
             
         except Exception as e:
-            print(f"❌ Error performing health check: {e}")
+            logger.error("Error performing health check", error=str(e))
             return {"error": str(e)}
     
     async def get_health(self) -> Dict[str, Any]:

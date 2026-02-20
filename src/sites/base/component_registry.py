@@ -12,8 +12,12 @@ import asyncio
 import json
 from pathlib import Path
 
+from src.observability.logger import get_logger
+
 from .component_interface import BaseComponent, ComponentMetadata
 from .component_manager import ComponentManager
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -116,11 +120,11 @@ class ComponentRegistry:
             # Build dependency graph
             await self._build_dependency_graph()
             
-            print(f"ComponentRegistry initialized with {len(self._registrations)} components")
+            logger.info("ComponentRegistry initialized", component_count=len(self._registrations))
             return True
             
         except Exception as e:
-            print(f"Failed to initialize ComponentRegistry: {str(e)}")
+            logger.error("Failed to initialize ComponentRegistry", error=str(e))
             return False
     
     async def register_component(
@@ -151,7 +155,7 @@ class ComponentRegistry:
             
             # Check if already registered
             if component_id in self._registrations:
-                print(f"Component {component_id} already registered")
+                logger.debug("Component already registered", component_id=component_id)
                 return False
             
             # Create registration
@@ -177,11 +181,11 @@ class ComponentRegistry:
             if self._auto_save_enabled and self._registry_file:
                 await self._save_registry_to_file()
             
-            print(f"Registered component: {component_id} from {source}")
+            logger.info("Registered component", component_id=component_id, source=source)
             return True
             
         except Exception as e:
-            print(f"Failed to register component {component_class.__name__}: {str(e)}")
+            logger.error("Failed to register component", class_name=component_class.__name__, error=str(e))
             return False
     
     async def unregister_component(self, component_id: str) -> bool:
@@ -196,13 +200,14 @@ class ComponentRegistry:
         """
         try:
             if component_id not in self._registrations:
-                print(f"Component {component_id} not registered")
+                logger.debug("Component not registered", component_id=component_id)
                 return False
             
             # Check for dependents
             registration = self._registrations[component_id]
             if registration.dependents:
-                print(f"Cannot unregister {component_id}: has dependents {registration.dependents}")
+                logger.warning("Cannot unregister component: has dependents", 
+                              component_id=component_id, dependents=registration.dependents)
                 return False
             
             # Remove from registry
@@ -218,11 +223,11 @@ class ComponentRegistry:
             if self._auto_save_enabled and self._registry_file:
                 await self._save_registry_to_file()
             
-            print(f"Unregistered component: {component_id}")
+            logger.info("Unregistered component", component_id=component_id)
             return True
             
         except Exception as e:
-            print(f"Failed to unregister component {component_id}: {str(e)}")
+            logger.error("Failed to unregister component", component_id=component_id, error=str(e))
             return False
     
     async def get_component(self, component_id: str) -> Optional[Type[BaseComponent]]:
@@ -444,11 +449,11 @@ class ComponentRegistry:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(export_data, f, indent=2, default_flow_style=False)
             
-            print(f"Exported registry to {file_path}")
+            logger.info("Exported registry", file_path=file_path)
             return True
             
         except Exception as e:
-            print(f"Failed to export registry to {file_path}: {str(e)}")
+            logger.error("Failed to export registry", file_path=file_path, error=str(e))
             return False
     
     async def import_registry(self, file_path: str, overwrite: bool = False) -> bool:
@@ -468,7 +473,7 @@ class ComponentRegistry:
             
             # Check version compatibility
             if import_data.get("version") != "1.0.0":
-                print(f"Incompatible registry version: {import_data.get('version')}")
+                logger.warning("Incompatible registry version", version=import_data.get('version'))
                 return False
             
             # Clear existing registrations if overwrite
@@ -478,7 +483,7 @@ class ComponentRegistry:
             # Import components
             for component_id, component_data in import_data.get("components", {}).items():
                 if component_id in self._registrations and not overwrite:
-                    print(f"Component {component_id} already exists, skipping import")
+                    logger.debug("Component already exists, skipping import", component_id=component_id)
                     continue
                 
                 # Reconstruct registration
@@ -505,11 +510,11 @@ class ComponentRegistry:
             await self._rebuild_stats()
             await self._build_dependency_graph()
             
-            print(f"Imported registry from {file_path}")
+            logger.info("Imported registry", file_path=file_path)
             return True
             
         except Exception as e:
-            print(f"Failed to import registry from {file_path}: {str(e)}")
+            logger.error("Failed to import registry", file_path=file_path, error=str(e))
             return False
     
     async def cleanup(self) -> None:
@@ -523,10 +528,10 @@ class ComponentRegistry:
             self._registrations.clear()
             self._stats = RegistryStats()
             
-            print("ComponentRegistry cleanup completed")
+            logger.info("ComponentRegistry cleanup completed")
             
         except Exception as e:
-            print(f"Error during ComponentRegistry cleanup: {str(e)}")
+            logger.error("Error during ComponentRegistry cleanup", error=str(e))
     
     async def _validate_component_class(self, component_class: Type[BaseComponent]) -> bool:
         """Validate a component class."""
@@ -562,7 +567,7 @@ class ComponentRegistry:
                     await self._inspect_component_file(component_file)
                     
             except Exception as e:
-                print(f"Error discovering components in {discovery_path}: {str(e)}")
+                logger.error("Error discovering components", discovery_path=discovery_path, error=str(e))
     
     async def _inspect_component_file(self, file_path: Path) -> None:
         """Inspect a Python file for components."""
@@ -583,7 +588,7 @@ class ComponentRegistry:
                     await self.register_component(obj, "auto_discovery")
                     
         except Exception as e:
-            print(f"Error inspecting component file {file_path}: {str(e)}")
+            logger.error("Error inspecting component file", file_path=str(file_path), error=str(e))
     
     async def _update_stats(self, registration: ComponentRegistration, action: str) -> None:
         """Update registry statistics."""
@@ -715,7 +720,7 @@ class ComponentRegistry:
                 json.dump(export_data, f, indent=2, default_flow_style=False)
                 
         except Exception as e:
-            print(f"Failed to save registry to file: {str(e)}")
+            logger.error("Failed to save registry to file", error=str(e))
     
     async def _load_registry_from_file(self) -> None:
         """Load registry from file."""
@@ -728,7 +733,7 @@ class ComponentRegistry:
             
             # Check version compatibility
             if import_data.get("version") != "1.0.0":
-                print(f"Incompatible registry version: {import_data.get('version')}")
+                logger.warning("Incompatible registry version", version=import_data.get('version'))
                 return
             
             # Import components
@@ -757,7 +762,7 @@ class ComponentRegistry:
             await self._build_dependency_graph()
             
         except Exception as e:
-            print(f"Failed to load registry from file: {str(e)}")
+            logger.error("Failed to load registry from file", error=str(e))
 
 
 class RegistryError(Exception):

@@ -11,9 +11,13 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from ..manager import SnapshotManager
 from ..models import SnapshotContext, SnapshotConfig, SnapshotMode
 from ..config import get_settings
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -84,10 +88,10 @@ class ErrorSnapshot:
             await self._hook_error_events()
             
             self._initialized = True
-            print("✅ Error handler integration initialized")
+            logger.info("Error handler integration initialized")
             
         except Exception as e:
-            print(f"❌ Failed to initialize error handler integration: {e}")
+            logger.error("Failed to initialize error handler integration", error=str(e))
             raise
     
     async def _hook_error_events(self):
@@ -133,7 +137,7 @@ class ErrorSnapshot:
             sys.excepthook = exception_hook
             
         except Exception as e:
-            print(f"❌ Failed to set up global exception hook: {e}")
+            logger.error("Failed to set up global exception hook", error=str(e))
     
     async def _on_error_occurred(self, error: Dict[str, Any]):
         """Handle error occurrence event."""
@@ -160,7 +164,7 @@ class ErrorSnapshot:
                 await callback(error)
                 
         except Exception as e:
-            print(f"❌ Error handling error occurrence: {e}")
+            logger.error("Error handling error occurrence", error=str(e))
     
     async def _on_critical_error(self, error: Dict[str, Any]):
         """Handle critical error event."""
@@ -195,7 +199,7 @@ class ErrorSnapshot:
                 await callback(error)
                 
         except Exception as e:
-            print(f"❌ Error handling critical error: {e}")
+            logger.error("Error handling critical error", error=str(e))
     
     async def _on_unhandled_exception(self, exc_type: type, exc_value: Exception, exc_traceback):
         """Handle unhandled exception event."""
@@ -238,7 +242,7 @@ class ErrorSnapshot:
                 await callback(error_data)
                 
         except Exception as e:
-            print(f"❌ Error handling unhandled exception: {e}")
+            logger.error("Error handling unhandled exception", error=str(e))
     
     async def _handle_snapshot_trigger_error(self, error: Dict[str, Any]):
         """Handle error that should trigger snapshot."""
@@ -267,7 +271,7 @@ class ErrorSnapshot:
                     self.integration_stats["snapshots_captured"] += 1
             
         except Exception as e:
-            print(f"❌ Error handling snapshot trigger error: {e}")
+            logger.error("Error handling snapshot trigger error", error=str(e))
     
     async def _handle_global_exception(self, exc_type: type, exc_value: Exception, exc_traceback):
         """Handle global exception from exception hook."""
@@ -314,13 +318,13 @@ class ErrorSnapshot:
             
             if bundle:
                 snapshot_id = bundle.content_hash[:8]
-                print(f"📸 Error snapshot captured: {snapshot_id} from {trigger_source}")
+                logger.info("Error snapshot captured", snapshot_id=snapshot_id, trigger_source=trigger_source)
                 return snapshot_id
             
             return None
             
         except Exception as e:
-            print(f"❌ Failed to capture error snapshot: {e}")
+            logger.error("Failed to capture error snapshot", error=str(e))
             return None
     
     async def _get_active_page(self) -> Optional[Any]:
@@ -339,7 +343,7 @@ class ErrorSnapshot:
             return None
             
         except Exception as e:
-            print(f"❌ Error getting active page: {e}")
+            logger.error("Error getting active page", error=str(e))
             return None
     
     async def get_health(self) -> Dict[str, Any]:

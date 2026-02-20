@@ -10,9 +10,13 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from ..manager import SnapshotManager
 from ..models import SnapshotContext, SnapshotConfig, SnapshotMode
 from ..config import get_settings
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -70,10 +74,10 @@ class SessionSnapshot:
             await self._hook_session_events()
             
             self._initialized = True
-            print("✅ Session manager integration initialized")
+            logger.info("Session manager integration initialized")
             
         except Exception as e:
-            print(f"❌ Failed to initialize session manager integration: {e}")
+            logger.error("Failed to initialize session manager integration", error=str(e))
             raise
     
     async def _hook_session_events(self):
@@ -131,7 +135,7 @@ class SessionSnapshot:
                 await callback(session_id, session_data)
                 
         except Exception as e:
-            print(f"❌ Error handling session creation: {e}")
+            logger.error("Error handling session creation", error=str(e))
     
     async def _on_session_started(self, session_id: str, start_data: Dict[str, Any]):
         """Handle session started event."""
@@ -143,7 +147,7 @@ class SessionSnapshot:
                 await callback(session_id, start_data)
                 
         except Exception as e:
-            print(f"❌ Error handling session started: {e}")
+            logger.error("Error handling session started", error=str(e))
     
     async def _on_session_paused(self, session_id: str, pause_data: Dict[str, Any]):
         """Handle session paused event."""
@@ -175,7 +179,7 @@ class SessionSnapshot:
                 await callback(session_id, pause_data)
                 
         except Exception as e:
-            print(f"❌ Error handling session paused: {e}")
+            logger.error("Error handling session paused", error=str(e))
     
     async def _on_session_resumed(self, session_id: str, resume_data: Dict[str, Any]):
         """Handle session resumed event."""
@@ -187,7 +191,7 @@ class SessionSnapshot:
                 await callback(session_id, resume_data)
                 
         except Exception as e:
-            print(f"❌ Error handling session resumed: {e}")
+            logger.error("Error handling session resumed", error=str(e))
     
     async def _on_session_terminated(self, session_id: str, termination_data: Dict[str, Any]):
         """Handle session termination event."""
@@ -220,7 +224,7 @@ class SessionSnapshot:
                 await callback(session_id, termination_data)
                 
         except Exception as e:
-            print(f"❌ Error handling session termination: {e}")
+            logger.error("Error handling session termination", error=str(e))
     
     async def _on_session_error(self, session_id: str, error_data: Dict[str, Any]):
         """Handle session error event."""
@@ -253,7 +257,7 @@ class SessionSnapshot:
                 await callback(session_id, error_data)
                 
         except Exception as e:
-            print(f"❌ Error handling session error: {e}")
+            logger.error("Error handling session error", error=str(e))
     
     async def _capture_session_snapshot(self, 
                                   trigger_source: str,
@@ -296,13 +300,13 @@ class SessionSnapshot:
             
             if bundle:
                 snapshot_id = bundle.content_hash[:8]
-                print(f"📸 Session snapshot captured: {snapshot_id} from {trigger_source}")
+                logger.info("Session snapshot captured", snapshot_id=snapshot_id, trigger_source=trigger_source)
                 return snapshot_id
             
             return None
             
         except Exception as e:
-            print(f"❌ Failed to capture session snapshot: {e}")
+            logger.error("Failed to capture session snapshot", error=str(e))
             return None
     
     async def _get_active_page(self) -> Optional[Any]:
@@ -321,7 +325,7 @@ class SessionSnapshot:
             return None
             
         except Exception as e:
-            print(f"❌ Error getting active page: {e}")
+            logger.error("Error getting active page", error=str(e))
             return None
     
     async def get_health(self) -> Dict[str, Any]:

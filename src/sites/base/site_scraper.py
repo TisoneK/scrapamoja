@@ -6,7 +6,6 @@ Provides common functionality and enforces required methods.
 Integrates with the modular component system for flows, processors, and validators.
 """
 
-import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 import inspect
@@ -14,6 +13,7 @@ from datetime import datetime
 import asyncio
 from playwright.async_api import Page
 
+from src.observability.logger import get_logger
 from .component_interface import BaseComponent, ComponentContext, ComponentResult
 from .component_manager import ComponentManager
 from .configuration_manager import ConfigurationManager, Environment
@@ -23,7 +23,7 @@ from .base_processor import BaseProcessor
 from .base_validator import BaseValidator
 
 # Module logger
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ModularSiteScraper(ABC):
@@ -116,7 +116,7 @@ class ModularSiteScraper(ABC):
             # The scraper is ready for use
             
         except Exception as e:
-            logger.error("Failed to initialize modular components", extra={"error": str(e)})
+            logger.error("Failed to initialize modular components", error=str(e))
     
     async def register_flow(self, flow: BaseFlow) -> bool:
         """
@@ -146,11 +146,11 @@ class ModularSiteScraper(ABC):
                 self._execution_context
             )
             
-            logger.debug("Registered flow", extra={"flow_id": flow.component_id})
+            logger.debug("Registered flow", flow_id=flow.component_id)
             return True
-            
+        
         except Exception as e:
-            logger.error("Failed to register flow", extra={"flow_id": flow.component_id, "error": str(e)})
+            logger.error("Failed to register flow", flow_id=flow.component_id, error=str(e))
             return False
     
     async def register_processor(self, processor: BaseProcessor) -> bool:
@@ -181,11 +181,11 @@ class ModularSiteScraper(ABC):
                 self._execution_context
             )
             
-            logger.debug("Registered processor", extra={"processor_id": processor.component_id})
+            logger.debug("Registered processor", processor_id=processor.component_id)
             return True
-            
+        
         except Exception as e:
-            logger.error("Failed to register processor", extra={"processor_id": processor.component_id, "error": str(e)})
+            logger.error("Failed to register processor", processor_id=processor.component_id, error=str(e))
             return False
     
     async def register_validator(self, validator: BaseValidator) -> bool:
@@ -216,11 +216,11 @@ class ModularSiteScraper(ABC):
                 self._execution_context
             )
             
-            logger.debug("Registered validator", extra={"validator_id": validator.component_id})
+            logger.debug("Registered validator", validator_id=validator.component_id)
             return True
-            
+        
         except Exception as e:
-            logger.error("Failed to register validator", extra={"validator_id": validator.component_id, "error": str(e)})
+            logger.error("Failed to register validator", validator_id=validator.component_id, error=str(e))
             return False
     
     async def execute_flow(self, flow_id: str, **kwargs) -> ComponentResult:
@@ -248,7 +248,7 @@ class ModularSiteScraper(ABC):
             return result
             
         except Exception as e:
-            logger.error("Failed to execute flow", extra={"flow_id": flow_id, "error": str(e)})
+            logger.error("Failed to execute flow", flow_id=flow_id, error=str(e))
             return ComponentResult(
                 success=False,
                 data={'error': str(e)},
@@ -274,7 +274,7 @@ class ModularSiteScraper(ABC):
             return await processor.execute(data=data)
             
         except Exception as e:
-            logger.error("Failed to process data", extra={"processor_id": processor_id, "error": str(e)})
+            logger.error("Failed to process data", processor_id=processor_id, error=str(e))
             return ComponentResult(
                 success=False,
                 data={'error': str(e)},
@@ -300,7 +300,7 @@ class ModularSiteScraper(ABC):
             return await validator.execute(target=data)
             
         except Exception as e:
-            logger.error("Failed to validate data", extra={"validator_id": validator_id, "error": str(e)})
+            logger.error("Failed to validate data", validator_id=validator_id, error=str(e))
             return ComponentResult(
                 success=False,
                 data={'error': str(e)},
@@ -547,10 +547,10 @@ class ModularSiteScraper(ABC):
             self._processors.clear()
             self._validators.clear()
             
-            logger.info("Modular scraper cleanup completed", extra={"site_id": self.site_id})
-            
+            logger.info("Modular scraper cleanup completed", site_id=self.site_id)
+        
         except Exception as e:
-            logger.error("Error during scraper cleanup", extra={"error": str(e)})
+            logger.error("Error during scraper cleanup", error=str(e))
 
 
 # Legacy compatibility

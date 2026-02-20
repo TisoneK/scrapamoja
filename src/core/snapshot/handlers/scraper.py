@@ -10,9 +10,13 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from ..manager import SnapshotManager
 from ..models import SnapshotContext, SnapshotConfig, SnapshotMode
 from ..config import get_settings
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -60,10 +64,10 @@ class ScraperSnapshot:
             # For now, we'll create a placeholder that can be hooked into
             
             self._initialized = True
-            print("✅ Scraper snapshot handler initialized")
+            logger.info("Scraper snapshot handler initialized")
             
         except Exception as e:
-            print(f"❌ Failed to initialize scraper snapshot handler: {e}")
+            logger.error("Failed to initialize scraper snapshot handler", error=str(e))
             raise
     
     async def handle_selector_failure(self, selector: str, failure_data: Dict[str, Any]):
@@ -99,7 +103,7 @@ class ScraperSnapshot:
                 await callback(selector, failure_data)
                 
         except Exception as e:
-            print(f"❌ Error handling scraper selector failure: {e}")
+            logger.error("Error handling scraper selector failure", error=str(e))
     
     async def _capture_scraper_snapshot(self, 
                                    trigger_source: str,
@@ -147,13 +151,13 @@ class ScraperSnapshot:
             
             if bundle:
                 snapshot_id = bundle.content_hash[:8]
-                print(f"📸 Scraper snapshot captured: {snapshot_id} from {trigger_source}")
+                logger.info("Scraper snapshot captured", snapshot_id=snapshot_id, trigger_source=trigger_source)
                 return snapshot_id
             
             return None
             
         except Exception as e:
-            print(f"❌ Failed to capture scraper snapshot: {e}")
+            logger.error("Failed to capture scraper snapshot", error=str(e))
             return None
     
     async def _get_active_page(self) -> Optional[Any]:
@@ -168,7 +172,7 @@ class ScraperSnapshot:
             return None
             
         except Exception as e:
-            print(f"❌ Error getting active page: {e}")
+            logger.error("Error getting active page", error=str(e))
             return None
     
     async def get_health(self) -> Dict[str, Any]:

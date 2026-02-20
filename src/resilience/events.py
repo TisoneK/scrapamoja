@@ -5,16 +5,16 @@ Provides event bus and event handling for resilience components including
 failure events, retry events, checkpoint events, resource events, and abort events.
 """
 
-import logging
 from typing import Dict, Any, List, Callable, Optional
 from datetime import datetime
 from dataclasses import dataclass, field
 import asyncio
 import uuid
+from src.observability.logger import get_logger
 from .correlation import get_correlation_id
 
 # Module logger
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -117,7 +117,7 @@ class EventBus:
                 handler(event)
         except Exception as e:
             # Log error but don't propagate to avoid breaking event publishing
-            logger.error("Error in event handler", extra={"error": str(e)})
+            logger.error("Error in event handler", error=str(e))
 
 
 # Global event bus instance

@@ -5,13 +5,13 @@ Handles navigation and interaction with Flashscore sports pages.
 """
 
 import asyncio
-import logging
+from src.observability.logger import get_logger
 from src.sites.base.flow import BaseFlow
 from src.selectors.context_manager import SelectorContext, DOMState
 from src.sites.flashscore.models import NavigationState, PageState
 
 # Module logger
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class FlashscoreFlow(BaseFlow):
@@ -28,7 +28,7 @@ class FlashscoreFlow(BaseFlow):
     
     async def _capture_debug_snapshot(self, operation: str, metadata: dict = None):
         """Capture debug snapshot during flow operations."""
-        logger.debug("Capturing debug snapshot", extra={"operation": operation, "enable_metrics": self.snapshot_settings.enable_metrics})
+        logger.debug("Capturing debug snapshot", operation=operation, enable_metrics=self.snapshot_settings.enable_metrics)
         try:
             if self.snapshot_settings.enable_metrics:
                 from src.core.snapshot.models import SnapshotContext, SnapshotConfig, SnapshotMode
@@ -84,18 +84,18 @@ class FlashscoreFlow(BaseFlow):
                 if snapshot_result:
                     if hasattr(snapshot_result, 'bundle_path'):
                         bundle_path = snapshot_result.bundle_path
-                        logger.debug("Successfully captured flow snapshot", extra={"bundle_path": bundle_path})
+                        logger.debug("Successfully captured flow snapshot", bundle_path=bundle_path)
                     else:
-                        logger.debug("Snapshot created but bundle_path not found in result", extra={"result_type": str(type(snapshot_result))})
+                        logger.debug("Snapshot created but bundle_path not found in result", result_type=str(type(snapshot_result)))
                 else:
                     logger.warning("Failed to capture snapshot - result is None")
                 
-                logger.info("Captured debug snapshot", extra={"operation": operation, "bundle_path": bundle_path})
-                
+                logger.info("Captured debug snapshot", operation=operation, bundle_path=bundle_path)
+
         except Exception as e:
-            logger.error("Failed to capture debug snapshot", extra={"operation": operation, "error": str(e), "exception_type": type(e).__name__})
+            logger.error("Failed to capture debug snapshot", operation=operation, error=str(e), exception_type=type(e).__name__)
             import traceback
-            logger.debug("Full traceback", extra={"traceback": traceback.format_exc()})
+            logger.debug("Full traceback", traceback=traceback.format_exc())
     
     def _get_timeout_ms(self, selector_name: str, default_timeout: float = 3.0) -> int:
         """

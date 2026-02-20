@@ -167,20 +167,20 @@ class FileSystemStorageAdapter(IStorageAdapter):
             
             # Capture HTML content
             if snapshot.dom_content:
-                logger.debug("Creating HTML artifact for snapshot", extra={"snapshot_id": snapshot.id})
+                logger.debug("Creating HTML artifact for snapshot", snapshot_id=snapshot.id)
                 html_filename = f"fullpage_{snapshot.id[:8]}.html"
                 html_path = bundle_path / "html" / html_filename
                 
-                logger.debug("HTML path resolved", extra={"html_path": str(html_path), "dom_content_length": len(snapshot.dom_content) if snapshot.dom_content else 0})
+                logger.debug("HTML path resolved", html_path=str(html_path), dom_content_length=len(snapshot.dom_content) if snapshot.dom_content else 0)
                 
                 # Write HTML content
                 with open(html_path, 'w', encoding='utf-8') as f:
                     f.write(snapshot.dom_content)
                 
-                logger.debug("HTML file written", extra={"html_path": str(html_path), "exists": html_path.exists()})
+                logger.debug("HTML file written", html_path=str(html_path), exists=html_path.exists())
                 artifacts.append(f"html/{html_filename}")
             else:
-                logger.debug("No DOM content found in snapshot", extra={"snapshot_id": snapshot.id})
+                logger.debug("No DOM content found in snapshot", snapshot_id=snapshot.id)
             
             # Capture screenshot if provided
             if screenshot:

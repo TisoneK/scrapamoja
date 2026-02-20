@@ -15,7 +15,11 @@ import json
 import os
 from enum import Enum
 
+from src.observability.logger import get_logger
+
 from .component_interface import ComponentContext
+
+logger = get_logger(__name__)
 
 
 class Environment(Enum):
@@ -146,11 +150,11 @@ class ConfigurationManager:
             if hot_reload:
                 await self._start_hot_reload()
             
-            print(f"ConfigurationManager initialized for environment: {environment.value}")
+            logger.info("ConfigurationManager initialized", environment=environment.value)
             return True
             
         except Exception as e:
-            print(f"Failed to initialize ConfigurationManager: {str(e)}")
+            logger.error("Failed to initialize ConfigurationManager", error=str(e))
             return False
     
     async def get_config(self, environment: Optional[Environment] = None) -> Dict[str, Any]:
@@ -328,11 +332,11 @@ class ConfigurationManager:
             # Save feature flags
             await self._save_feature_flags()
             
-            print(f"Set feature flag {flag_name} to {enabled}")
+            logger.info("Set feature flag", flag_name=flag_name, enabled=enabled)
             return True
             
         except Exception as e:
-            print(f"Failed to set feature flag {flag_name}: {str(e)}")
+            logger.error("Failed to set feature flag", flag_name=flag_name, error=str(e))
             return False
     
     async def reload_config(self, config_path: str) -> bool:
@@ -348,7 +352,7 @@ class ConfigurationManager:
         try:
             config_file = Path(config_path)
             if not config_file.exists():
-                print(f"Configuration file not found: {config_path}")
+                logger.warning("Configuration file not found", config_path=config_path)
                 return False
             
             # Load new configuration
@@ -384,13 +388,13 @@ class ConfigurationManager:
                 try:
                     callback(event)
                 except Exception as e:
-                    print(f"Error in reload callback: {str(e)}")
+                    logger.error("Error in reload callback", error=str(e))
             
-            print(f"Reloaded configuration from {config_path}")
+            logger.info("Reloaded configuration", config_path=config_path)
             return True
             
         except Exception as e:
-            print(f"Failed to reload configuration {config_path}: {str(e)}")
+            logger.error("Failed to reload configuration", config_path=config_path, error=str(e))
             return False
     
     def add_reload_callback(self, callback: Callable[[HotReloadEvent], None]):
@@ -435,10 +439,10 @@ class ConfigurationManager:
             self._validation_cache.clear()
             self._reload_callbacks.clear()
             
-            print("ConfigurationManager cleanup completed")
+            logger.info("ConfigurationManager cleanup completed")
             
         except Exception as e:
-            print(f"Error during ConfigurationManager cleanup: {str(e)}")
+            logger.error("Error during ConfigurationManager cleanup", error=str(e))
     
     async def _load_base_configurations(self) -> None:
         """Load base configuration files."""
@@ -505,7 +509,7 @@ class ConfigurationManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"Error watching config files: {str(e)}")
+                logger.error("Error watching config files", error=str(e))
     
     def _merge_configs(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
         """Merge base configuration with overrides."""

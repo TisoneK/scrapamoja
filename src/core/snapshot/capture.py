@@ -14,11 +14,15 @@ from typing import Any, Dict, List, Optional, Union, Tuple
 from datetime import datetime
 import hashlib
 
+from src.observability.logger import get_logger
+
 from .models import (
     SnapshotConfig, SnapshotContext, SnapshotBundle, SnapshotMode, EnumEncoder,
     ContentDeduplicator, ArtifactCaptureError, SnapshotError
 )
 from .storage import SnapshotStorage, AtomicFileWriter
+
+logger = get_logger(__name__)
 
 
 class SnapshotCapture:
@@ -34,7 +38,7 @@ class SnapshotCapture:
                              context: SnapshotContext,
                              config: SnapshotConfig) -> SnapshotBundle:
         """Capture complete snapshot with parallel artifact processing."""
-        print(f"🔍 DIAGNOSTIC: CAPTURE SNAPSHOT STARTED - context: {context}, config: {config}")
+        logger.debug("CAPTURE SNAPSHOT STARTED", context=str(context), config=str(config))
         start_time = datetime.now()
         
         try:
@@ -132,7 +136,7 @@ class SnapshotCapture:
         for result in results:
             if isinstance(result, Exception):
                 # Log error but continue with other artifacts
-                print(f"Capture artifact failed: {result}")
+                logger.warning("Capture artifact failed", error=str(result))
                 continue
             elif result:
                 artifact_paths.append(result)
@@ -171,18 +175,18 @@ class SnapshotCapture:
     async def _capture_element_html(self, page: Any, selector: str, html_dir: Path) -> Optional[str]:
         """Capture element-specific HTML."""
         try:
-            print(f"🔍 DIAGNOSTIC: Attempting to capture element HTML with selector: {selector}")
+            logger.debug("Attempting to capture element HTML", selector=selector)
             
             # Find element
             element = await page.query_selector(selector)
             if not element:
-                print(f"🔍 DIAGNOSTIC: Element not found for selector: {selector}")
+                logger.debug("Element not found for selector", selector=selector)
                 raise ArtifactCaptureError(f"Element not found for selector: {selector}")
             
             # Get element HTML
             html_content = await element.inner_html()
             
-            print(f"🔍 DIAGNOSTIC: Successfully captured element HTML, length: {len(html_content)}")
+            logger.debug("Successfully captured element HTML", content_length=len(html_content))
             
             # Check deduplication
             if self.deduplicator:
@@ -195,7 +199,7 @@ class SnapshotCapture:
             filename = f"element_{content_hash}.html"
             file_path = html_dir / filename
             
-            print(f"🔍 DIAGNOSTIC: Saving element HTML to: {file_path}")
+            logger.debug("Saving element HTML", file_path=str(file_path))
             
             # Write atomically
             await AtomicFileWriter.write_text(file_path, html_content)
@@ -205,11 +209,11 @@ class SnapshotCapture:
                 self.deduplicator.add_content(html_content)
             
             result = f"html/{filename}"
-            print(f"🔍 DIAGNOSTIC: Element HTML capture completed: {result}")
+            logger.debug("Element HTML capture completed", result=result)
             return result
             
         except Exception as e:
-            print(f"🔍 DIAGNOSTIC: Failed to capture element HTML: {e}")
+            logger.error("Failed to capture element HTML", error=str(e))
             raise ArtifactCaptureError(f"Failed to capture element HTML: {e}")
     
     async def _capture_screenshot(self, page: Any, screenshots_dir: Path) -> Optional[str]:

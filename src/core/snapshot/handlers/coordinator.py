@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from ..manager import SnapshotManager, get_snapshot_manager
 from ..exceptions import (
     SnapshotError, SnapshotCircuitOpen, SnapshotCompleteFailure,
@@ -25,6 +27,8 @@ from .selector import SelectorSnapshot
 from .error import ErrorSnapshot
 from .retry import RetrySnapshot
 from .monitoring import MonitoringSnapshot
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -81,7 +85,7 @@ class SnapshotCoordinator:
                     try:
                         await integration.initialize()
                         self.state.initialized_integrations.add(name)
-                        print(f"✅ Initialized {name} integration")
+                        logger.info("Initialized integration", integration=name)
                     except Exception as e:
                         error_info = {
                             "integration": name,
@@ -89,19 +93,19 @@ class SnapshotCoordinator:
                             "timestamp": datetime.now().isoformat()
                         }
                         self.state.integration_errors.append(error_info)
-                        print(f"❌ Failed to initialize {name} integration: {e}")
+                        logger.error("Failed to initialize integration", integration=name, error=str(e))
                 
                 # Set up cross-integration event routing
                 await self._setup_event_routing()
                 
                 self.state.last_health_check = datetime.now()
                 success_rate = len(self.state.initialized_integrations) / len(integrations) * 100
-                print(f"🎯 Snapshot coordinator initialized: {success_rate:.1f}% success rate")
+                logger.info("Snapshot coordinator initialized", success_rate=f"{success_rate:.1f}%")
                 
                 return len(self.state.initialized_integrations) > 0
                 
         except Exception as e:
-            print(f"❌ Critical error initializing snapshot coordinator: {e}")
+            logger.error("Critical error initializing snapshot coordinator", error=str(e))
             return False
     
     async def _setup_event_routing(self):
@@ -174,7 +178,7 @@ class SnapshotCoordinator:
             if page is None:
                 page = await self.browser_integration.get_active_page()
                 if page is None:
-                    print("⚠️  No active page available for system snapshot")
+                    logger.warning("No active page available for system snapshot")
                     return None
             
             # Capture snapshot
@@ -189,7 +193,7 @@ class SnapshotCoordinator:
                 for callback in self.on_snapshot_captured:
                     await callback(trigger_source, bundle)
                 
-                print(f"📸 System snapshot captured: {snapshot_id} from {trigger_source}")
+                logger.info("System snapshot captured", snapshot_id=snapshot_id, trigger_source=trigger_source)
                 return snapshot_id
             
             return None
@@ -207,7 +211,7 @@ class SnapshotCoordinator:
             for callback in self.on_integration_error:
                 await callback("system_snapshot", error_info)
             
-            print(f"❌ Failed to capture system snapshot: {e}")
+            logger.error("Failed to capture system snapshot", error=str(e))
             return None
     
     async def get_integration_health(self) -> Dict[str, Any]:
@@ -259,11 +263,11 @@ class SnapshotCoordinator:
         try:
             if session_id in self.state.active_snapshots:
                 del self.state.active_snapshots[session_id]
-                print(f"🧹 Cleaned up snapshots for session: {session_id}")
+                logger.debug("Cleaned up snapshots for session", session_id=session_id)
                 return 1
             return 0
         except Exception as e:
-            print(f"❌ Error cleaning up session snapshots: {e}")
+            logger.error("Error cleaning up session snapshots", error=str(e))
             return 0
     
     async def get_system_statistics(self) -> Dict[str, Any]:
@@ -330,37 +334,37 @@ class SnapshotCoordinator:
         if self.is_shutting_down:
             return True
         
-        print(f"🔄 Shutting down snapshot coordinator (timeout: {timeout}s)...")
+        logger.info("Shutting down snapshot coordinator", timeout=timeout)
         self.is_shutting_down = True
         self.shutdown_start_time = datetime.now()
         
         try:
             # 1. Stop accepting new snapshot requests
-            print("   🛑 Stopping new snapshot requests...")
+            logger.debug("Stopping new snapshot requests")
             await self._stop_accepting_requests()
             
             # 2. Wait for in-progress snapshots
-            print("   ⏳ Waiting for in-progress snapshots...")
+            logger.debug("Waiting for in-progress snapshots")
             await self._wait_for_snapshots(timeout)
             
             # 3. Shutdown all handlers
-            print("   🔧 Shutting down handlers...")
+            logger.debug("Shutting down handlers")
             await self._shutdown_handlers()
             
             # 4. Flush final metrics
-            print("   📊 Flushing final metrics...")
+            logger.debug("Flushing final metrics")
             await self._flush_final_metrics()
             
             # 5. Cleanup resources
-            print("   🧹 Cleaning up resources...")
+            logger.debug("Cleaning up resources")
             await self._cleanup_coordinator_resources()
             
             shutdown_duration = (datetime.now() - self.shutdown_start_time).total_seconds()
-            print(f"   ✅ Snapshot coordinator shutdown complete ({shutdown_duration:.2f}s)")
+            logger.info("Snapshot coordinator shutdown complete", duration_seconds=f"{shutdown_duration:.2f}")
             return True
             
         except Exception as e:
-            print(f"   ❌ Error during shutdown: {e}")
+            logger.error("Error during shutdown", error=str(e))
             return False
     
     async def _stop_accepting_requests(self):
@@ -378,9 +382,9 @@ class SnapshotCoordinator:
             try:
                 if hasattr(handler, 'stop_accepting_requests'):
                     await handler.stop_accepting_requests()
-                    print(f"      ✅ {handler_name} handler stopped accepting requests")
+                    logger.debug("Handler stopped accepting requests", handler=handler_name)
             except Exception as e:
-                print(f"      ⚠️ Error stopping {handler_name} handler: {e}")
+                logger.warning("Error stopping handler", handler=handler_name, error=str(e))
     
     async def _wait_for_snapshots(self, timeout: int):
         """Wait for in-progress snapshots to complete."""
@@ -390,13 +394,13 @@ class SnapshotCoordinator:
             # Check if any snapshots are in progress
             in_progress = len(self.state.active_snapshots)
             if in_progress == 0:
-                print(f"      ✅ All snapshots completed")
+                logger.debug("All snapshots completed")
                 break
             
-            print(f"      ⏳ Waiting for {in_progress} in-progress snapshots...")
+            logger.debug("Waiting for in-progress snapshots", count=in_progress)
             await asyncio.sleep(0.5)
         else:
-            print(f"      ⚠️ Timeout waiting for snapshots - {len(self.state.active_snapshots)} remaining")
+            logger.warning("Timeout waiting for snapshots", remaining=len(self.state.active_snapshots))
     
     async def _flush_final_metrics(self):
         """Flush final metrics before shutdown."""
@@ -404,13 +408,15 @@ class SnapshotCoordinator:
             stats = await self.get_system_statistics()
             snapshot_stats = stats.get('snapshot_manager', {})
             
-            print("      📊 Final Snapshot Metrics:")
-            print(f"         Total Snapshots: {snapshot_stats.get('total_snapshots', 0)}")
-            print(f"         Success Rate: {snapshot_stats.get('success_rate', 0):.1f}%")
-            print(f"         Average Capture Time: {snapshot_stats.get('average_capture_time', 0):.0f}ms")
+            logger.info(
+                "Final Snapshot Metrics",
+                total_snapshots=snapshot_stats.get('total_snapshots', 0),
+                success_rate=f"{snapshot_stats.get('success_rate', 0):.1f}%",
+                average_capture_time_ms=snapshot_stats.get('average_capture_time', 0)
+            )
             
         except Exception as e:
-            print(f"      ⚠️ Error flushing metrics: {e}")
+            logger.warning("Error flushing metrics", error=str(e))
     
     async def _shutdown_handlers(self):
         """Shutdown all snapshot handlers."""
@@ -426,11 +432,11 @@ class SnapshotCoordinator:
             try:
                 if hasattr(handler, 'shutdown'):
                     await handler.shutdown()
-                    print(f"      ✅ {handler_name} handler shutdown")
+                    logger.debug("Handler shutdown", handler=handler_name)
                 else:
-                    print(f"      ⚠️ {handler_name} handler has no shutdown method")
+                    logger.debug("Handler has no shutdown method", handler=handler_name)
             except Exception as e:
-                print(f"      ❌ Failed to shutdown {handler_name} handler: {e}")
+                logger.error("Failed to shutdown handler", handler=handler_name, error=str(e))
     
     async def _cleanup_coordinator_resources(self):
         """Clean up coordinator-specific resources."""
@@ -442,10 +448,10 @@ class SnapshotCoordinator:
             # Clear state
             self.state = IntegrationState()
             
-            print("🧹 Coordinator resources cleaned up")
+            logger.debug("Coordinator resources cleaned up")
             
         except Exception as e:
-            print(f"❌ Error during coordinator cleanup: {e}")
+            logger.error("Error during coordinator cleanup", error=str(e))
 
 
 # Global coordinator instance

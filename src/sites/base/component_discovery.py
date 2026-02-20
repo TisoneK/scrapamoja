@@ -5,7 +5,6 @@ This module provides automatic discovery of shared components across the
 scraper framework, enabling dynamic component loading and management.
 """
 
-import logging
 import os
 import sys
 import importlib
@@ -15,10 +14,11 @@ from pathlib import Path
 from datetime import datetime
 import json
 
+from src.observability.logger import get_logger
 from .component_interface import BaseComponent, BaseProcessor, BaseValidator, BaseFlow
 
 # Module logger
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ComponentDiscovery:
@@ -122,12 +122,12 @@ class ComponentDiscovery:
                         discovered.update(module_info)
                 except Exception as e:
                     # Log error but continue with other files
-                    logger.warning("Failed to analyze module file", extra={"file": str(py_file), "error": str(e)})
+                    logger.warning("Failed to analyze module file", file=str(py_file), error=str(e))
             
             return discovered
             
         except Exception as e:
-            logger.error("Error discovering components", extra={"search_path": str(search_path), "error": str(e)})
+            logger.error("Error discovering components", search_path=str(search_path), error=str(e))
             return {}
     
     async def _analyze_module_file(self, module_file: Path) -> Dict[str, Any]:
@@ -157,11 +157,11 @@ class ComponentDiscovery:
                 return module_info
                 
             except ImportError as e:
-                logger.warning("Failed to import module", extra={"module_path": module_path, "error": str(e)})
+                logger.warning("Failed to import module", module_path=module_path, error=str(e))
                 return {}
             
         except Exception as e:
-            logger.error("Error analyzing module file", extra={"module_file": str(module_file), "error": str(e)})
+            logger.error("Error analyzing module file", module_file=str(module_file), error=str(e))
             return {}
     
     async def _analyze_module(self, module, module_path: str) -> Dict[str, Any]:
@@ -191,7 +191,7 @@ class ComponentDiscovery:
             return module_info
             
         except Exception as e:
-            logger.error("Error analyzing module", extra={"module_path": module_path, "error": str(e)})
+            logger.error("Error analyzing module", module_path=module_path, error=str(e))
             return {}
     
     async def _analyze_component_class(self, cls: Type, name: str, module_path: str) -> Optional[Dict[str, Any]]:
@@ -234,7 +234,7 @@ class ComponentDiscovery:
             }
             
         except Exception as e:
-            logger.error("Error analyzing component class", extra={"class_name": name, "error": str(e)})
+            logger.error("Error analyzing component class", class_name=name, error=str(e))
             return None
     
     async def _extract_component_metadata(self, cls: Type) -> Dict[str, Any]:
@@ -311,7 +311,7 @@ class ComponentDiscovery:
                 self._flow_registry[component_info['class_name']] = cls
             
         except Exception as e:
-            logger.error("Error registering component", extra={"class_name": component_info['class_name'], "error": str(e)})
+            logger.error("Error registering component", class_name=component_info['class_name'], error=str(e))
     
     def _path_to_module_path(self, file_path: Path) -> Optional[str]:
         """Convert a file path to a Python module path."""
@@ -357,7 +357,7 @@ class ComponentDiscovery:
             return metadata
             
         except Exception as e:
-            logger.error("Error loading component metadata", extra={"error": str(e)})
+            logger.error("Error loading component metadata", error=str(e))
             return {}
     
     def get_component_class(self, component_id: str, component_type: str = None) -> Optional[Type]:
@@ -491,7 +491,7 @@ class ComponentDiscovery:
             return results
             
         except Exception as e:
-            logger.error("Error searching components", extra={"error": str(e)})
+            logger.error("Error searching components", error=str(e))
             return []
     
     def get_component_info(self, component_id: str, component_type: str = None) -> Optional[Dict[str, Any]]:
@@ -543,7 +543,7 @@ class ComponentDiscovery:
             }
             
         except Exception as e:
-            logger.error("Error getting component info", extra={"component_id": component_id, "error": str(e)})
+            logger.error("Error getting component info", component_id=component_id, error=str(e))
             return None
     
     def _clear_registries(self) -> None:

@@ -14,7 +14,11 @@ from collections import defaultdict, deque
 import json
 from pathlib import Path
 
+from src.observability.logger import get_logger
+
 from .models import SnapshotMetrics, SnapshotError, EnumEncoder
+
+logger = get_logger(__name__)
 
 @dataclass
 class PerformanceMetric:
@@ -240,7 +244,7 @@ class MetricsCollector:
                             self.operation_stats[operation] = self.operation_stats[operation][-1000:]
                     
             except Exception as e:
-                print(f"Error in metrics cleanup: {e}")
+                logger.error("Error in metrics cleanup", error=str(e))
 
 
 class HealthMonitor:

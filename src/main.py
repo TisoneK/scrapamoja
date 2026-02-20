@@ -137,10 +137,10 @@ async def cli():
             shutdown_success = await shutdown_coordinator.shutdown()
             return 0 if shutdown_success else 1
         except Exception as e:
-            cli_logger.error("Error during shutdown", extra={"error": str(e)})
+            cli_logger.error("Error during shutdown", error=str(e))
             return 1
     except Exception as e:
-        cli_logger.error("Error", extra={"error": str(e)})
+        cli_logger.error("Error", error=str(e))
         if config.log_level == 'DEBUG':
             import traceback
             traceback.print_exc()
@@ -149,7 +149,7 @@ async def cli():
         try:
             await shutdown_coordinator.shutdown()
         except Exception as shutdown_error:
-            cli_logger.error("Error during shutdown", extra={"error": str(shutdown_error)})
+            cli_logger.error("Error during shutdown", error=str(shutdown_error))
         
         return 1
 
