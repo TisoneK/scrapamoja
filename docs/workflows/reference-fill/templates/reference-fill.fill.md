@@ -47,23 +47,33 @@ Skip any files already marked "completed".
 
 ### Step 2: Select File
 <!-- ORDER: 1) Status → 2) Recommendations → 3) File list → 4) Prompt -->
+
+⚠️ **PRIORITY RULE:** Always prioritize SECONDARY files over TERTIARY files.
+- Tertiary tabs are sub-tabs UNDER secondary tabs
+- You cannot fill a tertiary file without first understanding its parent secondary tab
+- If both secondary and tertiary files need filling, always suggest secondary first
+
 ```
 📊 Fill Mode Status
 
 **Current Progress:**
 - Total files needing attention: {number}
-- High priority files: {number}
-- Recommended next: {file}
+- Secondary files: {number} (PRIORITY)
+- Tertiary files: {number} (depends on secondary)
 
-🎯 Recommended (highest impact):
+🎯 Recommended (secondary first):
 
-A) {highest_priority_file} - {reason}
+A) {secondary_file} - Secondary tab (required before tertiary)
 
-B) {second_priority_file} - {reason}
+B) {another_secondary_file} - Secondary tab
 
-📋 All files needing attention:
+📋 Secondary files needing attention:
 
-{present remaining files with letters C) D) E)...}
+{list secondary files with letters C) D) E)...}
+
+📋 Tertiary files (fill after secondary):
+
+{list tertiary files with letters...}
 
 Each file on its own line with blank line separation.
 
@@ -93,18 +103,24 @@ For example, if selected file is `docs/references/flashscore/html_samples/{state
 ⚠️ **Remember rules:** Re-read `docs/workflows/reference-fill/rules.md` if you forget how to handle answers.
 
 **Context for Tertiary Files:**
-If filling a TERTIARY file, first show the user the corresponding SECONDARY tab example:
+If filling a TERTIARY file, you MUST first READ the corresponding SECONDARY file to show actual tabs:
 ```
-📋 This is a tertiary tab file. Here's what the parent secondary tabs look like:
+📋 This is a tertiary tab file. Let me read the parent secondary file to show you the actual tabs...
 
-{Show example from finished/basketball/h2h/secondary.md or similar completed file}
+{READ the actual secondary file at: docs/references/flashscore/html_samples/{state}/basketball/{tab}/secondary.md}
+
+The secondary tabs are: {list actual tab names from the file you just read}
 
 You'll be looking for sub-tabs UNDER one of these secondary tabs.
 ```
 
+⚠️ **DO NOT GUESS:** Read the actual secondary file. Do not invent tab names like "Summary, Lineups, Match History" - use the actual tabs from the file.
+
 **Q1 - Source URL:**
 ```
-What is the Source URL?
+Q1. What is the Source URL?
+
+Category: {match_state} (from file path: {state}/basketball/{tab}/{level}.md)
 Example: https://www.flashscore.com/match/basketball/teamA-teamB/?mid=12345
 ```
 <!-- ⚠️ GATE -->

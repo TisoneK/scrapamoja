@@ -140,6 +140,48 @@ docs/references/flashscore/html_samples/
    - Second: Read Entry Point (`start.md`) for step-by-step instructions
 3. Added explicit instruction: "Do NOT Infer: If a command or step is not explicitly written, do not guess"
 
+### 2026-02-20: Tertiary Priority Bug
+
+**Issue:** LLM prioritized tertiary files over secondary files, but tertiary tabs depend on secondary tabs.
+
+**Root Cause:** Step 2 didn't specify priority rules. LLM used "highest impact" reasoning which incorrectly prioritized tertiary.
+
+**Fix:** Added PRIORITY RULE to Step 2:
+```
+⚠️ **PRIORITY RULE:** Always prioritize SECONDARY files over TERTIARY files.
+- Tertiary tabs are sub-tabs UNDER secondary tabs
+- You cannot fill a tertiary file without first understanding its parent secondary tab
+- If both secondary and tertiary files need filling, always suggest secondary first
+```
+
+### 2026-02-20: Secondary Tab Guessing Bug
+
+**Issue:** LLM guessed secondary tab names ("Summary, Lineups, Match History") instead of reading the actual secondary file.
+
+**Root Cause:** Template said "Show example from finished/basketball/h2h/secondary.md or similar completed file" which the LLM interpreted as optional.
+
+**Fix:** Changed to explicit READ instruction:
+```
+If filling a TERTIARY file, you MUST first READ the corresponding SECONDARY file to show actual tabs:
+{READ the actual secondary file at: docs/references/flashscore/html_samples/{state}/basketball/{tab}/secondary.md}
+
+⚠️ **DO NOT GUESS:** Read the actual secondary file. Do not invent tab names.
+```
+
+### 2026-02-20: Missing Match Type in Q1
+
+**Issue:** Q1 didn't show the match category (Live/Scheduled/Finished) from the file path.
+
+**Root Cause:** Q1 template only had "What is the Source URL?" without context.
+
+**Fix:** Added Category line to Q1:
+```
+Q1. What is the Source URL?
+
+Category: {match_state} (from file path: {state}/basketball/{tab}/{level}.md)
+Example: https://www.flashscore.com/match/basketball/teamA-teamB/?mid=12345
+```
+
 ---
 
 *This document is a living reference. Update as the workflow evolves.*
