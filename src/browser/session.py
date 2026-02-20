@@ -694,9 +694,13 @@ class BrowserSession:
                 correlation_id=self._correlation_id
             )
             
-            # Remove persisted state
+            # Remove persisted state - use same key format as persist_state()
             try:
-                await self._storage.delete(f"browser_sessions/{self.session_id}.json")
+                if self.site:
+                    storage_key = f"{self.site}/browser_sessions/{self.session_id}.json"
+                else:
+                    storage_key = f"browser_sessions/{self.session_id}.json"
+                await self._storage.delete(storage_key)
             except Exception as e:
                 self._logger.warning(
                     "session_state_cleanup_failed",

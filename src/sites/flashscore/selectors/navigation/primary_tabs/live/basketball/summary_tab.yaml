@@ -34,12 +34,15 @@ verification:
     - "a[data-analytics-alias='match-summary'].selected"
   url_patterns:
     - "/match/"
-    - not: "/odds/"
-    - not: "/h2h/"
-    - not: "/standings/"
+    - excluded: "/odds/"
+    - excluded: "/h2h/"
+    - excluded: "/standings/"
 
 # Navigation context
-context:
+context: "live_basketball_match"
+
+# Extended context metadata
+context_metadata:
   match_state: "live"
   sport: "basketball"
   tab_type: "primary"
