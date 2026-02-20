@@ -182,6 +182,29 @@ Category: {match_state} (from file path: {state}/basketball/{tab}/{level}.md)
 Example: https://www.flashscore.com/match/basketball/teamA-teamB/?mid=12345
 ```
 
+### 2026-02-20: Secondary File Flow Bug
+
+**Issue:** After Q4c "Yes" (tertiary tabs exist), the workflow jumped to collecting tertiary HTML instead of collecting secondary HTML first.
+
+**Root Cause:** Q5a asked to "enumerate tabs" without specifying that secondary HTML must be collected first. The flow didn't distinguish between secondary and tertiary file handling.
+
+**Fix:** Restructured Q5 into three separate questions:
+- **Q5a - Secondary Tab HTML:** Collect the parent element containing all secondary tabs first
+- **Q5b - Enumerate Tertiary Tabs:** List tertiary sub-tabs (only if Q4c was "Yes")
+- **Q5c - Tertiary HTML Content:** Collect HTML for each tertiary tab one at a time
+
+### 2026-02-20: Question Formatting Bug
+
+**Issue:** Questions didn't have blank lines before/after, and question numbers were inconsistent.
+
+**Root Cause:** Template used code blocks without proper spacing.
+
+**Fix:** Added:
+- Blank line before each question header
+- Blank line after each question code block
+- `---` separator between questions
+- Consistent question numbering (Q1, Q2, Q3, Q4a, Q4b, Q4c, Q5a, Q5b, Q5c)
+
 ---
 
 *This document is a living reference. Update as the workflow evolves.*

@@ -103,7 +103,9 @@ For example, if selected file is `docs/references/flashscore/html_samples/{state
 ⚠️ **Remember rules:** Re-read `docs/workflows/reference-fill/rules.md` if you forget how to handle answers.
 
 **Context for Tertiary Files:**
+
 If filling a TERTIARY file, you MUST first READ the corresponding SECONDARY file to show actual tabs:
+
 ```
 📋 This is a tertiary tab file. Let me read the parent secondary file to show you the actual tabs...
 
@@ -116,41 +118,62 @@ You'll be looking for sub-tabs UNDER one of these secondary tabs.
 
 ⚠️ **DO NOT GUESS:** Read the actual secondary file. Do not invent tab names like "Summary, Lineups, Match History" - use the actual tabs from the file.
 
+---
+
 **Q1 - Source URL:**
+
 ```
 Q1. What is the Source URL?
 
 Category: {match_state} (from file path: {state}/basketball/{tab}/{level}.md)
 Example: https://www.flashscore.com/match/basketball/teamA-teamB/?mid=12345
 ```
+
 <!-- ⚠️ GATE -->
 <!-- 🔍 **ISSUE CHECK:** Did user correct your URL format or question? If YES → Log issue → Continue. -->
 
+---
+
 **Q2 - Country:**
+
 ```
-What Country is the match from?
+Q2. What Country is the match from?
 ```
+
 <!-- ⚠️ GATE -->
+
+---
 
 **Q3 - League:**
+
 ```
-What League?
+Q3. What League?
 ```
+
 <!-- ⚠️ GATE -->
 
+---
+
 **Q4a - Home Team:**
+
 ```
-What is the Home Team name?
+Q4a. What is the Home Team name?
 ```
+
 <!-- ⚠️ GATE -->
 
 **Q4b - Away Team:**
+
 ```
-What is the Away Team name?
+Q4b. What is the Away Team name?
 ```
+
 <!-- ⚠️ GATE -->
 
+---
+
 **Q4c - Tertiary Tab Check (Secondary Tabs Only):**
+
 ```
 Does this secondary tab have tertiary sub-tabs?
 
@@ -159,13 +182,22 @@ Steps to verify:
 2. Click on: [SECONDARY TAB NAME]
 3. Look for: Additional tab navigation below the secondary tab
 4. Check for: data-testid="wcl-tabs" data-type="tertiary"
+```
 
 Options:
-A) Yes - Tertiary tabs exist (continue to Q5, will collect both secondary and tertiary HTML)
-B) No - No tertiary tabs (collect secondary HTML, mark tertiary complete)
+
+A) Yes - Tertiary tabs exist (will collect secondary HTML first, then tertiary)
+
+B) No - No tertiary tabs (collect secondary HTML only, mark tertiary complete)
+
 C) Unsure - Need help identifying
-```
-<!-- ⚠️ GATE: Wait for user answer. Options MUST be lettered A, B, C. -->
+
+<!-- ⚠️ GATE: Wait for user answer. Options MUST be lettered A, B, C with blank lines between. -->
+
+**If user selects A (Yes - Tertiary tabs exist):**
+1. First collect the SECONDARY tab HTML (the parent element containing all secondary tabs)
+2. Then collect tertiary HTML for each tertiary sub-tab
+3. Continue to Q5a for secondary HTML collection
 
 **If user selects B (No tertiary tabs):** 
 1. Note the absence of tertiary tabs for the Notes section
@@ -210,13 +242,29 @@ The navigation structure ends at the secondary level for this tab.
 
 **IMPORTANT:** The secondary tab still needs its HTML collected regardless of whether tertiary sub-tabs exist. Continue to Q5a.
 
-**Q5a - Enumerate Tabs:**
-```
-List all available tabs at this level.
+**Q5a - Secondary Tab HTML (For Secondary Files):**
 
-For primary tabs: Summary, Odds, H2H, Standings
-For secondary tabs: List sub-tabs under current primary tab
-For tertiary tabs: List sub-tabs under current secondary tab
+```
+Navigate to the "{secondary_tab_name}" tab and provide the parent element HTML.
+
+Steps:
+1. Go to: {source_url}
+2. Click on: {primary_tab} (e.g., Odds, H2H, Standings)
+3. Wait for secondary tab navigation to appear
+4. Right-click on the secondary tab navigation → Inspect
+5. Find the container with data-testid="wcl-tabs" data-type="secondary"
+6. Copy → Copy outerHTML (this should include ALL secondary tabs)
+7. Paste here
+
+Expected selector: div[data-testid="wcl-tabs"][data-type="secondary"]
+```
+
+<!-- ⚠️ GATE - Wait for secondary HTML -->
+
+**Q5b - Enumerate Tertiary Tabs (If Q4c was "Yes"):**
+
+```
+List all tertiary sub-tabs under this secondary tab.
 
 Format:
 | # | Tab Name | Status |
@@ -225,26 +273,29 @@ Format:
 | 2 | [name] | pending |
 ...
 ```
+
 <!-- ⚠️ GATE - Wait for tab list confirmation -->
 
-**Q5b - HTML Content (One Tab at a Time):**
+**Q5c - Tertiary HTML Content (One Tab at a Time):**
+
 ```
-Now let's collect HTML for each tab one at a time.
+Now let's collect HTML for each tertiary tab one at a time.
 
 **Current Tab:** [TAB NAME]
 
 Steps:
 1. Go to: {source_url}
-2. Navigate to: [PARENT TAB] → [CURRENT TAB]
+2. Navigate to: {primary_tab} → {secondary_tab} → [CURRENT TAB]
 3. Wait for tab content to load
-4. Right-click on tab navigation → Inspect
-5. Find container with data-testid="wcl-tabs"
+4. Right-click on tertiary tab navigation → Inspect
+5. Find container with data-testid="wcl-tabs" data-type="tertiary"
 6. Copy → Copy outerHTML
 7. Paste here
 
-Expected selector: {expected_selector}
+Expected selector: div[data-testid="wcl-tabs"][data-type="tertiary"]
 ```
-<!-- ⚠️ GATE - Repeat for each tab -->
+
+<!-- ⚠️ GATE - Repeat for each tertiary tab -->
 
 **Progress Tracking:**
 After each tab, update the tab list:
