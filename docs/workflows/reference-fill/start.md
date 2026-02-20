@@ -10,13 +10,18 @@ When user loads this workflow:
 
 ### Step 1: Run Scanner
 
-**🚨 ABSOLUTE RULE: MUST run scanner script - NO EXCEPTIONS**
-**PENALTY: Manual file reading = HIGH SEVERITY ISSUE AUTO-LOGGED**
-
-Execute scanner to assess current state:
+**🚨 ABSOLUTE RULE: Run EXACTLY this command — no variations, no assumptions:**
 ```powershell
 powershell -ExecutionPolicy Bypass -File "docs\workflows\reference-fill\scripts\pwsh\scanner.ps1"
 ```
+
+**FORBIDDEN:**
+- Do NOT assume file extension (it is `.ps1` not `.py`)
+- Do NOT search for alternative scanner files
+- Do NOT construct the command from memory
+- Copy the command above exactly as written
+
+**PENALTY: Manual file reading = HIGH SEVERITY ISSUE AUTO-LOGGED**
 
 **ON SUCCESS → Immediately proceed to Step 2. Do not wait for user input.**
 
