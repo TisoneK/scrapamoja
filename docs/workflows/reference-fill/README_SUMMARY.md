@@ -124,6 +124,20 @@ docs/references/flashscore/html_samples/
 - `reference-fill.fill.md`: `-Mode "fill"`
 - `reference-fill.status.md`: `-Mode "update"`
 
+### 2026-02-20: Missing Entry Point in ACTION TABLE
+
+**Issue:** The `workflows.start.md` ACTION TABLE didn't specify entry point files for each workflow. When user selected "A", the LLM tried to infer what to do and ran `python scripts\reference-fill\scanner.py` (wrong path, wrong extension).
+
+**Root Cause:** 
+1. ACTION TABLE only had "Description" column, no "Entry Point" column
+2. Stage 2 said "Read Workflow Rules" (`rules.md`) instead of "Read Entry Point" (`start.md`)
+3. The scanner command is in `start.md`, not `rules.md`
+
+**Fix:** 
+1. Added "Entry Point" column to ACTION TABLE with explicit file paths
+2. Changed Stage 2 from "Read Workflow Rules" to "Read Entry Point"
+3. Added explicit instruction: "Do NOT Infer: If a command or step is not explicitly written, do not guess"
+
 ---
 
 *This document is a living reference. Update as the workflow evolves.*

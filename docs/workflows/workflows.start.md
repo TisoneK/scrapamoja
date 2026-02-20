@@ -83,20 +83,27 @@ When user requests workflows, you MUST:
 ### Stage 2: Workflow Execution (After User Selection)
 When user selects a workflow, you MUST:
 
-1. **Read Workflow Rules**: Load `docs/workflows/[workflow]/rules.md` (inherits from general)
-2. **Follow Instructions**: Execute workflow-specific steps and templates
+1. **Read Entry Point**: Load the workflow's `start.md` file (see ACTION TABLE for paths)
+2. **Follow Entry Point Instructions**: Execute the steps defined in that file exactly
+3. **Do NOT Infer**: If a command or step is not explicitly written, do not guess
 
 **CRITICAL:** Do NOT skip Stage 1. Always read general rules first to ensure proper formatting and behavior.
 
 **ACTION TABLE FOR EXECUTION:**
-| Letter | Workflow | Description |
-|--------|-----------|-------------|
-| A | Reference Fill | Fill reference files with HTML samples from Flashscore |
-| B | Automated Debugging | Process failure clusters automatically |
-| C | Manual Debugging | Step-by-step analysis |
-| D | Design Standards | Review selector rules |
-| E | System Maintenance | Cleanup and optimization |
-| F | Complete Analysis | Comprehensive investigation |
-| G | Snapshot Analysis | Performance and patterns |
+| Letter | Workflow | Entry Point | Description |
+|--------|-----------|-------------|-------------|
+| A | Reference Fill | `docs/workflows/reference-fill/start.md` | Fill reference files with HTML samples from Flashscore |
+| B | Automated Debugging | `docs/workflows/automated-debugging/start.md` | Process failure clusters automatically |
+| C | Manual Debugging | `docs/workflows/manual-debugging/start.md` | Step-by-step analysis |
+| D | Design Standards | `docs/workflows/design-standards/start.md` | Review selector rules |
+| E | System Maintenance | `docs/workflows/system-maintenance/start.md` | Cleanup and optimization |
+| F | Complete Analysis | `docs/workflows/complete-analysis/start.md` | Comprehensive investigation |
+| G | Snapshot Analysis | `docs/workflows/snapshot-analysis/start.md` | Performance and patterns |
+
+**EXECUTION RULE:**
+When user selects a letter, read the corresponding Entry Point file and follow its instructions exactly.
+- Do NOT infer commands from context
+- Do NOT assume file extensions
+- Do NOT skip to later steps
 
 Do not show this table to the user.
