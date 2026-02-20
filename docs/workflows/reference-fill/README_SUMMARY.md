@@ -130,12 +130,14 @@ docs/references/flashscore/html_samples/
 
 **Root Cause:** 
 1. ACTION TABLE only had "Description" column, no "Entry Point" column
-2. Stage 2 said "Read Workflow Rules" (`rules.md`) instead of "Read Entry Point" (`start.md`)
+2. Stage 2 only said "Read Workflow Rules" but didn't mention reading the entry point file
 3. The scanner command is in `start.md`, not `rules.md`
 
 **Fix:** 
-1. Added "Entry Point" column to ACTION TABLE with explicit file paths
-2. Changed Stage 2 from "Read Workflow Rules" to "Read Entry Point"
+1. Added "Rules File" and "Entry Point" columns to ACTION TABLE with explicit file paths
+2. Stage 2 now reads BOTH files in order:
+   - First: Read Workflow Rules (`rules.md`) for workflow-specific conventions
+   - Second: Read Entry Point (`start.md`) for step-by-step instructions
 3. Added explicit instruction: "Do NOT Infer: If a command or step is not explicitly written, do not guess"
 
 ---
