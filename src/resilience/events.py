@@ -10,7 +10,11 @@ from datetime import datetime
 from dataclasses import dataclass, field
 import asyncio
 import uuid
+from src.observability.logger import get_logger
 from .correlation import get_correlation_id
+
+# Module logger
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -113,7 +117,7 @@ class EventBus:
                 handler(event)
         except Exception as e:
             # Log error but don't propagate to avoid breaking event publishing
-            print(f"Error in event handler: {e}")
+            logger.error("Error in event handler", error=str(e))
 
 
 # Global event bus instance

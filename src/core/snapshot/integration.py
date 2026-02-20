@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 import traceback
 
+from src.observability.logger import get_logger
 from .models import (
     SnapshotContext, SnapshotConfig, SnapshotBundle, SnapshotMode,
     SnapshotError
@@ -18,6 +19,9 @@ from .capture import SnapshotCapture
 from .triggers import TriggerManager
 from .config import get_settings
 from .metrics import MetricsCollector
+
+# Module logger
+logger = get_logger(__name__)
 
 
 class BrowserSnapshotIntegration:
@@ -98,12 +102,12 @@ class BrowserSnapshotIntegration:
                             success=False,
                             error_type=type(e).__name__
                         )
-                        print(f"Failed to capture selector failure snapshot: {e}")
+                        logger.warning("Failed to capture selector failure snapshot", error=str(e))
             
             return success_count > 0
             
         except Exception as e:
-            print(f"Error in selector failure snapshot integration: {e}")
+            logger.error("Error in selector failure snapshot integration", error=str(e))
             return False
     
     async def capture_snapshot_on_retry_exhaustion(
@@ -175,12 +179,12 @@ class BrowserSnapshotIntegration:
                             success=False,
                             error_type=type(e).__name__
                         )
-                        print(f"Failed to capture retry exhaustion snapshot: {e}")
+                        logger.warning("Failed to capture retry exhaustion snapshot", error=str(e))
             
             return success_count > 0
             
         except Exception as e:
-            print(f"Error in retry exhaustion snapshot integration: {e}")
+            logger.error("Error in retry exhaustion snapshot integration", error=str(e))
             return False
     
     async def capture_snapshot_on_timeout(
@@ -251,12 +255,12 @@ class BrowserSnapshotIntegration:
                             success=False,
                             error_type=type(e).__name__
                         )
-                        print(f"Failed to capture timeout snapshot: {e}")
+                        logger.warning("Failed to capture timeout snapshot", error=str(e))
             
             return success_count > 0
             
         except Exception as e:
-            print(f"Error in timeout snapshot integration: {e}")
+            logger.error("Error in timeout snapshot integration", error=str(e))
             return False
     
     async def capture_snapshot_on_extraction_mismatch(
@@ -329,12 +333,12 @@ class BrowserSnapshotIntegration:
                             success=False,
                             error_type=type(e).__name__
                         )
-                        print(f"Failed to capture extraction mismatch snapshot: {e}")
+                        logger.warning("Failed to capture extraction mismatch snapshot", error=str(e))
             
             return success_count > 0
             
         except Exception as e:
-            print(f"Error in extraction mismatch snapshot integration: {e}")
+            logger.error("Error in extraction mismatch snapshot integration", error=str(e))
             return False
     
     async def capture_manual_snapshot(
@@ -411,7 +415,7 @@ class BrowserSnapshotIntegration:
             return None
             
         except Exception as e:
-            print(f"Error in manual snapshot capture: {e}")
+            logger.error("Error in manual snapshot capture", error=str(e))
             return None
     
     async def _extract_page_from_browser_manager(self, browser_manager: Any) -> Optional[Any]:
@@ -427,11 +431,11 @@ class BrowserSnapshotIntegration:
             elif hasattr(browser_manager, 'pages') and browser_manager.pages:
                 return browser_manager.pages[-1]  # Get last page
             else:
-                print("Could not extract page from browser manager")
+                logger.warning("Could not extract page from browser manager")
                 return None
                 
         except Exception as e:
-            print(f"Error extracting page from browser manager: {e}")
+            logger.error("Error extracting page from browser manager", error=str(e))
             return None
     
     async def validate_session_status(self, browser_manager: Any, session_id: str) -> bool:
@@ -448,7 +452,7 @@ class BrowserSnapshotIntegration:
                 return True
                 
         except Exception as e:
-            print(f"Error validating session status: {e}")
+            logger.error("Error validating session status", error=str(e))
             return False
     
     async def handle_session_termination(self, browser_manager: Any, session_id: str) -> bool:
@@ -477,7 +481,7 @@ class BrowserSnapshotIntegration:
             return True
             
         except Exception as e:
-            print(f"Error handling session termination: {e}")
+            logger.error("Error handling session termination", error=str(e))
             return False
     
     def get_integration_statistics(self) -> Dict[str, Any]:

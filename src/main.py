@@ -71,6 +71,10 @@ async def cli():
     """Main CLI entry point with graceful shutdown support."""
     import sys
     
+    # Get logger for CLI operations
+    from src.observability.logger import get_logger
+    cli_logger = get_logger("cli")
+    
     if len(sys.argv) < 2:
         print("Usage: python -m src.main <site> <command> ...")
         print(f"Available sites: {', '.join(SITE_CLIS.keys())}")
@@ -127,16 +131,16 @@ async def cli():
         return result
         
     except KeyboardInterrupt:
-        print("\nOperation cancelled by user")
+        cli_logger.info("Operation cancelled by user")
         # Graceful shutdown through coordinator
         try:
             shutdown_success = await shutdown_coordinator.shutdown()
             return 0 if shutdown_success else 1
         except Exception as e:
-            print(f"Error during shutdown: {e}")
+            cli_logger.error("Error during shutdown", error=str(e))
             return 1
     except Exception as e:
-        print(f"Error: {e}")
+        cli_logger.error("Error", error=str(e))
         if config.log_level == 'DEBUG':
             import traceback
             traceback.print_exc()
@@ -145,7 +149,7 @@ async def cli():
         try:
             await shutdown_coordinator.shutdown()
         except Exception as shutdown_error:
-            print(f"Error during shutdown: {shutdown_error}")
+            cli_logger.error("Error during shutdown", error=str(shutdown_error))
         
         return 1
 

@@ -5,9 +5,13 @@ Handles navigation and interaction with Flashscore sports pages.
 """
 
 import asyncio
+from src.observability.logger import get_logger
 from src.sites.base.flow import BaseFlow
 from src.selectors.context_manager import SelectorContext, DOMState
 from src.sites.flashscore.models import NavigationState, PageState
+
+# Module logger
+logger = get_logger(__name__)
 
 
 class FlashscoreFlow(BaseFlow):
@@ -24,8 +28,7 @@ class FlashscoreFlow(BaseFlow):
     
     async def _capture_debug_snapshot(self, operation: str, metadata: dict = None):
         """Capture debug snapshot during flow operations."""
-        print(f"FLOW SNAPSHOT: _capture_debug_snapshot called for operation: {operation}")
-        print(f"FLOW SNAPSHOT: enable_metrics = {self.snapshot_settings.enable_metrics}")
+        logger.debug("Capturing debug snapshot", operation=operation, enable_metrics=self.snapshot_settings.enable_metrics)
         try:
             if self.snapshot_settings.enable_metrics:
                 from src.core.snapshot.models import SnapshotContext, SnapshotConfig, SnapshotMode
@@ -81,26 +84,18 @@ class FlashscoreFlow(BaseFlow):
                 if snapshot_result:
                     if hasattr(snapshot_result, 'bundle_path'):
                         bundle_path = snapshot_result.bundle_path
-                        print(f"FLOW SNAPSHOT: Successfully captured flow snapshot at {bundle_path}")
+                        logger.debug("Successfully captured flow snapshot", bundle_path=bundle_path)
                     else:
-                        print(f"FLOW SNAPSHOT: Snapshot created but bundle_path not found in result")
-                        print(f"FLOW SNAPSHOT: Result type: {type(snapshot_result)}")
-                        print(f"FLOW SNAPSHOT: Result attributes: {dir(snapshot_result)}")
+                        logger.debug("Snapshot created but bundle_path not found in result", result_type=str(type(snapshot_result)))
                 else:
-                    print(f"FLOW SNAPSHOT: Failed to capture snapshot - result is None")
+                    logger.warning("Failed to capture snapshot - result is None")
                 
-                from src.observability.logger import get_logger
-                logger = get_logger("flashscore.flow")
-                logger.info(f"Captured debug snapshot for {operation}: {snapshot_result.content_hash[:8] if snapshot_result else 'unknown'} at {bundle_path}")
-                
+                logger.info("Captured debug snapshot", operation=operation, bundle_path=bundle_path)
+
         except Exception as e:
-            from src.observability.logger import get_logger
-            logger = get_logger("flashscore.flow")
-            logger.error(f"Failed to capture debug snapshot for {operation}: {e}")
-            logger.error(f"Exception type: {type(e).__name__}")
-            logger.error(f"Exception details: {str(e)}")
+            logger.error("Failed to capture debug snapshot", operation=operation, error=str(e), exception_type=type(e).__name__)
             import traceback
-            logger.error(f"Full traceback: {traceback.format_exc()}")
+            logger.debug("Full traceback", traceback=traceback.format_exc())
     
     def _get_timeout_ms(self, selector_name: str, default_timeout: float = 3.0) -> int:
         """

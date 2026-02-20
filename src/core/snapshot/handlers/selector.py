@@ -10,9 +10,13 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from ..manager import SnapshotManager
 from ..models import SnapshotContext, SnapshotConfig, SnapshotMode
 from ..config import get_settings
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -70,10 +74,10 @@ class SelectorSnapshot:
             await self._hook_selector_events()
             
             self._initialized = True
-            print("✅ Selector engine integration initialized")
+            logger.info("Selector engine integration initialized")
             
         except Exception as e:
-            print(f"❌ Failed to initialize selector engine integration: {e}")
+            logger.error("Failed to initialize selector engine integration", error=str(e))
             raise
     
     async def _hook_selector_events(self):
@@ -120,7 +124,7 @@ class SelectorSnapshot:
                 await self._handle_selector_success(selector, result)
             
         except Exception as e:
-            print(f"❌ Error handling selector execution: {e}")
+            logger.error("Error handling selector execution", error=str(e))
     
     async def _on_selector_failed(self, selector: str, error: Dict[str, Any]):
         """Handle selector failure event."""
@@ -129,7 +133,7 @@ class SelectorSnapshot:
             await self._handle_selector_failure(selector, error)
             
         except Exception as e:
-            print(f"❌ Error handling selector failure: {e}")
+            logger.error("Error handling selector failure", error=str(e))
     
     async def _on_selector_timeout(self, selector: str, timeout_info: Dict[str, Any]):
         """Handle selector timeout event."""
@@ -162,7 +166,7 @@ class SelectorSnapshot:
                 await callback(selector, timeout_info)
                 
         except Exception as e:
-            print(f"❌ Error handling selector timeout: {e}")
+            logger.error("Error handling selector timeout", error=str(e))
     
     async def _on_performance_issue(self, selector: str, performance_data: Dict[str, Any]):
         """Handle performance issue event."""
@@ -170,7 +174,7 @@ class SelectorSnapshot:
             await self._handle_performance_degradation(selector, performance_data)
             
         except Exception as e:
-            print(f"❌ Error handling performance issue: {e}")
+            logger.error("Error handling performance issue", error=str(e))
     
     async def _handle_selector_failure(self, selector: str, error_data: Dict[str, Any]):
         """Handle selector failure with snapshot capture."""
@@ -203,7 +207,7 @@ class SelectorSnapshot:
                 await callback(selector, error_data)
                 
         except Exception as e:
-            print(f"❌ Error handling selector failure: {e}")
+            logger.error("Error handling selector failure", error=str(e))
     
     async def _handle_selector_success(self, selector: str, result: Dict[str, Any]):
         """Handle successful selector execution."""
@@ -213,7 +217,7 @@ class SelectorSnapshot:
                 await callback(selector, result)
                 
         except Exception as e:
-            print(f"❌ Error handling selector success: {e}")
+            logger.error("Error handling selector success", error=str(e))
     
     async def _handle_performance_degradation(self, selector: str, performance_data: Dict[str, Any]):
         """Handle performance degradation with snapshot capture."""
@@ -247,7 +251,7 @@ class SelectorSnapshot:
                 await callback(selector, performance_data)
                 
         except Exception as e:
-            print(f"❌ Error handling performance degradation: {e}")
+            logger.error("Error handling performance degradation", error=str(e))
     
     async def _capture_selector_snapshot(self, 
                                    trigger_source: str,
@@ -281,7 +285,7 @@ class SelectorSnapshot:
                 mode = SnapshotMode.SELECTOR
             else:
                 mode = SnapshotMode.FULL_PAGE
-                print(f"⚠️ No selector provided, using FULL_PAGE mode for {trigger_source}")
+                logger.warning("No selector provided, using FULL_PAGE mode", trigger_source=trigger_source)
             
             config = SnapshotConfig(
                 mode=mode,
@@ -315,13 +319,13 @@ class SelectorSnapshot:
                 except Exception:
                     snapshot_id = "unknown"
                     
-                print(f"📸 Selector snapshot captured: {snapshot_id} from {trigger_source}")
+                logger.info("Selector snapshot captured", snapshot_id=snapshot_id, trigger_source=trigger_source)
                 return snapshot_id
             
             return None
             
         except Exception as e:
-            print(f"❌ Failed to capture selector snapshot: {e}")
+            logger.error("Failed to capture selector snapshot", error=str(e))
             return None
     
     async def _get_active_page(self) -> Optional[Any]:
@@ -340,7 +344,7 @@ class SelectorSnapshot:
             return None
             
         except Exception as e:
-            print(f"❌ Error getting active page: {e}")
+            logger.error("Error getting active page", error=str(e))
             return None
     
     def get_selector_performance_stats(self) -> Dict[str, Any]:

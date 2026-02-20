@@ -6,13 +6,13 @@ for complex multi-layer navigation patterns like flashscore workflow.
 """
 
 import asyncio
-import logging
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Any
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
 from ..models.selector_models import (
     SemanticSelector, 
     TabContext, 
@@ -22,7 +22,7 @@ from ..models.selector_models import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class NavigationLevel(Enum):
@@ -209,12 +209,10 @@ class SelectorContextManager:
             
             logger.info(
                 f"Context set to: {new_context.get_context_path()}",
-                extra={
-                    "primary": primary_context,
-                    "secondary": secondary_context,
-                    "tertiary": tertiary_context,
-                    "dom_state": dom_state.value if dom_state else None
-                }
+                primary=primary_context,
+                secondary=secondary_context,
+                tertiary=tertiary_context,
+                dom_state=dom_state.value if dom_state else None
             )
             
             return True

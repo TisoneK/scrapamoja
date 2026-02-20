@@ -15,7 +15,11 @@ import inspect
 from pathlib import Path
 import json
 
+from src.observability.logger import get_logger
+
 from .component_interface import BaseComponent, ComponentContext, ComponentResult
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -143,11 +147,11 @@ class BasePluginManager(ABC):
             # Register default hooks
             await self._register_default_hooks()
             
-            print(f"PluginManager initialized with {len(self._registered_plugins)} plugins")
+            logger.info("PluginManager initialized", plugin_count=len(self._registered_plugins))
             return True
             
         except Exception as e:
-            print(f"Failed to initialize PluginManager: {str(e)}")
+            logger.error("Failed to initialize PluginManager", error=str(e))
             return False
     
     @abstractmethod
@@ -194,7 +198,7 @@ class BasePluginManager(ABC):
             
             # Check if already registered
             if metadata.plugin_id in self._registered_plugins:
-                print(f"Plugin {metadata.plugin_id} already registered")
+                logger.debug("Plugin already registered", plugin_id=metadata.plugin_id)
                 return False
             
             # Check version compatibility
@@ -204,7 +208,7 @@ class BasePluginManager(ABC):
             # Check permissions
             if self._permission_check_enabled:
                 if not await self._check_plugin_permissions(metadata):
-                    print(f"Plugin {metadata.plugin_id} requires permissions that are not granted")
+                    logger.warning("Plugin requires permissions that are not granted", plugin_id=metadata.plugin_id)
                     return False
             
             # Register plugin
@@ -213,11 +217,11 @@ class BasePluginManager(ABC):
             # Store plugin permissions
             self._plugin_permissions[metadata.plugin_id] = metadata.permissions
             
-            print(f"Registered plugin: {metadata.plugin_id}")
+            logger.info("Registered plugin", plugin_id=metadata.plugin_id)
             return True
             
         except Exception as e:
-            print(f"Failed to register plugin {metadata.plugin_id}: {str(e)}")
+            logger.error("Failed to register plugin", plugin_id=metadata.plugin_id, error=str(e))
             return False
     
     async def execute_hook(
@@ -266,7 +270,7 @@ class BasePluginManager(ABC):
             return events
             
         except Exception as e:
-            print(f"Error executing hook {hook_name}: {str(e)}")
+            logger.error("Error executing hook", hook_name=hook_name, error=str(e))
             return []
     
     async def get_plugin_info(self, plugin_id: str) -> Optional[Dict[str, Any]]:
@@ -365,7 +369,7 @@ class BasePluginManager(ABC):
                     await self._inspect_plugin_file(plugin_file)
                     
             except Exception as e:
-                print(f"Error discovering plugins in {plugin_dir}: {str(e)}")
+                logger.error("Error discovering plugins", directory=plugin_dir, error=str(e))
     
     async def _inspect_plugin_file(self, file_path: Path) -> None:
         """Inspect a Python file for plugins."""
@@ -383,7 +387,7 @@ class BasePluginManager(ABC):
                     await self._register_plugin_from_class(obj)
                     
         except Exception as e:
-            print(f"Error inspecting plugin file {file_path}: {str(e)}")
+            logger.error("Error inspecting plugin file", file_path=str(file_path), error=str(e))
     
     def _is_plugin_class(self, cls: Any, module: Any) -> bool:
         """Check if a class is a plugin."""
@@ -418,7 +422,7 @@ class BasePluginManager(ABC):
             await self.register_plugin(metadata)
             
         except Exception as e:
-            print(f"Failed to register plugin class {plugin_class.__name__}: {str(e)}")
+            logger.error("Failed to register plugin class", class_name=plugin_class.__name__, error=str(e))
     
     async def _validate_plugin_metadata(self, metadata: PluginMetadata) -> bool:
         """Validate plugin metadata."""
@@ -461,7 +465,8 @@ class BasePluginManager(ABC):
         try:
             for permission in metadata.permissions:
                 if permission not in self._permissions:
-                    print(f"Plugin requires permission '{permission}' which is not defined")
+                    logger.warning("Plugin requires permission which is not defined", 
+                                  plugin_id=metadata.plugin_id, permission=permission)
                     return False
             
             return True
@@ -559,7 +564,8 @@ class BasePluginManager(ABC):
                 )
                 
         except Exception as e:
-            print(f"Error executing hook {hook_name} on plugin {instance.plugin_id}: {str(e)}")
+            logger.error("Error executing hook on plugin", hook_name=hook_name, 
+                        plugin_id=instance.plugin_id, error=str(e))
             return None
     
     async def _register_default_hooks(self) -> None:
@@ -627,10 +633,10 @@ class BasePluginManager(ABC):
             self._permissions.clear()
             self._plugin_permissions.clear()
             
-            print("PluginManager cleanup completed")
+            logger.info("PluginManager cleanup completed")
             
         except Exception as e:
-            print(f"Error during PluginManager cleanup: {str(e)}")
+            logger.error("Error during PluginManager cleanup", error=str(e))
 
 
 class PluginManagerError(Exception):

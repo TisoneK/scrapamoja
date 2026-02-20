@@ -9,6 +9,10 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
 
+from src.observability.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 @dataclass
 class SnapshotSettings:
@@ -164,7 +168,7 @@ def load_settings_from_file(config_path: str) -> SnapshotSettings:
         # Return default settings if file doesn't exist
         return default_settings
     except Exception as e:
-        print(f"Error loading settings from {config_path}: {e}")
+        logger.error("Error loading settings from file", config_path=config_path, error=str(e))
         return default_settings
 
 
@@ -183,7 +187,7 @@ def save_settings_to_file(settings: SnapshotSettings, config_path: str) -> bool:
         return True
         
     except Exception as e:
-        print(f"Error saving settings to {config_path}: {e}")
+        logger.error("Error saving settings to file", config_path=config_path, error=str(e))
         return False
 
 

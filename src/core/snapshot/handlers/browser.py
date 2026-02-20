@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from ..manager import SnapshotManager
 from ..models import SnapshotContext, SnapshotConfig, SnapshotMode
 from ..config import get_settings
@@ -17,6 +19,8 @@ from ..exceptions import (
     SnapshotError, SnapshotCircuitOpen, SnapshotCompleteFailure,
     DiskFullError, PermissionError
 )
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -67,10 +71,10 @@ class BrowserSnapshot:
             await self._hook_browser_events()
             
             self._initialized = True
-            print("✅ Browser manager integration initialized")
+            logger.info("Browser manager integration initialized")
             
         except Exception as e:
-            print(f"❌ Failed to initialize browser manager integration: {e}")
+            logger.error("Failed to initialize browser manager integration", error=str(e))
             raise
     
     async def _hook_browser_events(self):
@@ -125,7 +129,7 @@ class BrowserSnapshot:
                 await callback(session_id, session_data)
                 
         except Exception as e:
-            print(f"❌ Error handling session creation: {e}")
+            logger.error("Error handling session creation", error=str(e))
     
     async def _on_session_terminated(self, session_id: str, reason: str):
         """Handle session termination event."""
@@ -154,7 +158,7 @@ class BrowserSnapshot:
                 await callback(session_id, reason)
                 
         except Exception as e:
-            print(f"❌ Error handling session termination: {e}")
+            logger.error("Error handling session termination", error=str(e))
     
     async def _on_navigation_error(self, session_id: str, error: Dict[str, Any]):
         """Handle navigation error event."""
@@ -187,7 +191,7 @@ class BrowserSnapshot:
                 await callback(session_id, error)
                 
         except Exception as e:
-            print(f"❌ Error handling navigation error: {e}")
+            logger.error("Error handling navigation error", error=str(e))
     
     async def _on_resource_error(self, session_id: str, error: Dict[str, Any]):
         """Handle resource error event."""
@@ -218,7 +222,7 @@ class BrowserSnapshot:
                 await callback(session_id, error)
                 
         except Exception as e:
-            print(f"❌ Error handling resource error: {e}")
+            logger.error("Error handling resource error", error=str(e))
     
     async def _on_browser_crash(self, session_id: str, crash_info: Dict[str, Any]):
         """Handle browser crash event."""
@@ -250,7 +254,7 @@ class BrowserSnapshot:
                 await callback(session_id, crash_info)
                 
         except Exception as e:
-            print(f"❌ Error handling browser crash: {e}")
+            logger.error("Error handling browser crash", error=str(e))
     
     async def _capture_browser_snapshot(self, 
                                    trigger_source: str,
@@ -260,7 +264,7 @@ class BrowserSnapshot:
             # Get active page from browser manager
             page = await self.get_active_page()
             if not page:
-                print("⚠️ No active page available for browser snapshot")
+                logger.warning("No active page available for browser snapshot")
                 return None
             
             # Build snapshot context
@@ -294,25 +298,25 @@ class BrowserSnapshot:
                 bundle = await self.snapshot_manager.capture_snapshot(page, context, config)
                 if bundle:
                     snapshot_id = bundle.content_hash[:8] if hasattr(bundle, 'content_hash') else str(hash(bundle))[:8]
-                    print(f"📸 Browser snapshot captured: {snapshot_id} from {trigger_source}")
+                    logger.info("Browser snapshot captured", snapshot_id=snapshot_id, trigger_source=trigger_source)
                     return snapshot_id
                 return None
                 
             except SnapshotCircuitOpen:
-                print("🚨 Browser snapshot skipped - circuit breaker open")
+                logger.warning("Browser snapshot skipped - circuit breaker open")
                 return None
             except SnapshotCompleteFailure:
-                print("⚠️ Browser snapshot failed completely")
+                logger.warning("Browser snapshot failed completely")
                 return None
             except (DiskFullError, PermissionError) as e:
-                print(f"🚨 Browser snapshot storage failed: {e.message}")
+                logger.error("Browser snapshot storage failed", error=e.message)
                 return None
             except SnapshotError as e:
-                print(f"⚠️ Browser snapshot failed: {e.message}")
+                logger.warning("Browser snapshot failed", error=e.message)
                 return None
             
         except Exception as e:
-            print(f"❌ Unexpected error in browser snapshot: {e}")
+            logger.error("Unexpected error in browser snapshot", error=str(e))
             return None
     
     async def get_active_page(self) -> Optional[Any]:
@@ -336,7 +340,7 @@ class BrowserSnapshot:
             return None
             
         except Exception as e:
-            print(f"❌ Error getting active page: {e}")
+            logger.error("Error getting active page", error=str(e))
             return None
     
     async def get_health(self) -> Dict[str, Any]:

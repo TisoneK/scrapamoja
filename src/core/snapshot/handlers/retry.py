@@ -10,9 +10,13 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from ..manager import SnapshotManager
 from ..models import SnapshotContext, SnapshotConfig, SnapshotMode
 from ..config import get_settings
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -69,10 +73,10 @@ class RetrySnapshot:
             await self._hook_retry_events()
             
             self._initialized = True
-            print("✅ Retry logic integration initialized")
+            logger.info("Retry logic integration initialized")
             
         except Exception as e:
-            print(f"❌ Failed to initialize retry logic integration: {e}")
+            logger.error("Failed to initialize retry logic integration", error=str(e))
             raise
     
     async def _hook_retry_events(self):
@@ -111,7 +115,7 @@ class RetrySnapshot:
                 await callback(operation_id, retry_info)
                 
         except Exception as e:
-            print(f"❌ Error handling retry started: {e}")
+            logger.error("Error handling retry started", error=str(e))
     
     async def _on_retry_attempt(self, operation_id: str, attempt_info: Dict[str, Any]):
         """Handle retry attempt event."""
@@ -128,7 +132,7 @@ class RetrySnapshot:
                 await callback(operation_id, attempt_info)
                 
         except Exception as e:
-            print(f"❌ Error handling retry attempt: {e}")
+            logger.error("Error handling retry attempt", error=str(e))
     
     async def _on_retry_exhausted(self, operation_id: str, exhaustion_info: Dict[str, Any]):
         """Handle retry exhausted event with snapshot capture."""
@@ -169,7 +173,7 @@ class RetrySnapshot:
                 await callback(operation_id, exhaustion_info)
                 
         except Exception as e:
-            print(f"❌ Error handling retry exhausted: {e}")
+            logger.error("Error handling retry exhausted", error=str(e))
     
     async def _on_retry_succeeded(self, operation_id: str, success_info: Dict[str, Any]):
         """Handle retry succeeded event."""
@@ -185,7 +189,7 @@ class RetrySnapshot:
                 await callback(operation_id, success_info)
                 
         except Exception as e:
-            print(f"❌ Error handling retry succeeded: {e}")
+            logger.error("Error handling retry succeeded", error=str(e))
     
     async def _capture_retry_snapshot(self, 
                                  trigger_source: str,
@@ -228,13 +232,13 @@ class RetrySnapshot:
             
             if bundle:
                 snapshot_id = bundle.content_hash[:8]
-                print(f"📸 Retry snapshot captured: {snapshot_id} from {trigger_source}")
+                logger.info("Retry snapshot captured", snapshot_id=snapshot_id, trigger_source=trigger_source)
                 return snapshot_id
             
             return None
             
         except Exception as e:
-            print(f"❌ Failed to capture retry snapshot: {e}")
+            logger.error("Failed to capture retry snapshot", error=str(e))
             return None
     
     async def _get_active_page(self) -> Optional[Any]:
@@ -253,7 +257,7 @@ class RetrySnapshot:
             return None
             
         except Exception as e:
-            print(f"❌ Error getting active page: {e}")
+            logger.error("Error getting active page", error=str(e))
             return None
     
     def get_active_retries(self) -> Dict[str, Dict[str, Any]]:

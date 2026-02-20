@@ -9,7 +9,11 @@ import time
 from typing import Optional, List
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
+
 from .exceptions import SnapshotCircuitOpen
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -128,8 +132,10 @@ class SnapshotCircuitBreaker:
             self.total_trips += 1
             self.half_open_attempts = 0
             
-            print(f"🚨 Snapshot circuit breaker OPEN - {len(self.failures)} failures in {self.config.time_window}s")
-            print(f"   Cooldown period: {self.config.cooldown_period}s")
+            logger.warning("Snapshot circuit breaker OPEN",
+                          failure_count=len(self.failures),
+                          time_window=self.config.time_window,
+                          cooldown_period=self.config.cooldown_period)
     
     def _close_circuit(self, current_time: float):
         """Close the circuit to allow normal operation."""
@@ -139,7 +145,7 @@ class SnapshotCircuitBreaker:
             self.failures = []  # Clear failure history
             self.half_open_attempts = 0
             
-            print(f"✅ Snapshot circuit breaker CLOSED - resuming normal operation")
+            logger.info("Snapshot circuit breaker CLOSED - resuming normal operation")
     
     def _half_open_circuit(self, current_time: float):
         """Move to half-open state to test recovery."""
@@ -148,7 +154,7 @@ class SnapshotCircuitBreaker:
             self.last_state_change = current_time
             self.half_open_attempts = 0
             
-            print(f"🔄 Snapshot circuit breaker HALF-OPEN - testing recovery")
+            logger.info("Snapshot circuit breaker HALF-OPEN - testing recovery")
     
     def get_state_info(self) -> dict:
         """Get current circuit breaker state and statistics."""
@@ -185,19 +191,19 @@ class SnapshotCircuitBreaker:
         self.last_state_change = time.time()
         self.failures = []
         self.half_open_attempts = 0
-        print("🔄 Snapshot circuit breaker RESET to closed state")
+        logger.info("Snapshot circuit breaker RESET to closed state")
     
     def force_open(self, reason: str):
         """Force the circuit open (for manual intervention)."""
         current_time = time.time()
         self._open_circuit(current_time)
-        print(f"🔒 Snapshot circuit breaker FORCED OPEN: {reason}")
+        logger.warning("Snapshot circuit breaker FORCED OPEN", reason=reason)
     
     def force_close(self, reason: str):
         """Force the circuit closed (for manual intervention)."""
         current_time = time.time()
         self._close_circuit(current_time)
-        print(f"🔓 Snapshot circuit breaker FORCED CLOSED: {reason}")
+        logger.info("Snapshot circuit breaker FORCED CLOSED", reason=reason)
 
 
 # Global circuit breaker instance

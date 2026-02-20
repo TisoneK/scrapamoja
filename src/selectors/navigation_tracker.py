@@ -6,16 +6,16 @@ multiple levels of the flashscore workflow interface.
 """
 
 import asyncio
-import logging
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple, Any, Callable
 from dataclasses import dataclass, field
 
+from src.observability.logger import get_logger
 from .context_manager import SelectorContext, NavigationLevel, DOMState
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class NavigationEventType(Enum):
@@ -139,11 +139,9 @@ class NavigationStateTracker:
         
         logger.info(
             f"Navigation started: {navigation_id}",
-            extra={
-                "navigation_id": navigation_id,
-                "source": source_context,
-                "target": target_context
-            }
+            navigation_id=navigation_id,
+            source=source_context,
+            target=target_context
         )
         
         return navigation_id
@@ -208,12 +206,10 @@ class NavigationStateTracker:
         
         logger.info(
             f"Navigation completed: {navigation_id}",
-            extra={
-                "navigation_id": navigation_id,
-                "success": success,
-                "duration_ms": start_event.duration_ms if start_event else None,
-                "final_context": final_context
-            }
+            navigation_id=navigation_id,
+            success=success,
+            duration_ms=start_event.duration_ms if start_event else None,
+            final_context=final_context
         )
     
     async def record_tab_switch(

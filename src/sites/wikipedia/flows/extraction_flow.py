@@ -7,10 +7,14 @@ process using the extractor module with type conversion and validation.
 
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from src.observability.logger import get_logger
 from ..extraction.config import WikipediaExtractionConfig
 from ..extraction.validators import WikipediaDataValidator
 from ..extraction.rules import WikipediaExtractionRules
 from ..extraction.models import ArticleExtractionResult, SearchExtractionResult, QualityMetrics
+
+# Module logger
+logger = get_logger(__name__)
 
 
 class ExtractionFlow:
@@ -27,24 +31,24 @@ class ExtractionFlow:
     def set_dom_context_bridge(self, dom_context_bridge):
         """Set the DOM context bridge function for creating proper DOM contexts."""
         self._dom_context_bridge = dom_context_bridge
-        self.logger.info("✅ DOM context bridge set in extraction flow")
+        logger.info("DOM context bridge set in extraction flow")
     
     async def extract_article_data(self, page, selector_engine, article_title: str) -> ArticleExtractionResult:
         """Extract structured data from a Wikipedia article."""
         start_time = datetime.utcnow()
         
-        print(f"🔍 DEBUG: Starting article extraction for: {article_title}")
+        logger.debug("Starting article extraction", article_title=article_title)
         
         try:
             # Extract basic article content using existing scraper methods
-            print("🔍 DEBUG: Calling _extract_basic_article_data...")
+            logger.debug("Calling _extract_basic_article_data")
             basic_data = await self._extract_basic_article_data(page, selector_engine, article_title)
-            print(f"🔍 DEBUG: Basic data extracted: {list(basic_data.keys())}")
+            logger.debug("Basic data extracted", keys=list(basic_data.keys()))
             
             # Apply extraction rules
-            print("🔍 DEBUG: Applying extraction rules...")
+            logger.debug("Applying extraction rules")
             processed_data = await self._apply_extraction_rules(page, selector_engine, basic_data)
-            print(f"🔍 DEBUG: Processed data keys: {list(processed_data.keys())}")
+            logger.debug("Processed data keys", keys=list(processed_data.keys()))
             
             # Validate extracted data
             validation_result = self.validator.validate_article_data(processed_data)
@@ -291,7 +295,7 @@ class ExtractionFlow:
             if self._dom_context_bridge:
                 # Use the integration bridge for proper DOM context creation
                 dom_context = self._dom_context_bridge(page, article_url, "wikipedia_extraction")
-                print(f"🔍 DEBUG: Using DOM context bridge for: {article_url}")
+                logger.debug("Using DOM context bridge", article_url=article_url)
             else:
                 # Fallback to manual DOM context creation
                 from src.selectors.context import DOMContext
@@ -302,31 +306,31 @@ class ExtractionFlow:
                     url=article_url,
                     timestamp=datetime.utcnow()
                 )
-                print(f"🔍 DEBUG: Using fallback DOM context creation for: {article_url}")
+                logger.debug("Using fallback DOM context creation", article_url=article_url)
             
             # Check if selectors are available
             available_selectors = selector_engine.list_selectors()
-            print(f"🔍 DEBUG: Available selectors: {available_selectors}")
+            logger.debug("Available selectors", selectors=available_selectors)
             
             # Extract article title using selector engine
-            print(f"🔍 DEBUG: Resolving selector 'article_title'...")
+            logger.debug("Resolving selector 'article_title'")
             title_result = await selector_engine.resolve("article_title", dom_context)
-            print(f"🔍 DEBUG: Title result success: {title_result.success}")
+            logger.debug("Title result", success=title_result.success)
             if title_result and title_result.element_info:
-                print(f"🔍 DEBUG: Title found: {title_result.element_info.text_content[:100]}...")
+                logger.debug("Title found", title_preview=title_result.element_info.text_content[:100] if title_result.element_info.text_content else "")
                 title = title_result.element_info.text_content
             else:
-                print(f"🔍 DEBUG: Title extraction failed: {title_result.failure_reason if title_result else 'No result'}")
+                logger.debug("Title extraction failed", failure_reason=title_result.failure_reason if title_result else 'No result')
                 title = article_title
             
             # Extract article content using selector engine
             content_result = await selector_engine.resolve("article_content", dom_context)
-            print(f"🔍 DEBUG: Content result success: {content_result.success}")
+            logger.debug("Content result", success=content_result.success)
             if content_result and content_result.element_info:
-                print(f"🔍 DEBUG: Content length: {len(content_result.element_info.text_content)} chars")
+                logger.debug("Content length", content_length=len(content_result.element_info.text_content) if content_result.element_info.text_content else 0)
                 content = content_result.element_info.text_content
             else:
-                print(f"🔍 DEBUG: Content extraction failed: {content_result.failure_reason if content_result else 'No result'}")
+                logger.debug("Content extraction failed", failure_reason=content_result.failure_reason if content_result else 'No result')
                 content = ""
             
             # Extract infobox data using selector engine
@@ -348,7 +352,7 @@ class ExtractionFlow:
             }
             
         except Exception as e:
-            print(f"🔍 DEBUG: Basic data extraction failed: {str(e)}")
+            logger.error("Basic data extraction failed", error=str(e))
             # Return basic data if extraction fails
             return {
                 'title': article_title,

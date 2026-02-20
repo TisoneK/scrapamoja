@@ -13,7 +13,11 @@ import importlib
 import inspect
 from pathlib import Path
 
+from src.observability.logger import get_logger
 from .component_interface import BaseComponent, ComponentMetadata, ComponentContext, ComponentResult
+
+# Module logger
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -96,11 +100,11 @@ class ComponentManager:
             # Start cleanup task
             self._cleanup_task = asyncio.create_task(self._cleanup_loop())
             
-            print(f"ComponentManager initialized with {len(self._registered_components)} components")
+            logger.info("ComponentManager initialized", component_count=len(self._registered_components))
             return True
-            
+        
         except Exception as e:
-            print(f"Failed to initialize ComponentManager: {str(e)}")
+            logger.error("Failed to initialize ComponentManager", error=str(e))
             return False
     
     async def register_component(self, component_class: Type[BaseComponent]) -> bool:
@@ -124,7 +128,7 @@ class ComponentManager:
             
             # Check if already registered
             if component_id in self._registered_components:
-                print(f"Component {component_id} already registered")
+                logger.debug("Component already registered", component_id=component_id)
                 return False
             
             # Register component
@@ -140,11 +144,11 @@ class ComponentManager:
                 "dependencies": [dep.component_id for dep in dependencies]
             })
             
-            print(f"Registered component: {component_id}")
+            logger.info("Registered component", component_id=component_id)
             return True
-            
+        
         except Exception as e:
-            print(f"Failed to register component {component_class.__name__}: {str(e)}")
+            logger.error("Failed to register component", component_class=component_class.__name__, error=str(e))
             return False
     
     async def create_instance(
@@ -213,11 +217,11 @@ class ComponentManager:
             # Log lifecycle event
             await self._log_lifecycle_event("created", component_id, instance_id)
             
-            print(f"Created instance: {instance_id} of component {component_id}")
+            logger.debug("Created component instance", instance_id=instance_id, component_id=component_id)
             return instance_id
-            
+        
         except Exception as e:
-            print(f"Failed to create instance of component {component_id}: {str(e)}")
+            logger.error("Failed to create component instance", component_id=component_id, error=str(e))
             return None
     
     async def get_instance(self, instance_id: str) -> Optional[BaseComponent]:
@@ -250,7 +254,7 @@ class ComponentManager:
         try:
             instance = self._active_instances.get(instance_id)
             if not instance:
-                print(f"Instance {instance_id} not found")
+                logger.warning("Instance not found", instance_id=instance_id)
                 return False
             
             # Cleanup component
@@ -265,11 +269,11 @@ class ComponentManager:
             # Log lifecycle event
             await self._log_lifecycle_event("destroyed", instance.component.component_id, instance_id)
             
-            print(f"Destroyed instance: {instance_id}")
+            logger.debug("Destroyed component instance", instance_id=instance_id)
             return True
-            
+        
         except Exception as e:
-            print(f"Failed to destroy instance {instance_id}: {str(e)}")
+            logger.error("Failed to destroy instance", instance_id=instance_id, error=str(e))
             return False
     
     async def get_component_info(self, component_id: str) -> Optional[Dict[str, Any]]:
@@ -371,7 +375,7 @@ class ComponentManager:
                     await self._inspect_module_file(py_file)
                     
             except Exception as e:
-                print(f"Error discovering components in {discovery_path}: {str(e)}")
+                logger.error("Error discovering components", discovery_path=discovery_path, error=str(e))
     
     async def _inspect_module_file(self, file_path: Path) -> None:
         """Inspect a Python file for component classes."""
@@ -392,7 +396,7 @@ class ComponentManager:
                     await self.register_component(obj)
                     
         except Exception as e:
-            print(f"Error inspecting {file_path}: {str(e)}")
+            logger.error("Error inspecting module file", file_path=str(file_path), error=str(e))
     
     async def _extract_dependencies(self, component: BaseComponent) -> List[ComponentDependency]:
         """Extract dependencies from a component."""
@@ -415,7 +419,7 @@ class ComponentManager:
         for dep in dependencies:
             if dep.component_id not in self._registered_components:
                 if dep.optional:
-                    print(f"Optional dependency {dep.component_id} not found for {component_id}")
+                    logger.debug("Optional dependency not found", dependency=dep.component_id, component_id=component_id)
                     continue
                 else:
                     raise ValueError(f"Required dependency {dep.component_id} not found for {component_id}")
@@ -431,7 +435,7 @@ class ComponentManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"Error in cleanup loop: {str(e)}")
+                logger.error("Error in cleanup loop", error=str(e))
     
     async def _cleanup_inactive_instances(self) -> None:
         """Clean up inactive instances."""
@@ -484,10 +488,10 @@ class ComponentManager:
             for instance_id in instances_to_destroy:
                 await self.destroy_instance(instance_id)
             
-            print("ComponentManager cleanup completed")
+            logger.info("ComponentManager cleanup completed")
             
         except Exception as e:
-            print(f"Error during ComponentManager cleanup: {str(e)}")
+            logger.error("Error during ComponentManager cleanup", error=str(e))
 
 
 class ComponentManagerError(Exception):
