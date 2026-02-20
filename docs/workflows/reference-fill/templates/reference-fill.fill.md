@@ -262,7 +262,7 @@ After confirmed → Generate and save file.
 After successfully saving the file, run the status updater:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "docs\workflows\reference-fill\scripts\pwsh\status_updater.ps1"
+powershell -ExecutionPolicy Bypass -File "docs\workflows\reference-fill\scripts\pwsh\status_updater.ps1" -Mode "fill"
 ```
 
 **Expected Output:**

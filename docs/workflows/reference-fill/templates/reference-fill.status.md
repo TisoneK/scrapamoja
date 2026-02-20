@@ -135,7 +135,7 @@ If any box is unchecked, DO NOT SEND RESPONSE.
 ```powershell
 # Update workflow status
 cd "c:\Users\tison\Dev\scorewise\scrapamoja"
-powershell -ExecutionPolicy Bypass -File "docs\workflows\reference-fill\scripts\pwsh\status_updater.ps1"
+powershell -ExecutionPolicy Bypass -File "docs\workflows\reference-fill\scripts\pwsh\status_updater.ps1" -Mode "update"
 ```
 
 ### Generate Report
