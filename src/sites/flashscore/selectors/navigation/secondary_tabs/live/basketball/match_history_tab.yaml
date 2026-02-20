@@ -37,7 +37,10 @@ verification:
     - "/match-history/"
 
 # Navigation context
-context:
+context: "live_basketball_match"
+
+# Extended context metadata
+context_metadata:
   match_state: "live"
   sport: "basketball"
   tab_type: "secondary"
