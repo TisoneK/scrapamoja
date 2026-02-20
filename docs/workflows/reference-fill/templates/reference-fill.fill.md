@@ -92,6 +92,16 @@ For example, if selected file is `docs/references/flashscore/html_samples/{state
 
 ⚠️ **Remember rules:** Re-read `docs/workflows/reference-fill/rules.md` if you forget how to handle answers.
 
+**Context for Tertiary Files:**
+If filling a TERTIARY file, first show the user the corresponding SECONDARY tab example:
+```
+📋 This is a tertiary tab file. Here's what the parent secondary tabs look like:
+
+{Show example from finished/basketball/h2h/secondary.md or similar completed file}
+
+You'll be looking for sub-tabs UNDER one of these secondary tabs.
+```
+
 **Q1 - Source URL:**
 ```
 What is the Source URL?
@@ -135,19 +145,54 @@ Steps to verify:
 4. Check for: data-testid="wcl-tabs" data-type="tertiary"
 
 Options:
-1. Yes - Tertiary tabs exist (continue to Q5)
-2. No - No tertiary tabs (document and skip to Step 7)
-3. Unsure - Need help identifying
+A) Yes - Tertiary tabs exist (continue to Q5, will collect both secondary and tertiary HTML)
+B) No - No tertiary tabs (collect secondary HTML, mark tertiary complete)
+C) Unsure - Need help identifying
 ```
-<!-- ⚠️ GATE -->
+<!-- ⚠️ GATE: Wait for user answer. Options MUST be lettered A, B, C. -->
 
-**If "No":** Document the absence and skip to Step 7:
-```
+**If user selects B (No tertiary tabs):** 
+1. Note the absence of tertiary tabs for the Notes section
+2. Continue to Q5a to collect HTML for the secondary tab itself
+3. After saving the secondary file, ALSO write a stub for the corresponding tertiary file:
+
+```markdown
+# {Match State} Basketball - {Primary Tab} Tab - Tertiary Tabs
+
+**Secondary Tab:** {secondary_tab_name}
+**Source URL:** {source_url}
+**Date Collected:** {date}
+**Country:** {country}
+**League:** {league}
+**Match:** {home_team} vs {away_team}
+
+---
+
 ## Notes
 
 ### Tertiary Tabs
-No tertiary tabs exist under this secondary tab. Verified on {date}.
+⚠️ **No tertiary tabs exist under this secondary tab.** 
+
+This secondary tab ({secondary_tab_name}) does not have any tertiary sub-tabs. Verified on {date}.
+
+The navigation structure ends at the secondary level for this tab.
+
+---
+
+### Active State Indicators
+- `aria-current="page"` on the `<a>` element indicates the active tab
+- `class="active"` on the `<a>` element indicates the active tab
+- `data-selected="true"` on the `<button>` element indicates the active tab
+
+### Selector Patterns
+- **Container:** `div[data-testid="wcl-tabs"][data-type="tertiary"]` (not present)
+- **Tab Links:** `a[title]`
+- **Tab Buttons:** `button[data-testid="wcl-tab"]`
 ```
+
+**Why write the stub?** The scanner checks file content for placeholders. A stub with "No tertiary tabs exist" will be detected as complete (no placeholders, has actual content), preventing false positives in future scans.
+
+**IMPORTANT:** The secondary tab still needs its HTML collected regardless of whether tertiary sub-tabs exist. Continue to Q5a.
 
 **Q5a - Enumerate Tabs:**
 ```
