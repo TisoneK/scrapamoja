@@ -26,22 +26,28 @@ cd "c:\Users\tison\Dev\scorewise\scrapamoja"
 ```
 
 ### 2. Analyze Scan Results
-Read the scan results and provide a prioritized analysis:
+Read the scan results file and extract key information:
 
-```python
-# Read scan results
-import json
-with open('docs/workflows/reference-fill/outputs/scans/scan_results.json', 'r') as f:
-    results = json.load(f)
+**File to read:** `docs/workflows/reference-fill/outputs/scans/scan_results.json`
 
-# Extract key information
-scan_id = results['scan_metadata']['scan_id']
-scan_date = results['scan_metadata']['scan_date']
-summary = results['summary']
-files = results['files']
-
-# Analyze and prioritize
+**JSON Structure (for reference):**
+```json
+{
+  "scan_metadata": {
+    "scan_id": "scan_YYYYMMDD_HHMMSS",
+    "scan_date": "YYYY-MM-DDTHH:MM:SSZ"
+  },
+  "summary": {
+    "total_files_scanned": number,
+    "files_by_status": { "complete": number, "incomplete": number },
+    "files_by_category": { "scheduled": {...}, "live": {...}, "finished": {...} },
+    "files_by_tab_level": { "primary": {...}, "secondary": {...}, "tertiary": {...} }
+  },
+  "files": [ { "path": "...", "status": "...", ... } ]
+}
 ```
+
+⚠️ **NOTE:** This is the expected JSON structure. Do NOT execute Python code. Use the `read_file` tool to read the JSON file directly.
 
 ### 3. Present Findings to User
 Present the scan results in this format:

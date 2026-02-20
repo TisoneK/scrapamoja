@@ -54,16 +54,18 @@ This ensures consistent behavior and automatic quality control.
 
 ### Step 2: Present Results
 
-**ON SCANNER SUCCESS → MUST read template first, then execute:**
+**ON SCANNER SUCCESS:**
 
-1. **READ**: `docs/workflows/reference-fill/templates/reference-fill.status.md` completely
-2. **UNDERSTAND**: All instructions and requirements in the template
-3. **EXECUTE**: Follow template exactly - no improvisation allowed
-4. **PRESENT**: Results and options exactly as specified in template
+1. **READ**: `docs/workflows/reference-fill/templates/reference-fill.status.md`
+   ⚠️ Use this file for OUTPUT FORMATTING ONLY — to display the status summary correctly.
+   ⚠️ DO NOT execute its control flow. DO NOT present its A/B/C options.
+   ⚠️ The A/B/C options are defined in Step 3 below — those are the authoritative options.
 
-**CRITICAL**: Do NOT present results until you have read and understood the entire status template.
+2. **DISPLAY**: Format and present the scan results using the status template's display format.
 
-**ON COMPLETION → Present options A) B) C) to user and wait for selection.**
+3. **RETURN HERE**: After displaying results, continue to Step 3 of this file.
+
+**ON COMPLETION → Present options A) B) C) defined in Step 3 below. Wait for selection.**
 
 ### Step 3: Route Based on User Choice
 

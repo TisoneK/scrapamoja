@@ -90,6 +90,9 @@ Show progress organized by categories:
 ```
 
 ### 6. Present User Options
+
+⚠️ **SCOPE GUARD: Only present these options if you entered this template directly from `start.md` Step 3 (user selected C) or as a standalone mode. If you are reading this template for display formatting only (called from `start.md` Step 2), SKIP this section entirely and return to `start.md`.**
+
 **ABSOLUTE REQUIREMENT: Present EXACTLY these options - NO VARIATIONS ALLOWED**
 
 Present exactly these options to user:

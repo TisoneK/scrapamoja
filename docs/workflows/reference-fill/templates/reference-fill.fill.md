@@ -4,6 +4,10 @@ description: Fill mode for reference file filling workflow
 
 # Fill Mode - Fill Reference Files with HTML Samples
 
+⚠️ **YOU ARE NOW IN FILL MODE. The status template is NO LONGER ACTIVE.**
+Any status display within this template is for context only — do NOT re-execute the status template.
+Continue linearly through this template's steps unless explicitly told otherwise.
+
 This mode guides users through collecting real HTML samples from Flashscore and filling reference files according to templates.
 
 ## Quick Flow
@@ -37,7 +41,7 @@ See the Issue Tracking section in `docs/workflows/reference-fill/rules.md` for d
 ### Step 1: Check Status Tracker
 Read: `docs/workflows/reference-fill/status.json`
 
-⚠️ **IMPORTANT:** Also read `docs/workflows/reference-fill/rules.md` to refresh memory on LLM behavior rules.
+⚠️ **IMPORTANT:** Also read `docs/workflows/reference-fill/rules.md` and `docs/workflows/rules.md` to refresh memory on LLM behavior rules.
 
 Skip any files already marked "completed".
 
@@ -77,7 +81,7 @@ powershell -ExecutionPolicy Bypass -File ".\docs\workflows\reference-fill\script
 
 Where `{REPLACE_WITH_RELATIVE_PATH}` is the path relative to `docs/references/flashscore/html_samples/`.
 
-For example, if selected file is `docs/references/flashscore/html_samples/live/basketball/odds/secondary.md`, use `live/basketball/odds/secondary.md`.
+For example, if selected file is `docs/references/flashscore/html_samples/{state}/basketball/{tab}/{level}.md`, use `{state}/basketball/{tab}/{level}.md`.
 
 ⚠️ CHECK: Does scanner show "NEEDS FILL"?
 - YES → Continue to Step 4
@@ -187,7 +191,7 @@ After each tab, update the tab list:
 |---|----------|--------|
 | 1 | [name] | ✅ collected |
 | 2 | [name] | ⏳ current |
-| 3 | [name] | pending |
+| 3 | [name] | pending... |
 
 ### Step 5: Validate & Generate
 
