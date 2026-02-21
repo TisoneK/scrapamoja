@@ -1,0 +1,125 @@
+﻿{
+    "configuration":  {
+                          "validation_level":  "standard",
+                          "template_reference":  "docs/references/flashscore/html_samples/README.md",
+                          "output_structure":  {
+                                                   "reports":  "outputs/reports/",
+                                                   "validation":  "outputs/validation/",
+                                                   "scans":  "outputs/scans/"
+                                               },
+                          "llm_settings":  {
+                                               "template_validation":  true,
+                                               "guided_html_collection":  true,
+                                               "progress_tracking":  true,
+                                               "auto_fix_simple_issues":  true
+                                           },
+                          "target_directory":  "docs/references/flashscore/html_samples/"
+                      },
+    "progress":  {
+                     "completed":  0,
+                     "need_attention":  0,
+                     "total_files":  0,
+                     "completion_percentage":  0,
+                     "in_progress":  0
+                 },
+    "steps_completed":  [
+
+                        ],
+    "status":  "ready",
+    "version":  "1.0.0",
+    "workflow_modes":  {
+                           "validate":  {
+                                            "script":  "scripts/pwsh/validator.ps1",
+                                            "template":  "templates/reference-fill.validate.md",
+                                            "available":  true
+                                        },
+                           "discovery":  {
+                                             "script":  "scripts/pwsh/scanner.ps1",
+                                             "template":  "templates/reference-fill.discovery.md",
+                                             "available":  true
+                                         },
+                           "status":  {
+                                          "script":  "scripts/pwsh/status_updater.ps1",
+                                          "template":  "templates/reference-fill.status.md",
+                                          "available":  true
+                                      },
+                           "fill":  {
+                                        "script":  null,
+                                        "template":  "templates/reference-fill.fill.md",
+                                        "available":  true
+                                    }
+                       },
+    "current_step":  null,
+    "llm_guidance_system":  true,
+    "workflow":  "reference-fill",
+    "health":  {
+                   "status":  "completed",
+                   "recommendations":  [
+                                           "All reference files completed successfully",
+                                           "Improve template compliance through validation",
+                                           "Run first fill mode session to begin populating reference files"
+                                       ],
+                   "blockers":  [
+
+                                ],
+                   "warnings":  [
+                                    "Missing validator.ps1 script",
+                                    "Missing status_updater.ps1 script"
+                                ]
+               },
+    "by_tab_level":  {
+                         "secondary":  {
+                                           "completed":  0,
+                                           "total":  0,
+                                           "need_attention":  0
+                                       },
+                         "primary":  {
+                                         "completed":  0,
+                                         "total":  0,
+                                         "need_attention":  0
+                                     },
+                         "tertiary":  {
+                                          "completed":  0,
+                                          "total":  0,
+                                          "need_attention":  0
+                                      }
+                     },
+    "created":  "2026-02-20T13:42:28Z",
+    "last_run":  {
+                     "output_file":  null,
+                     "script":  null,
+                     "files_processed":  0,
+                     "issues_found":  0,
+                     "date":  null,
+                     "mode":  null,
+                     "scan_id":  null
+                 },
+    "by_category":  {
+                        "live":  {
+                                     "need_attention":  0,
+                                     "completed":  0,
+                                     "total":  0,
+                                     "in_progress":  0
+                                 },
+                        "finished":  {
+                                         "need_attention":  0,
+                                         "completed":  0,
+                                         "total":  0,
+                                         "in_progress":  0
+                                     },
+                        "scheduled":  {
+                                          "need_attention":  0,
+                                          "completed":  0,
+                                          "total":  0,
+                                          "in_progress":  0
+                                      }
+                    },
+    "last_updated":  "2026-02-21T16:14:12Z",
+    "current_mode":  "fill",
+    "quality_metrics":  {
+                            "template_compliance":  0,
+                            "html_quality":  0,
+                            "documentation_quality":  0,
+                            "validation_pass_rate":  0
+                        }
+}

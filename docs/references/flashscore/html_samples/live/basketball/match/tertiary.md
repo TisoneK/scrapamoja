@@ -1,36 +1,37 @@
 # Live Basketball - Match Tab - Tertiary Tabs
 
-**Secondary Tab:** *(Specify which secondary tab you're documenting)*
-**Source URL:** *(Add URL here)*
-**Date Collected:** *(Add date here)*
-**League:** *(Add league here)*
-**Match:** *(Add match teams here)*
+**Secondary Tab:** Match (all secondary tabs)
+**Source URL:** https://www.flashscore.com/match/basketball/melilla-Ac45vn4k/obradoiro-cab-YRPggwMM/?mid=4Gywf4Ji
+**Date Collected:** 2026-02-15
+**Country:** Spain
+**League:** Primera FEB - Round 21
+**Match:** Melilla vs Obradoiro CAB
 
-## HTML
-
-```html
-<!-- Paste tertiary tabs HTML under each Match secondary tab here -->
-<!-- These are sub-tabs within each secondary tab during live match -->
-<!-- Copy separate HTML blocks for each secondary tab's tertiary structure -->
-```
-
-## Tertiary Structure by Secondary Tab
-
-### Summary > Tertiary
-*(Document any sub-tabs within Summary - e.g., quarter navigation)*
-
-### Player Stats > Tertiary
-*(Document any sub-tabs within Player Stats - e.g., team filter, stat categories)*
-
-### Stats > Tertiary
-*(Document any sub-tabs within Stats - e.g., quarter breakdown, stat categories)*
-
-### Lineups > Tertiary
-*(Document any sub-tabs within Lineups - e.g., team filter, starting vs bench)*
-
-### Match History > Tertiary
-*(Document any sub-tabs within Match History - e.g., event filters, quarter navigation)*
+---
 
 ## Notes
-- Live tertiary tabs may update in real-time
-- Document any auto-refresh behavior
+
+### Tertiary Tabs
+⚠️ **No tertiary tabs exist under this secondary tab.**
+
+The Match secondary tabs (Summary, Lineups, Match History) do not have tertiary sub-tabs for navigation. These tabs contain content (score, lineups, history) rather than further navigation options. Verified on 2026-02-15.
+
+The navigation structure ends at the secondary level for this tab.
+
+---
+
+### Active State Indicators
+- `aria-current="page"` on the `<a>` element indicates the active tab
+- `class="selected"` on the `<a>` element indicates the active tab
+- `data-selected="true"` on the `<button>` element indicates the active tab
+- `wcl-tabSelected_rHdTM` class on the `<button>` element indicates the active tab
+
+### Selector Patterns
+- **Container:** `div[data-testid="wcl-tabs"][data-type="secondary"]` (tertiary container not present)
+- **Tab Links:** `a[data-analytics-element="SCN_TAB"]`
+- **Tab Buttons:** `button[data-testid="wcl-tab"]`
+
+### Match State Differences
+- **Live:** Shows Summary, Lineups, Match History - no tertiary navigation
+- **Scheduled:** Limited tabs available
+- **Finished:** Full set of tabs with final statistics
