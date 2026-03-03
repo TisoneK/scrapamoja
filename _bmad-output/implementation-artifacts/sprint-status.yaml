@@ -1,0 +1,99 @@
+# generated: 2026-03-02
+# project: scrapamoja
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-03-02
+project: scrapamoja
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Foundation & Schema Extension
+  epic-1: done
+  1-1-extend-yaml-schema-with-recipe-metadata: done
+  1-2-create-recipe-version-storage: done
+  1-3-implement-recipe-stability-scoring: done
+  epic-1-retrospective: done
+
+  # Epic 2: Failure Detection & Capture
+  epic-2: in-progress
+  2-1-detect-selector-resolution-failures: review
+  2-2-capture-dom-snapshot-at-failure: review
+  2-3-record-failure-context: review
+  epic-2-retrospective: optional
+
+  # Epic 3: Alternative Selector Proposal
+  epic-3: backlog
+  3-1-analyze-dom-structure: backlog
+  3-2-generate-confidence-scores: backlog
+  3-3-calculate-blast-radius: backlog
+  epic-3-retrospective: optional
+
+
+  # Epic 4: Human Verification Workflow
+  epic-4: backlog
+  4-1-view-proposed-selectors-with-visual-preview: backlog
+  4-2-approve-or-reject-proposed-selectors: backlog
+  4-3-flag-selectors-for-developer-review: backlog
+  4-4-create-custom-selector-strategies: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Learning & Weight Adjustment
+  epic-5: backlog
+  5-1-learn-from-approvals: backlog
+  5-2-learn-from-rejections: backlog
+  5-3-track-selector-survival-across-generations: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Audit Logging
+  epic-6: backlog
+  6-1-record-human-decisions: backlog
+  6-2-maintain-complete-audit-trail: backlog
+  6-3-query-audit-history: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Escalation UI
+  epic-7: backlog
+  7-1-failure-dashboard: backlog
+  7-2-technical-and-non-technical-views: backlog
+  7-3-fast-triage-workflow: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: Feature Flags
+  epic-8: backlog
+  8-1-sport-based-feature-flags: backlog
+  8-2-site-based-feature-flags: backlog
+  8-3-feature-flag-management-ui: backlog
+  epic-8-retrospective: optional
