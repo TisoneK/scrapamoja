@@ -24,6 +24,11 @@ class ConfigurationMetadata:
     version: str
     last_updated: str
     description: str
+    # New recipe metadata fields for versioning and stability tracking
+    recipe_id: Optional[str] = None
+    stability_score: Optional[float] = None
+    generation: Optional[int] = None
+    parent_recipe_id: Optional[str] = None
     
     def __post_init__(self):
         """Validate metadata fields."""
@@ -34,6 +39,32 @@ class ConfigurationMetadata:
         # Validate version format (semantic versioning)
         if not self.version.replace(".", "").replace("-", "").isdigit():
             raise ValueError(f"Invalid version format: {self.version}")
+        
+        # Validate recipe_id: must be non-empty string if provided
+        if self.recipe_id is not None and not isinstance(self.recipe_id, str):
+            raise ValueError("recipe_id must be a string")
+        if self.recipe_id is not None and self.recipe_id.strip() == "":
+            raise ValueError("recipe_id must be non-empty if provided")
+        
+        # Validate stability_score: must be between 0.0 and 1.0
+        if self.stability_score is not None:
+            if not isinstance(self.stability_score, (int, float)):
+                raise ValueError("stability_score must be a number")
+            if self.stability_score < 0.0 or self.stability_score > 1.0:
+                raise ValueError("stability_score must be between 0.0 and 1.0")
+        
+        # Validate generation: must be positive integer >= 1
+        if self.generation is not None:
+            if not isinstance(self.generation, int) or isinstance(self.generation, bool):
+                raise ValueError("generation must be an integer")
+            if self.generation < 1:
+                raise ValueError("generation must be >= 1")
+        
+        # Validate parent_recipe_id: must be non-empty string if provided
+        if self.parent_recipe_id is not None and not isinstance(self.parent_recipe_id, str):
+            raise ValueError("parent_recipe_id must be a string")
+        if self.parent_recipe_id is not None and self.parent_recipe_id.strip() == "":
+            raise ValueError("parent_recipe_id must be non-empty if provided")
 
 
 @dataclass

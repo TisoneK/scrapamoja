@@ -1,4 +1,4 @@
-# generated: 2026-03-02
+# generated: 2026-03-04
 # project: scrapamoja
 # project_key: NOKEY
 # tracking_system: file-system
@@ -10,6 +10,7 @@
 #   - backlog: Epic not yet started
 #   - in-progress: Epic actively being worked on
 #   - done: All stories in epic completed
+#   - needs-refactor: Completed but requires refactoring to align with architecture
 #
 # Epic Status Transitions:
 #   - backlog → in-progress: Automatically when first story is created (via create-story)
@@ -21,6 +22,7 @@
 #   - in-progress: Developer actively working on implementation
 #   - review: Ready for code review (via Dev's code-review workflow)
 #   - done: Story completed
+#   - needs-refactor: Completed but requires refactoring to align with architecture
 #
 # Retrospective Status:
 #   - optional: Can be completed but not required
@@ -33,7 +35,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-03-02
+generated: 2026-03-04
 project: scrapamoja
 project_key: NOKEY
 tracking_system: file-system
@@ -41,40 +43,43 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Foundation & Schema Extension
+  # ⚠️ REQUIRES REFACTORING: Story 1.3 duplicates ConfidenceScorer - see 1-3a
   epic-1: done
   1-1-extend-yaml-schema-with-recipe-metadata: done
   1-2-create-recipe-version-storage: done
-  1-3-implement-recipe-stability-scoring: done
+  1-3-implement-recipe-stability-scoring: needs-refactor  # ⚠️ DUPLICATES ConfidenceScorer
+  1-3a-refactor-stability-scoring-to-use-confidence: done  # FIXED: code review resolved - tests pass
   epic-1-retrospective: done
 
   # Epic 2: Failure Detection & Capture
-  epic-2: in-progress
-  2-1-detect-selector-resolution-failures: review
-  2-2-capture-dom-snapshot-at-failure: review
-  2-3-record-failure-context: review
-  epic-2-retrospective: optional
+  # ⚠️ INTEGRATION GAPS: Story 2.1 may need integration check with adaptive system
+  epic-2: done
+  2-1-detect-selector-resolution-failures: done  # ⚠️ CHECK: integration with adaptive system
+  2-2-capture-dom-snapshot-at-failure: done  # ✓ VERIFIED: Uses existing core SnapshotManager
+  2-3-record-failure-context: done  # ✅ CODE REVIEW COMPLETE - fixed exports + added tests
+  epic-2-retrospective: done
 
   # Epic 3: Alternative Selector Proposal
-  epic-3: backlog
-  3-1-analyze-dom-structure: backlog
-  3-2-generate-confidence-scores: backlog
-  3-3-calculate-blast-radius: backlog
+  epic-3: done  # First story created
+  3-1-analyze-dom-structure: done  # ✅ CODE REVIEW COMPLETE - fixed integration, XPath depth limit, text escaping
+  3-2-generate-confidence-scores: done  # ✅ CODE REVIEW COMPLETE - fixed import + type issues
+  3-3-calculate-blast-radius: done  # ✅ CODE REVIEW COMPLETE - fixed integration, extended AlternativeSelector
   epic-3-retrospective: optional
 
-
   # Epic 4: Human Verification Workflow
-  epic-4: backlog
-  4-1-view-proposed-selectors-with-visual-preview: backlog
-  4-2-approve-or-reject-proposed-selectors: backlog
-  4-3-flag-selectors-for-developer-review: backlog
-  4-4-create-custom-selector-strategies: backlog
+  epic-4: in-progress
+  4-1-view-proposed-selectors-with-visual-preview: done  # ✅ CODE REVIEW COMPLETE - fixed missing files, CORS, XSS
+  4-2-approve-or-reject-proposed-selectors: done  # ✅ CODE REVIEW COMPLETE - FIXED: Real audit logging, error handling, updated dependencies
+  4-3-flag-selectors-for-developer-review: review  # ✅ READY FOR REVIEW
+  4-4-create-custom-selector-strategies: done  # ✅ CODE REVIEW COMPLETE - fixed ConfidenceScorer, UI indicators, tests
   epic-4-retrospective: optional
 
   # Epic 5: Learning & Weight Adjustment
-  epic-5: backlog
-  5-1-learn-from-approvals: backlog
-  5-2-learn-from-rejections: backlog
-  5-3-track-selector-survival-across-generations: backlog
+  # ⚠️ MUST EXTEND: All stories must use existing ConfidenceScorer per sprint change proposal
+  epic-5: in-progress  # First story created
+  5-1-learn-from-approvals: review  # ⚠️ IMPLEMENTATION COMPLETE - Ready for review
+  5-2-learn-from-rejections: review  # ⚠️ IMPLEMENTATION COMPLETE - Ready for review
+  5-3-track-selector-survival-across-generations: review  # ✅ IMPLEMENTATION COMPLETE - Ready for review
   epic-5-retrospective: optional
 
   # Epic 6: Audit Logging

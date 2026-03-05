@@ -1,0 +1,8 @@
+# Agentfile Project Manifest
+name: my-agentfile-project
+version: 1.0.0
+spec: "1.0.0"
+
+workflows_dir: workflows/
+examples_dir: examples/
+shared_dir: shared/

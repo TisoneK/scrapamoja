@@ -487,6 +487,9 @@ async def publish_selector_resolved(selector_name: str, strategy: str,
 
 async def publish_selector_failed(selector_name: str, strategy: str,
                                  failure_reason: str, resolution_time: float,
+                                 sport: Optional[str] = None,
+                                 site: Optional[str] = None,
+                                 recipe_id: Optional[str] = None,
                                  correlation_id: Optional[str] = None) -> int:
     """Publish selector failed event."""
     return await publish_event(
@@ -495,7 +498,10 @@ async def publish_selector_failed(selector_name: str, strategy: str,
             "selector_name": selector_name,
             "strategy": strategy,
             "failure_reason": failure_reason,
-            "resolution_time": resolution_time
+            "resolution_time": resolution_time,
+            "sport": sport,
+            "site": site,
+            "recipe_id": recipe_id,
         },
         correlation_id,
         "selector_engine"

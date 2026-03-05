@@ -1,216 +1,42 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# Agentfile runtime artifacts
+outputs/
 
-# C extensions
-*.so
+# Agentfile artifact staging — run directories are transient
+artifacts/**/
+!artifacts/.gitkeep
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
+# Environment files
 .env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+.env.local
+.env.*.local
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Rope project settings
-.ropeproject
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Windsurf and AI tools
-
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Browser and Playwright specific
-playwright-report/
-test-results/
-*.trace
-playwright/.cache/
-browser-profiles/
-user-data-dir/
-ms-playwright/
-
-# InfluxDB and metrics
-*.db
-*.sqlite
-*.sqlite3
-influxdb/
-metrics/
-
-# Application specific
-logs/
-*.log
-temp/
-tmp/
-
-# Scrapamoja specific
-
-# OpenSpec and specification artifacts
-openspec/changes/archive/
-openspec/specs/**/*.md
-specs/**/*.md
-!specs/README.md
-
-# Template and CLI artifacts
-template-cli
-.template-cache/
-
-# Documentation build artifacts
-docs/**/build/
-docs/**/_build/
-docs/**/node_modules/
-
-# Test artifacts and temporary files
-test_*.py
-test_*_real.py
-debug_*.py
-*_real.py
-
-# Configuration secrets
-.env.local
-.env.production
-config/secrets/
-*.key
-*.pem
-*.crt
-config/local_*.yaml
-config/production_*.yaml
-
-# Specify and memory management
-.specify/memory/
-.specify/cache/
-
-# AI assistant and development tools
-.claude/
-.aider/
-.cursor/
-*ai-chat*
-*assistant-response*
+# Node.js
+node_modules/
+.npm
+.eslintcache
 
 # Temporary files
 *.tmp
 *.temp
-.cache/
-*.bak
-*.backup

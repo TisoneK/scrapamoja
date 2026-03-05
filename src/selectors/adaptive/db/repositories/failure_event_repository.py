@@ -36,8 +36,8 @@ class FailureEventRepository:
             f"sqlite:///{db_path}",
             connect_args={"check_same_thread": False} if db_path != ":memory:" else {}
         )
-        # Create tables
-        Base.metadata.create_all(self.engine)
+        # Create tables with checkfirst to avoid index conflicts
+        Base.metadata.create_all(self.engine, checkfirst=True)
         # Create session factory
         self.SessionLocal = sessionmaker(bind=self.engine)
     
@@ -562,6 +562,52 @@ class FailureEventRepository:
             
             results = session.execute(query).all()
             return [{"date": row.date, "count": row.count} for row in results]
+    
+    def update_flag_info(
+        self,
+        failure_id: int,
+        flagged: bool,
+        flag_note: Optional[str] = None,
+        flagged_at: Optional[str] = None,
+    ) -> bool:
+        """
+        Update flag information for a failure event.
+        
+        Args:
+            failure_id: Unique identifier for the failure event
+            flagged: Whether the failure is flagged
+            flag_note: Optional note explaining the flag
+            flagged_at: Optional timestamp when flag was set
+            
+        Returns:
+            True if updated successfully, False otherwise
+        """
+        with self._get_session() as session:
+            event = session.execute(
+                select(FailureEvent).where(FailureEvent.id == failure_id)
+            ).scalar_one_or_none()
+            
+            if not event:
+                return False
+            
+            # Update flag fields if they exist in the model
+            if hasattr(event, 'flagged'):
+                event.flagged = flagged
+            if hasattr(event, 'flag_note') and flag_note is not None:
+                event.flag_note = flag_note
+            if hasattr(event, 'flagged_at') and flagged_at is not None:
+                # Parse ISO string back to datetime if needed
+                if isinstance(flagged_at, str):
+                    from datetime import datetime
+                    try:
+                        event.flagged_at = datetime.fromisoformat(flagged_at.replace('Z', '+00:00'))
+                    except ValueError:
+                        event.flagged_at = datetime.utcnow()
+                else:
+                    event.flagged_at = flagged_at
+            
+            session.commit()
+            return True
     
     def close(self):
         """Close the database connection."""

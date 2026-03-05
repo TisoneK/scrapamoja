@@ -4,8 +4,7 @@ Failure Event SQLAlchemy model for storing selector failure events in the databa
 
 from datetime import datetime
 from typing import Optional, Dict, Any
-
-from sqlalchemy import Integer, String, Float, DateTime, JSON, Index
+from sqlalchemy import Integer, String, Float, DateTime, JSON, Index, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .recipe import Base
@@ -102,6 +101,24 @@ class FailureEvent(Base):
         index=True
     )
     
+    # Flag fields for Story 4.3
+    flagged: Mapped[bool] = mapped_column(
+        Boolean, 
+        nullable=False, 
+        default=False,
+        doc="Whether failure is flagged for developer review"
+    )
+    flag_note: Mapped[Optional[str]] = mapped_column(
+        String(1000), 
+        nullable=True,
+        doc="Note explaining why failure was flagged"
+    )
+    flagged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, 
+        nullable=True,
+        doc="When failure was flagged for review"
+    )
+    
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
@@ -115,6 +132,8 @@ class FailureEvent(Base):
         Index('ix_failure_events_sport_site', 'sport', 'site'),
         Index('ix_failure_events_recipe_timestamp', 'recipe_id', 'timestamp'),
         Index('ix_failure_events_error_type_timestamp', 'error_type', 'timestamp'),
+        Index('ix_failure_events_flagged', 'flagged'),
+        Index('ix_failure_events_flagged_at', 'flagged_at'),
     )
     
     def __repr__(self) -> str:
@@ -140,6 +159,9 @@ class FailureEvent(Base):
             "severity": self.severity,
             "context_snapshot": self.context_snapshot,
             "correlation_id": self.correlation_id,
+            "flagged": getattr(self, 'flagged', False),
+            "flag_note": getattr(self, 'flag_note', None),
+            "flagged_at": getattr(self, 'flagged_at', None).isoformat() if getattr(self, 'flagged_at', None) else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
     

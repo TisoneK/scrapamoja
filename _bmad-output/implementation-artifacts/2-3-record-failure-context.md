@@ -1,6 +1,6 @@
 # Story 2.3: Record Failure Context
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -46,8 +46,8 @@ So that failures can be analyzed and proposed fixes can be evaluated.
   - [x] Subtask 3.3: Add aggregation queries for pattern analysis
 
 - [x] Task 4: Add context to API endpoints (AC: #2)
-  - [ ] Subtask 4.1: Update GET /failures endpoint with context filters
-  - [ ] Subtask 4.2: Add context fields to failure detail response
+  - [x] Subtask 4.1: Update GET /failures endpoint with context filters
+  - [x] Subtask 4.2: Add context fields to failure detail response
 
 - [x] Task 5: Add tests for failure context (AC: #4)
   - [x] Subtask 5.1: Unit tests for context extraction

@@ -531,7 +531,22 @@ class FailureService:
         Returns:
             Result dictionary
         """
-        # Verify the failure exists
+        # Input validation
+        if not note or not note.strip():
+            return {
+                "success": False,
+                "message": "Flag note is required and cannot be empty",
+                "failure_id": failure_id,
+            }
+        
+        if len(note) > 1000:
+            return {
+                "success": False,
+                "message": "Flag note must be less than 1000 characters",
+                "failure_id": failure_id,
+            }
+        
+        # Verify failure exists
         failure = self.failure_repository.get_by_id(failure_id)
         if not failure:
             return {
@@ -540,7 +555,38 @@ class FailureService:
                 "failure_id": failure_id,
             }
         
-        # Store flag info in database
+        # Check if already flagged (allow updating the note)
+        existing_flag = self._load_flagged_failure(failure_id)
+        if existing_flag and existing_flag.get("flagged", False):
+            # Update existing flag with new note
+            flag_info = {
+                "flagged": True,
+                "note": note,
+                "flagged_at": datetime.now(timezone.utc).isoformat(),
+                "user_id": user_id,
+            }
+            
+            # Save to database
+            if self._save_flagged_failure(failure_id, flag_info):
+                # Update cache
+                self._flagged_failures_cache[failure_id] = flag_info
+            
+            self._logger.info(
+                "failure_flag_updated",
+                failure_id=failure_id,
+                note=note[:100],  # Truncate for logging
+                user_id=user_id,
+            )
+            
+            return {
+                "success": True,
+                "message": "Flag note updated successfully",
+                "failure_id": failure_id,
+                "flagged": True,
+                "flag_note": note,
+                "flagged_at": flag_info["flagged_at"],
+            }
+        
         flagged_at = datetime.now(timezone.utc)
         flag_info = {
             "flagged": True,

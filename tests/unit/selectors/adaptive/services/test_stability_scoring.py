@@ -154,6 +154,7 @@ class TestStabilityScoringService:
         mock_recipe.failure_count = 2
         mock_recipe.generations_survived = 1
         mock_recipe.consecutive_failures = 0
+        mock_recipe.parent_recipe_id = None
         mock_repository.update_stability_on_success.return_value = mock_recipe
         
         await service.on_selector_success("test-recipe-123")
@@ -174,6 +175,7 @@ class TestStabilityScoringService:
         mock_recipe.failure_count = 2
         mock_recipe.generations_survived = 1
         mock_recipe.consecutive_failures = 1
+        mock_recipe.parent_recipe_id = None
         mock_repository.update_stability_on_failure.return_value = mock_recipe
         
         await service.on_selector_failure(
@@ -197,6 +199,7 @@ class TestStabilityScoringService:
         mock_recipe.failure_count = 2
         mock_recipe.generations_survived = 1
         mock_recipe.consecutive_failures = 1
+        mock_recipe.parent_recipe_id = None
         mock_repository.update_stability_on_failure.return_value = mock_recipe
         
         await service.on_selector_failure(

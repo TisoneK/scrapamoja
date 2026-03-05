@@ -12,49 +12,107 @@ html_samples/
 |   |-- basketball/
 |       |-- primary_tabs.md             # Primary tabs HTML
 |       |-- match/
-|       |   |-- secondary.md            # Secondary tabs under Match
-|       |   |-- tertiary.md             # Tertiary tabs under each secondary
+|       |   |-- navigation/
+|       |   |   |-- secondary.md         # Summary, Match History
+|       |   |   |-- tertiary.md
+|       |   |-- content/
+|       |       |-- summary/
+|       |       |-- match-history/
 |       |-- odds/
-|       |   |-- secondary.md
-|       |   |-- tertiary.md
+|       |   |-- navigation/
+|       |   |   |-- secondary.md         # Home/Away, 1X2, Over/Under, Asian handicap, Odd/Even
+|       |   |   |-- tertiary.md
+|       |   |-- content/
+|       |       |-- home-away/
+|       |       |-- 1x2/
+|       |       |-- over-under/
+|       |       |-- asian-handicap/
+|       |       |-- odd-even/
 |       |-- h2h/
-|       |   |-- secondary.md
-|       |   |-- tertiary.md
+|       |   |-- navigation/
+|       |   |   |-- secondary.md         # Overall, Home, Away
+|       |   |   |-- tertiary.md
+|       |   |-- content/
+|       |       |-- overall/
+|       |       |-- home/
+|       |       |-- away/
 |       |-- standings/
-|           |-- secondary.md
-|           |-- tertiary.md
+|           |-- navigation/
+|           |   |-- secondary.md         # Standings, Form
+|           |   |-- tertiary.md
+|           |-- content/
+|               |-- standings/
+|               |-- form/
 |
 |-- live/                               # Live matches (in progress)
 |   |-- basketball/
 |       |-- primary_tabs.md
 |       |-- match/
-|       |   |-- secondary.md
-|       |   |-- tertiary.md
+|       |   |-- navigation/
+|       |   |   |-- secondary.md         # Summary, Lineups, Match History
+|       |   |   |-- tertiary.md
+|       |   |-- content/
+|       |       |-- summary/
+|       |       |-- lineups/
+|       |       |-- match-history/
 |       |-- odds/
-|       |   |-- secondary.md
-|       |   |-- tertiary.md
+|       |   |-- navigation/
+|       |   |   |-- secondary.md         # Home/Away
+|       |   |   |-- tertiary.md
+|       |   |-- content/
+|       |       |-- home-away/
 |       |-- h2h/
-|       |   |-- secondary.md
-|       |   |-- tertiary.md
+|       |   |-- navigation/
+|       |   |   |-- secondary.md         # Overall
+|       |   |   |-- tertiary.md
+|       |   |-- content/
+|       |       |-- overall/
 |       |-- standings/
-|           |-- secondary.md
-|           |-- tertiary.md
+|           |-- navigation/
+|           |   |-- secondary.md         # Standings
+|           |   |-- tertiary.md
+|           |-- content/
+|               |-- standings/
 |
 |-- finished/                           # Finished matches (completed)
     |-- basketball/
         |-- primary_tabs.md
         |-- match/
-        |   |-- secondary.md
-        |   |-- tertiary.md
+        |   |-- navigation/
+        |   |   |-- secondary.md         # Summary, Player stats, Stats, Lineups, Match History
+        |   |   |-- tertiary.md
+        |   |-- content/
+        |       |-- summary/
+        |       |-- player-stats/
+        |       |-- stats/
+        |       |-- lineups/
+        |       |-- match-history/
         |-- odds/
-        |   |-- secondary.md
-        |   |-- tertiary.md
+        |   |-- navigation/
+        |   |   |-- secondary.md         # Home/Away, 1X2, Over/Under, Asian handicap, HT/FT, Odd/Even
+        |   |   |-- tertiary.md
+        |   |-- content/
+        |       |-- home-away/
+        |       |-- 1x2/
+        |       |-- over-under/
+        |       |-- asian-handicap/
+        |       |-- half-time-full-time/
+        |       |-- odd-even/
         |-- h2h/
-        |   |-- secondary.md
-        |   |-- tertiary.md
+        |   |-- navigation/
+        |   |   |-- secondary.md         # Overall, Home, Away
+        |   |   |-- tertiary.md
+        |   |-- content/
+        |       |-- overall/
+        |       |-- home/
+        |       |-- away/
         |-- standings/
-            |-- secondary.md
-            |-- tertiary.md
+            |-- navigation/
+            |   |-- secondary.md         # Standings, Form
+            |   |-- tertiary.md
+            |-- content/
+                |-- standings/
+                |-- form/
 ```
 
 ## Tab Hierarchy
@@ -271,6 +329,19 @@ This HTML sample captures the **secondary navigation tabs** under the {Primary T
 
 ---
 
+## Folder Purpose
+
+### navigation/
+Contains HTML samples for tab navigation elements:
+- `secondary.md` - Secondary tab navigation HTML
+- `tertiary.md` - Tertiary tab navigation HTML
+
+### content/
+Contains actual page content for each tab. Structure:
+- `content/<secondary_tab_name>/` - Folder for each secondary tab
+- Add `.md` files inside each folder for the page content
+- Tertiary subfolders can be added inside secondary content folders when needed
+
 ## How to Add HTML Samples
 
 ### Step 1: Navigate to Flashscore
@@ -332,7 +403,7 @@ At the top of each file, fill in:
 | Category | Files |
 |----------|-------|
 | README files | 2 |
-| Scheduled basketball | 9 |
-| Live basketball | 9 |
-| Finished basketball | 9 |
-| **Total** | **29** |
+| Scheduled basketball | 9 navigation + 5 content folders |
+| Live basketball | 9 navigation + 5 content folders |
+| Finished basketball | 9 navigation + 5 content folders |
+| **Total** | **29 + 15 content folders** |
