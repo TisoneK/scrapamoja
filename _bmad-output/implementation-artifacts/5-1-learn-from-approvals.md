@@ -1,6 +1,6 @@
 # Story 5.1: Learn from Approvals
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -302,13 +302,10 @@ For implementing the learning system, consider:
 ### File List
 
 **Backend (Python) - Modify existing:**
-- `src/selectors/adaptive/services/confidence_scorer.py` - Implement full `record_positive_feedback()` with learning logic
-
-**Database (if needed):**
-- `src/selectors/adaptive/db/models/weights.py` - Create if weights table doesn't exist
+- `src/selectors/adaptive/services/confidence_scorer.py` - Implemented full `record_positive_feedback()` with learning logic, integrated approval learning into confidence calculation, fixed error handling
 
 **Tests:**
-- `tests/selectors/adaptive/test_confidence_scorer.py` - Add tests for approval learning
+- `tests/unit/selectors/adaptive/services/test_confidence_scorer.py` - Fixed duplicate test classes and syntax errors, added comprehensive tests for approval learning functionality
 
-**Frontend (if needed):**
-- May need to display learned weights in UI (future Epic 5.3)
+**Documentation:**
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` - Updated story status tracking

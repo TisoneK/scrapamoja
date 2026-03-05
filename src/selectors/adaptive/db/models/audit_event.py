@@ -7,11 +7,10 @@ This implements Epic 6 (Audit Logging) requirements for Story 4.2.
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 
-Base = declarative_base()
+from .recipe import Base
 
 
 class AuditEvent(Base):
@@ -34,8 +33,10 @@ class AuditEvent(Base):
     timestamp = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     
     # Selector context
-    failure_id = Column(Integer, nullable=False, index=True)  # Links to failure event
+    failure_id = Column(Integer, nullable=True, index=True)  # Links to failure event (optional)
+    selector_id = Column(String(100), nullable=True, index=True)  # Unique selector identifier
     selector = Column(Text, nullable=False)  # The selector string
+    context_snapshot = Column(JSON, nullable=True)  # Full context snapshot at decision time
     
     # User context
     user_id = Column(String(100), nullable=False, default="system", index=True)
@@ -60,7 +61,9 @@ class AuditEvent(Base):
             "action_type": self.action_type,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
             "failure_id": self.failure_id,
+            "selector_id": self.selector_id,
             "selector": self.selector,
+            "context_snapshot": self.context_snapshot,
             "user_id": self.user_id,
             "before_state": self.before_state,
             "after_state": self.after_state,

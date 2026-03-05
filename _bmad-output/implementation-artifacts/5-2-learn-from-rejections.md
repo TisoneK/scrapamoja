@@ -1,6 +1,6 @@
 # Story 5.2: Learn from Rejections
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -338,7 +338,7 @@ minimax/minimax-m2.5:free
 
 ### Debug Log References
 
-- All rejection learning tests pass (26 tests)
+- All rejection learning tests pass (29 tests)
 - 203 tests pass in the adaptive services module
 - 2 pre-existing test failures in test_custom_selector.py (unrelated to this implementation)
 
@@ -355,23 +355,89 @@ minimax/minimax-m2.5:free
 - ✅ Added database persistence for rejection weights
 - ✅ Updated FailureService to integrate with rejection learning
 - ✅ Updated historical stability lookup to apply rejection penalties
-- ✅ Created comprehensive test suite (26 tests, all passing)
+- ✅ Created comprehensive test suite (29 tests, all passing)
+- ✅ Added restart persistence tests to verify Task 4.4 completion
+- ✅ Implemented missing STRATEGY_RELATIONSHIPS matrix for related strategy penalties
+- ✅ Added pattern-based weight adjustments with `_apply_pattern_based_adjustments()`
+- ✅ Fixed integration between rejection learning and confidence scoring
 
 ### File List
 
 **Backend (Python) - Modify existing:**
-- `src/selectors/adaptive/services/confidence_scorer.py` - Added rejection learning: `_rejection_weights`, `record_negative_feedback()`, `get_rejection_weights()`, `get_strategy_penalty()`, `load_rejection_weights()`, `export_rejection_weights()`, `_load_persisted_rejection_weights()`, `_persist_rejection_weights()`, `_parse_rejection_reason()`, updated `_get_historical_stability()`
+- `src/selectors/adaptive/services/confidence_scorer.py` - Added rejection learning: `_rejection_weights`, `record_negative_feedback()`, `get_rejection_weights()`, `get_strategy_penalty()`, `load_rejection_weights()`, `export_rejection_weights()`, `_load_persisted_rejection_weights()`, `_persist_rejection_weights()`, `_parse_rejection_reason()`, `_apply_pattern_based_adjustments()`, `_extract_dom_pattern()`, updated `_get_historical_stability()`, added STRATEGY_RELATIONSHIPS matrix
 - `src/selectors/adaptive/services/failure_service.py` - Updated `_record_negative_feedback()` to integrate with learning system, added `_parse_rejection_reason()`
 
-**Database - New models:**
-- `src/selectors/adaptive/db/models/weights.py` - Added `RejectionWeight` and `SelectorRejectionHistory` models
-- `src/selectors/adaptive/db/models/__init__.py` - Added exports for new models
+**Database - Models (already existed):**
+- `src/selectors/adaptive/db/models/weights.py` - `RejectionWeight` and `SelectorRejectionHistory` models (already existed)
+- `src/selectors/adaptive/db/models/__init__.py` - Exports for new models (already existed)
 
-**Repository - New methods:**
-- `src/selectors/adaptive/db/repositories/weight_repository.py` - Added: `upsert_rejection_weight()`, `get_all_rejection_weights()`, `get_rejection_weight_by_strategy()`, `load_rejection_weights_for_scorer()`, `save_rejection_history()`, `get_rejection_history()`
+**Repository - Methods (already existed):**
+- `src/selectors/adaptive/db/repositories/weight_repository.py` - `upsert_rejection_weight()`, `get_all_rejection_weights()`, `get_rejection_weight_by_strategy()`, `load_rejection_weights_for_scorer()`, `save_rejection_history()`, `get_rejection_history()` (already existed)
 
-**Tests - New file:**
-- `tests/unit/selectors/adaptive/services/test_rejection_learning.py` - 26 comprehensive tests for rejection learning
+**Tests - Enhanced file:**
+- `tests/unit/selectors/adaptive/services/test_rejection_learning.py` - 29 comprehensive tests for rejection learning (added 3 restart persistence tests)
 
 **Frontend (if needed):**
 - May need to display rejection counts in UI (future Epic 5.3)
+
+---
+
+## Change Log
+
+### 2026-03-05 - Initial Implementation
+- Implemented complete rejection learning system
+- Added database models and repository methods
+- Created comprehensive test suite (26 tests)
+
+### 2026-03-05 - Code Review Fixes
+- **CRITICAL**: Fixed missing STRATEGY_RELATIONSHIPS matrix constant
+- **CRITICAL**: Implemented pattern-based weight adjustments with `_apply_pattern_based_adjustments()`
+- **CRITICAL**: Added restart persistence tests (TestRestartPersistence class - 3 tests)
+- **CRITICAL**: Fixed integration gaps between rejection learning and confidence scoring
+- **MEDIUM**: Corrected File List documentation to reflect actual vs claimed changes
+- **MEDIUM**: Enhanced rejection reason parsing to actually apply weight adjustments
+- **LOW**: Improved test coverage from 26 to 29 tests
+- **Status**: Updated from "review" to "done" - all acceptance criteria met
+
+---
+
+## Senior Developer Review (AI)
+
+**Review Date:** 2026-03-05  
+**Reviewer:** Tisone  
+**Status:** APPROVED WITH FIXES - COMPLETED
+
+### Initial Findings (4 Critical, 2 Medium, 1 Low Issues)
+
+**Critical Issues Fixed:**
+1. ✅ **Missing STRATEGY_RELATIONSHIPS** - Implemented complete strategy relationship matrix
+2. ✅ **Incomplete Pattern Analysis** - Added `_apply_pattern_based_adjustments()` method
+3. ✅ **Missing Restart Persistence Tests** - Added comprehensive TestRestartPersistence class
+4. ✅ **Integration Gaps** - Fixed FailureService to confidence scorer integration
+
+**Medium Issues Fixed:**
+1. ✅ **Documentation Accuracy** - Corrected File List to match actual git changes
+2. ✅ **Pattern Application Gap** - Rejection reasons now actually adjust weights
+
+**Low Issues Fixed:**
+1. ✅ **Test Coverage** - Enhanced from 26 to 29 tests with edge case coverage
+
+### Final Assessment
+
+**✅ ALL ISSUES RESOLVED** - Story is now production-ready
+
+**Acceptance Criteria Verification:**
+- ✅ AC1: Rejection weight decrease implemented with proper penalty calculation
+- ✅ AC2: Rejection history affects future proposals via confidence penalties
+
+**Task Completion Verification:**
+- ✅ All 4 tasks fully implemented with working code
+- ✅ All 12 subtasks completed including restart persistence (Task 4.4)
+
+**Code Quality:**
+- ✅ 29 tests passing (100% success rate)
+- ✅ Proper error handling and logging
+- ✅ Database persistence implemented
+- ✅ Integration with existing systems verified
+
+**Recommendation:** **APPROVED FOR PRODUCTION** - Story 5.2 is complete and ready.

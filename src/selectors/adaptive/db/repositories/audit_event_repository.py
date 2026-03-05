@@ -41,9 +41,11 @@ class AuditEventRepository:
     def create_audit_event(
         self,
         action_type: str,
-        failure_id: int,
         selector: str,
         user_id: Optional[str] = None,
+        selector_id: Optional[str] = None,
+        failure_id: Optional[int] = None,
+        context_snapshot: Optional[Dict[str, Any]] = None,
         before_state: Optional[str] = None,
         after_state: Optional[str] = None,
         confidence_at_time: Optional[float] = None,
@@ -55,10 +57,12 @@ class AuditEventRepository:
         Create a new audit event.
         
         Args:
-            action_type: Type of action (selector_approved, selector_rejected, selector_flagged)
-            failure_id: The failure event ID
-            selector: The selector involved
-            user_id: User who performed the action
+            action_type: Type of action (selector_approved, selector_rejected, selector_flagged, custom_selector_created)
+            selector: The selector string
+            user_id: User who performed action
+            selector_id: Unique selector identifier (optional)
+            failure_id: The failure event ID (optional)
+            context_snapshot: Full context snapshot at decision time
             before_state: State before change
             after_state: State after change
             confidence_at_time: Confidence score at time of action
@@ -73,9 +77,11 @@ class AuditEventRepository:
         try:
             audit_event = AuditEvent(
                 action_type=action_type,
-                failure_id=failure_id,
                 selector=selector,
                 user_id=user_id or "system",
+                selector_id=selector_id,
+                failure_id=failure_id,
+                context_snapshot=context_snapshot,
                 before_state=before_state,
                 after_state=after_state,
                 confidence_at_time=confidence_at_time,
@@ -212,5 +218,232 @@ class AuditEventRepository:
                 "start_date": start_date.isoformat() if start_date else None,
                 "end_date": end_date.isoformat() if end_date else None,
             }
+        finally:
+            session.close()
+    
+    def get_all_events(self, limit: int = 1000) -> List[AuditEvent]:
+        """
+        Get all audit events in chronological order.
+        
+        Args:
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of all audit events ordered by timestamp
+        """
+        session = self.get_session()
+        try:
+            return (
+                session.query(AuditEvent)
+                .order_by(AuditEvent.timestamp.asc())
+                .limit(limit)
+                .all()
+            )
+        finally:
+            session.close()
+    
+    def get_events_by_date_range(
+        self, 
+        start_date: datetime, 
+        end_date: datetime,
+        limit: int = 1000
+    ) -> List[AuditEvent]:
+        """
+        Get audit events within a date range.
+        
+        Args:
+            start_date: Start of date range (inclusive)
+            end_date: End of date range (inclusive)
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of audit events within date range ordered by timestamp
+        """
+        session = self.get_session()
+        try:
+            return (
+                session.query(AuditEvent)
+                .filter(and_(
+                    AuditEvent.timestamp >= start_date,
+                    AuditEvent.timestamp <= end_date
+                ))
+                .order_by(AuditEvent.timestamp.asc())
+                .limit(limit)
+                .all()
+            )
+        finally:
+            session.close()
+    
+    def get_events_by_selector_id(self, selector_id: str, limit: int = 100) -> List[AuditEvent]:
+        """
+        Get all audit events for a specific selector.
+        
+        Args:
+            selector_id: The selector ID
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of audit events for selector ordered by timestamp
+        """
+        session = self.get_session()
+        try:
+            return (
+                session.query(AuditEvent)
+                .filter(AuditEvent.selector_id == selector_id)
+                .order_by(AuditEvent.timestamp.asc())
+                .limit(limit)
+                .all()
+            )
+        finally:
+            session.close()
+    
+    def get_events_by_user_ids(self, user_ids: List[str], limit: int = 1000) -> List[AuditEvent]:
+        """
+        Get audit events for multiple users.
+        
+        Args:
+            user_ids: List of user IDs
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of audit events for users ordered by timestamp
+        """
+        session = self.get_session()
+        try:
+            return (
+                session.query(AuditEvent)
+                .filter(AuditEvent.user_id.in_(user_ids))
+                .order_by(AuditEvent.timestamp.asc())
+                .limit(limit)
+                .all()
+            )
+        finally:
+            session.close()
+    
+    def get_events_by_action_types(self, action_types: List[str], limit: int = 1000) -> List[AuditEvent]:
+        """
+        Get audit events for multiple action types.
+        
+        Args:
+            action_types: List of action types
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of audit events for action types ordered by timestamp
+        """
+        session = self.get_session()
+        try:
+            return (
+                session.query(AuditEvent)
+                .filter(AuditEvent.action_type.in_(action_types))
+                .order_by(AuditEvent.timestamp.asc())
+                .limit(limit)
+                .all()
+            )
+        finally:
+            session.close()
+    
+    def get_events_by_selector_ids(self, selector_ids: List[str], limit: int = 1000) -> List[AuditEvent]:
+        """
+        Get audit events for multiple selectors.
+        
+        Args:
+            selector_ids: List of selector IDs
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of audit events for selectors ordered by timestamp
+        """
+        session = self.get_session()
+        try:
+            return (
+                session.query(AuditEvent)
+                .filter(AuditEvent.selector_id.in_(selector_ids))
+                .order_by(AuditEvent.timestamp.asc())
+                .limit(limit)
+                .all()
+            )
+        finally:
+            session.close()
+    
+    def get_events_by_multiple_filters(
+        self,
+        user_ids: Optional[List[str]] = None,
+        action_types: Optional[List[str]] = None,
+        selector_ids: Optional[List[str]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        limit: int = 1000
+    ) -> List[AuditEvent]:
+        """
+        Get audit events with multiple filters applied.
+        
+        Args:
+            user_ids: Optional list of user IDs to filter by
+            action_types: Optional list of action types to filter by
+            selector_ids: Optional list of selector IDs to filter by
+            start_date: Optional start date for filtering
+            end_date: Optional end date for filtering
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of filtered audit events ordered by timestamp
+        """
+        session = self.get_session()
+        try:
+            query = session.query(AuditEvent)
+            
+            if user_ids:
+                query = query.filter(AuditEvent.user_id.in_(user_ids))
+            
+            if action_types:
+                query = query.filter(AuditEvent.action_type.in_(action_types))
+            
+            if selector_ids:
+                query = query.filter(AuditEvent.selector_id.in_(selector_ids))
+            
+            if start_date:
+                query = query.filter(AuditEvent.timestamp >= start_date)
+            
+            if end_date:
+                query = query.filter(AuditEvent.timestamp <= end_date)
+            
+            return (
+                query.order_by(AuditEvent.timestamp.asc())
+                .limit(limit)
+                .all()
+            )
+        finally:
+            session.close()
+    
+    def get_by_user_id_and_action_type(
+        self, 
+        user_id: str, 
+        action_type: str, 
+        limit: int = 100
+    ) -> List[AuditEvent]:
+        """
+        Get audit events for a specific user and action type.
+        
+        Args:
+            user_id: The user ID
+            action_type: The action type
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of audit events for user and action type ordered by timestamp
+        """
+        session = self.get_session()
+        try:
+            return (
+                session.query(AuditEvent)
+                .filter(and_(
+                    AuditEvent.user_id == user_id,
+                    AuditEvent.action_type == action_type
+                ))
+                .order_by(desc(AuditEvent.timestamp))
+                .limit(limit)
+                .all()
+            )
         finally:
             session.close()

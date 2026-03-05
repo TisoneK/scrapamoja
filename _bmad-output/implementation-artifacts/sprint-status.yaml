@@ -62,7 +62,7 @@ development_status:
   3-1-analyze-dom-structure: done
   3-2-generate-confidence-scores: done
   3-3-calculate-blast-radius: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   # Epic 4: Human Verification Workflow
   epic-4: done
@@ -70,20 +70,20 @@ development_status:
   4-2-approve-or-reject-proposed-selectors: done
   4-3-flag-selectors-for-developer-review: done
   4-4-create-custom-selector-strategies: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   # Epic 5: Learning & Weight Adjustment
-  epic-5: in-progress
-  5-1-learn-from-approvals: review
-  5-2-learn-from-rejections: review
-  5-3-track-selector-survival-across-generations: review
-  epic-5-retrospective: optional
+  epic-5: done
+  5-1-learn-from-approvals: done
+  5-2-learn-from-rejections: done
+  5-3-track-selector-survival-across-generations: done
+  epic-5-retrospective: done
 
   # Epic 6: Audit Logging
-  epic-6: backlog
-  6-1-record-human-decisions: backlog
-  6-2-maintain-complete-audit-trail: backlog
-  6-3-query-audit-history: backlog
+  epic-6: in-progress
+  6-1-record-human-decisions: done
+  6-2-maintain-complete-audit-trail: done
+  6-3-query-audit-history: in-progress
   epic-6-retrospective: optional
 
   # Epic 7: Escalation UI

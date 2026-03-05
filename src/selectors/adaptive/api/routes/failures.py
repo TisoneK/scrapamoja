@@ -236,11 +236,15 @@ async def approve_selector(
     if service is None:
         service = get_failure_service()
     
-    # Approve the selector
+    # Extract user ID from request (for now, use provided user_id or default)
+    user_id = getattr(request, 'user_id', None) or (request.notes.get('user_id') if hasattr(request, 'notes') and request.notes else None)
+    
+    # Approve selector with user context for audit logging
     result = service.approve_alternative(
         failure_id=failure_id,
         selector=request.selector,
         notes=request.notes,
+        user_id=user_id,  # Pass user_id for audit logging
     )
     
     if not result["success"]:
@@ -299,12 +303,16 @@ async def reject_selector(
     if service is None:
         service = get_failure_service()
     
+    # Extract user ID from request (for now, use provided user_id or default)
+    user_id = getattr(request, 'user_id', None) or (request.notes.get('user_id') if hasattr(request, 'notes') and request.notes else None)
+    
     # Reject the selector
     result = service.reject_alternative(
         failure_id=failure_id,
         selector=request.selector,
         reason=request.reason,
         suggested_alternative=request.suggested_alternative,
+        user_id=user_id,  # Pass user_id for audit logging
     )
     
     if not result["success"]:
@@ -363,10 +371,14 @@ async def flag_failure(
     if service is None:
         service = get_failure_service()
     
-    # Flag the failure
+    # Extract user ID from request (for now, use provided user_id or default)
+    user_id = getattr(request, 'user_id', None) or (request.notes.get('user_id') if hasattr(request, 'notes') and request.notes else None)
+    
+    # Flag failure with user context for audit logging
     result = service.flag_failure(
         failure_id=failure_id,
         note=request.note,
+        user_id=user_id,  # Pass user_id for audit logging
     )
     
     if not result["success"]:
@@ -482,17 +494,13 @@ async def create_custom_selector(
     
     This allows users to manually create alternative selectors when the
     auto-proposal system cannot handle specific edge cases.
-    """
-    # Get service instance
-    if service is None:
-        service = get_failure_service()
-    
     # Create the custom selector
     result = service.create_custom_selector(
         failure_id=failure_id,
         selector_string=request.selector_string,
         strategy_type=request.strategy_type,
         notes=request.notes,
+        user_id=user_id,  # Pass user_id for audit logging
     )
     
     if not result["success"]:

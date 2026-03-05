@@ -15,6 +15,7 @@ from .blast_radius import (
     RecipeSelector,
     get_blast_radius_calculator,
 )
+from .audit_service import AuditLogger, get_audit_logger, record_human_decision
 
 __all__ = [
     "StabilityScoringService", 
@@ -33,4 +34,7 @@ __all__ = [
     "AffectedSelector",
     "RecipeSelector",
     "get_blast_radius_calculator",
+    "AuditLogger",
+    "get_audit_logger",
+    "record_human_decision",
 ]

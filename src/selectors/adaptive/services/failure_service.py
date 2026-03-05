@@ -403,16 +403,18 @@ class FailureService:
                 generation=(current_recipe.generation or 0) + 1 if current_recipe else 1,
             )
         
-        # TASK 2: Record approval in audit log
+        # TASK 2: Record approval in audit log with full context
         self._record_audit_event(
             action_type="selector_approved",
             failure_id=failure_id,
             selector=selector,
+            selector_id=failure_event.selector_id if failure_event else None,
             user_id=user_id,
             before_state=before_selector,
             after_state=selector,
             confidence_at_time=alternative.confidence_score,
             notes=notes,
+            context_snapshot=failure_event.context_snapshot if failure_event else None,
         )
         
         # TASK 3: Update confidence scorer with positive feedback
@@ -478,15 +480,17 @@ class FailureService:
         # Get the failure event
         failure_event = self.failure_repository.get_by_id(failure_id)
         
-        # TASK 2: Record rejection in audit log
+        # TASK 2: Record rejection in audit log with full context
         self._record_audit_event(
             action_type="selector_rejected",
             failure_id=failure_id,
             selector=selector,
+            selector_id=failure_event.selector_id if failure_event else None,
             user_id=user_id,
             reason=reason,
             suggested_alternative=suggested_alternative,
             confidence_at_time=alternative.confidence_score,
+            context_snapshot=failure_event.context_snapshot if failure_event else None,
         )
         
         # TASK 3: Update confidence scorer with negative feedback
@@ -604,13 +608,15 @@ class FailureService:
             self._flagged_failures_cache[failure_id] = flag_info
             self._logger.warning("flag_fallback_to_memory", failure_id=failure_id)
         
-        # Record audit event
+        # Record audit event with full context
         self._record_audit_event(
             action_type="selector_flagged",
             failure_id=failure_id,
             selector=failure.selector_id,
+            selector_id=failure.selector_id,
             user_id=user_id,
             notes=note,
+            context_snapshot=failure.context_snapshot if hasattr(failure, 'context_snapshot') else None,
         )
         
         self._logger.info(
@@ -678,12 +684,14 @@ class FailureService:
         else:
             self._logger.warning("unflag_fallback_to_memory", failure_id=failure_id)
         
-        # Record audit event
+        # Record audit event for unflag with full context
         self._record_audit_event(
             action_type="selector_unflagged",
             failure_id=failure_id,
             selector=failure.selector_id,
+            selector_id=failure.selector_id,
             user_id=user_id,
+            context_snapshot=failure.context_snapshot if hasattr(failure, 'context_snapshot') else None,
         )
         
         self._logger.info(
@@ -770,13 +778,15 @@ class FailureService:
             self._alternatives[failure_id] = []
         self._alternatives[failure_id].append(scored_selector)
         
-        # Record audit event for custom selector creation
+        # Record audit event for custom selector creation with full context
         self._record_audit_event(
             action_type="custom_selector_created",
             failure_id=failure_id,
             selector=selector_string,
+            selector_id=None,  # Custom selectors may not have an ID yet
             user_id=user_id,
             notes=notes,
+            context_snapshot=failure.context_snapshot if failure else None,
         )
         
         # Record custom selector for learning (Story 4.4 - Task 4)
@@ -943,44 +953,50 @@ class FailureService:
         failure_id: int,
         selector: str,
         user_id: Optional[str] = None,
+        selector_id: Optional[str] = None,
         before_state: Optional[str] = None,
         after_state: Optional[str] = None,
         confidence_at_time: Optional[float] = None,
         reason: Optional[str] = None,
         suggested_alternative: Optional[str] = None,
         notes: Optional[str] = None,
+        context_snapshot: Optional[Dict[str, Any]] = None,
     ):
         """
         Record an audit event for selector approval or rejection.
         
-        This implements Story 4.2 requirement for proper audit logging
-        to the database table instead of just logger output.
+        This implements Story 4.2/6.1 requirement for proper audit logging
+        to the database table with full context snapshot.
         
         Args:
             action_type: Type of action (selector_approved, selector_rejected)
             failure_id: The failure event ID
             selector: The selector involved
             user_id: User who performed the action
+            selector_id: Unique selector identifier
             before_state: State before change
             after_state: State after change
             confidence_at_time: Confidence score at time of action
             reason: Reason for rejection
             suggested_alternative: Suggested alternative selector
             notes: Optional notes
+            context_snapshot: Full context snapshot at decision time
         """
         try:
-            # Create audit event in database (Story 4.2 implementation)
+            # Create audit event in database (Story 6.1 implementation)
             audit_event = self.audit_repository.create_audit_event(
                 action_type=action_type,
                 failure_id=failure_id,
                 selector=selector,
                 user_id=user_id,
+                selector_id=selector_id,
                 before_state=before_state,
                 after_state=after_state,
                 confidence_at_time=confidence_at_time,
                 reason=reason,
                 suggested_alternative=suggested_alternative,
                 notes=notes,
+                context_snapshot=context_snapshot,
             )
             
             self._logger.info(

@@ -17,6 +17,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.selectors.adaptive.api.routes.failures import router as failures_router
+from src.selectors.adaptive.api.routes.audit import router as audit_router
+from src.selectors.adaptive.api.routes.audit_query import router as audit_query_router
 
 
 def create_app() -> FastAPI:
@@ -49,6 +51,8 @@ def create_app() -> FastAPI:
     
     # Include routers
     app.include_router(failures_router)
+    app.include_router(audit_router)
+    app.include_router(audit_query_router)
     
     @app.get("/health")
     async def health_check():
@@ -67,6 +71,16 @@ def create_app() -> FastAPI:
                 "failure_detail": "/failures/{failure_id}",
                 "approve": "/failures/{failure_id}/approve",
                 "reject": "/failures/{failure_id}/reject",
+                "audit_trail": "/audit/trail",
+                "selector_audit_trail": "/audit/trail/{selector_id}",
+                "user_decision_history": "/audit/trail/user/{user_id}",
+                "audit_summary": "/audit/summary",
+                "export_json": "/audit/export/json",
+                "export_csv": "/audit/export/csv",
+                "audit_query": "/audit/log",
+                "selector_audit_query": "/audit/log/selector/{selector_id}",
+                "user_audit_query": "/audit/log/user/{user_id}",
+                "date_range_audit_query": "/audit/log/date-range",
             },
         }
     

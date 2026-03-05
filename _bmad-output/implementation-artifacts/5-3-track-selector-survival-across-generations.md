@@ -1,6 +1,6 @@
 # Story 5.3: Track Selector Survival Across Generations
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

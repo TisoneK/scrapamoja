@@ -11,6 +11,8 @@ Tests the:
 """
 
 import pytest
+import unittest
+from unittest.mock import Mock
 from src.selectors.adaptive.services.confidence_scorer import ConfidenceScorer
 from src.selectors.adaptive.services.dom_analyzer import AlternativeSelector, StrategyType
 
@@ -443,3 +445,90 @@ class TestEdgeCases:
         weights = scorer.get_rejection_weights()
         assert 'css' in weights
         assert weights['css']['count'] == 1
+
+
+class TestRestartPersistence(unittest.TestCase):
+    """Test rejection weight persistence across service restarts."""
+    
+    def test_restart_persistence_with_repository(self):
+        """Test that rejection weights persist across scorer restarts."""
+        # Create a mock repository
+        mock_repo = Mock()
+        mock_repo.load_rejection_weights_for_scorer.return_value = {
+            'css': {
+                'count': 5,
+                'last_rejection': '2026-03-05T20:00:00',
+                'total_penalty': 0.2,
+                'related_penalty': 0.03,
+            },
+            'xpath': {
+                'count': 2,
+                'last_rejection': '2026-03-05T19:30:00',
+                'total_penalty': 0.1,
+                'related_penalty': 0.0,
+            }
+        }
+        
+        # Create scorer with repository (simulates restart)
+        scorer = ConfidenceScorer(weight_repository=mock_repo)
+        
+        # Verify persisted weights were loaded
+        weights = scorer.get_rejection_weights()
+        assert len(weights) == 2
+        assert weights['css']['count'] == 5
+        assert weights['css']['total_penalty'] == 0.2
+        assert weights['xpath']['count'] == 2
+        
+        # Verify that penalties are applied in confidence calculation
+        penalty = scorer.get_strategy_penalty(StrategyType.CSS)
+        assert penalty == 0.23  # 0.2 + 0.03
+        
+        # Verify historical stability lookup uses persisted penalties
+        stability = scorer._get_historical_stability(".test-selector", StrategyType.CSS)
+        base_confidence = scorer.STRATEGY_DEFAULTS[StrategyType.CSS]
+        expected = max(scorer.MIN_CONFIDENCE_FLOOR, base_confidence - penalty)
+        assert stability == expected
+        
+        # Verify repository was called during initialization
+        mock_repo.load_rejection_weights_for_scorer.assert_called_once()
+    
+    def test_restart_persistence_without_repository(self):
+        """Test behavior when no repository provided (no persistence)."""
+        scorer = ConfidenceScorer(weight_repository=None)
+        
+        # Should start with empty rejection weights
+        weights = scorer.get_rejection_weights()
+        assert len(weights) == 0
+        
+        # Add some rejections
+        scorer.record_negative_feedback(
+            selector=".test",
+            strategy=StrategyType.CSS,
+            rejection_reason="too specific"
+        )
+        
+        # Should have local weights but no persistence
+        weights = scorer.get_rejection_weights()
+        assert 'css' in weights
+        assert weights['css']['count'] == 1
+    
+    def test_restart_persistence_handles_corrupted_data(self):
+        """Test graceful handling of corrupted persisted data."""
+        mock_repo = Mock()
+        mock_repo.load_rejection_weights_for_scorer.side_effect = Exception("Database error")
+        
+        # Should not crash, should start with empty weights
+        scorer = ConfidenceScorer(weight_repository=mock_repo)
+        
+        weights = scorer.get_rejection_weights()
+        assert len(weights) == 0
+        
+        # Should still be able to record new rejections
+        scorer.record_negative_feedback(
+            selector=".test",
+            strategy=StrategyType.CSS,
+            rejection_reason="fragile"
+        )
+        
+        weights = scorer.get_rejection_weights()
+        assert 'css' in weights

@@ -94,9 +94,10 @@ class ConfidenceScorer:
     
     # Default weights for scoring factors (adjustable)
     WEIGHTS = {
-        'historical_stability': 0.4,
-        'specificity': 0.35,
-        'dom_similarity': 0.25,
+        'historical_stability': 0.35,  # Reduced from 0.4 to accommodate generation
+        'specificity': 0.30,           # Reduced from 0.35 to accommodate generation
+        'dom_similarity': 0.20,         # Reduced from 0.25 to accommodate generation
+        'generation_stability': 0.15,     # NEW: Generation survival weight
     }
     
     # Default confidence scores by strategy type (when no history exists)
@@ -136,15 +137,32 @@ class ConfidenceScorer:
         'custom': {'weight_adjustment': 0.0, 'description': 'Custom rejection reason'},
     }
     
-    # Strategy relationship matrix for similar strategy boost
-    # Maps each strategy to its related strategies and boost factor
+    # Strategy relationship matrix for rejection learning (Story 5.2)
+    # Maps strategy to related strategies and their penalty amounts
     STRATEGY_RELATIONSHIPS = {
-        StrategyType.CSS: {StrategyType.XPATH: 0.03, StrategyType.ATTRIBUTE_MATCH: 0.03},
-        StrategyType.XPATH: {StrategyType.CSS: 0.03, StrategyType.DOM_RELATIONSHIP: 0.03},
-        StrategyType.TEXT_ANCHOR: {StrategyType.DOM_RELATIONSHIP: 0.03, StrategyType.ROLE_BASED: 0.03},
-        StrategyType.ATTRIBUTE_MATCH: {StrategyType.CSS: 0.03, StrategyType.XPATH: 0.03},
-        StrategyType.DOM_RELATIONSHIP: {StrategyType.XPATH: 0.03, StrategyType.TEXT_ANCHOR: 0.03},
-        StrategyType.ROLE_BASED: {StrategyType.TEXT_ANCHOR: 0.03},
+        StrategyType.CSS: {
+            StrategyType.XPATH: RELATED_STRATEGY_PENALTY_AMOUNT,
+            StrategyType.ATTRIBUTE_MATCH: RELATED_STRATEGY_PENALTY_AMOUNT,
+        },
+        StrategyType.XPATH: {
+            StrategyType.CSS: RELATED_STRATEGY_PENALTY_AMOUNT,
+            StrategyType.DOM_RELATIONSHIP: RELATED_STRATEGY_PENALTY_AMOUNT,
+        },
+        StrategyType.TEXT_ANCHOR: {
+            StrategyType.DOM_RELATIONSHIP: RELATED_STRATEGY_PENALTY_AMOUNT,
+            StrategyType.ROLE_BASED: RELATED_STRATEGY_PENALTY_AMOUNT,
+        },
+        StrategyType.ATTRIBUTE_MATCH: {
+            StrategyType.CSS: RELATED_STRATEGY_PENALTY_AMOUNT,
+            StrategyType.XPATH: RELATED_STRATEGY_PENALTY_AMOUNT,
+        },
+        StrategyType.DOM_RELATIONSHIP: {
+            StrategyType.XPATH: RELATED_STRATEGY_PENALTY_AMOUNT,
+            StrategyType.TEXT_ANCHOR: RELATED_STRATEGY_PENALTY_AMOUNT,
+        },
+        StrategyType.ROLE_BASED: {
+            StrategyType.TEXT_ANCHOR: RELATED_STRATEGY_PENALTY_AMOUNT - 0.01,  # Slightly less penalty
+        },
     }
     
     # ==================== GENERATION TRACKING (STORY 5.3) ====================
@@ -197,6 +215,7 @@ class ConfidenceScorer:
             'historical_stability': weight,
             'specificity': specificity_weight,
             'dom_similarity': dom_similarity_weight,
+            'generation_stability': self.GENERATION_WEIGHT,  # Add generation weight
         }
         
         # Validate weights sum to 1.0
@@ -276,22 +295,31 @@ class ConfidenceScorer:
                 snapshot_id,
             )
         
-        # 4. Generation stability (Story 5.3) - apply generation boost/penalty
+        # 4. Approval learning (Story 5.1) - apply approval boost/penalty
+        approval_stability = 1.0  # Default neutral
+        if selector.strategy_type:
+            approval_boost = self.get_strategy_boost(selector.strategy_type)
+            approval_stability = 1.0 + approval_boost  # Boost > 1.0 means good approval history
+        
+        # 5. Generation stability (Story 5.3) - apply generation boost/penalty
         generation_stability = 1.0  # Default neutral
         if recipe_id:
             generation_stability = self.calculate_generation_stability(recipe_id)
         
-        # Calculate weighted final score
-        # Base score from original three factors
+        # Calculate weighted final score including generation stability
         base_score = (
             historical * self.WEIGHTS['historical_stability'] +
             specificity * self.WEIGHTS['specificity'] +
             dom_sim * self.WEIGHTS['dom_similarity']
         )
         
-        # Apply generation stability factor
-        # generation_stability > 1.0 means good survival, < 1.0 means poor survival
-        final_score = base_score * generation_stability
+        # Add generation stability as a weighted component
+        if recipe_id:
+            generation_component = generation_stability * self.WEIGHTS['generation_stability']
+            base_score += generation_component
+        
+        # Apply approval stability factor (generation already included in base_score)
+        final_score = base_score * approval_stability
         
         # Clamp to valid range [0.0, 1.0]
         final_score = max(0.0, min(1.0, final_score))
@@ -375,6 +403,16 @@ class ConfidenceScorer:
             # Store in cache for future lookups
             self._historical_data[cache_key] = penalized
             return penalized
+        
+        # Check if there's any boost from approvals for this strategy
+        strategy_boost = self.get_strategy_boost(strategy_type)
+        if strategy_boost > 0:
+            # Apply boost to base confidence
+            base_confidence = self.STRATEGY_DEFAULTS.get(strategy_type, 0.5)
+            boosted = min(1.0, base_confidence + strategy_boost)
+            # Store in cache for future lookups
+            self._historical_data[cache_key] = boosted
+            return boosted
         
         # Use strategy-based default
         default_score = self.STRATEGY_DEFAULTS.get(strategy_type, 0.5)
@@ -714,6 +752,11 @@ class ConfidenceScorer:
         strategy_cache_key = f"strategy:{strategy_key}"
         self._historical_data[strategy_cache_key] = boosted_confidence
         
+        # Clear any existing cache entries for this selector to ensure boost is applied on next lookup
+        # Clear generic selector cache (without sport prefix)
+        if selector in self._historical_data:
+            del self._historical_data[selector]
+        
         # Apply boost to related strategies (Task 3: Similar Strategy Boost)
         related_boosts = self.STRATEGY_RELATIONSHIPS.get(strategy, {})
         for related_strategy, boost_amount in related_boosts.items():
@@ -868,6 +911,14 @@ class ConfidenceScorer:
             if self.weight_repository is None:
                 self.weight_repository = get_weight_repository()
             
+            if self.weight_repository is None:
+                self._logger.error(
+                    "weight_repository_unavailable",
+                    strategy=strategy_key,
+                    error="Weight repository could not be initialized"
+                )
+                return
+            
             self.weight_repository.upsert_approval_weight(
                 strategy_type=strategy_key,
                 approval_count=approval_data.get('count', 0),
@@ -881,11 +932,13 @@ class ConfidenceScorer:
                 count=approval_data.get('count', 0),
             )
         except Exception as e:
-            self._logger.warning(
+            self._logger.error(
                 "failed_to_persist_weights",
                 strategy=strategy_key,
                 error=str(e)
             )
+            # Re-raise to allow caller to handle persistence failure
+            raise
     
     # ==================== REJECTION LEARNING (STORY 5.2) ====================
     
@@ -946,6 +999,10 @@ class ConfidenceScorer:
         
         # Parse rejection reason for pattern extraction (Task 3)
         reason_pattern = self._parse_rejection_reason(rejection_reason)
+        
+        # Apply pattern-based weight adjustments (Task 3.3)
+        if reason_pattern:
+            self._apply_pattern_based_adjustments(reason_pattern, strategy, selector)
         
         # Apply penalty to related strategies (Task 3: Similar Strategy Penalty)
         related_penalties = self.STRATEGY_RELATIONSHIPS.get(strategy, {})
@@ -1022,6 +1079,81 @@ class ConfidenceScorer:
             return 'not_stable'
         else:
             return 'custom'
+    
+    def _apply_pattern_based_adjustments(
+        self, 
+        pattern: str, 
+        strategy: StrategyType, 
+        selector: str
+    ):
+        """
+        Apply pattern-based weight adjustments based on rejection reason.
+        
+        Args:
+            pattern: The parsed rejection pattern
+            strategy: The strategy type that was rejected
+            selector: The selector that was rejected
+        """
+        if pattern == 'too_specific':
+            # Decrease specificity weight, favor more general selectors
+            current_specificity = self.WEIGHTS.get('specificity', 0.35)
+            self.WEIGHTS['specificity'] = max(0.1, current_specificity - 0.05)
+            # Increase historical stability to favor proven selectors
+            current_stability = self.WEIGHTS.get('historical_stability', 0.4)
+            self.WEIGHTS['historical_stability'] = min(0.6, current_stability + 0.05)
+            
+        elif pattern == 'too_generic':
+            # Increase specificity requirements
+            current_specificity = self.WEIGHTS.get('specificity', 0.35)
+            self.WEIGHTS['specificity'] = min(0.5, current_specificity + 0.05)
+            # Decrease historical stability to allow more specific but unproven selectors
+            current_stability = self.WEIGHTS.get('historical_stability', 0.4)
+            self.WEIGHTS['historical_stability'] = max(0.2, current_stability - 0.05)
+            
+        elif pattern == 'wrong_element':
+            # Decrease confidence for this specific DOM path pattern
+            # Extract DOM pattern from selector (simplified)
+            dom_pattern = self._extract_dom_pattern(selector)
+            if dom_pattern:
+                cache_key = f"dom_penalty:{dom_pattern}"
+                current_penalty = self._historical_data.get(cache_key, 0.0)
+                self._historical_data[cache_key] = min(0.5, current_penalty + 0.1)
+                
+        elif pattern == 'fragile' or pattern == 'not_stable':
+            # Decrease stability weight for this strategy type
+            strategy_key = strategy.value
+            stability_penalty_key = f"stability_penalty:{strategy_key}"
+            current_penalty = self._historical_data.get(stability_penalty_key, 0.0)
+            self._historical_data[stability_penalty_key] = min(0.3, current_penalty + 0.15)
+            
+        self._logger.info(
+            "pattern_based_adjustment_applied",
+            pattern=pattern,
+            strategy=strategy.value,
+            updated_weights=self.WEIGHTS
+        )
+    
+    def _extract_dom_pattern(self, selector: str) -> Optional[str]:
+        """
+        Extract a generalized DOM pattern from a selector for learning.
+        
+        Args:
+            selector: The selector string to analyze
+            
+        Returns:
+            A generalized pattern string or None
+        """
+        # Simplified pattern extraction - in production this would be more sophisticated
+        if '#' in selector:  # ID selector
+            return 'id_based'
+        elif '.' in selector:  # Class selector
+            return 'class_based'
+        elif '[' in selector:  # Attribute selector
+            return 'attribute_based'
+        elif '>' in selector or '+' in selector:  # Combinator
+            return 'combinator_based'
+        else:
+            return 'element_based'
     
     def get_rejection_weights(self) -> Dict[str, Any]:
         """
@@ -1165,12 +1297,19 @@ class ConfidenceScorer:
         
         gen_data = self._generation_data[recipe_id]
         
-        # If this is a new generation, increment survival count
-        if generation > gen_data.get('current_generation', 0):
+        # Track generation survival properly
+        current_gen = gen_data.get('current_generation', 0)
+        
+        if generation > current_gen:
+            # This is a generation change - the selector survived the transition
             gen_data['generations_survived'] = gen_data.get('generations_survived', 0) + 1
             gen_data['current_generation'] = generation
             gen_data['last_generation_change'] = datetime.now().isoformat()
-            # Reset consecutive failures on survival
+            # Reset consecutive failures on successful generation survival
+            gen_data['consecutive_failures'] = 0
+        elif generation == current_gen:
+            # Same generation, selector is working within current generation
+            # No change to survival count, but ensure consecutive failures is reset
             gen_data['consecutive_failures'] = 0
         
         self._logger.info(
@@ -1250,6 +1389,17 @@ class ConfidenceScorer:
                 consecutive_failures=gen_data['consecutive_failures'],
                 threshold=self.CONSECUTIVE_FAILURES_FOR_REVIEW,
             )
+            
+            # Mark recipe for review in generation data
+            gen_data['marked_for_review'] = True
+            gen_data['review_reason'] = f"Consecutive failures: {gen_data['consecutive_failures']}"
+            gen_data['review_timestamp'] = datetime.now().isoformat()
+            
+            # Persist review marking
+            self._persist_generation_data(recipe_id, gen_data)
+            
+            # Emit review event for external systems
+            self._emit_review_event(recipe_id, gen_data)
         
         return should_mark_review
     
@@ -1466,6 +1616,48 @@ class ConfidenceScorer:
         except Exception as e:
             self._logger.warning(
                 "failed_to_persist_generation_data",
+                recipe_id=recipe_id,
+                error=str(e)
+            )
+    
+    def _emit_review_event(self, recipe_id: str, gen_data: Dict[str, Any]):
+        """
+        Emit a review event for external systems to handle recipe review.
+        
+        This implements the "recipe should be marked for review" requirement
+        from AC #2 by providing a hook for external review systems.
+        
+        Args:
+            recipe_id: The recipe identifier
+            gen_data: The generation data containing review information
+        """
+        try:
+            # In a real implementation, this would emit an event to a message queue
+            # or call an external review service API
+            self._logger.info(
+                "review_event_emitted",
+                recipe_id=recipe_id,
+                review_reason=gen_data.get('review_reason'),
+                review_timestamp=gen_data.get('review_timestamp'),
+                consecutive_failures=gen_data.get('consecutive_failures'),
+            )
+            
+            # Store review event in audit trail if available
+            if hasattr(self, '_audit_service') and self._audit_service:
+                self._audit_service.record_review_event(
+                    recipe_id=recipe_id,
+                    reason=gen_data.get('review_reason'),
+                    timestamp=gen_data.get('review_timestamp'),
+                    metadata={
+                        'consecutive_failures': gen_data.get('consecutive_failures'),
+                        'total_failures': gen_data.get('generation_failures'),
+                        'generations_survived': gen_data.get('generations_survived'),
+                    }
+                )
+                
+        except Exception as e:
+            self._logger.warning(
+                "failed_to_emit_review_event",
                 recipe_id=recipe_id,
                 error=str(e)
             )
