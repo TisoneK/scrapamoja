@@ -1,6 +1,6 @@
 # Story 1.4: Fallback Attempt Logging
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -75,8 +75,8 @@ so that **I can debug issues and understand selector stability over time**.
 
 ### Review Follow-ups (AI)
 
-- [ ] [AI-Review][HIGH] Commit all implementation files to git for transparency
-- [ ] [AI-Review][HIGH] Fix conflicting completion status in story (lines 69-74 vs 411-418)
+- [x] [AI-Review][HIGH] Commit all implementation files to git for transparency
+- [x] [AI-Review][HIGH] Fix conflicting completion status in story (lines 69-74 vs 411-418)
 - [ ] [AI-Review][MEDIUM] Review decorator creates two log entries vs AC1 singular
 - [ ] [AI-Review][MEDIUM] Document single-fallback use case limitation or remove requirement
 - [ ] [AI-Review][LOW] Migrate Pydantic config to ConfigDict to fix deprecation warnings
