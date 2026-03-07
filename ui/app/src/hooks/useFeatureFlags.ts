@@ -1,11 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
 import { apiClient } from "@/api/featureFlagApi";
-import {
-  FeatureFlag,
-  FeatureFlagListResponse,
-  FeatureFlagStatsResponse,
-} from "@/types/featureFlag";
+import { FeatureFlag, FeatureFlagListResponse } from "@/types/featureFlag";
 
 // Query keys
 export const FEATURE_FLAGS_QUERY_KEY = ["feature-flags"];
@@ -70,14 +65,16 @@ export function useFeatureFlags(filterOptions: FilterOptions = {}) {
 
       // Apply filters
       if (filterOptions.sport) {
+        const sport = filterOptions.sport;
         filteredFlags = filteredFlags.filter((flag) =>
-          flag.sport.toLowerCase().includes(filterOptions.sport.toLowerCase()),
+          flag.sport.toLowerCase().includes(sport.toLowerCase()),
         );
       }
 
       if (filterOptions.site) {
+        const site = filterOptions.site;
         filteredFlags = filteredFlags.filter((flag) =>
-          flag.site?.toLowerCase().includes(filterOptions.site.toLowerCase()),
+          flag.site?.toLowerCase().includes(site.toLowerCase()),
         );
       }
 
