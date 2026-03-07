@@ -279,7 +279,7 @@ export const VisualPreview: React.FC<VisualPreviewProps> = ({
         </div>
         <div className="flex items-center space-x-1">
           <div className="w-3 h-3 bg-red-500 rounded"></div>
-          <span>Low Confidence (<40%)</span>
+          <span>Low Confidence (&lt;40%)</span>
         </div>
       </div>
     </div>

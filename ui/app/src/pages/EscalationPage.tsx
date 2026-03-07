@@ -1,8 +1,8 @@
 /**
- * FailuresPage - Main page for the Escalation UI
+ * EscalationPage - Main page for Escalation UI
  * 
  * This is the entry point for viewing and managing selector failures.
- * Combines the FailureDashboard with FailureDetailView for a complete experience.
+ * Combines FailureDashboard with FailureDetailView for a complete experience.
  * 
  * Story: 4.1 - View Proposed Selectors with Visual Preview
  * 
@@ -15,7 +15,7 @@ import { FailureDetailView } from '../components/failures/FailureDetailView';
 import { useFailures, useFailureDetail, useApproveSelector, useRejectSelector, useFlagSelector, useUnflagSelector } from '../hooks/useFailures';
 import type { FailureListItem } from '../hooks/useFailures';
 
-export const FailuresPage: React.FC = () => {
+export const EscalationPage: React.FC = () => {
   const [selectedFailureId, setSelectedFailureId] = useState<number | null>(null);
   
   // Fetch failures list with React Query
@@ -151,4 +151,4 @@ export const FailuresPage: React.FC = () => {
   );
 };
 
-export default FailuresPage;
+export default EscalationPage;
