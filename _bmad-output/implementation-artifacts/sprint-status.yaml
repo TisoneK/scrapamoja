@@ -69,8 +69,8 @@ development_status:
 
   # Epic 4: Graceful Degradation
   epic-4: in-progress
-  4-1-adaptive-rest-api-integration: review
-  4-2-service-unavailability-handling: review
+  4-1-adaptive-rest-api-integration: done
+  4-2-service-unavailability-handling: done
   epic-4-retrospective: optional
 
   # Epic 5: Real-Time Notifications (Phase 2)
