@@ -1,624 +1,681 @@
 ---
-stepsCompleted: [step-01-validate-prerequisites, step-02-design-epics, step-03-create-stories, step-04-final-validation]
-inputDocuments:
-  - _bmad-output/planning-artifacts/prd.md
-  - _bmad-output/planning-artifacts/architecture.md
-  - _bmad-output/planning-artifacts/product-brief-scrapamoja-2026-03-02.md
+stepsCompleted: ["step-01-validate-prerequisites", "step-02-design-epics", "step-03-create-stories", "step-04-final-validation"]
+status: "complete"
+inputDocuments: 
+  - "_bmad-output/planning-artifacts/prd.md"
+  - "_bmad-output/planning-artifacts/architecture.md"
 ---
 
 # scrapamoja - Epic Breakdown
 
 ## Overview
 
-This document provides the complete epic and story breakdown for scrapamoja (Adaptive Selector System), decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
-
-The Adaptive Selector System extends the existing YAML selector engine with cooperative, human-in-loop selector generation, versioned recipes, audit logging, escalation UI, and weight-based learning.
+This document provides the complete epic and story breakdown for scrapamoja, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
 
 ## Requirements Inventory
 
 ### Functional Requirements
 
-**Selector Failure Detection & Capture:**
-- FR1: System can detect when a selector fails during extraction
-- FR2: System captures DOM snapshot at time of failure
-- FR3: System records failure context (sport, status, page state)
+**Fallback Chain Management:**
+- FR1: System can execute primary selector for data extraction
+- FR2: System can execute fallback selector when primary fails
+- FR3: System can chain multiple fallback levels (minimum 2)
+- FR4: System can log fallback attempts with results
 
-**Alternative Selector Proposal:**
-- FR4: System analyzes DOM structure and proposes multiple alternative selector strategies
-- FR5: System provides confidence scores for each proposed selector
-- FR6: System shows blast radius (what other selectors might be affected)
+**YAML Hints Integration:**
+- FR5: System can read hint schema from YAML selectors
+- FR6: System can use hints to determine fallback strategy
+- FR7: System can prioritize selectors based on stability hints
 
-**Human Verification Workflow:**
-- FR7: Users can view proposed selectors with visual previews
-- FR8: Users can approve or reject proposed selectors
-- FR9: Users can flag selectors for developer review
-- FR10: Users can create custom selector strategies
+**Failure Capture & Logging:**
+- FR8: System can capture selector failure events
+- FR9: System can log failure events with full context (selectorId, URL, timestamp, failureType)
+- FR10: System can submit failure events to adaptive module DB
 
-**Learning & Weight Adjustment:**
-- FR11: System learns from human approvals to increase confidence of similar selectors
-- FR12: System learns from human rejections to avoid similar strategies
-- FR13: System tracks selector survival across layout generations
+**Real-Time Notifications (Phase 2):**
+- FR11: System can receive WebSocket notifications for failures
+- FR12: System can receive confidence score updates
+- FR13: System can receive selector health status updates
 
-**Versioned Recipes:**
-- FR14: System creates recipe versions when selectors are updated
-- FR15: System tracks stability score per recipe
-- FR16: System supports recipe inheritance (Parent → Child)
+**Health & Monitoring (Phase 2):**
+- FR14: System can query adaptive module for selector confidence scores
+- FR15: System can display selector health status
+- FR16: System can calculate blast radius for failures
 
-**Audit Logging:**
-- FR17: System records every human decision with full context
-- FR18: System maintains complete audit trail of selector changes
-- FR19: Users can query audit history by selector, date, or user
-
-**Escalation UI:**
-- FR20: UI shows clear dashboard of failures (what broke, why, alternatives)
-- FR21: UI supports both technical and non-technical views
-- FR22: UI provides fast triage workflow (< 5 min to resolve)
-
-**Feature Flags:**
-- FR23: System can enable/disable adaptive system per sport
-- FR24: System can enable/disable adaptive system per site
+**Integration Architecture:**
+- FR17: System can call adaptive REST API for alternative resolution
+- FR18: System can handle adaptive service unavailability gracefully
+- FR19: System can operate with sync failure capture (immediate)
+- FR20: System can operate with async failure capture (learning)
 
 ### NonFunctional Requirements
 
 **Performance:**
-- NFR1: Escalation UI Response Time: User can complete full approval workflow in < 5 minutes
-- NFR2: Selector Proposal Generation: System generates alternative selector proposals within 30 seconds of failure detection
-- NFR3: Learning System Latency: Weight adjustments are applied within 1 second of human decision
-
-**Scalability:**
-- NFR4: Multi-Site Support: System architecture supports adding new sites without code changes (feature flags)
-- NFR5: Recipe Storage: System can store and manage 1000+ recipe versions without performance degradation
-- NFR6: Concurrent Users: Support at least 5 concurrent users in escalation UI
-
-**Accessibility:**
-- NFR7: Non-Technical UI: Escalation UI must be usable by non-technical operations team members
-- NFR8: Visual Previews: Selector proposals include visual DOM previews (not just code)
-- NFR9: Clear Language: Error messages and failure descriptions use plain language
+- NFR1: Fallback Resolution Time - Sync fallback path should not add more than 5 seconds to scraper execution
+- NFR2: WebSocket Connection - Maintain stable connection for real-time notifications with automatic reconnection
 
 **Integration:**
-- NFR10: YAML Compatibility: All selector configurations remain in YAML format
-- NFR11: Selector Engine Integration: Must integrate with existing multi-strategy selector resolution
-- NFR12: Playwright Integration: Must work with Playwright for DOM snapshot capture
-- NFR13: Hot Reload: Configuration changes can be applied without restarting the system
+- NFR3: Graceful Degradation - When adaptive services are unavailable, scraper continues with primary selectors only (no fallback)
+- NFR4: API Timeout Handling - External API calls have configurable timeouts (default 30s) with appropriate error handling
+- NFR5: Connection Pooling - Manage adaptive API connections efficiently to avoid resource exhaustion
 
 ### Additional Requirements
 
-**From Architecture - Technical Requirements:**
-- Starter: Existing scrapamoja codebase (brownfield extension project)
-- Backend: FastAPI for Escalation UI REST API
-- Database: SQLite (MVP) / PostgreSQL (production)
-- ORM: SQLAlchemy 2.0 with async support
-- Frontend: React + TypeScript + Vite + Tailwind CSS
-- Authentication: API Keys (simple, good for integrations)
-- Tables Required: recipes, audit_log, weights, feature_flags, snapshots
-- New Module: `src/selectors/adaptive/` extending existing selector module
-
-**From Architecture - Integration Points:**
-- Selector Engine: Listen for resolution failures
-- Snapshot System: Reference captured snapshots
-- YAML Config: Extend with recipe metadata
-- Site Registry: Per-site feature flags
-
-**From Architecture - Implementation Sequence:**
-- Phase 1: Foundation - Set up adaptive module, SQLite database, basic FastAPI endpoints
-- Phase 2: Core Workflow - Integrate failure detection, create escalation UI React app
-- Phase 3: Intelligence - Implement proposal engine, learning engine, recipe versioning
-- Phase 4: Polish - Add audit logging UI, feature flag management, API key management
-
-**From Product Brief - MVP Core Features:**
-1. Schema Extension - Extend existing YAML with new metadata fields
-2. Audit Log - Record every human decision with full context
-3. Escalation UI - Fast triage view (what broke, why, alternatives, blast radius)
-4. Weight Adjustment - Per-selector learning from approvals/rejections
-5. Feature Flags - Incremental rollout by sport
+**From Architecture Document:**
+- Integration Pattern: In-process integration (import adaptive module directly into scraper)
+- Failure Capture Strategy: Validation layer (check results after extraction)
+- Fallback Chain Pattern: Linear chain (primary → fallback1 → fallback2)
+- Connection Management: Singleton pattern (single shared connection)
+- Implementation Pattern: Use @with_fallback decorator for fallback chains
+- Data Models: Use Pydantic models for failure events
+- Custom Exceptions: Located in src/selectors/exceptions.py
+- Naming Conventions: PascalCase (classes), snake_case (functions/variables), UPPER_SNAKE_CASE (constants)
+- Test Requirements: Unit tests with pytest markers (@pytest.mark.unit, @pytest.mark.integration)
+- Phase 2 Features (Deferred): WebSocket notifications, Health API with confidence scores, Blast radius analysis
 
 ### FR Coverage Map
 
-| Epic | FRs Covered |
-|------|-------------|
-| Epic 1: Foundation & Schema | FR1, FR2, FR3, FR14, FR15, FR16 |
-| Epic 2: Failure Detection & Capture | FR1, FR2, FR3 |
-| Epic 3: Alternative Selector Proposal | FR4, FR5, FR6 |
-| Epic 4: Human Verification Workflow | FR7, FR8, FR9, FR10 |
-| Epic 5: Learning & Weight Adjustment | FR11, FR12, FR13 |
-| Epic 6: Audit Logging | FR17, FR18, FR19 |
-| Epic 7: Escalation UI | FR20, FR21, FR22 |
-| Epic 8: Feature Flags | FR23, FR24 |
+| FR | Epic | Description |
+|----|------|-------------|
+| FR1 | Epic 1 | Primary selector execution |
+| FR2 | Epic 1 | Fallback selector execution |
+| FR3 | Epic 1 | Multi-level fallback chaining |
+| FR4 | Epic 1 | Fallback attempt logging |
+| FR5 | Epic 2 | YAML hint schema reading |
+| FR6 | Epic 2 | Hint-based fallback strategy |
+| FR7 | Epic 2 | Stability-based prioritization |
+| FR8 | Epic 3 | Failure event capture |
+| FR9 | Epic 3 | Full context failure logging |
+| FR10 | Epic 3 | Adaptive DB submission |
+| FR11 | Epic 5 | WebSocket failure notifications |
+| FR12 | Epic 5 | Confidence score updates |
+| FR13 | Epic 5 | Health status streaming |
+| FR14 | Epic 6 | Confidence score queries |
+| FR15 | Epic 6 | Health status display |
+| FR16 | Epic 6 | Blast radius calculation |
+| FR17 | Epic 4 | Adaptive REST API calls |
+| FR18 | Epic 4 | Service unavailability handling |
+| FR19 | Epic 3 | Sync failure capture |
+| FR20 | Epic 3 | Async failure capture |
 
 ## Epic List
 
-**Epic 1: Foundation & Schema Extension**
-- Goal: Extend existing YAML with new metadata fields for recipe versioning and stability tracking
+### Epic 1: Automatic Fallback Resolution
+**Goal:** Enable the scraper to automatically recover from selector failures without manual intervention, ensuring continuous data extraction.
 
-**Epic 2: Failure Detection & Capture**
-- Goal: Detect selector failures, capture DOM snapshots, and record failure context
-
-**Epic 3: Alternative Selector Proposal**
-- Goal: Analyze DOM structure and propose multiple alternative selector strategies with confidence scores
-
-**Epic 4: Human Verification Workflow**
-- Goal: Enable users to view, approve, reject, or create custom selector strategies
-
-**Epic 5: Learning & Weight Adjustment**
-- Goal: Learn from human approvals/rejections and track selector survival across generations
-
-**Epic 6: Audit Logging**
-- Goal: Record every human decision with full context and maintain queryable audit trail
-
-**Epic 7: Escalation UI**
-- Goal: Provide fast triage dashboard for both technical and non-technical users
-
-**Epic 8: Feature Flags**
-- Goal: Enable incremental rollout by sport and site
+**FRs covered:** FR1, FR2, FR3, FR4 (Fallback Chain Management)
 
 ---
 
-## Epic 1: Foundation & Schema Extension
+#### Story 1.1: Primary Selector Execution
 
-**Goal:** Extend existing YAML configuration with new metadata fields for recipe versioning, stability scoring, and generation tracking.
-
-### Story 1.1: Extend YAML Schema with Recipe Metadata
-
-As a **System Architect**,
-I want to extend the existing YAML configuration schema with new metadata fields
-So that recipe versioning and stability tracking can be stored alongside selector configurations.
+As a **scraper system**,
+I want **to execute a primary selector for data extraction**,
+So that **data can be extracted from web pages using the main selector defined in the YAML configuration**.
 
 **Acceptance Criteria:**
 
-**Given** an existing YAML selector configuration
-**When** the system loads the configuration
-**Then** it should recognize and parse new metadata fields: recipe_id, stability_score, generation, parent_recipe_id
-**And** the fields should be optional to maintain backward compatibility with existing configs
+**Given** a YAML-configured selector with a primary selector defined
+**When** the scraper invokes the selector engine for data extraction
+**Then** the primary selector is executed against the page
+**And** the extracted data is returned to the caller
 
-**Given** a YAML configuration with recipe metadata
-**When** the system serializes it back to YAML
-**Then** the metadata fields should be preserved exactly as defined
-
-### Story 1.2: Create Recipe Version Storage
-
-As a **System**,
-I want to store recipe versions in a database
-So that I can track selector stability over time and support inheritance.
-
-**Acceptance Criteria:**
-
-**Given** a recipe configuration with metadata
-**When** it is first created
-**Then** it should be stored in the recipes table with all required fields
-**And** the initial version number should be 1
-
-**Given** an existing recipe
-**When** selectors are updated
-**Then** a new version should be created with incremented version number
-**And** the parent_version_id should reference the previous version
-
-### Story 1.3: Implement Recipe Stability Scoring
-
-As a **System**,
-I want to calculate and store stability scores for each recipe
-So that selectors can be ranked by survival probability.
-
-**Acceptance Criteria:**
-
-**Given** a recipe with multiple versions
-**When** a selector resolves successfully over time
-**Then** the stability score should incrementally increase
-**And** the score should be calculated based on layout generations survived
-
-**Given** a recipe with failed selectors
-**When** the failure is detected
-**Then** the stability score should be recalculated
-**And** the score should decrease based on failure severity
+**Given** a valid page with the expected DOM structure
+**When** the primary selector is executed
+**Then** the selector successfully extracts the data
+**And** returns the expected value
 
 ---
 
-## Epic 2: Failure Detection & Capture
+#### Story 1.2: Fallback Selector Execution
 
-**Goal:** Detect when selectors fail during extraction, capture DOM snapshots, and record failure context.
-
-### Story 2.1: Detect Selector Resolution Failures
-
-As a **System**,
-I want to detect when a selector fails during extraction
-So that I can trigger the adaptive workflow.
+As a **scraper system**,
+I want **to execute a fallback selector when the primary fails**,
+So that **data extraction continues even when the primary selector breaks due to DOM changes**.
 
 **Acceptance Criteria:**
 
-**Given** a selector being resolved by the selector engine
-**When** the resolution returns no results or an error
-**Then** the failure should be detected and logged
-**And** the failure event should include: selector_id, sport, site, timestamp, error_type
+**Given** a primary selector that fails (returns empty or raises exception)
+**When** the fallback mechanism is triggered
+**Then** the fallback selector is executed against the same page
+**And** the fallback result is returned if successful
 
-**Given** a failed selector
-**When** the failure occurs
-**Then** it should emit a failure event to the adaptive system
-**And** the event should be processed within 1 second
+**Given** a primary selector failure with error details
+**When** the fallback is attempted
+**Then** the failure event is logged with selector ID, URL, timestamp, and failure type
+**And** the fallback attempt result is also logged
 
-### Story 2.2: Capture DOM Snapshot at Failure
+---
 
-As a **System**,
-I want to capture a DOM snapshot at the time of failure
-So that the snapshot can be used to propose alternative selectors.
+#### Story 1.3: Multi-Level Fallback Chain
+
+As a **scraper system**,
+I want **to chain multiple fallback levels (minimum 2)**,
+So that **there are multiple recovery options when the first fallback also fails**.
+
+**Acceptance Criteria:**
+
+**Given** a primary selector failure
+**When** the fallback chain is executed
+**Then** fallback1 is attempted first
+**And** if fallback1 succeeds, the result is returned
+**And** if fallback1 fails, fallback2 is attempted
+
+**Given** both fallback1 and fallback2 fail
+**When** the fallback chain completes
+**Then** the system returns failure with all attempted selectors logged
+**And** the chain stops at the first successful fallback
+
+**Given** a linear chain configuration (primary → fallback1 → fallback2)
+**When** the chain executes
+**Then** each selector is tried in order until success or all fail
+**And** the total fallback resolution time is tracked for performance monitoring
+
+---
+
+#### Story 1.4: Fallback Attempt Logging
+
+As a **developer**,
+I want **to log all fallback attempts with results**,
+So that **I can debug issues and understand selector stability over time**.
+
+**Acceptance Criteria:**
+
+**Given** any fallback attempt (success or failure)
+**When** the fallback chain completes
+**Then** a log entry is created with: selector ID, page URL, timestamp, attempted selectors in order, final result
+
+**Given** a fallback success
+**When** logging the event
+**Then** log includes which fallback succeeded and the extracted value
+
+**Given** a fallback failure
+**When** logging the event
+**Then** log includes all attempted selectors that failed
+**And** includes the failure reason for each attempt
+
+---
+
+### Epic 2: YAML Hints & Selector Prioritization
+**Goal:** Leverage YAML-defined hints to intelligently choose fallback strategies based on selector stability.
+
+**FRs covered:** FR5, FR6, FR7 (YAML Hints Integration)
+
+---
+
+#### Story 2.1: YAML Hint Schema Reading
+
+As a **scraper system**,
+I want **to read hint schema from YAML selectors**,
+So that **the system can understand the metadata and hints defined for each selector**.
+
+**Acceptance Criteria:**
+
+**Given** a YAML selector configuration file
+**When** the selector engine loads the configuration
+**Then** all hint fields are parsed from the YAML
+**And** the hints are available to the fallback chain logic
+
+**Given** a YAML selector with hints defined (stability, priority, alternatives)
+**When** the selector is loaded
+**Then** the hints are deserialized into a structured format
+**And** stored with the selector metadata
+
+**Given** a YAML selector without hints
+**When** the selector is loaded
+**Then** default hint values are applied
+**And** no errors are raised
+
+---
+
+#### Story 2.2: Hint-Based Fallback Strategy
+
+As a **scraper system**,
+I want **to use hints to determine fallback strategy**,
+So that **the fallback chain follows intelligent routing based on selector metadata**.
+
+**Acceptance Criteria:**
+
+**Given** a selector with defined hints including alternative selectors
+**When** the primary selector fails
+**Then** the fallback chain uses the hints to determine which alternatives to try
+**And** the alternatives are attempted in the order specified in hints
+
+**Given** a selector with a "strategy" hint (e.g., "linear", "priority", "adaptive")
+**When** the fallback chain executes
+**Then** the strategy determines how fallbacks are attempted
+**And** the appropriate fallback behavior is applied
+
+**Given** a selector with custom hint rules
+**When** fallback is triggered
+**Then** the custom rules are evaluated
+**And** the fallback behavior follows the custom logic
+
+---
+
+#### Story 2.3: Stability-Based Prioritization
+
+As a **developer**,
+I want **to prioritize selectors based on stability hints**,
+So that **more stable selectors are tried first, reducing the likelihood of repeated failures**.
+
+**Acceptance Criteria:**
+
+**Given** multiple selectors with different stability scores in hints
+**When** building the fallback chain
+**Then** selectors are ordered by stability (highest first)
+**And** the most stable fallback is attempted before less stable ones
+
+**Given** a selector with a stability score of 0.9 (high)
+**When** compared to a selector with stability 0.5 (low)
+**Then** the high-stability selector is prioritized in the fallback order
+**And** low-stability selectors are tried as last resorts
+
+**Given** historical stability data from the adaptive module
+**When** constructing the fallback chain
+**Then** the system can optionally use real stability metrics
+**And** combine with YAML hints for optimal ordering
+
+---
+
+### Epic 3: Failure Event Capture & Logging
+**Goal:** Capture all selector failure events with full context and submit them to the adaptive module database for analysis.
+
+**FRs covered:** FR8, FR9, FR10, FR19, FR20 (Failure Capture + Sync/Async Capture)
+
+---
+
+#### Story 3.1: Selector Failure Event Capture
+
+As a **scraper system**,
+I want **to capture selector failure events**,
+So that **all failures are detected and recorded for analysis and learning**.
+
+**Acceptance Criteria:**
+
+**Given** a selector that returns empty or null result
+**When** the validation layer checks the result
+**Then** a failure event is created
+**And** the failure type is set to "empty_result"
+
+**Given** a selector that throws an exception
+**When** the exception is caught
+**Then** a failure event is created
+**And** the failure type is set to "exception" with error details
+
+**Given** a selector that times out
+**When** the timeout is detected
+**Then** a failure event is created
+**And** the failure type is set to "timeout"
+
+**Given** any failure detection
+**When** the event is captured
+**Then** the event includes: selector_id, page_url, timestamp, failure_type, extractor_id
+
+---
+
+#### Story 3.2: Full Context Failure Logging
+
+As a **developer**,
+I want **to log failure events with full context**,
+So that **I can debug issues and understand the root cause of failures**.
+
+**Acceptance Criteria:**
+
+**Given** a failure event with all required fields
+**When** the event is logged
+**Then** the log includes: selector_id, page_url, timestamp, failure_type, extractor_id
+**And** attempted_fallbacks array is included (even if empty)
+
+**Given** a failure event during fallback chain execution
+**When** logging the event
+**Then** the attempted_fallbacks array includes all selectors that were tried
+**And** each fallback includes its result (success/failure)
+
+**Given** a page context with additional metadata
+**When** creating the failure event
+**Then** the page_url includes full URL with any relevant parameters
+**And** timestamp is in ISO8601 format
+
+**Given** a failure event
+**When** logging to structured logger
+**Then** correlation ID is included for tracing
+**And** log level is set appropriately (WARNING for single failure, ERROR for critical)
+
+---
+
+#### Story 3.3: Adaptive Module DB Submission
+
+As a **scraper system**,
+I want **to submit failure events to the adaptive module database**,
+So that **the adaptive system can learn from failures and improve selector suggestions**.
+
+**Acceptance Criteria:**
+
+**Given** a captured failure event
+**When** the sync failure capture is triggered
+**Then** the event is submitted to the adaptive module DB
+**And** the submission completes before continuing
+
+**Given** a submission to the adaptive module
+**When** the DB operation succeeds
+**Then** the event is stored with all fields
+**And** no error is raised to the caller
+
+**Given** a submission to the adaptive module
+**When** the DB operation fails
+**Then** the error is logged
+**And** the failure is handled gracefully (doesn't crash the scraper)
+
+**Given** the adaptive module is unavailable
+**When** submitting a failure event
+**Then** the event is queued for later retry
+**And** the scraper continues without blocking
+
+---
+
+#### Story 3.4: Sync Failure Capture (Immediate)
+
+As a **scraper system**,
+I want **to operate with sync failure capture (immediate)**,
+So that **failures are captured and submitted right away during extraction**.
+
+**Acceptance Criteria:**
+
+**Given** a selector execution that returns empty
+**When** the validation layer detects the failure
+**Then** the failure event is captured synchronously
+**And** the fallback chain is triggered immediately
+**And** the total added latency is ≤ 5 seconds (NFR1)
+
+**Given** a sync failure capture in progress
+**When** the adaptive module DB is slow
+**Then** the timeout is applied (default 30s per NFR4)
+**And** the scraper continues with primary selectors if timeout occurs
+
+**Given** high-volume scraping operations
+**When** many failures occur in quick succession
+**Then** each failure is captured and submitted
+**And** the system handles the load without blocking
+
+---
+
+#### Story 3.5: Async Failure Capture (Learning) - Phase 2
+
+As a **scraper system**,
+I want **to operate with async failure capture (learning)**,
+So that **failures are captured for learning without impacting extraction performance**.
+
+**Acceptance Criteria:**
+
+**Given** a selector execution that completes successfully
+**When** the validation layer validates the result
+**Then** a failure event (if any) is captured asynchronously
+**And** submitted via fire-and-forget to the adaptive DB
+**And** the extraction result is returned immediately without waiting
+
+**Given** async failure capture
+**When** the adaptive module DB is unavailable
+**Then** events are queued locally
+**And** retried when connection is restored
+**And** no data is lost
+
+**Given** learning-mode enabled
+**When** successful extractions occur
+**Then** success events are also captured
+**And** submitted to the adaptive module
+**And** used to update stability scores
+
+---
+
+### Epic 4: Graceful Degradation
+**Goal:** Ensure the scraper continues operating with primary selectors when adaptive services are unavailable.
+
+**FRs covered:** FR17, FR18 (Integration Architecture)
+
+---
+
+#### Story 4.1: Adaptive REST API Integration
+
+As a **scraper system**,
+I want **to call the adaptive REST API for alternative resolution**,
+So that **I can get alternative selector suggestions when primary selectors fail**.
+
+**Acceptance Criteria:**
+
+**Given** a failed primary selector
+**When** calling the adaptive REST API
+**Then** a request is sent with selector_id and page_url
+**And** alternative selectors are returned if available
+
+**Given** a successful API call
+**When** alternatives are received
+**Then** the alternatives are used as fallbacks
+**And** the fallback chain is extended with these alternatives
+
+**Given** an API call with a selector that has no alternatives
+**When** the API responds
+**Then** an empty alternatives list is returned
+**And** no error is raised
+
+**Given** adaptive API integration
+**When** configuring the API client
+**Then** timeout is configurable (default 30s per NFR4)
+**And** connection pooling is enabled (per NFR5)
+
+---
+
+#### Story 4.2: Service Unavailability Handling
+
+As a **scraper system**,
+I want **to handle adaptive service unavailability gracefully**,
+So that **the scraper continues with primary selectors when the adaptive module is down**.
+
+**Acceptance Criteria:**
+
+**Given** the adaptive module is completely unavailable
+**When** a selector fails and fallback is needed
+**Then** the system detects the unavailability
+**And** continues with primary selectors only
+**And** logs a warning about adaptive service being unavailable
+
+**Given** adaptive service timeout
+**When** the API call exceeds the timeout
+**Then** the timeout exception is caught
+**And** fallback to primary selector continues
+**And** the timeout is logged for diagnostics
+
+**Given** intermittent adaptive service failures
+**When** a request fails
+**Then** retry logic is applied (configurable retries)
+**And** if all retries fail, graceful degradation kicks in
+
+**Given** recovery of adaptive service
+**When** a new request is made after unavailability
+**Then** the system detects the service is back
+**And** normal adaptive integration resumes
+**And** no manual restart is required
+
+---
+
+### Epic 5: Real-Time Notifications (Phase 2)
+**Goal:** Provide WebSocket-based notifications for failures, confidence score updates, and selector health status.
+
+**FRs covered:** FR11, FR12, FR13 (Real-Time Notifications)
+
+---
+
+#### Story 5.1: WebSocket Connection for Failure Notifications
+
+As a **user**,
+I want **to receive WebSocket notifications for failures**,
+So that **I can be immediately aware when selector failures occur**.
+
+**Acceptance Criteria:**
+
+**Given** a WebSocket connection established
+**When** a selector failure is captured
+**Then** a failure notification is sent via WebSocket
+**And** the notification includes: selector_id, page_url, timestamp, failure_type
+
+**Given** a stable WebSocket connection
+**When** the scraper runs
+**Then** all failure events are streamed in real-time
+**And** no failures are missed due to buffering
+
+**Given** WebSocket connection loss
+**When** the connection drops
+**Then** automatic reconnection is attempted
+**And** the reconnection follows exponential backoff
+**And** the system continues to buffer failures during disconnection (per NFR2)
+
+**Given** WebSocket reconnection
+**When** the connection is restored
+**Then** the system resumes streaming notifications
+**And** no duplicate notifications are sent
+
+---
+
+#### Story 5.2: Confidence Score Updates via WebSocket
+
+As a **user**,
+I want **to receive confidence score updates**,
+So that **I can track selector stability in real-time**.
+
+**Acceptance Criteria:**
+
+**Given** a selector's confidence score changes
+**When** the adaptive module updates the score
+**Then** a confidence update notification is sent via WebSocket
+**And** the notification includes: selector_id, old_score, new_score, reason
+
+**Given** periodic confidence score refresh
+**When** scores are recalculated
+**Then** updated scores are broadcast to all connected clients
+**And** notifications include the recalculation timestamp
+
+**Given** confidence score dropping below threshold
+**When** the update is received
+**Then** an alert notification is sent
+**And** the alert indicates the selector needs attention
+
+---
+
+#### Story 5.3: Selector Health Status Streaming
+
+As a **user**,
+I want **to receive selector health status updates**,
+So that **I can monitor which selectors are working vs degraded**.
+
+**Acceptance Criteria:**
+
+**Given** a selector health status change
+**When** the status changes (healthy → degraded → failed)
+**Then** a status update notification is sent via WebSocket
+**And** the notification includes: selector_id, old_status, new_status, timestamp
+
+**Given** periodic health check completion
+**When** health status is evaluated
+**Then** the current health snapshot is broadcast
+**And** all connected clients receive the full status list
+
+**Given** multiple selectors with different health states
+**When** health status is streamed
+**Then** each selector's status is individually updateable
+**And** clients can subscribe to specific selectors if needed
+
+---
+
+### Epic 6: Health Monitoring & Blast Radius (Phase 2)
+**Goal:** Enable querying of selector confidence scores, displaying health status, and calculating failure impact.
+
+**FRs covered:** FR14, FR15, FR16 (Health & Monitoring)
+
+---
+
+#### Story 6.1: Confidence Score Query API
+
+As a **developer**,
+I want **to query the adaptive module for selector confidence scores**,
+So that **I can understand which selectors are stable and which need attention**.
+
+**Acceptance Criteria:**
+
+**Given** a selector ID
+**When** querying the confidence score API
+**Then** the current confidence score (0.0-1.0) is returned
+**And** the last updated timestamp is included
+
+**Given** multiple selector IDs
+**When** batch querying confidence scores
+**Then** all requested scores are returned in a single response
+**And** missing selectors return null or not found
+
+**Given** no selector ID specified
+**When** querying the API
+**Then** all selector confidence scores are returned
+**And** pagination is supported for large result sets
+
+**Given** a selector with no historical data
+**When** querying the score
+**Then** a default score (e.g., 0.5) is returned
+**And** a flag indicates the score is estimated
+
+---
+
+#### Story 6.2: Selector Health Status Display
+
+As a **user**,
+I want **to display selector health status**,
+So that **I can quickly see which selectors are working, degraded, or failed**.
+
+**Acceptance Criteria:**
+
+**Given** a selector's performance history
+**When** calculating health status
+**Then** the status is one of: healthy (≥0.8), degraded (0.5-0.79), failed (<0.5)
+**And** status is calculated based on recent success rate
+
+**Given** a dashboard request
+**When** displaying selector health
+**Then** all selectors are grouped by status
+**And** the display shows: selector_id, status, confidence_score, last_failure
+
+**Given** a degraded selector
+**When** displaying health
+**Then** the recommended action is shown
+**And** any available alternatives are suggested
+
+**Given** real-time status updates
+**When** WebSocket connection is active
+**Then** health status changes are pushed immediately
+**And** the dashboard auto-updates without refresh
+
+---
+
+#### Story 6.3: Blast Radius Calculation
+
+As a **user**,
+I want **to calculate blast radius for failures**,
+So that **I can understand the impact of a selector failure on data quality**.
 
 **Acceptance Criteria:**
 
 **Given** a selector failure event
-**When** the failure is detected
-**Then** a DOM snapshot should be captured using Playwright
-**And** the snapshot should be stored with reference to the failure event
+**When** calculating blast radius
+**Then** the affected data fields are identified
+**And** the count of affected records is returned
 
-**Given** a captured snapshot
-**When** it is stored
-**Then** it should include: HTML content, viewport size, user agent, timestamp
-**And** the snapshot should be compressed to save storage space
-
-### Story 2.3: Record Failure Context
-
-As a **System**,
-I want to record comprehensive failure context
-So that failures can be analyzed and proposed fixes can be evaluated.
-
-**Acceptance Criteria:**
-
-**Given** a selector failure
-**When** the failure is recorded
-**Then** it should capture: sport, page state, tab type, previous selector strategy used, confidence score at time of failure
-
-**Given** failure context is recorded
-**When** querying failures
-**Then** the context should be filterable by sport, date range, selector type
-
----
-
-## Epic 3: Alternative Selector Proposal
-
-**Goal:** Analyze DOM structure and propose multiple alternative selector strategies with confidence scores.
-
-### Story 3.1: Analyze DOM Structure
-
-As a **System**,
-I want to analyze the captured DOM snapshot
-So that I can identify alternative selector strategies.
-
-**Acceptance Criteria:**
-
-**Given** a DOM snapshot from a failed selector
-**When** the analysis runs
-**Then** it should identify potential alternative selectors using multiple strategies: CSS, XPath, text anchor, attribute match, DOM relationships, role-based
-
-**Given** the DOM analysis
-**When** it identifies alternatives
-**Then** each alternative should include: selector string, strategy type, confidence score
-
-### Story 3.2: Generate Confidence Scores
-
-As a **System**,
-I want to calculate confidence scores for proposed selectors
-So that users can make informed decisions.
-
-**Acceptance Criteria:**
-
-**Given** multiple proposed selector alternatives
-**When** confidence scores are calculated
-**Then** scores should range from 0.0 to 1.0
-**And** the scoring should consider: historical stability, selector specificity, DOM structure similarity
-
-**Given** proposed selectors with confidence scores
-**When** they are displayed to users
-**Then** they should be sorted by confidence score (highest first)
-
-### Story 3.3: Calculate Blast Radius
-
-As a **System**,
-I want to calculate the blast radius for each proposed fix
-So that users understand the impact of approving a selector change.
-
-**Acceptance Criteria:**
-
-**Given** a proposed selector fix
+**Given** a failed selector that extracts "home_team"
 **When** blast radius is calculated
-**Then** it should identify all selectors that share ancestor containers with the proposed selector
-**And** the blast radius should indicate: how many selectors might be affected, which sports might be impacted
-
-**Given** blast radius information
-**When** displayed in the UI
-**Then** it should clearly show: affected selector count, affected sports, severity level
-
----
-
-## Epic 4: Human Verification Workflow
-
-**Goal:** Enable users to view proposed selectors, approve or reject them, and create custom selector strategies.
-
-### Story 4.1: View Proposed Selectors with Visual Preview
-
-As a **Python Developer**,
-I want to view proposed selectors with visual previews
-So that I can understand what the selector will capture before approving.
-
-**Acceptance Criteria:**
-
-**Given** a selector failure with proposed alternatives
-**When** I view the failure details
-**Then** I should see: the failed selector, each proposed alternative with confidence score, visual preview highlighting what each selector captures
-
-**Given** the visual preview
-**When** displayed
-**Then** it should clearly show: matched elements highlighted, unmatched elements dimmed, context around the match
-
-### Story 4.2: Approve or Reject Proposed Selectors
-
-As a **User**,
-I want to approve or reject proposed selectors
-So that the system can apply the selected selector and learn from my decision.
-
-**Acceptance Criteria:**
-
-**Given** proposed selector alternatives
-**When** I click "Approve" on one
-**Then** the selected selector should be applied to the recipe
-**And** the approval should be recorded in the audit log
-**And** the learning system should be updated
-
-**Given** proposed selector alternatives
-**When** I click "Reject" on one
-**Then** the rejection should be recorded with my reason
-**And** the learning system should be updated to avoid similar strategies
-
-### Story 4.3: Flag Selectors for Developer Review
-
-As an **Operations Team Member**,
-I want to flag selectors for developer review
-So that complex cases can be handled by technical team members.
-
-**Acceptance Criteria:**
-
-**Given** a proposed selector with low confidence
-**When** I am unsure about approving it
-**Then** I should be able to flag it for developer review
-**And** the flag should include my note about what I'm unsure about
-
-**Given** a selector flagged for review
-**When** a developer views it
-**Then** they should see: the flag note, the proposed alternatives, the failure context
-
-### Story 4.4: Create Custom Selector Strategies
-
-As a **Python Developer**,
-I want to create custom selector strategies
-So that I can handle edge cases that the system cannot auto-propose.
-
-**Acceptance Criteria:**
-
-**Given** the escalation UI
-**When** I want to create a custom selector
-**Then** I should be able to: enter custom selector string, specify strategy type, add notes about my approach
-
-**Given** a custom selector I created
-**When** I submit it
-**Then** it should be treated as a proposed alternative
-**And** my custom strategy should be recorded for learning purposes
-
----
-
-## Epic 5: Learning & Weight Adjustment
-
-**Goal:** Learn from human approvals and rejections to improve future selector proposals.
-
-### Story 5.1: Learn from Approvals
-
-As a **System**,
-I want to learn from human approvals
-So that future selector proposals improve in accuracy.
-
-**Acceptance Criteria:**
-
-**Given** a human approves a proposed selector
-**When** the approval is recorded
-**Then** the weight of the selector strategy should increase
-**And** similar selector strategies should get a slight weight boost
-
-**Given** approvals accumulate over time
-**When** proposing new selectors
-**Then** strategies that have been approved before should receive higher confidence scores
-
-### Story 5.2: Learn from Rejections
-
-As a **System**,
-I want to learn from human rejections
-So that similar selector strategies are avoided in the future.
-
-**Acceptance Criteria:**
-
-**Given** a human rejects a proposed selector
-**When** the rejection is recorded
-**Then** the weight of that selector strategy should decrease
-**And** the rejection reason should be analyzed to identify patterns to avoid
-
-**Given** rejections accumulate over time
-**When** proposing new selectors
-**Then** strategies that have been rejected before should receive lower confidence scores
-
-### Story 5.3: Track Selector Survival Across Generations
-
-As a **System**,
-I want to track selector survival across layout generations
-So that stability scores can be calculated accurately.
-
-**Acceptance Criteria:**
-
-**Given** a recipe version
-**When** selectors survive a layout generation change on the target site
-**Then** the generation_survived count should increment
-**And** the stability score should reflect the survival rate
-
-**Given** a selector that fails
-**When** the failure is detected
-**Then** it should be recorded as a generation failure
-**And** the recipe should be marked for review
-
----
-
-## Epic 6: Audit Logging
-
-**Goal:** Record every human decision with full context and maintain a queryable audit trail.
-
-### Story 6.1: Record Human Decisions
-
-As a **System**,
-I want to record every human decision with full context
-So that there is a complete audit trail.
-
-**Acceptance Criteria:**
-
-**Given** a human takes an action (approve, reject, flag, create custom)
-**When** the action is processed
-**Then** it should be recorded in the audit_log table with: action_type, selector_id, user_id, timestamp, context_snapshot
-
-**Given** a decision is recorded
-**When** stored
-**Then** it should include: before_state, after_state, reason_if_provided, confidence_at_time
-
-### Story 6.2: Maintain Complete Audit Trail
-
-As a **System**,
-I want to maintain a complete audit trail of selector changes
-So that changes can be traced back to their source.
-
-**Acceptance Criteria:**
-
-**Given** multiple decisions over time
-**When** viewing the audit trail
-**Then** it should show: chronological history, connected decisions (e.g., reject after approval), user attribution
-
-**Given** the audit trail
-**When** needed for compliance
-**Then** it should be exportable in standard formats (JSON, CSV)
-
-### Story 6.3: Query Audit History
-
-As a **User**,
-I want to query audit history by selector, date, or user
-So that I can investigate past decisions.
-
-**Acceptance Criteria:**
-
-**Given** the audit log
-**When** I query by selector_id
-**Then** I should see all decisions related to that selector
-
-**Given** the audit log
-**When** I query by date range
-**Then** I should see all decisions within that period
-
-**Given** the audit log
-**When** I query by user
-**Then** I should see all decisions made by that user
-
----
-
-## Epic 7: Escalation UI
-
-**Goal:** Provide a fast triage dashboard that supports both technical and non-technical users.
-
-### Story 7.1: Failure Dashboard
-
-As a **User**,
-I want to see a clear dashboard of failures
-So that I can quickly understand what broke and prioritize fixes.
-
-**Acceptance Criteria:**
-
-**Given** multiple selector failures
-**When** I view the dashboard
-**Then** I should see: list of failures, what broke, why it broke, severity level
-
-**Given** the dashboard
-**When** failures exist
-**Then** they should be sorted by: severity, time since failure, blast radius
-
-### Story 7.2: Technical and Non-Technical Views
-
-As a **User**,
-I want views appropriate to my technical level
-So that I can efficiently do my job without being overwhelmed.
-
-**Given** a non-technical user (Operations)
-**When** viewing the UI
-**Then** they should see: plain language descriptions, visual previews, simple approve/reject actions
-
-**Given** a technical user (Developer)
-**When** viewing the UI
-**Then** they should see: full selector details, DOM structure, confidence score breakdown, ability to create custom strategies
-
-### Story 7.3: Fast Triage Workflow
-
-As a **User**,
-I want to complete the approval workflow in under 5 minutes
-So that selector failures don't block data pipelines.
-
-**Acceptance Criteria:**
-
-**Given** a simple selector failure with clear proposed fix
-**When** I approve the fix
-**Then** the entire workflow (view → understand → approve) should take less than 5 minutes
-
-**Given** the escalation UI
-**When** loaded
-**Then** initial page load should be under 2 seconds
-**And** each action should respond within 500ms
-
----
-
-## Epic 8: Feature Flags
-
-**Goal:** Enable incremental rollout by sport and site through a feature flag system.
-
-### Story 8.1: Sport-Based Feature Flags
-
-As a **System Administrator**,
-I want to enable/disable the adaptive system per sport
-So that I can roll out features gradually.
-
-**Acceptance Criteria:**
-
-**Given** the feature flag system
-**When** I enable the adaptive system for Basketball
-**Then** only Basketball selectors should trigger the adaptive workflow
-
-**Given** the feature flag system
-**When** I disable the adaptive system for a sport
-**Then** selectors for that sport should use the traditional fallback mechanism
-
-### Story 8.2: Site-Based Feature Flags
-
-As a **System Administrator**,
-I want to enable/disable the adaptive system per site
-So that I can test on specific sites before full rollout.
-
-**Acceptance Criteria:**
-
-**Given** the feature flag system
-**When** I enable the adaptive system for Flashscore
-**Then** only Flashscore selectors should trigger the adaptive workflow
-
-**Given** the feature flag system
-**When** I disable the adaptive system for a site
-**Then** selectors for that site should use the traditional fallback mechanism
-
-### Story 8.3: Feature Flag Management UI
-
-As a **System Administrator**,
-I want a UI to manage feature flags
-So that I can easily configure rollout settings.
-
-**Acceptance Criteria:**
-
-**Given** the feature flag management UI
-**When** I view current flags
-**Then** I should see: all flags, current status (enabled/disabled), last modified
-
-**Given** the feature flag management UI
-**When** I toggle a flag
-**Then** the change should take effect immediately (hot-reload)
-**And** the change should be recorded in audit log
+**Then** the impact includes: which match records are affected
+**And** the severity level (critical/major/minor)
+
+**Given** multiple related selectors
+**When** one fails and impacts others
+**Then** the blast radius includes cascading effects
+**And** all dependent data fields are marked as affected
+
+**Given** a blast radius query
+**When** presenting results
+**Then** the output includes: failed_selector, affected_fields, affected_records, severity, recommended_actions

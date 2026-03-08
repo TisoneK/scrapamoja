@@ -1,271 +1,393 @@
-import { useState } from 'react'
-import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { SkeletonTable } from '@/components/ui/Skeleton'
+import { useState } from "react";
+import { Download, Search, FileText } from "lucide-react";
 
-// Mock audit log data - replace with actual API call
 interface AuditLogEntry {
-  id: number
-  action: 'create' | 'update' | 'toggle' | 'delete'
-  sport: string
-  site?: string
-  old_value?: boolean
-  new_value?: boolean
-  user: string
-  timestamp: string
-  description?: string
+  id: number;
+  action: "create" | "update" | "toggle" | "delete";
+  sport: string;
+  site?: string;
+  old_value?: boolean;
+  new_value?: boolean;
+  user: string;
+  timestamp: string;
+  description?: string;
 }
 
 interface AuditLogResponse {
-  data: AuditLogEntry[]
-  count: number
-  page: number
-  page_size: number
-  total_pages: number
+  data: AuditLogEntry[];
+  count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 interface AuditLogFilters {
-  sport?: string
-  site?: string
-  action?: 'all' | 'create' | 'update' | 'toggle' | 'delete'
-  date_from?: string
-  date_to?: string
-  user?: string
+  sport?: string;
+  site?: string;
+  action?: "all" | "create" | "update" | "toggle" | "delete";
+  user?: string;
+}
+
+const MOCK_DATA: AuditLogResponse = {
+  data: [
+    {
+      id: 1,
+      action: "create",
+      sport: "football",
+      site: "flashscore",
+      new_value: true,
+      user: "admin",
+      timestamp: "2026-03-06T13:30:00Z",
+      description: "Created new feature flag for football adaptive selectors",
+    },
+    {
+      id: 2,
+      action: "toggle",
+      sport: "football",
+      site: "flashscore",
+      old_value: true,
+      new_value: false,
+      user: "operator",
+      timestamp: "2026-03-06T14:15:00Z",
+      description:
+        "Disabled football adaptive selectors due to scheduled maintenance window",
+    },
+    {
+      id: 3,
+      action: "update",
+      sport: "tennis",
+      site: "flashscore",
+      old_value: false,
+      new_value: true,
+      user: "admin",
+      timestamp: "2026-03-06T15:00:00Z",
+      description:
+        "Updated tennis feature flag configuration and enabled it for production",
+    },
+  ],
+  count: 3,
+  page: 1,
+  page_size: 20,
+  total_pages: 1,
+};
+
+const ACTION_BADGE: Record<
+  AuditLogEntry["action"],
+  { label: string; className: string }
+> = {
+  create: { label: "CREATE", className: "badge badge-green" },
+  toggle: { label: "TOGGLE", className: "badge badge-yellow" },
+  update: { label: "UPDATE", className: "badge badge-blue" },
+  delete: { label: "DELETE", className: "badge badge-red" },
+};
+
+function formatTimestamp(ts: string) {
+  const d = new Date(ts);
+  const date = d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const time = d.toLocaleString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return { date, time };
+}
+
+function UserAvatar({ name }: { name: string }) {
+  return (
+    <span
+      title={name}
+      className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center uppercase flex-shrink-0 cursor-default"
+    >
+      {name[0]}
+    </span>
+  );
 }
 
 export function AuditLogViewer() {
-  const [filters, setFilters] = useState<AuditLogFilters>({})
-  const [currentPage, setCurrentPage] = useState(1)
-  const [isLoading, setIsLoading] = useState(false)
+  const [filters, setFilters] = useState<AuditLogFilters>({});
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-  // Mock data - replace with actual API call
-  const mockData: AuditLogResponse = {
-    data: [
-      {
-        id: 1,
-        action: 'create',
-        sport: 'football',
-        site: 'flashscore',
-        new_value: true,
-        user: 'admin',
-        timestamp: '2026-03-06T10:30:00Z',
-        description: 'Created new feature flag for football adaptive selectors'
-      },
-      {
-        id: 2,
-        action: 'toggle',
-        sport: 'football',
-        site: 'flashscore',
-        old_value: true,
-        new_value: false,
-        user: 'operator',
-        timestamp: '2026-03-06T11:15:00Z',
-        description: 'Disabled football adaptive selectors due to maintenance'
-      },
-      {
-        id: 3,
-        action: 'update',
-        sport: 'tennis',
-        site: 'flashscore',
-        old_value: false,
-        new_value: true,
-        user: 'admin',
-        timestamp: '2026-03-06T12:00:00Z',
-        description: 'Updated tennis feature flag configuration'
-      },
-    ],
-    count: 3,
-    page: 1,
-    page_size: 20,
-    total_pages: 1,
-  }
+  const set = <K extends keyof AuditLogFilters>(
+    key: K,
+    value: AuditLogFilters[K],
+  ) => setFilters((prev) => ({ ...prev, [key]: value }));
 
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString()
-  }
-
-  const getActionColor = (action: string) => {
-    switch (action) {
-      case 'create': return 'text-green-600 bg-green-100'
-      case 'update': return 'text-blue-600 bg-blue-100'
-      case 'toggle': return 'text-yellow-600 bg-yellow-100'
-      case 'delete': return 'text-red-600 bg-red-100'
-      default: return 'text-gray-600 bg-gray-100'
-    }
-  }
-
-  const handleFilterChange = (key: keyof AuditLogFilters, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
-    setCurrentPage(1) // Reset to first page when filters change
-  }
+  const filtered = MOCK_DATA.data.filter((entry) => {
+    if (
+      filters.sport &&
+      !entry.sport.toLowerCase().includes(filters.sport.toLowerCase())
+    )
+      return false;
+    if (
+      filters.site &&
+      !entry.site?.toLowerCase().includes(filters.site.toLowerCase())
+    )
+      return false;
+    if (
+      filters.action &&
+      filters.action !== "all" &&
+      entry.action !== filters.action
+    )
+      return false;
+    if (
+      filters.user &&
+      !entry.user.toLowerCase().includes(filters.user.toLowerCase())
+    )
+      return false;
+    return true;
+  });
 
   const handleExport = () => {
-    // Implement export functionality
-    const csvContent = [
-      'Action,Sport,Site,User,Timestamp,Description',
-      ...mockData.data.map(entry => [
-        entry.action,
-        entry.sport,
-        entry.site || '',
-        entry.user,
-        entry.timestamp,
-        entry.description || ''
-      ])
-    ].join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `audit-log-${new Date().toISOString().split('T')[0]}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
+    const rows = [
+      ["Timestamp", "Action", "Sport", "Site", "User", "Description"],
+      ...filtered.map((e) => [
+        e.timestamp,
+        e.action,
+        e.sport,
+        e.site ?? "",
+        e.user,
+        e.description ?? "",
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-log-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Audit Log</h1>
-        <Button onClick={handleExport} className="flex items-center space-x-2">
-          <span>📥</span>
+    <div className="flex flex-col flex-1 space-y-3">
+      {/* Page header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-base font-semibold text-slate-900 tracking-tight">
+          Audit Log
+        </h1>
+        <button
+          onClick={handleExport}
+          className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-slate-800 active:bg-slate-950 transition-colors duration-150 shadow-sm"
+        >
+          <Download className="w-3.5 h-3.5" />
           Export CSV
-        </Button>
+        </button>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sport
-              </label>
+      {/* Filter bar — no header row, inputs only */}
+      <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Sport */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Sport
+            </label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <input
                 type="text"
-                value={filters.sport || ''}
-                onChange={(e) => handleFilterChange('sport', e.target.value)}
-                placeholder="Filter by sport..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Site
-              </label>
-              <input
-                type="text"
-                value={filters.site || ''}
-                onChange={(e) => handleFilterChange('site', e.target.value)}
-                placeholder="Filter by site..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Action
-              </label>
-              <select
-                value={filters.action || 'all'}
-                onChange={(e) => handleFilterChange('action', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Actions</option>
-                <option value="create">Create</option>
-                <option value="update">Update</option>
-                <option value="toggle">Toggle</option>
-                <option value="delete">Delete</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                User
-              </label>
-              <input
-                type="text"
-                value={filters.user || ''}
-                onChange={(e) => handleFilterChange('user', e.target.value)}
-                placeholder="Filter by user..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={filters.sport ?? ""}
+                onChange={(e) => set("sport", e.target.value)}
+                placeholder="Filter by sport…"
+                className="select pl-8 h-8 text-xs"
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Audit Log Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex justify-between items-center">
-            <span>Audit Log Entries</span>
-            <span className="text-sm font-normal text-gray-500">
-              {mockData.count} total entries
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          {/* Site */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Site
+            </label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={filters.site ?? ""}
+                onChange={(e) => set("site", e.target.value)}
+                placeholder="Filter by site…"
+                className="select pl-8 h-8 text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Action */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Action
+            </label>
+            <select
+              value={filters.action ?? "all"}
+              onChange={(e) =>
+                set("action", e.target.value as AuditLogFilters["action"])
+              }
+              className="select h-8 text-xs"
+            >
+              <option value="all">All actions</option>
+              <option value="create">Create</option>
+              <option value="update">Update</option>
+              <option value="toggle">Toggle</option>
+              <option value="delete">Delete</option>
+            </select>
+          </div>
+
+          {/* User */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              User
+            </label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={filters.user ?? ""}
+                onChange={(e) => set("user", e.target.value)}
+                placeholder="Filter by user…"
+                className="select pl-8 h-8 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Table card */}
+      <div className="flex flex-col flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden">
+        {/* Card header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <FileText className="w-3.5 h-3.5 text-slate-400" />
+            <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+              Entries
+            </h2>
+          </div>
+          <span className="text-xs text-slate-400 font-medium">
+            {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
+          </span>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="flex flex-col flex-1 items-center justify-center py-12 text-slate-400">
+            <FileText className="w-7 h-7 mb-2 text-slate-300" />
+            <p className="text-sm font-medium text-slate-500">
+              No entries match your filters
+            </p>
+            <p className="text-xs mt-0.5">
+              Try adjusting or clearing the filters above
+            </p>
+          </div>
+        ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full data-table">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Timestamp
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Action
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Sport
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Site
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Description
-                  </th>
+                  <th className="w-28">Timestamp</th>
+                  <th className="w-24">Action</th>
+                  <th className="w-28">Sport</th>
+                  <th className="w-28">Site</th>
+                  <th className="w-10 text-center">By</th>
+                  <th>Description</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {mockData.data.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatTimestamp(entry.timestamp)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionColor(entry.action)}`}>
-                        {entry.action.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {entry.sport}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {entry.site || 'Global'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {entry.user}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-                      {entry.description || '-'}
-                    </td>
-                  </tr>
-                ))}
+              <tbody>
+                {filtered.map((entry) => {
+                  const badge = ACTION_BADGE[entry.action];
+                  const isExpanded = expandedRow === entry.id;
+                  const isLong = (entry.description?.length ?? 0) > 60;
+                  const { date, time } = formatTimestamp(entry.timestamp);
+
+                  return (
+                    <>
+                      <tr key={entry.id}>
+                        {/* Stacked timestamp */}
+                        <td className="whitespace-nowrap">
+                          <span className="block text-xs text-slate-500">
+                            {date}
+                          </span>
+                          <span className="block font-mono text-xs text-slate-700 mt-0.5">
+                            {time}
+                          </span>
+                        </td>
+
+                        <td className="whitespace-nowrap">
+                          <span className={badge.className}>{badge.label}</span>
+                        </td>
+
+                        <td className="whitespace-nowrap font-medium text-slate-800 capitalize">
+                          {entry.sport}
+                        </td>
+
+                        <td className="whitespace-nowrap">
+                          {entry.site ? (
+                            <span className="badge badge-slate">
+                              {entry.site}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 text-xs italic">
+                              Global
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Avatar only — name on hover */}
+                        <td className="text-center">
+                          <UserAvatar name={entry.user} />
+                        </td>
+
+                        {/* Description with expand toggle */}
+                        <td>
+                          <div className="flex items-start gap-1.5">
+                            <span
+                              className={
+                                isLong && !isExpanded
+                                  ? "truncate block max-w-xs"
+                                  : "block whitespace-normal"
+                              }
+                              title={
+                                !isExpanded ? entry.description : undefined
+                              }
+                            >
+                              {entry.description ?? "—"}
+                            </span>
+                            {isLong && (
+                              <button
+                                onClick={() =>
+                                  setExpandedRow(isExpanded ? null : entry.id)
+                                }
+                                className="flex-shrink-0 text-xs text-indigo-500 hover:text-indigo-700 font-medium whitespace-nowrap mt-0.5"
+                              >
+                                {isExpanded ? "less" : "more"}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+
+                      {isExpanded && (
+                        <tr
+                          key={`${entry.id}-expanded`}
+                          className="!bg-indigo-50/40"
+                        >
+                          <td colSpan={6} className="px-4 pb-3 pt-0">
+                            <p className="text-sm text-slate-600 leading-relaxed border-l-2 border-indigo-300 ml-1 pl-3">
+                              {entry.description}
+                            </p>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
     </div>
-  )
+  );
 }

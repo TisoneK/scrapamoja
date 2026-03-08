@@ -379,9 +379,11 @@ class FailureEventRepository:
         site: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
+        sort_by: Optional[str] = None,
+        sort_order: str = "desc",
     ) -> List[FailureEvent]:
         """
-        Query failures with filters.
+        Query failures with filters and sorting.
         
         Args:
             sport: Filter by sport name
@@ -390,15 +392,20 @@ class FailureEventRepository:
             selector_type: Filter by selector type (uses selector_id pattern)
             error_type: Filter by error type
             tab_type: Filter by tab type
+            site: Filter by site
             limit: Maximum number of results
             offset: Number of results to skip
+            sort_by: Sort by field (timestamp, severity)
+            sort_order: Sort order (asc, desc)
             
         Returns:
             List of FailureEvent instances matching filters
         """
         with self._get_session() as session:
-            query = select(FailureEvent).order_by(FailureEvent.timestamp.desc())
+            # Start with base query
+            query = select(FailureEvent)
             
+            # Apply filters
             if sport is not None:
                 query = query.where(FailureEvent.sport == sport)
             
@@ -420,6 +427,33 @@ class FailureEventRepository:
             if site is not None:
                 query = query.where(FailureEvent.site == site)
             
+            # Apply sorting at database level for performance
+            if sort_by == "timestamp":
+                if sort_order == "asc":
+                    query = query.order_by(FailureEvent.timestamp.asc())
+                else:
+                    query = query.order_by(FailureEvent.timestamp.desc())
+            elif sort_by == "severity":
+                # Define severity order for database sorting
+                severity_order = {"critical": 4, "high": 3, "moderate": 2, "minor": 1}
+                # Use case statement for severity ordering
+                from sqlalchemy import case
+                severity_case = case(
+                    [(FailureEvent.severity == "critical", 4),
+                     (FailureEvent.severity == "high", 3),
+                     (FailureEvent.severity == "moderate", 2),
+                     (FailureEvent.severity == "minor", 1)],
+                    else_=0
+                )
+                if sort_order == "asc":
+                    query = query.order_by(severity_case.asc())
+                else:
+                    query = query.order_by(severity_case.desc())
+            else:
+                # Default sort by timestamp descending
+                query = query.order_by(FailureEvent.timestamp.desc())
+            
+            # Apply pagination
             query = query.limit(limit).offset(offset)
             
             return list(session.execute(query).scalars().all())

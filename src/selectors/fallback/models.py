@@ -75,6 +75,43 @@ class FailureEvent:
         }
 
 
+# === Story 3-5: Success Event for Learning (AC3) ===
+
+
+@dataclass
+class SuccessEvent:
+    """
+    Event captured when selector succeeds - for learning.
+
+    Used to update stability scores and learn which selectors
+    perform well in different contexts.
+
+    Story 3-5: Async Failure Capture (Learning)
+    - AC3: Success Event Capture for Learning
+    """
+    selector_id: str
+    page_url: str
+    timestamp: datetime
+    extractor_id: str
+    extraction_duration_ms: int
+    confidence_score: float = 1.0
+    result_hash: Optional[str] = None  # For deduplication
+    context: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert success event to dictionary representation."""
+        return {
+            "selector_id": self.selector_id,
+            "page_url": self.page_url,
+            "timestamp": self.timestamp.isoformat(),
+            "extractor_id": self.extractor_id,
+            "extraction_duration_ms": self.extraction_duration_ms,
+            "confidence_score": self.confidence_score,
+            "result_hash": self.result_hash,
+            "context": self.context,
+        }
+
+
 @dataclass
 class FallbackAttempt:
     """Information about a single fallback attempt."""
@@ -139,6 +176,9 @@ class FallbackResult:
     chain_duration: float = 0.0
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     attempted_selectors: List[Dict[str, Any]] = field(default_factory=list)
+    stability_scores: Dict[str, float] = field(default_factory=dict)
+    stability_source: str = "yaml"  # "yaml" or "adaptive"
+    api_alternatives: List[str] = field(default_factory=list)  # Story 4-1: API-returned alternatives
 
     @property
     def overall_success(self) -> bool:
@@ -155,7 +195,9 @@ class FallbackResult:
             "overall_success": self.overall_success,
             "chain_duration": self.chain_duration,
             "timestamp": self.timestamp.isoformat(),
-            "attempted_selectors": self.attempted_selectors
+            "attempted_selectors": self.attempted_selectors,
+            "stability_scores": self.stability_scores,
+            "stability_source": self.stability_source
         }
         if self.failure_event:
             result["failure_event"] = self.failure_event.to_dict()

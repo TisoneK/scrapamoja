@@ -15,6 +15,7 @@ from ..db.repositories.failure_event_repository import FailureEventRepository
 from ..db.models.failure_event import ErrorType
 from ..db.models import FailureEvent
 from .stability_scoring import StabilityScoringService, FailureSeverity
+from ..services.feature_flag_service import is_adaptive_enabled
 
 if TYPE_CHECKING:
     from src.observability.events import Event
@@ -272,6 +273,18 @@ class FailureDetectorService:
         
         # Extract correlation ID if available
         correlation_id = event.correlation_id
+        
+        # Check if adaptive system is enabled for this sport/site
+        # This implements Story 8.1: Sport-Based Feature Flags
+        if sport:
+            adaptive_enabled = is_adaptive_enabled(sport, site)
+            if not adaptive_enabled:
+                # Log that adaptive workflow is disabled for this sport/site
+                logger.info(
+                    f"Adaptive workflow disabled for sport={sport}, site={site}. "
+                    f"Skipping adaptive processing."
+                )
+                return
         
         # Call the main handler
         await self.on_selector_failed(

@@ -56,8 +56,8 @@ class PaginatedAuditResponse:
     events: List[AuditEvent]
     total_count: int
     has_more: bool
-    next_cursor: Optional[str] = None
     filters_applied: Dict[str, Any]
+    next_cursor: Optional[str] = None
 
 
 class AuditQueryService:
@@ -80,11 +80,13 @@ class AuditQueryService:
         """
         if db_path is None:
             from pathlib import Path
-            db_path = Path("data/audit_log.db")
-            db_path.parent.mkdir(parents=True, exist_ok=True)
+            db_path_str = str(Path("data/audit_log.db"))
+            Path(db_path_str).parent.mkdir(parents=True, exist_ok=True)
+        else:
+            db_path_str = db_path
         
-        self.repository = AuditEventRepository(str(db_path))
-        logger.info("Audit query service initialized", db_path=str(db_path))
+        self.repository = AuditEventRepository(db_path_str)
+        logger.info("Audit query service initialized", db_path=db_path_str)
     
     def query_audit_history(
         self,
@@ -304,7 +306,7 @@ class AuditQueryService:
         action_types: Optional[List[str]] = None,
     ) -> int:
         """
-        Get count of filtered audit events.
+        Get count of filtered audit events using efficient COUNT query.
         
         Args:
             selector_id: Optional selector ID filter
@@ -316,16 +318,14 @@ class AuditQueryService:
         Returns:
             Count of matching events
         """
-        # Use repository's multi-filter method
-        events = self.repository.get_events_by_multiple_filters(
+        # Use repository's count method for efficient counting
+        return self.repository.count_events_by_multiple_filters(
             selector_ids=[selector_id] if selector_id else None,
             user_ids=[user_id] if user_id else None,
             action_types=action_types,
             start_date=start_date,
             end_date=end_date,
-            limit=100000,  # High limit to get all
         )
-        return len(events)
     
     def _query_with_pagination_and_sort(
         self,
@@ -359,7 +359,8 @@ class AuditQueryService:
                 cursor_id = int(params.cursor)
                 # Find index of cursor event
                 for i, event in enumerate(events):
-                    if event.id == cursor_id:
+                    event_id = int(event.id)
+                    if event_id == cursor_id:
                         # Start from next event after cursor
                         events = events[i + 1:]
                         break

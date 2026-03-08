@@ -1,8 +1,11 @@
 ---
-project_name: scrapamoja
-user_name: Tisone
-date: '2026-03-04'
-sections_completed: ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'code_quality', 'workflow_rules', 'critical_rules', 'existing_frameworks']
+project_name: 'scrapamoja'
+user_name: 'Tisone'
+date: '2026-03-06T20:01:00Z'
+sections_completed: ['technology_stack', 'language_specific', 'framework_specific', 'testing_rules', 'code_quality', 'development_workflow', 'critical_dont_miss_rules']
+status: 'complete'
+rule_count: 45
+optimized_for_llm: true
 ---
 
 # Project Context for AI Agents
@@ -11,495 +14,105 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 ---
 
-## ⚠️ CRITICAL: Existing Frameworks (EXTEND, DON'T RECREATE)
-
-**Before implementing ANY new functionality, check if it already exists!** This project has robust, production-ready frameworks that should be extended, not recreated.
-
-### 1. Browser Management Framework (`src/browser/`)
-
-**ALWAYS use existing browser components - this is an INTEGRATED SYSTEM:**
-
-| Component | File | Purpose |
-|-----------|------|---------|
-| **BrowserSessionManager** | `browser/session_manager.py` | ⭐ **MAIN ENTRY POINT** - Coordinates all browser components |
-| BrowserAuthority | `browser/authority.py` | Central authority for lifecycle control |
-| BrowserManager | `browser/manager.py` | Multi-session management, concurrent access |
-| BrowserSession | `browser/session.py` | Individual browser instance management |
-| StateManager | `browser/state.py` | State persistence with encryption |
-| ResourceMonitor | `browser/monitoring.py` | Resource usage monitoring |
-| ResilienceManager | `browser/resilience.py` | Retry + circuit breaker patterns |
-| ConfigurationManager | `browser/configuration.py` | Config loading, validation |
-| Encryption | `browser/encryption.py` | State data encryption |
-| CorruptionDetector | `browser/corruption_detector.py` | State corruption detection |
-| LifecycleManager | `browser/lifecycle.py` | Module lifecycle phases |
-
-**🔑 Session Manager is the INTEGRATION HUB** - It combines:
-- Browser lifecycle (launch/close)
-- State persistence (cookies, storage)
-- Resource monitoring (memory, CPU)
-- Error handling & recovery
-- Configuration management
-
-**Usage:**
-```python
-from src.browser.session_manager import BrowserSessionManager
-
-# Don't create raw Playwright instances - use SessionManager!
-session_manager = BrowserSessionManager()
-browser_context = await session_manager.create_session(config)
-```
-
-### 2. Telemetry System (`src/telemetry/`)
-
-**ALWAYS use existing telemetry components:**
-
-| Component | File | Purpose |
-|-----------|------|---------|
-| Lifecycle | `telemetry/lifecycle.py` | System lifecycle management |
-| Alerting | `telemetry/alerting/` | Alert engine, threshold monitoring |
-| Collector | `telemetry/collector/` | Event, metrics, performance collection |
-| Storage | `telemetry/storage/` | InfluxDB, backup, archival |
-| Processing | `telemetry/processor/` | Batch processing, aggregation |
-| Reporting | `telemetry/reporting/` | Analytics, health reports |
-| Error Handling | `telemetry/error_handling.py` | Error classification, recovery |
-| Configuration | `telemetry/configuration/` | Config schemas, validation |
-| Security | `telemetry/security/` | Data protection, anonymization |
-
-**Usage:**
-```python
-from src.telemetry.lifecycle import TelemetryLifecycleManager
-from src.telemetry.collector.metrics_collector import MetricsCollector
-
-# Don't create new logging/metrics systems - extend existing
-collector = MetricsCollector()
-```
-
-### 3. Selector Engine (`src/selectors/`)
-
-**Core selector resolution system:**
-
-| Component | File | Purpose |
-|-----------|------|---------|
-| Engine | `selectors/engine.py` | Main selector resolution |
-| Confidence | `selectors/confidence.py` | Confidence scoring |
-| Registry | `selectors/registry.py` | Selector registration |
-| Validation | `selectors/validation.py` | Selector validation |
-| Context | `selectors/context_manager.py` | Context management |
-| **Selector Strategies** | `selectors/strategies/` | 7 strategy implementations |
-| Adaptive | `selectors/adaptive/` | Adaptive selector system |
-| Drift | `selectors/interfaces.py` | IDriftDetector interface |
-| Evolution | `selectors/evolution/` | Selector evolution |
-
-**Selector Strategy Types:**
-```python
-from src.selectors.strategies import (
-    AttributeMatchStrategy,    # CSS attribute matching
-    CSSStrategy,                # CSS selector
-    DOMRelationshipStrategy,    # DOM tree relationships
-    RoleBasedStrategy,         # ARIA role-based
-    TextAnchorStrategy,         # Text anchor positioning
-    XPathStrategy,              # XPath expressions
-    BaseStrategy,               # Abstract base for all strategies
-)
-```
-
-### 4. Storage System (`src/storage/`)
-
-**Unified storage adapter:**
-
-| Component | File | Purpose |
-|-----------|------|---------|
-| StorageAdapter | `storage/adapter.py` | Abstract storage interface |
-| FileSystemAdapter | `storage/adapter.py` | File system implementation |
-| MemoryAdapter | `storage/adapter.py` | In-memory for testing |
-
-**Usage:**
-```python
-from src.storage.adapter import get_storage_adapter, FileSystemStorageAdapter
-
-# Don't create new storage - use existing adapter
-storage = get_storage_adapter()
-```
-
-### 5. Site Scrapers (`src/sites/`)
-
-**Site-specific implementations:**
-
-| Site | Path | Implementation |
-|------|------|-----------------|
-| Template | `sites/_template/` | Base scraper template |
-| Wikipedia | `sites/wikipedia/` | Full implementation |
-| Flashscore | `sites/flashscore/` | Full implementation |
-| GitHub | `sites/github/` | Full implementation |
-| Shared | `sites/shared_components/` | Reusable components |
-
-### 6. Stealth System (`src/stealth/`)
-
-**Anti-detection framework:**
-
-| Component | File | Purpose |
-|-----------|------|---------|
-| AntiDetection | `stealth/anti_detection.py` | Main anti-detection |
-| Behavior | `stealth/behavior.py` | Human behavior emulation |
-| Fingerprint | `stealth/fingerprint.py` | Browser fingerprinting |
-| ProxyManager | `stealth/proxy_manager.py` | Proxy rotation |
-| ConsentHandler | `stealth/consent_handler.py` | Consent dialog handling |
-| Coordinator | `stealth/coordinator.py` | Orchestration |
-
-### 7. Other Core Modules
-
-| Module | Purpose |
-|--------|---------|
-| `src/models/` | Pydantic data models (selector_models.py) |
-| `src/core/` | Core utilities (logging, shutdown) |
-| `src/core/snapshot/` | **CRITICAL - DOM Snapshot System** - 18 files for capture, storage, triggers |
-| `src/navigation/` | **CRITICAL - Navigation System** - 25+ files for route planning, adaptation |
-| `src/resilience/` | **CRITICAL - Resilience System** - 30+ files for recovery, retry, checkpoints |
-| `src/observability/` | Observability utilities (logging, metrics) |
-| `src/interrupt_handling/` | Interrupt and signal handling |
-| `src/config/` | Configuration management (settings.py with 22KB, YAML configs) |
-
-### 8. Core Snapshot System (`src/core/snapshot/`)
-
-**CRITICAL - This is the MAIN snapshot system:**
-
-| Component | File | Purpose |
-|-----------|------|---------|
-| SnapshotManager | `core/snapshot/manager.py` | Main entry point for snapshot operations |
-| SnapshotCapture | `core/snapshot/capture.py` | DOM capture logic |
-| SnapshotStorage | `core/snapshot/storage.py` | Storage backend |
-| SnapshotConfig | `core/snapshot/config.py` | Configuration |
-| SnapshotTriggers | `core/snapshot/triggers.py` | Automatic capture triggers |
-| SnapshotMetrics | `core/snapshot/metrics.py` | Performance metrics |
-| SnapshotModels | `core/snapshot/models.py` | Data models |
-| SnapshotCircuitBreaker | `core/snapshot/circuit_breaker.py` | Failure prevention |
-| SnapshotIntegration | `core/snapshot/integration.py` | System integration |
-| Handlers | `core/snapshot/handlers/` | Specialized handlers (browser, selector, error, retry, session, scraper, coordinator, monitoring) |
-
-**Usage:**
-```python
-from src.core.snapshot import SnapshotManager, get_snapshot_manager
-
-# Get global snapshot manager
-snapshot_mgr = get_snapshot_manager()
-
-# Capture snapshot
-bundle = await snapshot_mgr.capture_snapshot(page, context, config)
-```
-
-### 9. Navigation System (`src/navigation/`)
-
-**CRITICAL - Complex navigation handling:**
-
-| Component | File | Purpose |
-|-----------|------|---------|
-| NavigationService | `navigation/navigation_service.py` | Main navigation orchestration |
-| RouteDiscovery | `navigation/route_discovery.py` | Discover navigation routes |
-| RouteOptimizer | `navigation/route_optimizer.py` | Optimize route selection |
-| RouteAdaptation | `navigation/route_adaptation.py` | Adapt routes dynamically |
-| PathPlanning | `navigation/path_planning.py` | Plan navigation paths |
-| NavigationContext | `navigation/context_manager.py` | Context management |
-| NavigationEventPublisher | `navigation/event_publisher.py` | Event publishing |
-| PerformanceMonitor | `navigation/performance_monitor.py` | Performance tracking |
-| CheckpointManager | `navigation/checkpoint_manager.py` | Navigation checkpoints |
-| ProxyManager | `navigation/proxy_manager.py` | Proxy handling |
-| HealthChecker | `navigation/health_checker.py` | Navigation health |
-| Integrations | `navigation/integrations/` | External integrations |
-
-### 10. Resilience System (`src/resilience/`)
-
-**CRITICAL - Failure recovery and retry logic:**
-
-| Component | File | Purpose |
-|-----------|------|---------|
-| ResilienceCoordinator | `resilience/coordinator.py` | Main orchestration (30KB) |
-| BrowserRecovery | `resilience/browser_recovery.py` | Browser-specific recovery |
-| FailureClassifier | `resilience/failure_classifier.py` | Classify failure types |
-| FailureHandler | `resilience/failure_handler.py` | Handle failures |
-| TabHandler | `resilience/tab_handler.py` | Tab-specific recovery |
-| Correlation | `resilience/correlation.py` | Cross-component correlation |
-| Events | `resilience/events.py` | Resilience events |
-| Interfaces | `resilience/interfaces.py` | ABC interfaces |
-| Retry | `resilience/retry/` | Retry logic modules |
-| Checkpoint | `resilience/checkpoint/` | Checkpoint management |
-| Resource | `resilience/resource/` | Resource management |
-| Logging | `resilience/logging/` | Resilience logging |
-| Config | `resilience/config/` | Resilience configuration |
-
----
-
 ## Technology Stack & Versions
 
-### Core Technologies
-- **Python 3.11+** - Required version (from `requires-python >=3.11`)
-- **Playwright 1.40.0+** - Browser automation
-- **Pydantic 2.5.0+** - Data validation with v2 API
-- **pytest 7.4.0+** - Testing framework
-- **pytest-asyncio 0.21.0+** - Async test support
-- **SQLAlchemy 2.0.0+** - Database ORM
-- **InfluxDB Client 1.38.0+** - Time-series data
+**Core Technologies:**
+- Python 3.11+ (asyncio-first architecture)
+- Playwright >=1.40.0 (browser automation)
+- FastAPI >=0.104.0 (REST API framework)
+- SQLAlchemy >=2.0.0 (async ORM)
+- Pydantic >=2.5.0 (data validation)
 
-### Development Tools
-- **Black 23.11.0+** - Code formatter (88 char line length)
-- **Ruff 0.1.6+** - Fast linter
-- **Mypy 1.7.0+** - Type checker (strict mode)
+**Key Dependencies:**
+- BeautifulSoup4 >=4.12.0 (HTML parsing)
+- lxml >=4.9.0 (XML/HTML processing)
+- pytest >=7.4.0 (testing with async support)
+- Black >=23.11.0 (code formatting, 88 char limit)
+- Ruff >=0.1.6 (linting)
+- MyPy >=1.7.0 (strict type checking)
 
-### Key Dependencies
-- **aiofiles 23.2.0+** - Async file I/O
-- **asyncio-throttle 1.0.2+** - Rate limiting
-- **lxml 4.9.0+** - XML/HTML parsing
-- **beautifulsoup4 4.12.0+** - HTML parsing
-- **structlog 23.2.0+** - Structured logging
-- **rich 13.7.0+** - Terminal formatting
-- **click 8.1.0+** - CLI framework
-- **pyyaml 6.0.1+** - YAML config parsing
-
----
+**Critical Infrastructure:**
+- Structlog >=23.2.0 (structured logging)
+- Rich >=13.7.0 (console output)
+- InfluxDB-client >=1.38.0 (metrics storage)
 
 ## Critical Implementation Rules
 
 ### Language-Specific Rules
 
-#### Python Strict Mode Requirements
-- **All functions must have type hints** - MyPy strict mode is enabled (`disallow_untyped_defs = true`)
-- **No implicit optionals** - Use `Optional[X]` not `X | None` consistently, or vice versa but be consistent (`no_implicit_optional = true`)
-- **No unused imports** - Enable `warn_unused_ignores = true`
-- **Always use async/await for I/O** - Never use blocking calls in async context
-
-#### Import Conventions
-```python
-# Standard library first
-import asyncio
-import json
-from pathlib import Path
-
-# Third-party imports
-import pydantic
-from playwright.async_api import async_playwright
-
-# Local imports
-from src.selectors.config import SelectorConfig
-from src.utils.exceptions import SelectorEngineError
-```
-
-#### Exception Hierarchy Pattern
-```python
-class SelectorEngineError(Exception):
-    """Base exception for selector engine - all custom exceptions inherit from this."""
-    pass
-
-class SelectorNotFoundError(SelectorEngineError):
-    """Raised when selector is not found in DOM."""
-    pass
-```
+- **Async/Await Requirements**: ALL I/O operations must use `async def` (browser, storage, network). Use `asyncio.gather()` for concurrent browser sessions. Implement `__aenter__`/`__aexit__` for resource managers (BrowserSession, etc.)
+- **Module Integration Patterns**: Use dependency injection via module interfaces (`src/*/interfaces.py`). Leverage existing systems: don't recreate browser/session/storage handlers. Import from core systems: `from src.core.snapshot import SnapshotManager`
+- **Type Safety Requirements**: MyPy strict mode - all functions need type annotations. Use Pydantic models for all data transfer objects. SQLAlchemy models must extend proper base classes
+- **Error Handling Architecture**: Use structured logging with correlation IDs from observability stack. Custom exceptions per module (BrowserError, SelectorError, etc.). Implement resilience patterns from `src/resilience/`
+- **Resource Management**: Use async context managers for browser sessions. Implement proper cleanup in interrupt handling scenarios. Follow snapshot system patterns for state persistence
+- **Critical Integration Rules**: Always use existing selector engine for DOM operations. Leverage telemetry system for metrics collection. Use storage adapter instead of direct file operations
 
 ### Framework-Specific Rules
 
-#### Playwright Integration
-- **Always use async_playwright()** - Never sync version in async code
-- **Always release resources** - Use `async with` or proper cleanup:
-  ```python
-  async with async_playwright() as p:
-      browser = await p.chromium.launch()
-      # ... use browser
-      await browser.close()  # Or use context manager
-  ```
-- **Context isolation** - Each scraping session gets own browser context
-
-#### Selector Engine Patterns
-- **Confidence scoring** - All selector strategies must return confidence 0.0-1.0
-- **Strategy types** - Use Enum: `class StrategyType(str, Enum)`
-- **Fallback chains** - Implement fallback selector chains with confidence thresholds
-
-#### YAML Configuration
-- **Hot-reload support** - Config files support live reload via file watcher
-- **Inheritance** - Recipes support parent-child inheritance
-- **Versioning** - Recipe versions tracked with stability scores
+- **Browser Management Framework**: Use BrowserSession for all browser operations - never create raw Playwright instances. Implement authority pattern for concurrent session management. Use resource monitoring from browser management system. Follow stealth configuration patterns for anti-detection
+- **Selector Engine Framework**: Use semantic selector strategies instead of raw CSS/XPath selectors. Implement confidence scoring for all selector operations. Use adaptive failure recovery from selector engine. Leverage DOM context for element validation
+- **Snapshot System Framework**: Use SnapshotManager for all snapshot orchestration. Use SnapshotStorage for hierarchical storage with deduplication. Implement BrowserSnapshot and SelectorSnapshot handlers. Use SnapshotBundle for unified data model. Follow atomic operations and metrics tracking patterns
+- **Storage & Persistence Framework**: Use storage adapter for all backend operations. Implement compression and metadata management. Use core snapshot system integration. Follow hierarchical storage patterns
+- **Resilience Framework**: Use retry mechanisms from resilience engine for all external operations. Implement checkpointing for long-running operations. Use abort controller for intelligent failure detection. Follow resource lifecycle control patterns
+- **Observability Framework**: Use structured logging with correlation IDs. Implement telemetry collection for all operations. Use event bus for system communication. Follow performance monitoring patterns
+- **FastAPI Web Framework**: Use middleware patterns: CORS, rate limiting, audit logging. Implement structured responses with Pydantic models. Use dependency injection for framework services. Follow async route patterns
+- **Interrupt Handling Framework**: Use signal capture for graceful shutdowns. Implement resource cleanup patterns. Use atomic operations for data integrity. Follow user feedback integration patterns
+- **Navigation Intelligence Framework**: Use RouteDiscovery for automatic path finding. Implement ContextManager for navigation state. Use stealth-aware design for route planning. Follow human behavior emulation patterns
+- **Multi-Site Framework**: Use ScraperRegistry for site discovery and registration. Follow BaseSiteScraper contract: navigate(), scrape(), normalize(). Implement site-specific configs with SITE_CONFIG dictionary. Use standardized directory structure: src/sites/{site_name}/{config.py,scraper.py,flow.py,selectors/,cli/}
 
 ### Testing Rules
 
-#### Test Markers (from pytest.ini)
-```python
-@pytest.mark.unit          # Fast, isolated unit tests
-@pytest.mark.integration   # Tests requiring external services
-@pytest.mark.slow          # Tests taking >5 seconds
-@pytest.mark.selector_engine  # Selector engine specific
-@pytest.mark.confidence_scoring  # Confidence scoring tests
-@pytest.mark.drift_detection   # Drift detection tests
-@pytest.mark.snapshots   # DOM snapshot tests
-```
-
-#### Test Structure
-- **Location**: `tests/` directory (configured in `pyproject.toml`)
-- **Async tests**: Use `@pytest.mark.asyncio` decorator
-- **Fixtures**: Use `pytest-asyncio` fixtures for async setup
-- **Mock external calls**: Use `pytest-mock` for Playwright/API mocking
-
-#### Coverage Requirements
-- Run with: `pytest --cov=src --cov-report=term-missing`
-- Minimum coverage: Not explicitly set, but target >80% for core modules
+- **Test Organization**: Use pytest markers: `@pytest.mark.integration`, `@pytest.mark.unit`, `@pytest.mark.slow`. Integration tests in `tests/integration/`, unit tests in `tests/`. Module-specific markers: `selector_engine`, `confidence_scoring`, `drift_detection`, `snapshots`, `performance`. Use `asyncio_mode=auto` for async test support
+- **Mock Usage**: Use pytest-mock for mocking external dependencies. Mock Playwright browser instances in unit tests. Mock storage and snapshot systems for isolated testing. Use fixtures for common test setup (browser configs, DOM samples)
+- **Integration Testing Patterns**: Test end-to-end browser session workflows. Validate selector engine integration with DOM context. Test snapshot system integration across modules. Validate resilience engine retry mechanisms. Test interrupt handling with shutdown coordinator
+- **Module Integration Rules**: Test browser management with selector engine integration. Validate storage adapter with snapshot system. Test telemetry collection across all modules. Validate observability stack integration. Test FastAPI middleware integration
+- **Coverage Requirements**: Coverage reporting enabled with HTML and XML output. Target coverage for core modules (browser, selectors, snapshot). Integration tests for cross-module workflows. Performance tests for critical integration paths
+- **Cleanup & Integration Testing**: Test shutdown coordinator for graceful resource cleanup. Validate interrupt handling in integration scenarios. Test atomic operations across module boundaries. Use proper async context manager cleanup in integration tests
+- **Browser Integration Testing**: Test stealth system integration with browser management. Validate navigation intelligence with route discovery. Test authority pattern for concurrent sessions. Validate resource monitoring integration
 
 ### Code Quality & Style Rules
 
-#### Formatting (Black)
-- **Line length**: 88 characters (Black default)
-- **Target Python**: 3.11 (from `target-version`)
-
-#### Linting (Ruff)
-- **Select rules**: E, W, F, I, B, C4, UP
-- **Ignore**: E501 (line too long - handled by Black)
-- **Per-file ignores**: `__init__.py` can skip F401
-
-#### Type Checking (Mypy) - STRICT
-```toml
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-```
-
-#### Naming Conventions
-- **Classes**: PascalCase (`class SelectorEngine`)
-- **Functions/methods**: snake_case (`def get_selector()`)
-- **Constants**: UPPER_SNAKE_CASE
-- **Private methods**: `_leading_underscore()`
-- **Files**: snake_case.py
-
-#### Dataclass/Pydantic Usage
-```python
-from dataclasses import dataclass
-from pydantic import BaseModel, Field
-
-@dataclass
-class SimpleData:
-    name: str
-    value: int
-
-class ComplexModel(BaseModel):
-    name: str
-    value: int = Field(default=0, ge=0)
-```
+- **Black Formatting Rules**: Line length: 88 characters (strictly enforced). Target Python version: 3.11+. Use double quotes for strings. Proper trailing comma handling for multi-line constructs
+- **Ruff Linting Rules**: Enabled rules: pycodestyle errors/warnings, pyflakes, isort, flake8-bugbear, flake8-comprehensions, pyupgrade. Ignore E501 (line length - handled by Black). Ignore B008 (function calls in argument defaults). Per-file ignores: F401 for `__init__.py`, B011 for tests
+- **MyPy Type Checking**: Strict mode enabled with comprehensive checks. All functions must have type annotations. Disallow untyped definitions and incomplete definitions. No implicit optional types. Warn on redundant casts and unused ignores
+- **Code Organization**: Module structure: `src/module_name/` with `__init__.py` for clean API. Interfaces in `src/module_name/interfaces.py` for dependency injection. Models in `src/module_name/models/` for data structures. Use absolute imports from project root
+- **Naming Conventions**: Classes: PascalCase (BrowserSession, SnapshotManager). Functions/variables: snake_case (capture_snapshot, browser_config). Constants: UPPER_SNAKE_CASE (MAX_RETRIES, DEFAULT_TIMEOUT). Modules: snake_case (browser_management, selector_engine)
+- **Documentation Requirements**: Use docstrings for all public functions and classes. Structlog for logging with correlation IDs. Rich for console output and progress bars. Comprehensive README for each module
 
 ### Development Workflow Rules
 
-#### Git Branch Naming
-- Feature: `feature/description`
-- Bugfix: `bugfix/description`
-- Hotfix: `hotfix/description`
-
-#### Testing Commands
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src --cov-report=html
-
-# Run specific markers
-pytest -m "not slow"
-pytest -m "unit"
-
-# Parallel execution
-pytest -n auto
-```
-
-#### Code Quality Checks
-```bash
-# Format code
-black src/ tests/
-
-# Lint
-ruff check src/ tests/
-
-# Type check
-mypy src/
-```
+- **CLI Entry Point Patterns**: Use `src/main.py` as unified CLI entry point. Site-specific CLI classes in `src/sites/{site}/cli/main.py`. Implement `create_parser()` and `run()` methods for each site CLI. Use argparse for command-line argument parsing. Support verbose flag for enhanced logging
+- **Module Development Patterns**: Follow modular architecture with clear separation of concerns. Use dependency injection via interfaces. Implement proper async context managers. Use existing systems instead of recreating functionality. Follow established patterns for browser, selector, and storage integration
+- **Configuration Management**: Use environment-based configuration via `src/config/`. Implement Pydantic models for configuration validation. Support feature flags for conditional functionality. Use JSON Schema for configuration validation. Centralize all configuration loading
+- **Error Handling & Logging**: Use structured logging with correlation IDs. Implement custom exceptions per module. Use resilience engine for retry mechanisms. Follow interrupt handling patterns for graceful shutdowns. Use telemetry for monitoring and alerting
+- **Integration with Existing Systems**: Always leverage existing selector engine for DOM operations. Use snapshot system for state persistence. Integrate with observability stack for monitoring. Use storage adapter for all persistence operations. Follow established patterns for browser management
+- **Site-Specific Development**: Use base contracts from `src/sites/` framework. Implement registry patterns for site scrapers. Follow validation guardrails for data extraction. Use shared components for common functionality. Implement proper error handling for site-specific issues. Follow BaseSiteScraper contract: navigate(), scrape(), normalize(). Register new sites in ScraperRegistry and src/main.py SITE_CLIS dictionary
 
 ### Critical Don't-Miss Rules
 
-#### Anti-Patterns to Avoid
-
-1. **🔴 NEVER recreate existing frameworks** - This is the MOST IMPORTANT rule!
-   - ❌ Don't create new Playwright instances → USE `BrowserSessionManager`
-   - ❌ Don't create new logging systems → EXTEND `TelemetryLifecycleManager`
-   - ❌ Don't create new storage → USE `StorageAdapter`
-   - ❌ Don't create new metrics → USE `MetricsCollector`
-   - ❌ Don't create new alerts → EXTEND `AlertEngine`
-   - ❌ Never bypass SessionManager - it's the INTEGRATION HUB
-
-2. **Never use sync Playwright in async code**
-   ```python
-   # WRONG
-   from playwright.sync_api import sync_playwright
-   
-   # CORRECT
-   from playwright.async_api import async_playwright
-   ```
-
-2. **Never block event loop**
-   ```python
-   # WRONG - blocks event loop
-   time.sleep(5)
-   
-   # CORRECT - async sleep
-   await asyncio.sleep(5)
-   ```
-
-3. **Never forget to close resources**
-   ```python
-   # WRONG - resource leak
-   browser = await p.chromium.launch()
-   # ... do work
-   
-   # CORRECT - always cleanup
-   async with async_playwright() as p:
-       browser = await p.chromium.launch()
-       # ... work done, browser auto-closed
-   ```
-
-4. **Never ignore type hints**
-   ```python
-   # WRONG - no type hints
-   def process(data):
-       return data
-   
-   # CORRECT - full type hints
-   def process(data: dict[str, Any]) -> list[str]:
-       return list(data.keys())
-   ```
-
-5. **Never use bare exceptions**
-   ```python
-   # WRONG
-   except:
-       pass
-   
-   # CORRECT
-   except SelectorEngineError as e:
-       logger.error(f"Selector failed: {e}")
-       raise
-   ```
-
-#### Security Rules
-- **Never log sensitive data** - Redact PII, credentials
-- **Environment variables** - Use `.env` for secrets, never commit
-- **Proxy credentials** - Handle securely, never log
-
-#### Performance Gotchas
-- **Selector timeout** - Set reasonable timeouts (default 30s)
-- **Memory leaks** - Always cleanup browser contexts
-- **Rate limiting** - Respect site limits, use throttle
-- **DOM snapshots** - Don't store full page HTML - extract needed data
+- **Anti-Patterns to Avoid**: NEVER create raw Playwright instances - always use BrowserSession. NEVER bypass selector engine - use semantic selectors with confidence scoring. NEVER implement direct file operations - use storage adapter and snapshot system. NEVER ignore async context managers - proper resource cleanup is mandatory. NEVER create duplicate functionality - leverage existing modular systems
+- **Critical Integration Gotchas**: ALWAYS use existing browser management instead of creating new session handlers. ALWAYS integrate with observability stack for logging and metrics. ALWAYS use resilience engine for external operations (retries, checkpoints). ALWAYS follow interrupt handling patterns for graceful shutdowns. ALWAYS use snapshot system for state persistence and recovery
+- **Performance Anti-Patterns**: NEVER block event loops - use async patterns throughout. NEVER ignore resource monitoring - browser sessions have limits. NEVER skip deduplication in snapshot storage. NEVER disable telemetry collection - performance monitoring is critical. NEVER ignore memory optimization in navigation intelligence
+- **Security & Stealth Rules**: ALWAYS use stealth system for anti-detection. NEVER expose browser fingerprints - use anti-detection masking. ALWAYS rotate proxies via proxy manager. NEVER ignore consent handling - use behavior emulator. ALWAYS follow human behavior emulation patterns
+- **Edge Cases to Handle**: Browser session corruption - use authority pattern for recovery. Selector confidence failures - use adaptive failure recovery. Storage backend failures - use storage adapter fallbacks. Network interruptions - use resilience engine retry mechanisms. Resource exhaustion - use abort controller and lifecycle management
+- **Critical System Dependencies**: ALWAYS import from core systems instead of duplicating functionality. NEVER break dependency injection patterns via interfaces. ALWAYS maintain correlation IDs across async operations. NEVER bypass shutdown coordinator in cleanup scenarios
 
 ---
 
-_Last updated: 2026-03-04_
+## Usage Guidelines
+
+**For AI Agents:**
+
+- Read this file before implementing any code
+- Follow ALL rules exactly as documented
+- When in doubt, prefer the more restrictive option
+- Update this file if new patterns emerge
+
+**For Humans:**
+
+- Keep this file lean and focused on agent needs
+- Update when technology stack changes
+- Review quarterly for outdated rules
+- Remove rules that become obvious over time
+
+Last Updated: 2026-03-06T20:01:00Z

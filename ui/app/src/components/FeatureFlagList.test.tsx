@@ -96,7 +96,7 @@ describe("FeatureFlagList", () => {
 
     renderWithQueryClient(<FeatureFlagList />);
 
-    expect(screen.getByText("No feature flags found")).toBeInTheDocument();
+    expect(screen.getByText("No feature flags yet")).toBeInTheDocument();
   });
 
   it("displays error state", () => {
@@ -108,6 +108,8 @@ describe("FeatureFlagList", () => {
 
     renderWithQueryClient(<FeatureFlagList />);
 
-    expect(screen.getByText("Error loading feature flags")).toBeInTheDocument();
+    expect(
+      screen.getByText("Failed to load feature flags"),
+    ).toBeInTheDocument();
   });
 });

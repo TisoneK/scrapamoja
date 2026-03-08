@@ -3,6 +3,10 @@ Failures / escalation API router.
 
 All routes are mounted under the prefix ``/failures`` in main.py.
 
+Delegates entirely to the adaptive module's FailureService, which owns
+the real persistent database at data/adaptive.db and receives live failure
+events from the scraper via the in-process event bus.
+
 Endpoints
 ---------
 GET    /failures                          – paginated list with filters
@@ -16,16 +20,13 @@ POST   /failures/{id}/custom-selector     – submit a custom replacement
 
 from __future__ import annotations
 
-import json
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from fastapi import APIRouter, HTTPException, Query, status
 
-from src.api.database import get_db
-from src.api.models import Failure, FailureAlternative
 from src.api.schemas import (
     AlternativeSelectorOut,
     ApprovalRequest,
@@ -46,99 +47,112 @@ router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Helpers
 # ---------------------------------------------------------------------------
+
+
+def _db_path() -> str:
+    """
+    Resolve the shared adaptive database path.
+
+    Respects ``ADAPTIVE_DB_PATH`` so tests and CI can override it.
+    Falls back to ``<project-root>/data/adaptive.db``.
+    """
+    env = os.environ.get("ADAPTIVE_DB_PATH")
+    if env:
+        return env
+    project_root = Path(__file__).resolve().parents[3]  # src/api/routers/ → root
+    db_dir = project_root / "data"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    return str(db_dir / "adaptive.db")
+
+
+def _get_failure_service():
+    """Return a FailureService wired to the shared DB path."""
+    from src.selectors.adaptive.services.failure_service import FailureService
+
+    return FailureService(db_path=_db_path())
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _get_failure_or_404(db: Session, failure_id: int) -> Failure:
-    """Return the Failure row (with alternatives eagerly loaded) or raise 404."""
-    stmt = (
-        select(Failure)
-        .where(Failure.id == failure_id)
-        .options(selectinload(Failure.alternatives))
-    )
-    failure = db.scalars(stmt).first()
-    if failure is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Failure not found: id={failure_id}",
-        )
-    return failure
-
-
-def _alternative_to_schema(alt: FailureAlternative) -> AlternativeSelectorOut:
-    """Convert a FailureAlternative ORM row to its Pydantic output schema."""
+def _map_alternative(alt_dict: dict) -> AlternativeSelectorOut:
+    """Convert an alternative dict from FailureService to the output schema."""
     blast_radius: Optional[BlastRadiusInfo] = None
-    if alt.blast_radius_affected_count is not None:
-        affected_sports: list[str] = []
-        if alt.blast_radius_affected_sports:
-            try:
-                affected_sports = json.loads(alt.blast_radius_affected_sports)
-            except (json.JSONDecodeError, TypeError):
-                affected_sports = []
+    br = alt_dict.get("blast_radius")
+    if br:
         blast_radius = BlastRadiusInfo(
-            affected_count=alt.blast_radius_affected_count,
-            affected_sports=affected_sports,
-            severity=alt.blast_radius_severity or "low",
-            container_path=alt.blast_radius_container_path or "",
+            affected_count=br.get("affected_count", 0),
+            affected_sports=br.get("affected_sports", []),
+            severity=br.get("severity", "low"),
+            container_path=br.get("container_path", ""),
         )
 
     return AlternativeSelectorOut(
-        selector=alt.selector,
-        strategy=alt.strategy,
-        confidence_score=alt.confidence_score,
+        selector=alt_dict.get("selector", ""),
+        strategy=alt_dict.get("strategy", "css"),
+        confidence_score=float(alt_dict.get("confidence_score", 0.0)),
         blast_radius=blast_radius,
-        highlight_css=alt.highlight_css,
-        is_custom=alt.is_custom,
-        custom_notes=alt.custom_notes,
+        highlight_css=alt_dict.get("highlight_css"),
+        is_custom=bool(alt_dict.get("is_custom", False)),
+        custom_notes=alt_dict.get("custom_notes"),
     )
 
 
-def _failure_to_detail(failure: Failure) -> FailureDetailOut:
-    """Map a Failure ORM row (with loaded alternatives) to FailureDetailOut."""
-    alternatives = [_alternative_to_schema(a) for a in failure.alternatives]
-    alternatives.sort(key=lambda a: a.confidence_score, reverse=True)
+def _parse_timestamp(value) -> datetime:
+    """Coerce a timestamp value (str, datetime, or None) to datetime."""
+    if value is None:
+        return _utcnow()
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return _utcnow()
+
+
+def _dict_to_list_item(d: dict) -> FailureListItem:
+    return FailureListItem(
+        failure_id=d["failure_id"],
+        selector_id=d["selector_id"],
+        failed_selector=d.get("failed_selector", d["selector_id"]),
+        recipe_id=d.get("recipe_id"),
+        sport=d.get("sport"),
+        site=d.get("site"),
+        timestamp=_parse_timestamp(d.get("timestamp")),
+        error_type=d.get("error_type", "exception"),
+        severity=d.get("severity", "minor"),
+        has_alternatives=bool(d.get("has_alternatives", False)),
+        alternative_count=int(d.get("alternative_count", 0)),
+        flagged=bool(d.get("flagged", False)),
+        flag_note=d.get("flag_note"),
+    )
+
+
+def _dict_to_detail(d: dict) -> FailureDetailOut:
+    alts = [_map_alternative(a) for a in d.get("alternatives", [])]
+    alts.sort(key=lambda a: a.confidence_score, reverse=True)
 
     return FailureDetailOut(
-        failure_id=failure.id,
-        selector_id=failure.selector_id,
-        failed_selector=failure.failed_selector,
-        recipe_id=failure.recipe_id,
-        sport=failure.sport,
-        site=failure.site,
-        timestamp=failure.timestamp,
-        error_type=failure.error_type,
-        failure_reason=failure.failure_reason,
-        severity=failure.severity,
-        snapshot_id=failure.snapshot_id,
-        alternatives=alternatives,
-        flagged=failure.flagged,
-        flag_note=failure.flag_note,
-        flagged_at=failure.flagged_at,
-    )
-
-
-def _failure_to_list_item(failure: Failure) -> FailureListItem:
-    """Map a Failure ORM row to the lightweight list-view schema."""
-    alt_count = len(failure.alternatives)
-    return FailureListItem(
-        failure_id=failure.id,
-        selector_id=failure.selector_id,
-        failed_selector=failure.failed_selector,
-        recipe_id=failure.recipe_id,
-        sport=failure.sport,
-        site=failure.site,
-        timestamp=failure.timestamp,
-        error_type=failure.error_type,
-        severity=failure.severity,
-        has_alternatives=alt_count > 0,
-        alternative_count=alt_count,
-        flagged=failure.flagged,
-        flag_note=failure.flag_note,
+        failure_id=d["failure_id"],
+        selector_id=d["selector_id"],
+        failed_selector=d.get("failed_selector", d["selector_id"]),
+        recipe_id=d.get("recipe_id"),
+        sport=d.get("sport"),
+        site=d.get("site"),
+        timestamp=_parse_timestamp(d.get("timestamp")),
+        error_type=d.get("error_type", "exception"),
+        failure_reason=d.get("failure_reason"),
+        severity=d.get("severity", "minor"),
+        snapshot_id=d.get("snapshot_id"),
+        alternatives=alts,
+        flagged=bool(d.get("flagged", False)),
+        flag_note=d.get("flag_note"),
+        flagged_at=_parse_timestamp(d.get("flagged_at"))
+        if d.get("flagged_at")
+        else None,
     )
 
 
@@ -156,42 +170,23 @@ def list_failures(
     sport: Optional[str] = Query(None, description="Filter by sport"),
     site: Optional[str] = Query(None, description="Filter by site"),
     error_type: Optional[str] = Query(None, description="Filter by error type"),
-    severity: Optional[str] = Query(
-        None, description="Filter by severity (low|medium|high|critical)"
-    ),
+    severity: Optional[str] = Query(None, description="Filter by severity"),
     flagged: Optional[bool] = Query(None, description="Filter by flagged state"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     page_size: int = Query(20, ge=1, le=200, description="Rows per page"),
-    db: Session = Depends(get_db),
 ) -> FailureListResponse:
-    """
-    Return a paginated list of selector failures.
+    """Return a paginated list of selector failures, newest first."""
+    svc = _get_failure_service()
 
-    Failures are returned newest-first.  The ``alternatives`` relationship is
-    loaded lazily via a count sub-query to keep the list query fast.
-    """
-    stmt = (
-        select(Failure)
-        .options(selectinload(Failure.alternatives))
-        .order_by(Failure.timestamp.desc())
+    results, total = svc.list_failures(
+        sport=sport,
+        site=site,
+        error_type=error_type,
+        severity=severity,
+        flagged=flagged,
+        page=page,
+        page_size=page_size,
     )
-
-    if sport:
-        stmt = stmt.where(Failure.sport == sport)
-    if site:
-        stmt = stmt.where(Failure.site == site)
-    if error_type:
-        stmt = stmt.where(Failure.error_type == error_type)
-    if severity:
-        stmt = stmt.where(Failure.severity == severity)
-    if flagged is not None:
-        stmt = stmt.where(Failure.flagged.is_(flagged))
-
-    # Total count (before pagination)
-    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-
-    offset = (page - 1) * page_size
-    failures = db.scalars(stmt.offset(offset).limit(page_size)).all()
 
     active_filters: dict = {}
     if sport:
@@ -206,7 +201,7 @@ def list_failures(
         active_filters["flagged"] = flagged
 
     return FailureListResponse(
-        data=[_failure_to_list_item(f) for f in failures],
+        data=[_dict_to_list_item(r) for r in results],
         total=total,
         page=page,
         page_size=page_size,
@@ -219,13 +214,16 @@ def list_failures(
     response_model=FailureDetailResponse,
     summary="Get full failure detail",
 )
-def get_failure(
-    failure_id: int,
-    db: Session = Depends(get_db),
-) -> FailureDetailResponse:
-    """Return the full failure record including all alternative selectors."""
-    failure = _get_failure_or_404(db, failure_id)
-    return FailureDetailResponse(data=_failure_to_detail(failure))
+def get_failure(failure_id: int) -> FailureDetailResponse:
+    """Return the full failure record including alternative selectors."""
+    svc = _get_failure_service()
+    detail = svc.get_failure_detail(failure_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failure not found: id={failure_id}",
+        )
+    return FailureDetailResponse(data=_dict_to_detail(detail))
 
 
 @router.post(
@@ -233,45 +231,28 @@ def get_failure(
     response_model=ApprovalResponse,
     summary="Approve an alternative selector",
 )
-def approve_selector(
-    failure_id: int,
-    body: ApprovalRequest,
-    db: Session = Depends(get_db),
-) -> ApprovalResponse:
-    """
-    Record operator approval of a proposed (or custom) alternative selector.
+async def approve_selector(failure_id: int, body: ApprovalRequest) -> ApprovalResponse:
+    """Record operator approval of a proposed alternative selector."""
+    svc = _get_failure_service()
 
-    In the current implementation this marks the failure as reviewed by
-    adding an approved alternative with ``confidence_score = 1.0`` and
-    ``is_custom = False`` if the selector is not already present, then
-    clears the flagged state.  A future story can wire this to the adaptive
-    selector database.
-    """
-    failure = _get_failure_or_404(db, failure_id)
-
-    # Check whether the selector already exists as an alternative.
-    existing = next(
-        (a for a in failure.alternatives if a.selector == body.selector), None
-    )
-    if existing is None:
-        # Add it as an approved custom entry so the history is preserved.
-        alt = FailureAlternative(
-            failure_id=failure.id,
-            selector=body.selector,
-            strategy="css",
-            confidence_score=1.0,
-            is_custom=True,
-            custom_notes=body.notes,
-            created_at=_utcnow(),
+    # Verify the failure exists first
+    if svc.get_failure_detail(failure_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failure not found: id={failure_id}",
         )
-        db.add(alt)
 
-    # Clear flag if set.
-    failure.flagged = False
-    failure.flag_note = None
-    failure.flagged_at = None
-
-    db.commit()
+    try:
+        await svc.approve_alternative(
+            failure_id=failure_id,
+            selector=body.selector,
+            notes=body.notes,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        )
 
     return ApprovalResponse(
         success=True,
@@ -287,40 +268,28 @@ def approve_selector(
     response_model=ApprovalResponse,
     summary="Reject an alternative selector",
 )
-def reject_selector(
-    failure_id: int,
-    body: RejectionRequest,
-    db: Session = Depends(get_db),
-) -> ApprovalResponse:
-    """
-    Record operator rejection of a proposed alternative selector.
+async def reject_selector(failure_id: int, body: RejectionRequest) -> ApprovalResponse:
+    """Record operator rejection of a proposed alternative selector."""
+    svc = _get_failure_service()
 
-    The rejected selector is removed from the alternatives list so it won't
-    appear again in the UI.  If a ``suggested_alternative`` is provided it is
-    stored as a new custom alternative with a moderate confidence score.
-    """
-    failure = _get_failure_or_404(db, failure_id)
-
-    # Remove the rejected alternative if it exists.
-    for alt in list(failure.alternatives):
-        if alt.selector == body.selector:
-            db.delete(alt)
-            break
-
-    # Store operator's suggestion as a new custom alternative.
-    if body.suggested_alternative:
-        suggestion = FailureAlternative(
-            failure_id=failure.id,
-            selector=body.suggested_alternative,
-            strategy="css",
-            confidence_score=0.5,
-            is_custom=True,
-            custom_notes=f"Suggested after rejecting: {body.reason}",
-            created_at=_utcnow(),
+    if svc.get_failure_detail(failure_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failure not found: id={failure_id}",
         )
-        db.add(suggestion)
 
-    db.commit()
+    try:
+        await svc.reject_alternative(
+            failure_id=failure_id,
+            selector=body.selector,
+            reason=body.reason,
+            suggested_alternative=body.suggested_alternative,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        )
 
     return ApprovalResponse(
         success=True,
@@ -336,21 +305,24 @@ def reject_selector(
     response_model=FlagResponse,
     summary="Flag a failure for developer review",
 )
-def flag_failure(
-    failure_id: int,
-    body: FlagRequest,
-    db: Session = Depends(get_db),
-) -> FlagResponse:
+def flag_failure(failure_id: int, body: FlagRequest) -> FlagResponse:
     """Mark a failure as needing developer attention."""
-    failure = _get_failure_or_404(db, failure_id)
+    svc = _get_failure_service()
+
+    if svc.get_failure_detail(failure_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failure not found: id={failure_id}",
+        )
+
+    result = svc.flag_failure(failure_id=failure_id, note=body.note)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to flag failure.",
+        )
 
     now = _utcnow()
-    failure.flagged = True
-    failure.flag_note = body.note
-    failure.flagged_at = now
-
-    db.commit()
-
     return FlagResponse(
         success=True,
         message=f"Failure #{failure_id} flagged for review.",
@@ -366,21 +338,30 @@ def flag_failure(
     response_model=FlagResponse,
     summary="Remove flag from a failure",
 )
-def unflag_failure(
-    failure_id: int,
-    db: Session = Depends(get_db),
-) -> FlagResponse:
+def unflag_failure(failure_id: int) -> FlagResponse:
     """Clear the developer-review flag on a failure."""
-    failure = _get_failure_or_404(db, failure_id)
+    svc = _get_failure_service()
 
-    now = _utcnow()
-    failure.flagged = False
-    previous_note = failure.flag_note or ""
-    previous_flagged_at = failure.flagged_at or now
-    failure.flag_note = None
-    failure.flagged_at = None
+    detail = svc.get_failure_detail(failure_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failure not found: id={failure_id}",
+        )
 
-    db.commit()
+    previous_note = detail.get("flag_note") or ""
+    previous_flagged_at = (
+        _parse_timestamp(detail.get("flagged_at"))
+        if detail.get("flagged_at")
+        else _utcnow()
+    )
+
+    result = svc.unflag_failure(failure_id=failure_id)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to unflag failure.",
+        )
 
     return FlagResponse(
         success=True,
@@ -401,37 +382,49 @@ def unflag_failure(
 def create_custom_selector(
     failure_id: int,
     body: CustomSelectorRequest,
-    db: Session = Depends(get_db),
 ) -> CustomSelectorResponse:
-    """
-    Allow an operator to propose their own selector string as a replacement.
+    """Allow an operator to propose their own selector string as a replacement."""
+    svc = _get_failure_service()
 
-    The new alternative is stored with ``is_custom=True`` and a default
-    confidence score of 0.75 so it floats near the top of the list without
-    displacing high-confidence machine-generated candidates.
-    """
-    failure = _get_failure_or_404(db, failure_id)
+    if svc.get_failure_detail(failure_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failure not found: id={failure_id}",
+        )
+
+    try:
+        from src.selectors.adaptive.services.dom_analyzer import StrategyType
+
+        strategy = StrategyType(body.strategy_type)
+    except (ValueError, ImportError):
+        strategy = body.strategy_type  # pass through as string if enum unavailable
+
+    result = svc.create_custom_selector(
+        failure_id=failure_id,
+        selector_string=body.selector_string,
+        strategy_type=strategy,
+        notes=body.notes,
+    )
+
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create custom selector.",
+        )
 
     now = _utcnow()
-    alt = FailureAlternative(
-        failure_id=failure.id,
-        selector=body.selector_string,
-        strategy=body.strategy_type,
-        confidence_score=0.75,
-        is_custom=True,
-        custom_notes=body.notes,
-        created_at=now,
+    selector_str = (
+        result.get("selector", body.selector_string)
+        if isinstance(result, dict)
+        else body.selector_string
     )
-    db.add(alt)
-    db.commit()
-    db.refresh(alt)
 
     return CustomSelectorResponse(
         success=True,
         message=f"Custom selector added to failure #{failure_id}.",
         failure_id=failure_id,
-        selector=alt.selector,
-        strategy_type=alt.strategy,
+        selector=selector_str,
+        strategy_type=body.strategy_type,
         is_custom=True,
         created_at=now,
     )

@@ -373,7 +373,8 @@ class AuditEventRepository:
         selector_ids: Optional[List[str]] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        limit: int = 1000
+        limit: int = 1000,
+        offset: int = 0
     ) -> List[AuditEvent]:
         """
         Get audit events with multiple filters applied.
@@ -385,6 +386,7 @@ class AuditEventRepository:
             start_date: Optional start date for filtering
             end_date: Optional end date for filtering
             limit: Maximum number of events to return
+            offset: Number of events to skip (for pagination)
             
         Returns:
             List of filtered audit events ordered by timestamp
@@ -410,9 +412,54 @@ class AuditEventRepository:
             
             return (
                 query.order_by(AuditEvent.timestamp.asc())
+                .offset(offset if offset is not None else 0)
                 .limit(limit)
                 .all()
             )
+        finally:
+            session.close()
+    
+    def count_events_by_multiple_filters(
+        self,
+        user_ids: Optional[List[str]] = None,
+        action_types: Optional[List[str]] = None,
+        selector_ids: Optional[List[str]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> int:
+        """
+        Count audit events with multiple filters applied using efficient COUNT query.
+        
+        Args:
+            user_ids: Optional list of user IDs to filter by
+            action_types: Optional list of action types to filter by
+            selector_ids: Optional list of selector IDs to filter by
+            start_date: Optional start date for filtering
+            end_date: Optional end date for filtering
+            
+        Returns:
+            Count of filtered audit events
+        """
+        session = self.get_session()
+        try:
+            query = session.query(func.count(AuditEvent.id))
+            
+            if user_ids:
+                query = query.filter(AuditEvent.user_id.in_(user_ids))
+            
+            if action_types:
+                query = query.filter(AuditEvent.action_type.in_(action_types))
+            
+            if selector_ids:
+                query = query.filter(AuditEvent.selector_id.in_(selector_ids))
+            
+            if start_date:
+                query = query.filter(AuditEvent.timestamp >= start_date)
+            
+            if end_date:
+                query = query.filter(AuditEvent.timestamp <= end_date)
+            
+            return query.scalar() or 0
         finally:
             session.close()
     

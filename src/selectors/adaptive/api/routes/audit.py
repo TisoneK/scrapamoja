@@ -445,14 +445,15 @@ async def export_audit_trail_csv(
             while remaining > 0:
                 current_chunk_size = min(chunk_size, remaining)
                 
-                # Get chunk of events
+                # Get chunk of events with offset for true pagination
                 events = audit_trail_service.get_chronological_audit_trail(
                     start_date=parsed_start_date,
                     end_date=parsed_end_date,
                     user_ids=user_ids,
                     action_types=action_types,
                     selector_ids=selector_ids,
-                    limit=current_chunk_size
+                    limit=current_chunk_size,
+                    offset=offset
                 )
                 
                 if not events:

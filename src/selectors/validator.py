@@ -7,14 +7,36 @@ structure validation, rule validation, and error reporting.
 
 import re
 import os
+import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set
 import logging
 
-from .models import (
-    YAMLSelector, SelectorStrategy, SelectorValidationError, 
-    ValidationResult, ErrorType, Severity, SelectorType, StrategyType
-)
+# NOTE: We use explicit module path resolution to avoid naming conflict between:
+# - src/selectors/models.py (the file we want)
+# - src/selectors/models/ (a directory/package)
+# Python's relative imports resolve to the directory first, so we explicitly
+# register the module with a unique name to avoid conflicts.
+if "selector_models" not in sys.modules:
+    import importlib.util
+    models_path = os.path.join(os.path.dirname(__file__), "models.py")
+    spec = importlib.util.spec_from_file_location("selector_models", models_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load models from {models_path}")
+    _models = importlib.util.module_from_spec(spec)
+    sys.modules["selector_models"] = _models
+    spec.loader.exec_module(_models)
+else:
+    _models = sys.modules["selector_models"]
+
+YAMLSelector = _models.YAMLSelector
+SelectorStrategy = _models.SelectorStrategy
+SelectorValidationError = _models.SelectorValidationError
+ValidationResult = _models.ValidationResult
+ErrorType = _models.ErrorType
+Severity = _models.Severity
+SelectorType = _models.SelectorType
+StrategyType = _models.StrategyType
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +80,9 @@ class SelectorValidator:
             
             # Metadata validation
             self._validate_metadata(selector, result)
+            
+            # Hints validation
+            self._validate_hints(selector, result)
             
         except Exception as e:
             error = SelectorValidationError(
@@ -484,6 +509,90 @@ class SelectorValidator:
                         suggested_fix="Use semantic versioning format (e.g., 1.0.0)"
                     )
                     result.add_error(error)
+    
+    def _validate_hints(self, selector: YAMLSelector, result: ValidationResult):
+        """Validate hints configuration."""
+        if selector.hints:
+            try:
+                from src.selectors.hints.models import SelectorHint, VALID_STRATEGIES
+                
+                if not isinstance(selector.hints, SelectorHint):
+                    error = SelectorValidationError(
+                        selector_id=selector.id,
+                        error_type=ErrorType.VALIDATION_ERROR,
+                        field_path="hints",
+                        error_message="Hints must be a SelectorHint instance",
+                        severity=Severity.ERROR,
+                        suggested_fix="Ensure hints are properly parsed from YAML configuration"
+                    )
+                    result.add_error(error)
+                else:
+                    # Validate individual hint fields
+                    if not (0.0 <= selector.hints.stability <= 1.0):
+                        error = SelectorValidationError(
+                            selector_id=selector.id,
+                            error_type=ErrorType.VALIDATION_ERROR,
+                            field_path="hints.stability",
+                            error_message="Stability must be between 0.0 and 1.0",
+                            severity=Severity.ERROR,
+                            suggested_fix="Set stability to a value between 0.0 and 1.0"
+                        )
+                        result.add_error(error)
+                        
+                    if not (1 <= selector.hints.priority <= 10):
+                        error = SelectorValidationError(
+                            selector_id=selector.id,
+                            error_type=ErrorType.VALIDATION_ERROR,
+                            field_path="hints.priority",
+                            error_message="Priority must be between 1 and 10",
+                            severity=Severity.ERROR,
+                            suggested_fix="Set priority to a value between 1 and 10"
+                        )
+                        result.add_error(error)
+                        
+                    if not isinstance(selector.hints.alternatives, list):
+                        error = SelectorValidationError(
+                            selector_id=selector.id,
+                            error_type=ErrorType.VALIDATION_ERROR,
+                            field_path="hints.alternatives",
+                            error_message="Alternatives must be a list",
+                            severity=Severity.ERROR,
+                            suggested_fix="Convert alternatives to a list"
+                        )
+                        result.add_error(error)
+                        
+                    if selector.hints.strategy not in VALID_STRATEGIES:
+                        error = SelectorValidationError(
+                            selector_id=selector.id,
+                            error_type=ErrorType.VALIDATION_ERROR,
+                            field_path="hints.strategy",
+                            error_message=f"Strategy must be one of {set(VALID_STRATEGIES)}",
+                            severity=Severity.ERROR,
+                            suggested_fix=f"Set strategy to one of {', '.join(VALID_STRATEGIES)}"
+                        )
+                        result.add_error(error)
+                        
+                    if selector.hints.metadata is not None and not isinstance(selector.hints.metadata, dict):
+                        error = SelectorValidationError(
+                            selector_id=selector.id,
+                            error_type=ErrorType.VALIDATION_ERROR,
+                            field_path="hints.metadata",
+                            error_message="Metadata must be a dictionary",
+                            severity=Severity.ERROR,
+                            suggested_fix="Convert hints metadata to a dictionary"
+                        )
+                        result.add_error(error)
+                        
+            except ImportError as e:
+                error = SelectorValidationError(
+                    selector_id=selector.id,
+                    error_type=ErrorType.CONFIGURATION_ERROR,
+                    field_path="hints",
+                    error_message=f"Failed to import SelectorHint: {str(e)}",
+                    severity=Severity.ERROR,
+                    suggested_fix="Ensure the hints module is properly installed"
+                )
+                result.add_error(error)
     
     def _is_valid_css_selector(self, pattern: str) -> bool:
         """Basic CSS selector validation."""

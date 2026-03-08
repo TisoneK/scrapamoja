@@ -11,6 +11,12 @@ from enum import Enum
 from typing import Dict, List, Optional, Any, Union
 import logging
 
+try:
+    from src.selectors.hints.models import SelectorHint
+except ImportError:
+    # Fallback for circular imports during initial module loading
+    SelectorHint = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -131,6 +137,7 @@ class YAMLSelector:
     metadata: Optional[Dict[str, Any]] = None
     loaded_at: Optional[datetime] = None
     version: str = "1.0.0"
+    hints: Optional[Any] = None
     
     def __post_init__(self):
         """Validate selector configuration after initialization."""
@@ -182,7 +189,7 @@ class YAMLSelector:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert selector to dictionary representation."""
-        return {
+        result = {
             "id": self.id,
             "name": self.name,
             "description": self.description,
@@ -195,6 +202,12 @@ class YAMLSelector:
             "loaded_at": self.loaded_at.isoformat() if self.loaded_at else None,
             "version": self.version
         }
+        if self.hints:
+            if hasattr(self.hints, "to_dict"):
+                result["hints"] = self.hints.to_dict()
+            else:
+                result["hints"] = self.hints
+        return result
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "YAMLSelector":
@@ -208,6 +221,22 @@ class YAMLSelector:
         if data.get("loaded_at"):
             loaded_at = datetime.fromisoformat(data["loaded_at"])
         
+        # Parse hints if available
+        hints = data.get("hints")
+        if hints:
+            try:
+                from src.selectors.hints.models import SelectorHint
+                if not isinstance(hints, SelectorHint):
+                    if isinstance(hints, dict):
+                        hints = SelectorHint.from_dict(hints)
+            except (ImportError, ValueError, TypeError) as e:
+                logger.warning(
+                    f"Failed to parse hints for selector {data.get('id', 'unknown')}: {e}. "
+                    "Storing as raw data."
+                )
+                # Keep original hints value (dict) for backwards compatibility
+                # Don't convert to SelectorHint if parsing fails
+        
         return cls(
             id=data["id"],
             name=data["name"],
@@ -219,7 +248,8 @@ class YAMLSelector:
             metadata=data.get("metadata"),
             file_path=data["file_path"],
             loaded_at=loaded_at,
-            version=data.get("version", "1.0.0")
+            version=data.get("version", "1.0.0"),
+            hints=hints
         )
 
 

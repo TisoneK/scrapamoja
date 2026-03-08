@@ -16,6 +16,9 @@ from .blast_radius import (
     get_blast_radius_calculator,
 )
 from .audit_service import AuditLogger, get_audit_logger, record_human_decision
+from .view_service import ViewService, get_view_service
+from .fast_triage_service import FastTriageService, get_fast_triage_service
+from .feature_flag_service import FeatureFlagService, get_feature_flag_service, is_adaptive_enabled
 
 __all__ = [
     "StabilityScoringService", 
@@ -37,4 +40,11 @@ __all__ = [
     "AuditLogger",
     "get_audit_logger",
     "record_human_decision",
+    "ViewService",
+    "get_view_service",
+    "FastTriageService",
+    "get_fast_triage_service",
+    "FeatureFlagService",
+    "get_feature_flag_service",
+    "is_adaptive_enabled",
 ]

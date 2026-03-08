@@ -17,18 +17,40 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.database import SessionLocal, init_db
 from src.api.routers import failures as failures_router
 from src.api.routers import feature_flags as feature_flags_router
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Shared DB path
+# ---------------------------------------------------------------------------
+
+
+def _db_path() -> str:
+    """
+    Resolve the shared adaptive database path.
+
+    Respects the ``ADAPTIVE_DB_PATH`` environment variable so the test suite
+    and CI can override it.  Falls back to ``<project-root>/data/adaptive.db``.
+    """
+    env = os.environ.get("ADAPTIVE_DB_PATH")
+    if env:
+        return env
+    project_root = Path(__file__).resolve().parents[2]  # src/api/main.py → root
+    db_dir = project_root / "data"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    return str(db_dir / "adaptive.db")
+
 
 # ---------------------------------------------------------------------------
 # WebSocket connection manager
@@ -83,10 +105,9 @@ ws_manager = ConnectionManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ANN001
-    """Initialise the database and seed demo data on first run."""
-    init_db()
-    _seed_demo_data()
-    logger.info("Scrapamoja API started. Database initialised.")
+    """Seed demo feature flags on first startup, then yield."""
+    _seed_demo_flags()
+    logger.info("Scrapamoja API started.")
     yield
     logger.info("Scrapamoja API shutting down.")
 
@@ -102,7 +123,9 @@ def create_app() -> FastAPI:
         description=(
             "REST API for the Scrapamoja scraper control plane.\n\n"
             "Provides feature-flag management and selector-failure escalation "
-            "endpoints consumed by the React UI at `ui/app/`."
+            "endpoints consumed by the React UI at `ui/app/`.\n\n"
+            "All data is persisted in the shared adaptive module database at "
+            "`data/adaptive.db` (overridable via `ADAPTIVE_DB_PATH`)."
         ),
         version="1.0.0",
         docs_url="/docs",
@@ -199,7 +222,7 @@ app = create_app()
 
 
 # ---------------------------------------------------------------------------
-# Demo-data seeding
+# Demo-data seeding  (feature flags only; failures come from the scraper)
 # ---------------------------------------------------------------------------
 
 _DEMO_FLAGS = [
@@ -225,161 +248,37 @@ _DEMO_FLAGS = [
     ),
 ]
 
-_DEMO_FAILURES = [
-    {
-        "selector_id": "football.flashscore.match_score",
-        "failed_selector": ".event__score--home",
-        "recipe_id": "flashscore-football-v2",
-        "sport": "football",
-        "site": "flashscore",
-        "error_type": "not_found",
-        "failure_reason": "Element not found after 5 retries — possible DOM restructure",
-        "severity": "high",
-        "alternatives": [
-            {
-                "selector": ".smh__participantName--home",
-                "strategy": "css",
-                "confidence_score": 0.91,
-                "blast_radius_affected_count": 3,
-                "blast_radius_affected_sports": '["football", "futsal"]',
-                "blast_radius_severity": "medium",
-                "blast_radius_container_path": ".event__match",
-                "highlight_css": ".smh__participantName--home { outline: 2px solid #6366f1; }",
-            },
-            {
-                "selector": "//div[contains(@class,'event__score')][1]",
-                "strategy": "xpath",
-                "confidence_score": 0.78,
-                "blast_radius_affected_count": 1,
-                "blast_radius_affected_sports": '["football"]',
-                "blast_radius_severity": "low",
-                "blast_radius_container_path": ".event__match",
-            },
-        ],
-    },
-    {
-        "selector_id": "tennis.flashscore.player_name",
-        "failed_selector": ".participant__participantName",
-        "recipe_id": "flashscore-tennis-v1",
-        "sport": "tennis",
-        "site": "flashscore",
-        "error_type": "stale_element",
-        "failure_reason": "StaleElementReferenceException after navigation",
-        "severity": "medium",
-        "alternatives": [
-            {
-                "selector": ".participant__participantName--home",
-                "strategy": "css",
-                "confidence_score": 0.85,
-            }
-        ],
-    },
-    {
-        "selector_id": "basketball.flashscore.quarter_scores",
-        "failed_selector": ".smh__part--home",
-        "recipe_id": "flashscore-basketball-v1",
-        "sport": "basketball",
-        "site": "flashscore",
-        "error_type": "timeout",
-        "failure_reason": "Element wait timeout exceeded (30s)",
-        "severity": "critical",
-        "alternatives": [],
-        "flagged": True,
-        "flag_note": "No alternatives found — needs manual selector research",
-    },
-]
 
-
-def _seed_demo_data() -> None:
+def _seed_demo_flags() -> None:
     """
-    Insert demo feature flags and selector failures on first startup.
+    Insert demo feature flags on first startup using FeatureFlagService.
 
-    Uses ``INSERT OR IGNORE`` semantics: if rows already exist nothing changes,
-    so re-starts don't duplicate data.
+    Uses the service's ``create_feature_flag`` which raises ``ValueError``
+    if a flag already exists — we catch that and skip silently so re-starts
+    are idempotent.
     """
-    from sqlalchemy import select
-
-    from src.api.models import Failure as FailureModel
-    from src.api.models import FailureAlternative, FeatureFlag
-
-    db = SessionLocal()
     try:
-        now = datetime.now(timezone.utc)
+        from src.selectors.adaptive.services.feature_flag_service import (
+            FeatureFlagService,
+        )
 
-        # ── Feature flags ─────────────────────────────────────────────────────
-        for sport, site, enabled, description in _DEMO_FLAGS:
-            stmt = select(FeatureFlag).where(FeatureFlag.sport == sport)
-            stmt = (
-                stmt.where(FeatureFlag.site.is_(None))
-                if site is None
-                else stmt.where(FeatureFlag.site == site)
-            )
-            if db.scalars(stmt).first() is None:
-                flag = FeatureFlag(
-                    sport=sport,
-                    site=site,
-                    enabled=enabled,
-                    description=description,
-                    created_at=now,
-                    updated_at=now,
-                )
-                db.add(flag)
+        svc = FeatureFlagService(db_path=_db_path())
 
-        db.flush()
+        seeded = 0
+        for sport, site, enabled, _desc in _DEMO_FLAGS:
+            try:
+                svc.create_feature_flag(sport=sport, site=site, enabled=enabled)
+                seeded += 1
+            except ValueError:
+                pass  # already exists — skip
 
-        # ── Selector failures ─────────────────────────────────────────────────
-        for fdata in _DEMO_FAILURES:
-            stmt = select(FailureModel).where(
-                FailureModel.selector_id == fdata["selector_id"]
-            )
-            if db.scalars(stmt).first() is None:
-                failure = FailureModel(
-                    selector_id=fdata["selector_id"],
-                    failed_selector=fdata["failed_selector"],
-                    recipe_id=fdata.get("recipe_id"),
-                    sport=fdata.get("sport"),
-                    site=fdata.get("site"),
-                    error_type=fdata.get("error_type", "not_found"),
-                    failure_reason=fdata.get("failure_reason"),
-                    severity=fdata.get("severity", "medium"),
-                    flagged=fdata.get("flagged", False),
-                    flag_note=fdata.get("flag_note"),
-                    flagged_at=now if fdata.get("flagged") else None,
-                    timestamp=now,
-                )
-                db.add(failure)
-                db.flush()
-
-                for alt_data in fdata.get("alternatives", []):
-                    alt = FailureAlternative(
-                        failure_id=failure.id,
-                        selector=alt_data["selector"],
-                        strategy=alt_data.get("strategy", "css"),
-                        confidence_score=alt_data.get("confidence_score", 0.5),
-                        blast_radius_affected_count=alt_data.get(
-                            "blast_radius_affected_count"
-                        ),
-                        blast_radius_affected_sports=alt_data.get(
-                            "blast_radius_affected_sports"
-                        ),
-                        blast_radius_severity=alt_data.get("blast_radius_severity"),
-                        blast_radius_container_path=alt_data.get(
-                            "blast_radius_container_path"
-                        ),
-                        highlight_css=alt_data.get("highlight_css"),
-                        is_custom=False,
-                        created_at=now,
-                    )
-                    db.add(alt)
-
-        db.commit()
-        logger.info("Demo data seeded successfully.")
+        if seeded:
+            logger.info("Demo feature flags seeded: %d new flags.", seeded)
+        else:
+            logger.info("Demo feature flags already present — nothing to seed.")
 
     except Exception as exc:
-        db.rollback()
-        logger.warning("Demo data seeding failed (non-fatal): %s", exc)
-    finally:
-        db.close()
+        logger.warning("Demo flag seeding failed (non-fatal): %s", exc)
 
 
 # ---------------------------------------------------------------------------

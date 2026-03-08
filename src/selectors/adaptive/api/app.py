@@ -16,9 +16,18 @@ from typing import Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.selectors.adaptive.api.middleware.performance import PerformanceMonitoringMiddleware
+from src.selectors.adaptive.api.middleware.rate_limiting import RateLimitMiddleware, BulkOperationSizeMiddleware
+from src.selectors.adaptive.api.middleware.audit_logging import AuditLoggingMiddleware
+from src.selectors.adaptive.api.websocket.failure_updates import websocket_endpoint
 from src.selectors.adaptive.api.routes.failures import router as failures_router
 from src.selectors.adaptive.api.routes.audit import router as audit_router
 from src.selectors.adaptive.api.routes.audit_query import router as audit_query_router
+from src.selectors.adaptive.api.routes.users import router as users_router
+from src.selectors.adaptive.api.routes.views import router as views_router
+from src.selectors.adaptive.api.routes.triage import router as triage_router
+from src.selectors.adaptive.api.routes.custom_strategies import router as custom_strategies_router
+from src.selectors.adaptive.api.routes.feature_flags import router as feature_flags_router
 
 
 def create_app() -> FastAPI:
@@ -46,13 +55,37 @@ def create_app() -> FastAPI:
         allow_origins=origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=["Content-Type", "Authorization", "X-User-ID"],
     )
+    
+    # Add audit logging middleware for compliance and debugging
+    # Logs all triage actions with sanitized request/response data
+    app.add_middleware(AuditLoggingMiddleware, log_level="INFO")
+    
+    # Add rate limiting middleware to prevent abuse
+    # Limits: 100 req/min default, 20 bulk/min, 10 strict/min
+    app.add_middleware(RateLimitMiddleware)
+    
+    # Add bulk operation size validation
+    # Prevents excessively large bulk operations (>100 items)
+    app.add_middleware(BulkOperationSizeMiddleware, max_bulk_size=100)
+    
+    # Add performance monitoring middleware for AC #3 compliance
+    # Tracks response times to ensure < 2s page load and < 500ms actions
+    app.add_middleware(PerformanceMonitoringMiddleware)
     
     # Include routers
     app.include_router(failures_router)
     app.include_router(audit_router)
     app.include_router(audit_query_router)
+    app.include_router(users_router)
+    app.include_router(views_router)
+    app.include_router(triage_router)
+    app.include_router(custom_strategies_router)
+    app.include_router(feature_flags_router)
+    
+    # WebSocket endpoint for real-time failure updates (Task 3.2)
+    app.websocket("/ws/failures")(websocket_endpoint)
     
     @app.get("/health")
     async def health_check():
@@ -81,6 +114,24 @@ def create_app() -> FastAPI:
                 "selector_audit_query": "/audit/log/selector/{selector_id}",
                 "user_audit_query": "/audit/log/user/{user_id}",
                 "date_range_audit_query": "/audit/log/date-range",
+                "user_info": "/users/me",
+                "view_mode_switch": "/users/me/view-mode",
+                "view_adaptive_failure": "/views/failures/{failure_id}",
+                "view_modes": "/views/modes",
+                # Fast triage endpoints
+                "triage_failures": "/triage/failures",
+                "quick_approve": "/triage/failures/{failure_id}/quick-approve",
+                "bulk_approve": "/triage/bulk-approve",
+                "bulk_reject": "/triage/bulk-reject",
+                "quick_escalate": "/triage/escalate",
+                "performance": "/triage/performance",
+                # Feature flag endpoints
+                "feature_flags": "/feature-flags",
+                "feature_flag_check": "/feature-flags/check",
+                "enabled_sports": "/feature-flags/enabled-sports",
+                "feature_flag_stats": "/feature-flags/stats",
+                "toggle_sport_flag": "/feature-flags/{sport}",
+                "update_site_flag": "/feature-flags/{sport}/sites/{site}",
             },
         }
     

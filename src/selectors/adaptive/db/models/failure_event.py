@@ -134,6 +134,11 @@ class FailureEvent(Base):
         Index('ix_failure_events_error_type_timestamp', 'error_type', 'timestamp'),
         Index('ix_failure_events_flagged', 'flagged'),
         Index('ix_failure_events_flagged_at', 'flagged_at'),
+        # Performance optimization indexes for AC #3
+        Index('ix_failure_events_timestamp_desc', 'timestamp'),  # For timestamp sorting
+        Index('ix_failure_events_severity_timestamp', 'severity', 'timestamp'),  # For severity sorting
+        Index('ix_failure_events_sport_timestamp', 'sport', 'timestamp'),  # For sport filtering + sorting
+        Index('ix_failure_events_site_timestamp', 'site', 'timestamp'),  # For site filtering + sorting
     )
     
     def __repr__(self) -> str:

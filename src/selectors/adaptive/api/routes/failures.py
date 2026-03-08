@@ -68,6 +68,14 @@ async def list_failures(
     flagged: Optional[bool] = Query(None, description="Filter by flagged status"),
     date_from: Optional[datetime] = Query(None, description="Filter from date (ISO8601)"),
     date_to: Optional[datetime] = Query(None, description="Filter to date (ISO8601)"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="Sort by field: severity, timestamp, blast_radius"
+    ),
+    sort_order: Optional[str] = Query(
+        "desc",
+        description="Sort order: asc or desc"
+    ),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Results per page"),
     service: FailureService = Query(None, description="Failure service dependency"),
@@ -97,6 +105,19 @@ async def list_failures(
         filters["date_from"] = date_from.isoformat()
     if date_to:
         filters["date_to"] = date_to.isoformat()
+    if sort_by:
+        filters["sort_by"] = sort_by
+    if sort_order:
+        filters["sort_order"] = sort_order
+    
+    # Validate sort_by parameter
+    valid_sort_fields = ["severity", "timestamp", "blast_radius"]
+    if sort_by is not None and sort_by not in valid_sort_fields:
+        sort_by = None  # Fall back to default
+    
+    # Validate sort_order parameter
+    if sort_order not in ["asc", "desc"]:
+        sort_order = "desc"  # Default to descending
     
     # Fetch failures
     failures, total = service.list_failures(
@@ -107,6 +128,8 @@ async def list_failures(
         flagged=flagged,
         date_from=date_from,
         date_to=date_to,
+        sort_by=sort_by,
+        sort_order=sort_order,
         page=page,
         page_size=page_size,
     )
@@ -236,11 +259,17 @@ async def approve_selector(
     if service is None:
         service = get_failure_service()
     
-    # Extract user ID from request (for now, use provided user_id or default)
-    user_id = getattr(request, 'user_id', None) or (request.notes.get('user_id') if hasattr(request, 'notes') and request.notes else None)
+    # Extract user ID from request - simplified and more robust
+    user_id = None
+    if hasattr(request, 'user_id') and request.user_id:
+        user_id = request.user_id
+    elif hasattr(request, 'model_dump') and 'user_id' in request.model_dump():
+        user_id = request.model_dump()['user_id']
+    elif hasattr(request, 'notes') and request.notes and 'user_id' in request.notes:
+        user_id = request.notes['user_id']
     
     # Approve selector with user context for audit logging
-    result = service.approve_alternative(
+    result = await service.approve_alternative(
         failure_id=failure_id,
         selector=request.selector,
         notes=request.notes,
@@ -303,11 +332,17 @@ async def reject_selector(
     if service is None:
         service = get_failure_service()
     
-    # Extract user ID from request (for now, use provided user_id or default)
-    user_id = getattr(request, 'user_id', None) or (request.notes.get('user_id') if hasattr(request, 'notes') and request.notes else None)
+    # Extract user ID from request - simplified and more robust
+    user_id = None
+    if hasattr(request, 'user_id') and request.user_id:
+        user_id = request.user_id
+    elif hasattr(request, 'model_dump') and 'user_id' in request.model_dump():
+        user_id = request.model_dump()['user_id']
+    elif hasattr(request, 'notes') and request.notes and 'user_id' in request.notes:
+        user_id = request.notes['user_id']
     
     # Reject the selector
-    result = service.reject_alternative(
+    result = await service.reject_alternative(
         failure_id=failure_id,
         selector=request.selector,
         reason=request.reason,
@@ -371,8 +406,14 @@ async def flag_failure(
     if service is None:
         service = get_failure_service()
     
-    # Extract user ID from request (for now, use provided user_id or default)
-    user_id = getattr(request, 'user_id', None) or (request.notes.get('user_id') if hasattr(request, 'notes') and request.notes else None)
+    # Extract user ID from request - simplified and more robust
+    user_id = None
+    if hasattr(request, 'user_id') and request.user_id:
+        user_id = request.user_id
+    elif hasattr(request, 'model_dump') and 'user_id' in request.model_dump():
+        user_id = request.model_dump()['user_id']
+    elif hasattr(request, 'notes') and request.notes and 'user_id' in request.notes:
+        user_id = request.notes['user_id']
     
     # Flag failure with user context for audit logging
     result = service.flag_failure(
@@ -494,6 +535,20 @@ async def create_custom_selector(
     
     This allows users to manually create alternative selectors when the
     auto-proposal system cannot handle specific edge cases.
+    """
+    # Get service instance
+    if service is None:
+        service = get_failure_service()
+    
+    # Extract user ID from request - simplified and more robust
+    user_id = None
+    if hasattr(request, 'user_id') and request.user_id:
+        user_id = request.user_id
+    elif hasattr(request, 'model_dump') and 'user_id' in request.model_dump():
+        user_id = request.model_dump()['user_id']
+    elif hasattr(request, 'notes') and request.notes and 'user_id' in request.notes:
+        user_id = request.notes['user_id']
+    
     # Create the custom selector
     result = service.create_custom_selector(
         failure_id=failure_id,

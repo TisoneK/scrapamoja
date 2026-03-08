@@ -8,15 +8,48 @@ and convert them into selector objects that can be used by the selector engine.
 import os
 import yaml
 import time
+import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 from glob import glob
 import logging
 
-from .models import (
-    YAMLSelector, SelectorStrategy, LoadResult, SelectorValidationError,
-    ValidationResult, ErrorType, Severity
-)
+# NOTE: We use explicit module path resolution to avoid naming conflict between:
+# - src/selectors/models.py (the file we want)
+# - src/selectors/models/ (a directory/package)
+# Python's relative imports resolve to the directory first, so we explicitly
+# register the module with a unique name to avoid conflicts.
+# We also check sys.modules to avoid reloading if already loaded by validator.py
+if "selector_models" not in sys.modules:
+    import importlib.util
+    models_path = os.path.join(os.path.dirname(__file__), "models.py")
+    spec = importlib.util.spec_from_file_location("selector_models", models_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load models from {models_path}")
+    _models = importlib.util.module_from_spec(spec)
+    sys.modules["selector_models"] = _models
+    spec.loader.exec_module(_models)
+else:
+    _models = sys.modules["selector_models"]
+
+# Import other selector models that may be needed
+try:
+    from src.models.selector_models import (
+        SemanticSelector, SelectorResult, StrategyPattern, ValidationRule,
+        ConfidenceMetrics, SnapshotType, DOMSnapshot, SnapshotMetadata,
+        ElementInfo, ValidationResult as SelectorModelValidationResult
+    )
+except ImportError:
+    # These may not exist in all versions
+    pass
+
+ValidationResult = _models.ValidationResult
+ErrorType = _models.ErrorType
+Severity = _models.Severity
+YAMLSelector = _models.YAMLSelector
+SelectorStrategy = _models.SelectorStrategy
+SelectorType = _models.SelectorType
+LoadResult = _models.LoadResult
 from .exceptions import (
     SelectorLoadingError, SelectorValidationError as SelectorValidationException,
     SelectorFileError, create_file_error, create_loading_error
@@ -386,6 +419,10 @@ class YAMLSelectorLoader:
                 strategy = SelectorStrategy.from_dict(strategy_data)
                 strategies.append(strategy)
             
+            # Parse hints
+            from src.selectors.hints.parser import parse_hints
+            hints = parse_hints(yaml_data.get('hints'))
+            
             # Create selector
             selector = YAMLSelector(
                 id=yaml_data['id'],
@@ -397,7 +434,8 @@ class YAMLSelectorLoader:
                 validation_rules=yaml_data.get('validation_rules'),
                 metadata=yaml_data.get('metadata'),
                 file_path=file_path,
-                version=yaml_data.get('version', '1.0.0')
+                version=yaml_data.get('version', '1.0.0'),
+                hints=hints
             )
             
             return selector

@@ -1,142 +1,141 @@
-import { useState, useMemo } from 'react'
-import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { useMemo } from "react";
+import { Search, RotateCcw } from "lucide-react";
+import { cn } from "@/utils";
 
 interface FilterState {
-  sport: string
-  site: string
-  enabled: 'all' | 'enabled' | 'disabled'
-  sortBy: 'updated_at' | 'sport' | 'site' | 'created_at'
-  sortOrder: 'asc' | 'desc'
+  sport: string;
+  site: string;
+  enabled: "all" | "enabled" | "disabled";
+  sortBy: "updated_at" | "sport" | "site" | "created_at";
+  sortOrder: "asc" | "desc";
 }
 
 interface FeatureFlagFiltersProps {
-  filters: FilterState
-  onFiltersChange: (filters: FilterState) => void
-  onReset: () => void
+  filters: FilterState;
+  onFiltersChange: (filters: FilterState) => void;
+  onReset: () => void;
 }
 
-export function FeatureFlagFilters({ filters, onFiltersChange, onReset }: FeatureFlagFiltersProps) {
-  const handleSportChange = (sport: string) => {
-    onFiltersChange({ ...filters, sport })
-  }
+export function FeatureFlagFilters({
+  filters,
+  onFiltersChange,
+  onReset,
+}: FeatureFlagFiltersProps) {
+  const hasActiveFilters = useMemo(
+    () =>
+      filters.sport !== "" || filters.site !== "" || filters.enabled !== "all",
+    [filters.sport, filters.site, filters.enabled],
+  );
 
-  const handleSiteChange = (site: string) => {
-    onFiltersChange({ ...filters, site })
-  }
-
-  const handleEnabledChange = (enabled: FilterState['enabled']) => {
-    onFiltersChange({ ...filters, enabled })
-  }
-
-  const handleSortChange = (sortBy: FilterState['sortBy']) => {
-    onFiltersChange({ ...filters, sortBy })
-  }
-
-  const handleSortOrderChange = (sortOrder: FilterState['sortOrder']) => {
-    onFiltersChange({ ...filters, sortOrder })
-  }
-
-  const hasActiveFilters = useMemo(() => {
-    return filters.sport !== '' || filters.site !== '' || filters.enabled !== 'all'
-  }, [filters.sport, filters.site, filters.enabled])
+  const set = <K extends keyof FilterState>(key: K, value: FilterState[K]) =>
+    onFiltersChange({ ...filters, [key]: value });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Filters</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {/* Sport Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Sport
-            </label>
+    <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+      <div className="flex flex-wrap items-end gap-3">
+        {/* Sport */}
+        <div className="flex-1 min-w-[130px]">
+          <label className="block text-xs font-medium text-slate-500 mb-1">
+            Sport
+          </label>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={filters.sport}
-              onChange={(e) => handleSportChange(e.target.value)}
-              placeholder="Filter by sport..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              onChange={(e) => set("sport", e.target.value)}
+              placeholder="Filter by sport…"
+              className="select pl-7 h-8 text-xs"
             />
           </div>
+        </div>
 
-          {/* Site Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Site
-            </label>
+        {/* Site */}
+        <div className="flex-1 min-w-[130px]">
+          <label className="block text-xs font-medium text-slate-500 mb-1">
+            Site
+          </label>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={filters.site}
-              onChange={(e) => handleSiteChange(e.target.value)}
-              placeholder="Filter by site..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              onChange={(e) => set("site", e.target.value)}
+              placeholder="Filter by site…"
+              className="select pl-7 h-8 text-xs"
             />
           </div>
-
-          {/* Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Status
-            </label>
-            <select
-              value={filters.enabled}
-              onChange={(e) => handleEnabledChange(e.target.value as FilterState['enabled'])}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All</option>
-              <option value="enabled">Enabled</option>
-              <option value="disabled">Disabled</option>
-            </select>
-          </div>
-
-          {/* Sort Options */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sort By
-              </label>
-              <select
-                value={filters.sortBy}
-                onChange={(e) => handleSortChange(e.target.value as FilterState['sortBy'])}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="updated_at">Last Updated</option>
-                <option value="sport">Sport</option>
-                <option value="site">Site</option>
-                <option value="created_at">Created</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Order
-              </label>
-              <select
-                value={filters.sortOrder}
-                onChange={(e) => handleSortOrderChange(e.target.value as FilterState['sortOrder'])}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="asc">Ascending</option>
-                <option value="desc">Descending</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Reset Button */}
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              onClick={onReset}
-              disabled={!hasActiveFilters}
-            >
-              Reset Filters
-            </Button>
-          </div>
         </div>
-      </CardContent>
-    </Card>
-  )
+
+        {/* Status */}
+        <div className="w-34">
+          <label className="block text-xs font-medium text-slate-500 mb-1">
+            Status
+          </label>
+          <select
+            value={filters.enabled}
+            onChange={(e) =>
+              set("enabled", e.target.value as FilterState["enabled"])
+            }
+            className="select h-8 text-xs"
+          >
+            <option value="all">All statuses</option>
+            <option value="enabled">Enabled</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </div>
+
+        {/* Sort by */}
+        <div className="w-36">
+          <label className="block text-xs font-medium text-slate-500 mb-1">
+            Sort by
+          </label>
+          <select
+            value={filters.sortBy}
+            onChange={(e) =>
+              set("sortBy", e.target.value as FilterState["sortBy"])
+            }
+            className="select h-8 text-xs"
+          >
+            <option value="updated_at">Last updated</option>
+            <option value="sport">Sport</option>
+            <option value="site">Site</option>
+            <option value="created_at">Created</option>
+          </select>
+        </div>
+
+        {/* Order */}
+        <div className="w-32">
+          <label className="block text-xs font-medium text-slate-500 mb-1">
+            Order
+          </label>
+          <select
+            value={filters.sortOrder}
+            onChange={(e) =>
+              set("sortOrder", e.target.value as FilterState["sortOrder"])
+            }
+            className="select h-8 text-xs"
+          >
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </div>
+
+        {/* Reset */}
+        <button
+          onClick={onReset}
+          disabled={!hasActiveFilters}
+          className={cn(
+            "flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border transition-colors duration-150 mb-0 self-end",
+            hasActiveFilters
+              ? "border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+              : "border-slate-100 text-slate-300 cursor-not-allowed",
+          )}
+        >
+          <RotateCcw className="w-3 h-3" />
+          Reset
+        </button>
+      </div>
+    </div>
+  );
 }

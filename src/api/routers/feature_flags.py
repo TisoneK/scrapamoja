@@ -3,25 +3,27 @@ Feature-flags API router.
 
 All routes are mounted under the prefix ``/feature-flags`` in main.py.
 
+Delegates entirely to the adaptive module's FeatureFlagService, which owns
+the real persistent database at data/adaptive.db and is shared with the
+scraper's in-process feature-flag checks.
+
 Route ordering matters: static path segments (``/check``, ``/stats``, etc.)
-are declared *before* the ``/{sport}`` path-parameter routes so FastAPI does
-not mistakenly capture them as a sport name.
+must be declared *before* the ``/{sport}`` path-parameter routes so FastAPI
+does not capture them as a sport name.
 """
 
 from __future__ import annotations
 
-import json
 import math
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Query, status
 
-from src.api.database import get_db
-from src.api.models import AuditLog, FeatureFlag
 from src.api.schemas import (
+    AuditLogEntryOut,
     AuditLogResponse,
     EnabledSportsResponse,
     FeatureFlagCheckResponse,
@@ -31,61 +33,55 @@ from src.api.schemas import (
     FeatureFlagStatsResponse,
     FeatureFlagUpdateRequest,
 )
+from src.selectors.adaptive.services.feature_flag_service import (
+    FeatureFlagService,
+    get_feature_flag_service,
+)
 
 router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Helpers
 # ---------------------------------------------------------------------------
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+def _db_path() -> str:
+    """
+    Resolve the shared adaptive database path.
+
+    Respects the ``ADAPTIVE_DB_PATH`` environment variable so the test suite
+    and CI can override it.  Falls back to ``<project-root>/data/adaptive.db``.
+    """
+    env = os.environ.get("ADAPTIVE_DB_PATH")
+    if env:
+        return env
+    project_root = Path(__file__).resolve().parents[3]  # src/api/routers/ → root
+    db_dir = project_root / "data"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    return str(db_dir / "adaptive.db")
 
 
-def _get_flag_or_404(db: Session, sport: str, site: Optional[str]) -> FeatureFlag:
-    """Return the flag or raise HTTP 404."""
-    stmt = select(FeatureFlag).where(FeatureFlag.sport == sport)
-    if site is None:
-        stmt = stmt.where(FeatureFlag.site.is_(None))
-    else:
-        stmt = stmt.where(FeatureFlag.site == site)
-    flag = db.scalars(stmt).first()
-    if flag is None:
-        detail = f"Feature flag not found: sport={sport!r}" + (
-            f", site={site!r}" if site else " (global)"
-        )
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
-    return flag
+def _svc() -> FeatureFlagService:
+    """Return a FeatureFlagService wired to the shared DB path."""
+    return FeatureFlagService(db_path=_db_path())
 
 
-def _write_audit(
-    db: Session,
-    flag: FeatureFlag,
-    action: str,
-    old_value: Optional[bool],
-    new_value: Optional[bool],
-    description: Optional[str] = None,
-    user: str = "system",
-) -> None:
-    """Append one row to the audit log (called inside the same transaction)."""
-    entry = AuditLog(
-        flag_id=flag.id,
+def _to_out(flag) -> FeatureFlagOut:
+    """Convert an adaptive FeatureFlag model instance to the API output schema."""
+    return FeatureFlagOut(
+        id=flag.id,
         sport=flag.sport,
         site=flag.site,
-        action=action,
-        old_value=old_value,
-        new_value=new_value,
-        user=user,
-        description=description,
-        timestamp=_utcnow(),
+        enabled=flag.enabled,
+        description=getattr(flag, "description", None),
+        created_at=flag.created_at,
+        updated_at=flag.updated_at,
     )
-    db.add(entry)
 
 
 # ===========================================================================
-# Static routes  (must come before /{sport} to avoid path-param capture)
+# Static routes  (must come before /{sport})
 # ===========================================================================
 
 
@@ -97,18 +93,23 @@ def _write_audit(
 def list_feature_flags(
     sport: Optional[str] = Query(None, description="Filter by sport name"),
     site: Optional[str] = Query(None, description="Filter by site name"),
-    db: Session = Depends(get_db),
 ) -> FeatureFlagListResponse:
     """Return all feature flags, optionally filtered by sport and/or site."""
-    stmt = select(FeatureFlag).order_by(FeatureFlag.updated_at.desc())
-    if sport:
-        stmt = stmt.where(FeatureFlag.sport.ilike(f"%{sport}%"))
-    if site:
-        stmt = stmt.where(FeatureFlag.site.ilike(f"%{site}%"))
+    svc = _svc()
 
-    flags = db.scalars(stmt).all()
+    if sport:
+        flags = svc.get_feature_flags_by_sport(sport)
+    else:
+        flags = svc.get_all_feature_flags()
+
+    if site:
+        flags = [f for f in flags if f.site == site]
+
+    # Sort newest-updated first
+    flags = sorted(flags, key=lambda f: f.updated_at, reverse=True)
+
     return FeatureFlagListResponse(
-        data=[FeatureFlagOut.model_validate(f) for f in flags],
+        data=[_to_out(f) for f in flags],
         count=len(flags),
     )
 
@@ -119,55 +120,18 @@ def list_feature_flags(
     status_code=status.HTTP_201_CREATED,
     summary="Create a feature flag",
 )
-def create_feature_flag(
-    body: FeatureFlagCreateRequest,
-    db: Session = Depends(get_db),
-) -> FeatureFlagOut:
-    """Create a new feature flag.  Raises 409 if (sport, site) already exists."""
-    existing_stmt = select(FeatureFlag).where(FeatureFlag.sport == body.sport)
-    if body.site is None:
-        existing_stmt = existing_stmt.where(FeatureFlag.site.is_(None))
-    else:
-        existing_stmt = existing_stmt.where(FeatureFlag.site == body.site)
-
-    if db.scalars(existing_stmt).first() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Feature flag already exists: sport={body.sport!r}"
-                + (f", site={body.site!r}" if body.site else " (global)")
-            ),
+def create_feature_flag(body: FeatureFlagCreateRequest) -> FeatureFlagOut:
+    """Create a new feature flag.  Returns 409 if (sport, site) already exists."""
+    svc = _svc()
+    try:
+        flag = svc.create_feature_flag(
+            sport=body.sport,
+            site=body.site,
+            enabled=body.enabled,
         )
-
-    now = _utcnow()
-    flag = FeatureFlag(
-        sport=body.sport,
-        site=body.site,
-        enabled=body.enabled,
-        description=body.description,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(flag)
-    db.flush()  # populate flag.id before writing audit entry
-
-    _write_audit(
-        db,
-        flag,
-        action="create",
-        old_value=None,
-        new_value=body.enabled,
-        description=(
-            body.description
-            or f"Created {'site-specific' if body.site else 'global'} flag "
-            f"for {body.sport!r}"
-            + (f" on {body.site!r}" if body.site else "")
-        ),
-    )
-
-    db.commit()
-    db.refresh(flag)
-    return FeatureFlagOut.model_validate(flag)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    return _to_out(flag)
 
 
 @router.get(
@@ -178,7 +142,6 @@ def create_feature_flag(
 def check_feature_flag(
     sport: str = Query(..., description="Sport to check"),
     site: Optional[str] = Query(None, description="Site to check (omit for global)"),
-    db: Session = Depends(get_db),
 ) -> FeatureFlagCheckResponse:
     """
     Resolve the effective enabled state for (sport, site).
@@ -188,43 +151,14 @@ def check_feature_flag(
     2. Global flag         (sport, site IS NULL)
     3. Default: disabled (flag_exists=False)
     """
-    # Site-specific lookup
-    if site:
-        site_stmt = (
-            select(FeatureFlag)
-            .where(FeatureFlag.sport == sport)
-            .where(FeatureFlag.site == site)
-        )
-        site_flag = db.scalars(site_stmt).first()
-        if site_flag is not None:
-            return FeatureFlagCheckResponse(
-                sport=sport,
-                site=site,
-                enabled=site_flag.enabled,
-                flag_exists=True,
-            )
-
-    # Global fallback
-    global_stmt = (
-        select(FeatureFlag)
-        .where(FeatureFlag.sport == sport)
-        .where(FeatureFlag.site.is_(None))
-    )
-    global_flag = db.scalars(global_stmt).first()
-    if global_flag is not None:
-        return FeatureFlagCheckResponse(
-            sport=sport,
-            site=site,
-            enabled=global_flag.enabled,
-            flag_exists=True,
-        )
-
-    # Not found → disabled by default
+    svc = _svc()
+    flag = svc.get_feature_flag(sport, site)
+    enabled = svc.is_adaptive_enabled(sport, site)
     return FeatureFlagCheckResponse(
         sport=sport,
         site=site,
-        enabled=False,
-        flag_exists=False,
+        enabled=enabled,
+        flag_exists=flag is not None,
     )
 
 
@@ -233,14 +167,9 @@ def check_feature_flag(
     response_model=EnabledSportsResponse,
     summary="List sports with at least one enabled flag",
 )
-def get_enabled_sports(db: Session = Depends(get_db)) -> EnabledSportsResponse:
-    stmt = (
-        select(FeatureFlag.sport)
-        .where(FeatureFlag.enabled.is_(True))
-        .distinct()
-        .order_by(FeatureFlag.sport)
-    )
-    sports = list(db.scalars(stmt).all())
+def get_enabled_sports() -> EnabledSportsResponse:
+    svc = _svc()
+    sports = sorted(svc.get_enabled_sports())
     return EnabledSportsResponse(sports=sports, count=len(sports))
 
 
@@ -249,39 +178,14 @@ def get_enabled_sports(db: Session = Depends(get_db)) -> EnabledSportsResponse:
     response_model=FeatureFlagStatsResponse,
     summary="Aggregate feature-flag statistics",
 )
-def get_feature_flag_stats(db: Session = Depends(get_db)) -> FeatureFlagStatsResponse:
-    total = db.scalar(select(func.count()).select_from(FeatureFlag)) or 0
-    enabled = (
-        db.scalar(
-            select(func.count())
-            .select_from(FeatureFlag)
-            .where(FeatureFlag.enabled.is_(True))
-        )
-        or 0
-    )
-    global_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(FeatureFlag)
-            .where(FeatureFlag.site.is_(None))
-        )
-        or 0
-    )
-    site_specific = (
-        db.scalar(
-            select(func.count())
-            .select_from(FeatureFlag)
-            .where(FeatureFlag.site.isnot(None))
-        )
-        or 0
-    )
-    unique_sports = (
-        db.scalar(
-            select(func.count(FeatureFlag.sport.distinct())).select_from(FeatureFlag)
-        )
-        or 0
-    )
-
+def get_feature_flag_stats() -> FeatureFlagStatsResponse:
+    svc = _svc()
+    flags = svc.get_all_feature_flags()
+    total = len(flags)
+    enabled = sum(1 for f in flags if f.enabled)
+    global_count = sum(1 for f in flags if f.site is None)
+    site_specific = total - global_count
+    unique_sports = len({f.sport for f in flags})
     return FeatureFlagStatsResponse(
         total_flags=total,
         enabled_flags=enabled,
@@ -297,15 +201,12 @@ def get_feature_flag_stats(db: Session = Depends(get_db)) -> FeatureFlagStatsRes
     response_model=FeatureFlagListResponse,
     summary="List all site-specific flags",
 )
-def get_site_flags(db: Session = Depends(get_db)) -> FeatureFlagListResponse:
-    stmt = (
-        select(FeatureFlag)
-        .where(FeatureFlag.site.isnot(None))
-        .order_by(FeatureFlag.sport, FeatureFlag.site)
-    )
-    flags = db.scalars(stmt).all()
+def get_site_flags() -> FeatureFlagListResponse:
+    svc = _svc()
+    flags = [f for f in svc.get_all_feature_flags() if f.site is not None]
+    flags = sorted(flags, key=lambda f: (f.sport, f.site or ""))
     return FeatureFlagListResponse(
-        data=[FeatureFlagOut.model_validate(f) for f in flags],
+        data=[_to_out(f) for f in flags],
         count=len(flags),
     )
 
@@ -313,7 +214,7 @@ def get_site_flags(db: Session = Depends(get_db)) -> FeatureFlagListResponse:
 @router.get(
     "/audit-log",
     response_model=AuditLogResponse,
-    summary="Retrieve audit log entries",
+    summary="Retrieve audit log entries for feature-flag mutations",
 )
 def get_audit_log(
     sport: Optional[str] = Query(None),
@@ -324,31 +225,103 @@ def get_audit_log(
     user: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
 ) -> AuditLogResponse:
-    """Return paginated audit-log entries, newest first."""
-    stmt = select(AuditLog).order_by(AuditLog.timestamp.desc())
+    """
+    Return audit log entries from the adaptive module's audit_log table.
 
+    The adaptive module records selector decisions (approve / reject / flag)
+    rather than flag mutations, so the ``action`` field in each entry reflects
+    the selector-decision vocabulary.  Front-end filters that use the feature-flag
+    vocabulary (create / update / toggle / delete) are applied server-side by
+    mapping to the closest equivalent action_type values.
+    """
+    try:
+        from src.selectors.adaptive.db.repositories.audit_event_repository import (
+            AuditEventRepository,
+        )
+    except ImportError:
+        # Graceful degradation: return empty log if audit module unavailable
+        return AuditLogResponse(
+            data=[],
+            count=0,
+            page=1,
+            page_size=limit,
+            total_pages=1,
+            has_more=False,
+        )
+
+    repo = AuditEventRepository(db_path=_db_path())
+
+    # Map the UI's feature-flag action vocabulary to the adaptive module's
+    # action_type values so filters work sensibly across both worlds.
+    _ACTION_MAP = {
+        "create": "custom_selector_created",
+        "update": "selector_approved",
+        "toggle": "selector_approved",
+        "delete": "selector_rejected",
+    }
+
+    try:
+        all_entries = repo.get_recent_audit_events(limit=10_000)
+    except Exception:
+        all_entries = []
+
+    # Apply filters
     if sport:
-        stmt = stmt.where(AuditLog.sport.ilike(f"%{sport}%"))
+        all_entries = [
+            e
+            for e in all_entries
+            if (e.selector_id or "").lower().startswith(sport.lower())
+        ]
     if site:
-        stmt = stmt.where(AuditLog.site.ilike(f"%{site}%"))
+        all_entries = [
+            e for e in all_entries if site.lower() in (e.selector_id or "").lower()
+        ]
     if action and action != "all":
-        stmt = stmt.where(AuditLog.action == action)
+        target_action = _ACTION_MAP.get(action, action)
+        all_entries = [e for e in all_entries if e.action_type == target_action]
     if user:
-        stmt = stmt.where(AuditLog.user.ilike(f"%{user}%"))
+        all_entries = [
+            e for e in all_entries if user.lower() in (e.user_id or "").lower()
+        ]
 
-    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    entries = db.scalars(stmt.offset(offset).limit(limit)).all()
+    total = len(all_entries)
+    page_entries = all_entries[offset : offset + limit]
 
     page_size = limit
     page = (offset // page_size) + 1 if page_size else 1
     total_pages = max(1, math.ceil(total / page_size)) if page_size else 1
 
-    from src.api.schemas import AuditLogEntryOut  # local import avoids circular
+    def _entry_to_out(e) -> AuditLogEntryOut:
+        # Map adaptive action_type → UI action vocabulary
+        _REVERSE_ACTION_MAP = {
+            "custom_selector_created": "create",
+            "selector_approved": "update",
+            "selector_rejected": "delete",
+            "selector_flagged": "toggle",
+        }
+        ui_action = _REVERSE_ACTION_MAP.get(e.action_type, "update")
+
+        # Derive sport/site from selector_id (format: sport.site.element)
+        selector_id = e.selector_id or ""
+        parts = selector_id.split(".")
+        entry_sport = parts[0] if parts else selector_id
+        entry_site = parts[1] if len(parts) > 1 else None
+
+        return AuditLogEntryOut(
+            id=e.id,
+            action=ui_action,
+            sport=entry_sport,
+            site=entry_site,
+            old_value=None,
+            new_value=None,
+            user=e.user_id or "system",
+            timestamp=e.timestamp,
+            description=e.notes or e.reason,
+        )
 
     return AuditLogResponse(
-        data=[AuditLogEntryOut.model_validate(e) for e in entries],
+        data=[_entry_to_out(e) for e in page_entries],
         count=total,
         page=page,
         page_size=page_size,
@@ -367,18 +340,12 @@ def get_audit_log(
     response_model=FeatureFlagListResponse,
     summary="Get all flags for a sport",
 )
-def get_sport_flags(
-    sport: str,
-    db: Session = Depends(get_db),
-) -> FeatureFlagListResponse:
-    stmt = (
-        select(FeatureFlag)
-        .where(FeatureFlag.sport == sport)
-        .order_by(FeatureFlag.site.nullsfirst())
-    )
-    flags = db.scalars(stmt).all()
+def get_sport_flags(sport: str) -> FeatureFlagListResponse:
+    svc = _svc()
+    flags = svc.get_feature_flags_by_sport(sport)
+    flags = sorted(flags, key=lambda f: (f.site or ""))
     return FeatureFlagListResponse(
-        data=[FeatureFlagOut.model_validate(f) for f in flags],
+        data=[_to_out(f) for f in flags],
         count=len(flags),
     )
 
@@ -388,34 +355,13 @@ def get_sport_flags(
     response_model=FeatureFlagOut,
     summary="Update / toggle a sport's global flag",
 )
-def update_sport_flag(
-    sport: str,
-    body: FeatureFlagUpdateRequest,
-    db: Session = Depends(get_db),
-) -> FeatureFlagOut:
-    flag = _get_flag_or_404(db, sport, site=None)
-    old_enabled = flag.enabled
-    flag.enabled = body.enabled
-    if body.description is not None:
-        flag.description = body.description
-    flag.updated_at = _utcnow()
-
-    action = "toggle" if old_enabled != body.enabled else "update"
-    _write_audit(
-        db,
-        flag,
-        action=action,
-        old_value=old_enabled,
-        new_value=body.enabled,
-        description=(
-            f"{'Enabled' if body.enabled else 'Disabled'} global flag for {sport!r}"
-            if action == "toggle"
-            else f"Updated global flag for {sport!r}"
-        ),
-    )
-    db.commit()
-    db.refresh(flag)
-    return FeatureFlagOut.model_validate(flag)
+def update_sport_flag(sport: str, body: FeatureFlagUpdateRequest) -> FeatureFlagOut:
+    svc = _svc()
+    flag = svc.update_feature_flag(sport, site=None, enabled=body.enabled)
+    if flag is None:
+        # Auto-create if it doesn't exist yet (idempotent upsert)
+        flag = svc.create_feature_flag(sport=sport, site=None, enabled=body.enabled)
+    return _to_out(flag)
 
 
 @router.delete(
@@ -423,21 +369,14 @@ def update_sport_flag(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a sport's global flag",
 )
-def delete_sport_flag(
-    sport: str,
-    db: Session = Depends(get_db),
-) -> None:
-    flag = _get_flag_or_404(db, sport, site=None)
-    _write_audit(
-        db,
-        flag,
-        action="delete",
-        old_value=flag.enabled,
-        new_value=None,
-        description=f"Deleted global flag for {sport!r}",
-    )
-    db.delete(flag)
-    db.commit()
+def delete_sport_flag(sport: str) -> None:
+    svc = _svc()
+    deleted = svc.delete_feature_flag(sport, site=None)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Feature flag not found: sport={sport!r} (global)",
+        )
 
 
 @router.get(
@@ -445,13 +384,15 @@ def delete_sport_flag(
     response_model=FeatureFlagOut,
     summary="Get a site-specific flag",
 )
-def get_site_flag(
-    sport: str,
-    site: str,
-    db: Session = Depends(get_db),
-) -> FeatureFlagOut:
-    flag = _get_flag_or_404(db, sport, site=site)
-    return FeatureFlagOut.model_validate(flag)
+def get_site_flag(sport: str, site: str) -> FeatureFlagOut:
+    svc = _svc()
+    flag = svc.get_feature_flag(sport, site)
+    if flag is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Feature flag not found: sport={sport!r}, site={site!r}",
+        )
+    return _to_out(flag)
 
 
 @router.patch(
@@ -463,31 +404,15 @@ def update_site_flag(
     sport: str,
     site: str,
     body: FeatureFlagUpdateRequest,
-    db: Session = Depends(get_db),
 ) -> FeatureFlagOut:
-    flag = _get_flag_or_404(db, sport, site=site)
-    old_enabled = flag.enabled
-    flag.enabled = body.enabled
-    if body.description is not None:
-        flag.description = body.description
-    flag.updated_at = _utcnow()
-
-    action = "toggle" if old_enabled != body.enabled else "update"
-    _write_audit(
-        db,
-        flag,
-        action=action,
-        old_value=old_enabled,
-        new_value=body.enabled,
-        description=(
-            f"{'Enabled' if body.enabled else 'Disabled'} {sport!r} flag on {site!r}"
-            if action == "toggle"
-            else f"Updated {sport!r} flag on {site!r}"
-        ),
-    )
-    db.commit()
-    db.refresh(flag)
-    return FeatureFlagOut.model_validate(flag)
+    svc = _svc()
+    flag = svc.update_feature_flag(sport, site=site, enabled=body.enabled)
+    if flag is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Feature flag not found: sport={sport!r}, site={site!r}",
+        )
+    return _to_out(flag)
 
 
 @router.delete(
@@ -495,19 +420,11 @@ def update_site_flag(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a site-specific flag",
 )
-def delete_site_flag(
-    sport: str,
-    site: str,
-    db: Session = Depends(get_db),
-) -> None:
-    flag = _get_flag_or_404(db, sport, site=site)
-    _write_audit(
-        db,
-        flag,
-        action="delete",
-        old_value=flag.enabled,
-        new_value=None,
-        description=f"Deleted {sport!r} flag on {site!r}",
-    )
-    db.delete(flag)
-    db.commit()
+def delete_site_flag(sport: str, site: str) -> None:
+    svc = _svc()
+    deleted = svc.delete_feature_flag(sport, site=site)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Feature flag not found: sport={sport!r}, site={site!r}",
+        )

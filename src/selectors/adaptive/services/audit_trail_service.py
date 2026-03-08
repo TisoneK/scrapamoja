@@ -10,11 +10,27 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 import structlog
+from sqlalchemy.exc import SQLAlchemyError
 
 from ..db.repositories.audit_event_repository import AuditEventRepository
 from ..db.models.audit_event import AuditEvent
 
 logger = structlog.get_logger(__name__)
+
+
+class AuditTrailServiceError(Exception):
+    """Base exception for audit trail service errors."""
+    pass
+
+
+class AuditTrailQueryError(AuditTrailServiceError):
+    """Exception for audit trail query failures."""
+    pass
+
+
+class ConnectedDecisionError(AuditTrailServiceError):
+    """Exception for connected decision analysis failures."""
+    pass
 
 
 class AuditTrailService:
@@ -41,7 +57,7 @@ class AuditTrailService:
             db_path = Path("data/audit_log.db")
             db_path.parent.mkdir(parents=True, exist_ok=True)
         
-        self.repository = AuditEventRepository(str(db_path))
+        self.repository: AuditEventRepository = AuditEventRepository(str(db_path))
         logger.info("Audit trail service initialized", db_path=str(db_path))
     
     def get_chronological_audit_trail(
@@ -52,6 +68,7 @@ class AuditTrailService:
         action_types: Optional[List[str]] = None,
         selector_ids: Optional[List[str]] = None,
         limit: int = 1000,
+        offset: int = 0,
     ) -> List[AuditEvent]:
         """
         Get audit trail in chronological order with optional filters.
@@ -63,6 +80,7 @@ class AuditTrailService:
             action_types: Optional list of action types to filter by
             selector_ids: Optional list of selector IDs to filter by
             limit: Maximum number of events to return
+            offset: Number of events to skip (for pagination)
             
         Returns:
             List of audit events in chronological order
@@ -78,7 +96,8 @@ class AuditTrailService:
                     selector_ids=selector_ids,
                     start_date=start_date,
                     end_date=end_date,
-                    limit=limit
+                    limit=limit,
+                    offset=offset if offset > 0 else None
                 )
             else:
                 events = self.repository.get_all_events(limit)
@@ -95,9 +114,9 @@ class AuditTrailService:
             
             return events
             
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(
-                "Failed to retrieve chronological audit trail",
+                "Database error retrieving chronological audit trail",
                 start_date=start_date,
                 end_date=end_date,
                 user_ids=user_ids,
@@ -105,7 +124,18 @@ class AuditTrailService:
                 selector_ids=selector_ids,
                 error=str(e),
             )
-            raise
+            raise AuditTrailQueryError(f"Failed to retrieve audit trail: {e}") from e
+        except Exception as e:
+            logger.error(
+                "Unexpected error retrieving chronological audit trail",
+                start_date=start_date,
+                end_date=end_date,
+                user_ids=user_ids,
+                action_types=action_types,
+                selector_ids=selector_ids,
+                error=str(e),
+            )
+            raise AuditTrailServiceError(f"Unexpected error: {e}") from e
     
     def detect_connected_decisions(self, selector_id: str) -> List[Dict[str, Any]]:
         """
@@ -129,44 +159,58 @@ class AuditTrailService:
             
             connections = []
             
-            # Create hash maps for O(1) lookups
-            approval_events = {}
-            rejection_events = {}
+            # Create chronological lists for O(n) single-pass analysis
+            approval_events = []
+            rejection_events = []
             
-            # Categorize events by type and index
-            for i, event in enumerate(events):
+            # Categorize events by type and maintain chronological order
+            for event in events:
                 if event.action_type == "selector_approved":
-                    approval_events[i] = event
+                    approval_events.append(event)
                 elif event.action_type == "selector_rejected":
-                    rejection_events[i] = event
+                    rejection_events.append(event)
             
-            # Find approval after rejection (O(n) instead of O(n²))
-            for rej_idx, rejection_event in rejection_events.items():
-                # Look for any approval after this rejection
-                for appr_idx, approval_event in approval_events.items():
-                    if appr_idx > rej_idx:
-                        connections.append({
-                            "type": "approval_after_rejection",
-                            "rejection_event": rejection_event,
-                            "approval_event": approval_event,
-                            "selector_id": selector_id,
-                            "time_difference": approval_event.timestamp - rejection_event.timestamp,
-                        })
-                        break  # Only need the first approval after rejection
+            # Find approval after rejection - O(n) with two pointers
+            rejection_idx = 0
+            approval_idx = 0
             
-            # Find rejection after approval (O(n) instead of O(n²))
-            for appr_idx, approval_event in approval_events.items():
-                # Look for any rejection after this approval
-                for rej_idx, rejection_event in rejection_events.items():
-                    if rej_idx > appr_idx:
-                        connections.append({
-                            "type": "rejection_after_approval",
-                            "approval_event": approval_event,
-                            "rejection_event": rejection_event,
-                            "selector_id": selector_id,
-                            "time_difference": rejection_event.timestamp - approval_event.timestamp,
-                        })
-                        break  # Only need the first rejection after approval
+            while rejection_idx < len(rejection_events) and approval_idx < len(approval_events):
+                rejection_event = rejection_events[rejection_idx]
+                approval_event = approval_events[approval_idx]
+                
+                if approval_event.timestamp > rejection_event.timestamp:
+                    # Found approval after rejection
+                    connections.append({
+                        "type": "approval_after_rejection",
+                        "rejection_event": rejection_event,
+                        "approval_event": approval_event,
+                        "selector_id": selector_id,
+                        "time_difference": approval_event.timestamp - rejection_event.timestamp,
+                    })
+                    rejection_idx += 1
+                else:
+                    approval_idx += 1
+            
+            # Find rejection after approval - O(n) with two pointers  
+            approval_idx = 0
+            rejection_idx = 0
+            
+            while approval_idx < len(approval_events) and rejection_idx < len(rejection_events):
+                approval_event = approval_events[approval_idx]
+                rejection_event = rejection_events[rejection_idx]
+                
+                if rejection_event.timestamp > approval_event.timestamp:
+                    # Found rejection after approval
+                    connections.append({
+                        "type": "rejection_after_approval",
+                        "approval_event": approval_event,
+                        "rejection_event": rejection_event,
+                        "selector_id": selector_id,
+                        "time_difference": rejection_event.timestamp - approval_event.timestamp,
+                    })
+                    approval_idx += 1
+                else:
+                    rejection_idx += 1
             
             logger.info(
                 "Detected connected decisions",
@@ -177,13 +221,20 @@ class AuditTrailService:
             
             return connections
             
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(
-                "Failed to detect connected decisions",
+                "Database error detecting connected decisions",
                 selector_id=selector_id,
                 error=str(e),
             )
-            raise
+            raise ConnectedDecisionError(f"Failed to detect connected decisions: {e}") from e
+        except Exception as e:
+            logger.error(
+                "Unexpected error detecting connected decisions",
+                selector_id=selector_id,
+                error=str(e),
+            )
+            raise ConnectedDecisionError(f"Unexpected error: {e}") from e
     
     def get_user_decision_history(
         self,

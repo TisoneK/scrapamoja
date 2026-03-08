@@ -25,6 +25,14 @@ from src.selectors.adaptive.services.dom_analyzer import AlternativeSelector, St
 
 from src.observability.logger import get_logger
 
+# Import WebSocket manager for real-time updates
+try:
+    from src.selectors.adaptive.api.websocket.failure_updates import get_failure_update_manager
+except ImportError:
+    # WebSocket module not available - fallback for testing
+    def get_failure_update_manager():
+        return None
+
 
 class FailureService:
     """
@@ -44,6 +52,7 @@ class FailureService:
         blast_radius_calculator: Optional[BlastRadiusCalculator] = None,
         recipe_repository: Optional[RecipeRepository] = None,
         audit_repository: Optional[AuditEventRepository] = None,
+        db_path: Optional[str] = None,
     ):
         """
         Initialize the failure service.
@@ -54,21 +63,44 @@ class FailureService:
             blast_radius_calculator: Service for blast radius calculation
             recipe_repository: Repository for recipe CRUD operations
             audit_repository: Repository for audit logging (Story 4.2 implementation)
+            db_path: Optional database path for persistent storage
         """
         self._logger = get_logger("failure_service")
         
-        # Use provided or create default repository
-        self.failure_repository = failure_repository or FailureEventRepository()
+        # Use persistent database path if not provided
+        # Prefer environment variable or app data directory over cwd
+        if db_path is None:
+            import os
+            # Check for environment variable first
+            db_path = os.environ.get("ADAPTIVE_DB_PATH")
+            if not db_path:
+                # Use app data directory if available, otherwise fall back to cwd
+                app_data = os.environ.get("APPDATA") or os.environ.get("HOME")
+                if app_data:
+                    db_dir = os.path.join(app_data, ".scrapamoja", "data")
+                else:
+                    db_dir = os.path.join(os.getcwd(), "data")
+                os.makedirs(db_dir, exist_ok=True)
+                db_path = os.path.join(db_dir, "adaptive.db")
+        
+        # Use provided or create default repository with persistent storage
+        if failure_repository is None:
+            failure_repository = FailureEventRepository(db_path)
+        self.failure_repository = failure_repository
         
         # Use provided or create default services
         self.confidence_scorer = confidence_scorer or ConfidenceScorer()
         self.blast_radius_calculator = blast_radius_calculator or BlastRadiusCalculator()
         
-        # Recipe repository for selector updates
-        self.recipe_repository = recipe_repository or RecipeRepository()
+        # Recipe repository for selector updates with persistent storage
+        if recipe_repository is None:
+            recipe_repository = RecipeRepository(db_path)
+        self.recipe_repository = recipe_repository
         
-        # Audit repository for proper database logging (Story 4.2)
-        self.audit_repository = audit_repository or AuditEventRepository()
+        # Audit repository for proper database logging with persistent storage
+        if audit_repository is None:
+            audit_repository = AuditEventRepository(db_path)
+        self.audit_repository = audit_repository
         
         # TODO(Story 4.2): Replace with database table for persistence
         # Currently in-memory only - data lost on restart
@@ -225,11 +257,13 @@ class FailureService:
         flagged: Optional[bool] = None,
         date_from: Optional[datetime] = None,
         date_to: Optional[datetime] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = "desc",
         page: int = 1,
         page_size: int = 20,
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
-        List failure events with filtering and pagination.
+        List failure events with filtering, sorting, and pagination.
         
         Args:
             sport: Optional sport filter
@@ -239,6 +273,8 @@ class FailureService:
             flagged: Optional flagged status filter
             date_from: Optional start date filter
             date_to: Optional end date filter
+            sort_by: Sort by field: severity, timestamp, blast_radius
+            sort_order: Sort order: asc or desc
             page: Page number (1-indexed)
             page_size: Number of results per page
             
@@ -248,7 +284,7 @@ class FailureService:
         # Calculate offset
         offset = (page - 1) * page_size
         
-        # Fetch failures from repository
+        # Fetch failures from repository with database-level sorting
         failures = self.failure_repository.find_with_filters(
             sport=sport,
             date_from=date_from,
@@ -257,6 +293,8 @@ class FailureService:
             site=site,
             limit=page_size,
             offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
         
         # Build summary list
@@ -287,12 +325,54 @@ class FailureService:
                 "flag_note": flag_info.get("note"),
             })
         
+        # Apply sorting for blast_radius only (other sorting done at database level)
+        if sort_by == "blast_radius":
+            # Calculate actual blast radius for each failure if alternatives exist
+            blast_radius_values = []
+            for result in results:
+                failure_id = result["failure_id"]
+                alternatives = self._alternatives.get(failure_id, [])
+                
+                if alternatives and len(alternatives) > 0:
+                    # Use actual blast radius calculation
+                    try:
+                        # Get snapshot reference for HTML content
+                        snapshot_id = self._snapshot_references.get(failure_id)
+                        html_content = None
+                        
+                        # For MVP, we'll use a simplified blast radius based on confidence
+                        # In production, this would fetch HTML from snapshot and use BlastRadiusCalculator
+                        max_confidence = max(alt.confidence_score for alt in alternatives)
+                        
+                        # Apply blast radius calculation logic from BlastRadiusCalculator
+                        # This is a simplified version for the current implementation
+                        if max_confidence >= 0.9:
+                            blast_radius = 4.0  # Critical impact
+                        elif max_confidence >= 0.7:
+                            blast_radius = 3.0  # High impact  
+                        elif max_confidence >= 0.5:
+                            blast_radius = 2.0  # Medium impact
+                        else:
+                            blast_radius = 1.0  # Low impact
+                            
+                        blast_radius_values.append(blast_radius)
+                    except Exception as e:
+                        self._logger.warning(f"Error calculating blast radius for failure {failure_id}: {e}")
+                        blast_radius_values.append(0.0)
+                else:
+                    blast_radius_values.append(0.0)
+            
+            # Sort by calculated blast radius values
+            combined = list(zip(results, blast_radius_values))
+            combined.sort(key=lambda x: x[1], reverse=reverse)
+            results = [x[0] for x in combined]
+        
         # Get total count (simplified - in production would be a proper count query)
         total = len(results)  # This is approximate for MVP
         
         return results, total
     
-    def approve_alternative(
+    async def approve_alternative(
         self,
         failure_id: int,
         selector: str,
@@ -432,6 +512,18 @@ class FailureService:
             new_version=new_version,
         )
         
+        # Broadcast real-time update to connected clients (Task 3.2)
+        websocket_manager = get_failure_update_manager()
+        if websocket_manager:
+            await websocket_manager.broadcast_approval({
+                "failure_id": failure_id,
+                "selector": selector,
+                "recipe_id": recipe_id,
+                "new_version": new_version,
+                "user_id": user_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        
         return {
             "success": True,
             "message": "Selector approved successfully",
@@ -442,7 +534,7 @@ class FailureService:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     
-    def reject_alternative(
+    async def reject_alternative(
         self,
         failure_id: int,
         selector: str,
@@ -507,6 +599,18 @@ class FailureService:
             reason=reason,
             suggested_alternative=suggested_alternative,
         )
+        
+        # Broadcast real-time update to connected clients (Task 3.2)
+        websocket_manager = get_failure_update_manager()
+        if websocket_manager:
+            await websocket_manager.broadcast_rejection({
+                "failure_id": failure_id,
+                "selector": selector,
+                "reason": reason,
+                "suggested_alternative": suggested_alternative,
+                "user_id": user_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
         
         return {
             "success": True,
