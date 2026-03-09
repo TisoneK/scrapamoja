@@ -7,7 +7,7 @@ context-aware scoping, and integration with all strategy patterns as specified i
 
 import asyncio
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 from src.models.selector_models import (
@@ -45,6 +45,12 @@ class ResolutionAttempt:
 class SelectorEngine(ISelectorEngine):
     """Main selector engine implementing multi-strategy resolution."""
     
+    # Lifecycle hook events
+    HOOK_EVENT_INIT = "on_init"          # Engine initialization
+    HOOK_EVENT_LOAD = "on_load"          # Selectors loaded
+    HOOK_EVENT_READY = "on_ready"        # All selectors ready
+    HOOK_EVENT_SELECTOR_REGISTERED = "on_selector_registered"  # Single selector registered
+    
     def __init__(self):
         self._logger = get_logger("selector_engine")
         self._threshold_manager = get_threshold_manager()
@@ -68,10 +74,92 @@ class SelectorEngine(ISelectorEngine):
         # Configuration
         self._config = get_config()
         
+        # Lifecycle hooks - Story 7.4: Registration Automation
+        self._hooks: Dict[str, List[Callable]] = {
+            self.HOOK_EVENT_INIT: [],
+            self.HOOK_EVENT_LOAD: [],
+            self.HOOK_EVENT_READY: [],
+            self.HOOK_EVENT_SELECTOR_REGISTERED: [],
+        }
+        self._hooks_enabled = True
+        
         # Initialize common strategies
         self._initialize_common_strategies()
         
+        # Trigger init hook - Story 7.4
+        # Store deferred init for later triggering when event loop is available
+        self._deferred_init_hook = True
         self._logger.info("SelectorEngine initialized")
+    
+    def _maybe_trigger_init_hook(self) -> None:
+        """
+        Try to trigger the init hook. Called when an event loop becomes available.
+        This is safe to call multiple times - it only triggers once.
+        """
+        if not getattr(self, '_deferred_init_hook', False):
+            return
+        
+        self._deferred_init_hook = False
+        
+        try:
+            # Try to get the current event loop
+            loop = asyncio.get_running_loop()
+            # Schedule the hook to run
+            loop.call_soon(lambda: asyncio.create_task(self._trigger_hook(self.HOOK_EVENT_INIT)))
+        except RuntimeError:
+            # No running event loop - try synchronous trigger
+            try:
+                # Run synchronously if possible
+                self._trigger_hook(self.HOOK_EVENT_INIT)
+            except Exception as e:
+                self._logger.debug(f"Could not trigger init hook synchronously: {e}")
+    
+    def register_hook(self, event: str, callback: Callable) -> None:
+        """
+        Register a callback for a lifecycle event.
+        
+        Args:
+            event: The event to register for (on_init, on_load, on_ready, on_selector_registered)
+            callback: Async callable to call when event is triggered
+        """
+        if event not in self._hooks:
+            self._hooks[event] = []
+        self._hooks[event].append(callback)
+        self._logger.debug(f"Registered hook for event: {event}")
+    
+    def unregister_hook(self, event: str, callback: Callable) -> None:
+        """
+        Unregister a callback from a lifecycle event.
+        
+        Args:
+            event: The event to unregister from
+            callback: The callback to remove
+        """
+        if event in self._hooks and callback in self._hooks[event]:
+            self._hooks[event].remove(callback)
+            self._logger.debug(f"Unregistered hook for event: {event}")
+    
+    async def _trigger_hook(self, event: str, *args: Any, **kwargs: Any) -> None:
+        """
+        Trigger all registered callbacks for an event.
+        
+        Args:
+            event: The event to trigger
+            *args: Positional arguments to pass to callbacks
+            **kwargs: Keyword arguments to pass to callbacks
+        """
+        if not self._hooks_enabled:
+            return
+        
+        if event in self._hooks:
+            for callback in self._hooks[event]:
+                try:
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback(*args, **kwargs)
+                    else:
+                        callback(*args, **kwargs)
+                except Exception as e:
+                    self._logger.warning(f"Hook callback failed for event {event}: {e}")
     
     async def resolve(self, selector_name: str, context: DOMContext) -> StrategyResult:
         """
@@ -395,6 +483,8 @@ class SelectorEngine(ISelectorEngine):
             
             if success:
                 self._logger.info(f"Successfully registered selector: {name}")
+                # Trigger selector registered hook - Story 7.4
+                await self._trigger_hook(self.HOOK_EVENT_SELECTOR_REGISTERED, name, selector)
             else:
                 self._logger.warning(f"Failed to register selector with global registry: {name}")
             
@@ -402,6 +492,22 @@ class SelectorEngine(ISelectorEngine):
         except Exception as e:
             self._logger.error(f"Error registering selector {name}: {e}")
             return False
+    
+    async def notify_selectors_loaded(self, selector_count: int) -> None:
+        """
+        Notify engine that selectors have been loaded.
+        
+        This should be called after batch loading selectors to trigger the on_load
+        and on_ready hooks for automatic registration.
+        
+        Args:
+            selector_count: Number of selectors that were loaded
+        """
+        self._logger.info(f"Notifying engine of {selector_count} selectors loaded")
+        # Trigger load hook
+        await self._trigger_hook(self.HOOK_EVENT_LOAD, selector_count)
+        # Trigger ready hook when all selectors are loaded
+        await self._trigger_hook(self.HOOK_EVENT_READY, selector_count)
     
     def list_selectors(self, context: Optional[str] = None) -> List[str]:
         """List available selectors, optionally filtered by context."""

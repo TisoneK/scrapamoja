@@ -256,6 +256,39 @@ class FailureEventRepository:
             
             return list(session.execute(query).scalars().all())
     
+    def get_all(self, limit: Optional[int] = None) -> List[FailureEvent]:
+        """
+        Get all failure events.
+        
+        Args:
+            limit: Optional limit on number of results
+            
+        Returns:
+            List of all FailureEvent instances
+        """
+        with self._get_session() as session:
+            query = select(FailureEvent).order_by(FailureEvent.timestamp.desc())
+            
+            if limit is not None:
+                query = query.limit(limit)
+            
+            return list(session.execute(query).scalars().all())
+
+    def get_unique_selectors(self) -> List[str]:
+        """
+        Get all unique selector IDs from failure events.
+        
+        Returns:
+            List of unique selector IDs
+        """
+        with self._get_session() as session:
+            query = (
+                select(FailureEvent.selector_id)
+                .distinct()
+                .order_by(FailureEvent.selector_id)
+            )
+            return list(session.execute(query).scalars().all())
+
     def count_by_selector(self, selector_id: str) -> int:
         """
         Count failure events for a selector.

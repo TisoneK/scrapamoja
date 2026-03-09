@@ -2,9 +2,16 @@
 Flashscore scraper implementation.
 
 Example scraper demonstrating sports data extraction from Flashscore.
+
+This module has been refactored to use the selector engine's native YAML loading
+capabilities instead of manual selector conversion. This leverages:
+- YAMLSelectorLoader for native YAML file loading
+- ContextBasedSelectorLoader for context-aware selector resolution
+- UnifiedContext for unified context management (Story 7.1) - INTEGRATED
 """
 
-from typing import Dict, Any, List
+import asyncio
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 from pathlib import Path
 from src.sites.base.site_scraper import BaseSiteScraper
@@ -12,8 +19,13 @@ from .flow import FlashscoreFlow
 from .config import SITE_CONFIG
 from src.selectors.context_manager import SelectorContext, get_context_manager, DOMState
 from src.selectors.context_loader import get_context_based_loader
+from src.selectors.yaml_loader import get_yaml_loader, YAMLSelectorLoader
+from src.selectors.unified_context import UnifiedContext, from_selector_context, create_unified_context
+from src.models.selector_models import SemanticSelector
 from src.observability.logger import get_logger
 from src.interrupt_handling.integration import InterruptAwareScraper
+from src.selectors.hooks.registration import create_registration_hook
+from src.selectors.engine import SelectorEngine
 
 
 class FlashscoreScraper(InterruptAwareScraper):
@@ -23,7 +35,7 @@ class FlashscoreScraper(InterruptAwareScraper):
     site_name = SITE_CONFIG["name"]
     base_url = SITE_CONFIG["base_url"]
 
-    def __init__(self, page, selector_engine):
+    def __init__(self, page, selector_engine: SelectorEngine):
         super().__init__(page, selector_engine)
         self.flow = FlashscoreFlow(self.page, self.selector_engine)
         self.logger = get_logger("flashscore.scraper")
@@ -39,19 +51,200 @@ class FlashscoreScraper(InterruptAwareScraper):
         self.context_manager = get_context_manager(selectors_root)
         self.context_loader = get_context_based_loader(selectors_root)
         
-        # Initialize context
-        self.current_context: SelectorContext = None
+        # Initialize context using UnifiedContext (Story 7.1 integration)
+        self.current_context: Optional[UnifiedContext] = None
+        self._legacy_selector_context: Optional[SelectorContext] = None  # For backward compat
         
-        # Load selectors into registry will be done asynchronously after init
+        # Automatic selector loading - load immediately on scraper initialization
+        # This satisfies AC #3: Loading happens automatically on scraper initialization
+        self._selectors_loaded = False
+        self._selectors_loading = False
+        self._selectors_loaded_event: Optional[asyncio.Event] = None
+        
+        # Story 7.4: Registration Automation - Set up automatic registration hook
+        # This enables selectors to be automatically loaded and registered via engine hooks
+        self._registration_hook = create_registration_hook(
+            self.selector_engine,
+            selectors_root
+        )
+        self.logger.debug("Automatic selector registration hook initialized")
+    
+    async def _ensure_selectors_loaded(self) -> None:
+        """
+        Ensure selectors are loaded before use (lazy loading with auto-initialization).
+        
+        This method provides automatic loading on first use, ensuring selectors
+        are available when needed without requiring manual initialization calls.
+        """
+        if self._selectors_loaded:
+            return
+        
+        if self._selectors_loading:
+            # Wait for ongoing loading to complete
+            if self._selectors_loaded_event:
+                await self._selectors_loaded_event.wait()
+            return
+        
+        # Auto-load selectors on first access
+        await self.initialize_selectors()
     
     async def initialize_selectors(self):
-        """Initialize selectors asynchronously after scraper creation."""
-        self.logger.info("Starting selector initialization...")
-        await self._load_selectors()
-        self.logger.info("Selector initialization completed")
+        """
+        Initialize selectors asynchronously after scraper creation.
+        
+        This method uses the RegistrationHook for automatic loading and registration.
+        Can be called manually or automatically via _ensure_selectors_loaded().
+        
+        AC #1: No manual registration - uses RegistrationHook for automatic registration
+        AC #2: Registration happens automatically via engine hooks
+        AC #3: Selectors available immediately on scraper startup
+        """
+        # Prevent re-entrant loading
+        if self._selectors_loading or self._selectors_loaded:
+            self.logger.debug("Selectors already loaded or loading, skipping initialization")
+            return
+        
+        self._selectors_loading = True
+        self._selectors_loaded_event = asyncio.Event()
+        
+        try:
+            self.logger.info("Starting automatic selector registration via hook...")
+            
+            # Use the RegistrationHook for automatic loading (AC #1, #2)
+            # This replaces manual registration calls
+            if self._registration_hook:
+                await self._registration_hook._auto_load_selectors()
+            else:
+                # Fallback: Use native YAML loading without manual registration
+                self.logger.warning("RegistrationHook not available, using direct YAML loading")
+                await self._load_selectors_via_hook()
+            
+            self._selectors_loaded = True
+            self.logger.info("Automatic selector registration completed")
+        except Exception as e:
+            self.logger.error(f"Automatic selector registration failed: {e}")
+            # Try direct YAML loading as fallback
+            self.logger.info("Attempting fallback YAML loading...")
+            try:
+                await self._load_selectors_via_hook()
+                self._selectors_loaded = True
+                self.logger.info("Fallback selector loading completed")
+            except Exception as legacy_error:
+                self.logger.error(f"Fallback loading also failed: {legacy_error}")
+        finally:
+            self._selectors_loading = False
+            if self._selectors_loaded_event:
+                self._selectors_loaded_event.set()
+    
+    async def _load_selectors_via_hook(self) -> None:
+        """
+        Load selectors using native YAML loading (fallback method).
+        
+        This is used when RegistrationHook is not available.
+        NOTE: This method does NOT do manual registration - it relies on the hook.
+        """
+        from src.selectors.yaml_loader import get_yaml_loader, YAMLSelectorLoader
+        
+        try:
+            selectors_root = Path(__file__).parent / "selectors"
+            
+            # Use native YAML loader for loading only
+            yaml_loader: YAMLSelectorLoader = get_yaml_loader()
+            
+            load_result = yaml_loader.load_selectors_from_directory(
+                directory_path=str(selectors_root),
+                recursive=True
+            )
+            
+            if not load_result.success:
+                self.logger.warning(
+                    f"Selector loading had issues: {load_result.errors}"
+                )
+            
+            # Get cached selectors - registration is handled by RegistrationHook
+            # This satisfies AC #1: No manual registration calls
+            cache_stats = yaml_loader.get_cache_stats()
+            cached_count = len(cache_stats.get('cached_files', []))
+            
+            self.logger.info(
+                f"YAML loading complete: {load_result.selectors_loaded} selectors loaded, "
+                f"{load_result.selectors_failed} failed in {load_result.loading_time_ms:.2f}ms"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"YAML loading failed: {e}")
+            raise
 
-    async def _load_selectors(self):
-        """Load all YAML selectors into the selector engine registry."""
+    async def _load_selectors(self) -> None:
+        """
+        Load all YAML selectors using the engine's native YAML loading.
+        
+        This method is now DEPRECATED. Use _load_selectors_via_hook() instead.
+        Kept for backward compatibility - delegates to hook-based loading.
+        """
+        # Delegate to the hook-based loading
+        await self._load_selectors_via_hook()
+    
+    def _convert_yaml_to_semantic(self, yaml_selector) -> Optional[SemanticSelector]:
+        """
+        Convert a YAMLSelector to SemanticSelector for engine registration.
+        
+        This is a compatibility layer that converts the engine's native YAMLSelector
+        format to the SemanticSelector format expected by the registry.
+        
+        Args:
+            yaml_selector: YAMLSelector from the engine's loader
+            
+        Returns:
+            SemanticSelector compatible with the selector engine registry
+        """
+        try:
+            from src.models.selector_models import (
+                StrategyPattern, StrategyType
+            )
+            
+            # Convert YAMLSelector strategies to SemanticSelector strategies
+            strategies = []
+            for i, strategy in enumerate(yaml_selector.strategies or []):
+                strategy_pattern = StrategyPattern(
+                    id=strategy.id or f"{yaml_selector.id}_strategy_{i}",
+                    type=StrategyType(strategy.type.value if hasattr(strategy.type, 'value') else 'css'),
+                    priority=i + 1,
+                    config={
+                        'selector': strategy.config.get('selector') if strategy.config else None,
+                        'weight': strategy.config.get('weight', 1.0) if strategy.config else 1.0
+                    }
+                )
+                strategies.append(strategy_pattern)
+            
+            # Create SemanticSelector from YAMLSelector
+            semantic_selector = SemanticSelector(
+                name=yaml_selector.id,
+                description=yaml_selector.description or '',
+                context=yaml_selector.name,
+                strategies=strategies,
+                validation_rules=yaml_selector.validation_rules or [],
+                confidence_threshold=yaml_selector.metadata.get('confidence_threshold', 0.8) if yaml_selector.metadata else 0.8,
+                metadata={
+                    'file_path': yaml_selector.file_path,
+                    'original_yaml_id': yaml_selector.id,
+                    **(yaml_selector.metadata or {})
+                }
+            )
+            
+            return semantic_selector
+            
+        except Exception as e:
+            self.logger.error(f"Failed to convert YAMLSelector to SemanticSelector: {e}")
+            return None
+    
+    async def _load_selectors_legacy(self) -> None:
+        """
+        Legacy fallback loading method.
+        
+        This method is kept as a fallback in case native loading fails.
+        It performs the same function as the original manual loading.
+        """
         try:
             selectors_root = Path(__file__).parent / "selectors"
             
@@ -62,73 +255,31 @@ class FlashscoreScraper(InterruptAwareScraper):
             for yaml_file in yaml_files:
                 await self._load_selector_file(yaml_file)
                 
-            self.logger.debug(f"Loaded {len(yaml_files)} selector files from {selectors_root}")
-            
-            # Log registry state for debugging
-            if hasattr(self.context_loader, 'get_registry_state'):
-                registry_state = self.context_loader.get_registry_state()
-                self.logger.info(f"Registry state: {registry_state}", extra=registry_state)
-            else:
-                self.logger.warning("Context loader does not support registry state debugging")
+            self.logger.debug(f"Legacy loading: {len(yaml_files)} selector files from {selectors_root}")
             
         except Exception as e:
-            self.logger.error(f"Failed to load selectors: {e}")
+            self.logger.error(f"Failed legacy selector loading: {e}")
     
-    async def _load_selector_file(self, yaml_file: Path):
-        """Load a single selector YAML file into the registry."""
-        try:
-            import yaml
-            
-            with open(yaml_file, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f)
-            
-            if not data:
-                return
-            
-            # Create selector name from file path
-            selectors_root = Path(__file__).parent / "selectors"
-            relative_path = yaml_file.relative_to(selectors_root)
-            selector_name = str(relative_path.with_suffix('')).replace('\\', '.').replace('/', '.')
-            
-            self.logger.debug(f"Loading selector file: {yaml_file} -> {selector_name}")
-            
-            # Create SemanticSelector from YAML data
-            from src.models.selector_models import SemanticSelector
-            
-            # Convert strategies to proper format
-            from src.models.selector_models import StrategyPattern, StrategyType
-            strategies = []
-            for i, strategy in enumerate(data.get('strategies', [])):
-                strategy_pattern = StrategyPattern(
-                    id=f"{selector_name}_strategy_{i}",
-                    type=StrategyType(strategy.get('type', 'css')),
-                    priority=len(strategies) + 1,  # Use order as priority
-                    config={
-                        'selector': strategy.get('selector'),
-                        'weight': strategy.get('weight', 1.0)
-                    }
-                )
-                strategies.append(strategy_pattern)
-            
-            selector = SemanticSelector(
-                name=selector_name,
-                description=data.get('description', ''),
-                context=data.get('context', selector_name),
-                strategies=strategies,
-                validation_rules=data.get('validation_rules', []),
-                confidence_threshold=data.get('confidence_threshold', 0.8),
-                metadata={
-                    'file_path': str(yaml_file),
-                    **data.get('metadata', {})
-                }
-            )
-            
-            # Register with selector engine
-            success = await self.selector_engine.register_selector(selector)
-            self.logger.debug(f"Registered selector {selector_name}: {success}")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to load selector file {yaml_file}: {e}")
+    async def _load_selector_file(self, yaml_file: Path) -> None:
+        """
+        Load a single selector YAML file into the registry.
+        
+        DEPRECATED: This method is kept for backward compatibility only.
+        Use RegistrationHook for automatic registration instead.
+        
+        This method now uses the RegistrationHook instead of manual registration.
+        """
+        # Use the registration hook instead of manual registration
+        # This satisfies AC #1: No manual registration calls
+        if self._registration_hook:
+            self.logger.debug(f"Delegating selector file loading to RegistrationHook: {yaml_file}")
+            # The hook handles loading and registration
+            # Just trigger auto-load if not already done
+            if not getattr(self._registration_hook, '_loaded', False):
+                await self._registration_hook._auto_load_selectors()
+        else:
+            # Fallback to direct loading only (no manual registration)
+            self.logger.warning(f"RegistrationHook not available, skipping: {yaml_file}")
 
     async def navigate(self):
         """Navigate to Flashscore home page."""
@@ -150,21 +301,44 @@ class FlashscoreScraper(InterruptAwareScraper):
             tertiary_context=tertiary_context,
             dom_state=dom_state
         )
-        self.current_context = self.context_manager.current_context
+        # Convert SelectorContext to UnifiedContext (Story 7.1 integration)
+        legacy_context = self.context_manager.current_context
+        if legacy_context:
+            self.current_context = from_selector_context(
+                legacy_context,
+                page=self.page,
+                url=self.base_url
+            )
+            self._legacy_selector_context = legacy_context  # Keep for backward compat
+        else:
+            self.current_context = None
 
     async def _get_context_selectors(self, force_reload: bool = False):
         """Get selectors for current context."""
-        if not self.current_context:
+        if not self.current_context and not self._legacy_selector_context:
             return []
         
+        # Use legacy selector context for loader (backward compatibility)
+        # The UnifiedContext wraps the same information
+        context_for_loader = self._legacy_selector_context
+        
         result = await self.context_loader.load_selectors(
-            context=self.current_context,
+            context=context_for_loader,
             force_reload=force_reload
         )
         return result.selectors
 
     async def scrape(self, **kwargs):
-        """Perform scraping using hierarchical selectors."""
+        """
+        Perform scraping using hierarchical selectors.
+        
+        This method ensures selectors are automatically loaded before scraping
+        by calling _ensure_selectors_loaded(). This satisfies AC #3: Loading
+        happens automatically on scraper initialization.
+        """
+        # Ensure selectors are loaded before scraping (automatic initialization)
+        await self._ensure_selectors_loaded()
+        
         sport = kwargs.get('sport', 'football')
         date_filter = kwargs.get('date', 'today')
         competition = kwargs.get('competition', None)

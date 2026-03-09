@@ -9,6 +9,15 @@ from .engine import SelectorEngine, get_selector_engine
 from .registry import SelectorRegistry, get_selector_registry
 from .validation import ValidationEngine, get_validation_engine
 from .context import DOMContext, ElementInfoExtractor, TabContextManager
+from .unified_context import (
+    UnifiedContext,
+    from_selector_context,
+    from_dom_context,
+    create_unified_context,
+    UnifiedContextError,
+    ContextConversionError,
+    ContextValidationError
+)
 from .interfaces import (
     ISelectorEngine, IStrategyPattern, IConfidenceScorer,
     IDOMSnapshotManager, IDriftDetector, IStrategyEvolution
@@ -42,6 +51,15 @@ __all__ = [
     "DOMContext",
     "ElementInfoExtractor",
     "TabContextManager",
+    
+    # Unified Context
+    "UnifiedContext",
+    "from_selector_context",
+    "from_dom_context",
+    "create_unified_context",
+    "UnifiedContextError",
+    "ContextConversionError",
+    "ContextValidationError",
     
     # Interfaces
     "ISelectorEngine",

@@ -28,6 +28,9 @@ from src.selectors.adaptive.api.routes.views import router as views_router
 from src.selectors.adaptive.api.routes.triage import router as triage_router
 from src.selectors.adaptive.api.routes.custom_strategies import router as custom_strategies_router
 from src.selectors.adaptive.api.routes.feature_flags import router as feature_flags_router
+from src.selectors.adaptive.api.routes.confidence import router as confidence_router
+from src.selectors.adaptive.api.routes.health import router as health_router
+from src.selectors.adaptive.api.routes.blast_radius import router as blast_radius_router
 
 
 def create_app() -> FastAPI:
@@ -83,6 +86,9 @@ def create_app() -> FastAPI:
     app.include_router(triage_router)
     app.include_router(custom_strategies_router)
     app.include_router(feature_flags_router)
+    app.include_router(confidence_router)
+    app.include_router(health_router)
+    app.include_router(blast_radius_router)
     
     # WebSocket endpoint for real-time failure updates (Task 3.2)
     app.websocket("/ws/failures")(websocket_endpoint)
@@ -132,6 +138,19 @@ def create_app() -> FastAPI:
                 "feature_flag_stats": "/feature-flags/stats",
                 "toggle_sport_flag": "/feature-flags/{sport}",
                 "update_site_flag": "/feature-flags/{sport}/sites/{site}",
+                # Confidence score query endpoints (Story 6-1)
+                "confidence_query": "/api/v1/confidence/{selector_id}",
+                "confidence_batch": "/api/v1/confidence/batch",
+                "confidence_all": "/api/v1/confidence",
+                # Health status display endpoints (Story 6-2)
+                "health_dashboard": "/api/v1/health",
+                "health_selector": "/api/v1/health/{selector_id}",
+                "health_config": "/api/v1/health/config/thresholds",
+                # Blast radius calculation endpoints (Story 6-3)
+                "blast_radius_selector": "/api/v1/blast-radius/{selector_id}",
+                "blast_radius_batch": "/api/v1/blast-radius?selector_ids=...",
+                "blast_radius_config": "/api/v1/blast-radius/config",
+                "blast_radius_summary": "/api/v1/blast-radius/summary",
             },
         }
     

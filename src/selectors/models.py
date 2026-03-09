@@ -35,6 +35,9 @@ class StrategyType(Enum):
     DOM_RELATIONSHIP = "dom_relationship"
     ROLE_BASED = "role_based"
     CSS = "css"
+    XPATH = "xpath"
+    TEXT = "text"
+    ATTRIBUTE = "attribute"
 
 
 class ErrorType(Enum):

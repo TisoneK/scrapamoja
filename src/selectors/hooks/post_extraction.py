@@ -19,6 +19,7 @@ Story 3-2: Full Context Failure Logging
 
 import logging
 import uuid
+import asyncio
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -32,6 +33,24 @@ from src.selectors.hooks.submission import (
     submit_success_event_to_db,  # Story 3-5: Success event submission
     create_and_submit_failure_event,
 )
+
+# Story 5-1: WebSocket notification integration
+try:
+    from src.selectors.websocket.integration import notify_failure_event
+except ImportError:
+    notify_failure_event = None  # WebSocket module not available
+
+# Story 5-3: Health status notification integration
+try:
+    from src.selectors.websocket.integration import (
+        notify_health_status_change,
+        get_health_status_service,
+    )
+    from src.selectors.websocket.models import HealthStatus
+except ImportError:
+    notify_health_status_change = None
+    get_health_status_service = None
+    HealthStatus = None
 
 # Context variable for correlation ID tracking across async calls
 correlation_id_var: ContextVar[Optional[str]] = ContextVar('correlation_id', default=None)
@@ -212,6 +231,56 @@ class PostExtractionValidator:
             "selector_failure_detected",
             extra=failure_event.to_dict(),
         )
+
+        # Story 5-1: Send WebSocket notification (Task 2.2)
+        if notify_failure_event is not None:
+            try:
+                # Fire and forget - don't block on notification
+                asyncio.create_task(notify_failure_event(failure_event))
+            except Exception as ws_error:
+                # Don't let WebSocket errors affect the main flow
+                self._logger.warning(
+                    f"WebSocket notification failed: {ws_error}"
+                )
+        
+        # Story 5-3: Send health status notification when failure occurs
+        if notify_health_status_change is not None and HealthStatus is not None:
+            try:
+                # Determine new health status based on failure type
+                # Use HealthStatus enum instead of hardcoded strings
+                if failure_event.failure_type.value == "exception":
+                    new_status = HealthStatus.FAILED
+                else:
+                    new_status = HealthStatus.DEGRADED
+                
+                # Get the service to look up old status
+                old_status = HealthStatus.UNKNOWN  # Default unknown
+                if get_health_status_service is not None:
+                    service = get_health_status_service()
+                    if service is not None:
+                        # Try to get last known status for this selector
+                        last_status = service.get_last_health_status(failure_event.selector_id)
+                        if last_status:
+                            # Convert string to HealthStatus enum if possible
+                            try:
+                                old_status = HealthStatus(last_status)
+                            except ValueError:
+                                old_status = HealthStatus.UNKNOWN
+                
+                # Fire and forget - don't block on notification
+                asyncio.create_task(
+                    notify_health_status_change(
+                        selector_id=failure_event.selector_id,
+                        old_status=old_status,
+                        new_status=new_status,
+                        confidence_score=failure_event.confidence_score,
+                    )
+                )
+            except Exception as hs_error:
+                # Don't let health status errors affect the main flow
+                self._logger.warning(
+                    f"Health status notification failed: {hs_error}"
+                )
 
         return failure_event
 

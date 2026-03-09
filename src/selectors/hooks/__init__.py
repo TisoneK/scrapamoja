@@ -22,6 +22,13 @@ Story 3-2: Full Context Failure Logging
 - AC2: Fallback Chain Context (all attempted selectors with results)
 - AC3: Page Context with Metadata (full URL, ISO8601 timestamps)
 - AC4: Structured Logging with Correlation (correlation_id, log levels)
+
+Story 7.4: Registration Automation
+- RegistrationHook: Automatic selector registration via engine hooks
+- create_registration_hook: Factory function to create and register hook
+- auto_register_from_directory: Utility for manual trigger of auto-registration
+- AC2: Registration happens automatically via engine hooks
+- AC3: Selectors available immediately on scraper startup
 """
 
 from src.selectors.hooks.post_extraction import (
@@ -66,6 +73,13 @@ from src.selectors.hooks.submission import (
     MAX_RETRY_ATTEMPTS,
 )
 
+# Story 7.4: Registration Automation
+from src.selectors.hooks.registration import (
+    RegistrationHook,
+    create_registration_hook,
+    auto_register_from_directory,
+)
+
 __all__ = [
     # Story 3-1 exports
     "PostExtractionValidator",
@@ -98,4 +112,8 @@ __all__ = [
     "QUEUE_PERSISTENCE_PATH",
     "RETRY_BACKOFF_BASE",
     "MAX_RETRY_ATTEMPTS",
+    # Story 7.4: Registration Automation
+    "RegistrationHook",
+    "create_registration_hook",
+    "auto_register_from_directory",
 ]
