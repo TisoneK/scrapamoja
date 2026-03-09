@@ -1,3 +1,6 @@
+id: user_menu
+name: User Menu
+selector_type: css
 description: "User menu and login button"
 confidence_threshold: 0.9
 timeout: 3.0

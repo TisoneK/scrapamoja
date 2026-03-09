@@ -1,3 +1,6 @@
+id: overtime_stats
+name: Overtime Stats
+selector_type: css
 description: "Overtime statistics in Inc OT view"
 confidence_threshold: 0.8
 timeout: 5.0

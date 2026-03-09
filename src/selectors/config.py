@@ -14,6 +14,127 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# Story 4-1: Adaptive API Configuration
+
+# Story 4-2: Service Unavailability Configuration
+ADAPTIVE_API_RECOVERY_TIMEOUT: float = 60.0  # seconds
+ADAPTIVE_API_CIRCUIT_BREAKER_THRESHOLD: int = 3  # consecutive failures
+ADAPTIVE_API_RETRY_BACKOFF_FACTOR: float = 2.0  # exponential backoff factor
+
+
+@dataclass
+class AdaptiveAPIConfig:
+    """
+    Configuration for the adaptive API integration.
+
+    This configures:
+    - API endpoint URL
+    - Timeout settings (default 30s per NFR4)
+    - Connection pooling (per NFR5)
+    - Enable/disable adaptive API fallback
+    - Service availability and circuit breaker settings (Story 4-2)
+    """
+
+    # API Configuration
+    base_url: str = "http://localhost:8000"
+    enabled: bool = True
+
+    # Timeout Configuration (NFR4)
+    timeout: float = 30.0  # seconds
+    connect_timeout: float = 10.0  # seconds
+
+    # Connection Pooling Configuration (NFR5)
+    max_keepalive_connections: int = 20
+    max_connections: int = 100
+    keepalive_expiry: float = 30.0  # seconds
+
+    # Retry Configuration
+    max_retries: int = 3
+
+    # Service Availability Configuration (Story 4-2)
+    recovery_timeout: float = 60.0  # seconds
+    circuit_breaker_threshold: int = 3  # consecutive failures
+    retry_backoff_factor: float = 2.0  # exponential backoff factor
+
+    def __post_init__(self):
+        """Validate configuration."""
+        if self.timeout <= 0:
+            raise ValueError("timeout must be positive")
+        if self.connect_timeout <= 0:
+            raise ValueError("connect_timeout must be positive")
+        if self.max_keepalive_connections < 0:
+            raise ValueError("max_keepalive_connections cannot be negative")
+        if self.max_connections < 1:
+            raise ValueError("max_connections must be at least 1")
+        if self.keepalive_expiry <= 0:
+            raise ValueError("keepalive_expiry must be positive")
+        if self.max_retries < 0:
+            raise ValueError("max_retries cannot be negative")
+        if self.recovery_timeout <= 0:
+            raise ValueError("recovery_timeout must be positive")
+        if self.circuit_breaker_threshold < 1:
+            raise ValueError("circuit_breaker_threshold must be at least 1")
+        if self.retry_backoff_factor <= 1.0:
+            raise ValueError("retry_backoff_factor must be greater than 1.0")
+
+    @classmethod
+    def from_env(cls) -> "AdaptiveAPIConfig":
+        """Create configuration from environment variables."""
+        config = cls()
+
+        if os.getenv("ADAPTIVE_API_BASE_URL"):
+            config.base_url = os.getenv("ADAPTIVE_API_BASE_URL")
+
+        if os.getenv("ADAPTIVE_API_ENABLED"):
+            config.enabled = os.getenv("ADAPTIVE_API_ENABLED").lower() == "true"
+
+        if os.getenv("ADAPTIVE_API_TIMEOUT"):
+            config.timeout = float(os.getenv("ADAPTIVE_API_TIMEOUT"))
+
+        if os.getenv("ADAPTIVE_API_CONNECT_TIMEOUT"):
+            config.connect_timeout = float(os.getenv("ADAPTIVE_API_CONNECT_TIMEOUT"))
+
+        if os.getenv("ADAPTIVE_API_MAX_KEEPALIVE"):
+            config.max_keepalive_connections = int(os.getenv("ADAPTIVE_API_MAX_KEEPALIVE"))
+
+        if os.getenv("ADAPTIVE_API_MAX_CONNECTIONS"):
+            config.max_connections = int(os.getenv("ADAPTIVE_API_MAX_CONNECTIONS"))
+
+        if os.getenv("ADAPTIVE_API_KEEPALIVE_EXPIRY"):
+            config.keepalive_expiry = float(os.getenv("ADAPTIVE_API_KEEPALIVE_EXPIRY"))
+
+        if os.getenv("ADAPTIVE_API_MAX_RETRIES"):
+            config.max_retries = int(os.getenv("ADAPTIVE_API_MAX_RETRIES"))
+
+        # Story 4-2: Service availability configuration
+        if os.getenv("ADAPTIVE_API_RECOVERY_TIMEOUT"):
+            config.recovery_timeout = float(os.getenv("ADAPTIVE_API_RECOVERY_TIMEOUT"))
+
+        if os.getenv("ADAPTIVE_API_CIRCUIT_BREAKER_THRESHOLD"):
+            config.circuit_breaker_threshold = int(os.getenv("ADAPTIVE_API_CIRCUIT_BREAKER_THRESHOLD"))
+
+        if os.getenv("ADAPTIVE_API_RETRY_BACKOFF_FACTOR"):
+            config.retry_backoff_factor = float(os.getenv("ADAPTIVE_API_RETRY_BACKOFF_FACTOR"))
+
+        return config
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert configuration to dictionary."""
+        return {
+            "base_url": self.base_url,
+            "enabled": self.enabled,
+            "timeout": self.timeout,
+            "connect_timeout": self.connect_timeout,
+            "max_keepalive_connections": self.max_keepalive_connections,
+            "max_connections": self.max_connections,
+            "keepalive_expiry": self.keepalive_expiry,
+            "max_retries": self.max_retries,
+            "recovery_timeout": self.recovery_timeout,
+            "circuit_breaker_threshold": self.circuit_breaker_threshold,
+            "retry_backoff_factor": self.retry_backoff_factor,
+        }
+
+
 @dataclass
 class SelectorConfig:
     """Configuration for the YAML selector system."""

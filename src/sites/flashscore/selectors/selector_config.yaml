@@ -1,3 +1,6 @@
+id: selector_config
+name: Selector Config
+selector_type: css
 description: "Flashscore selector configuration with sport and status awareness"
 version: "1.0"
 base_url: "https://www.flashscore.com"

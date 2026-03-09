@@ -1,3 +1,6 @@
+id: inc_ot_tab
+name: Inc Ot Tab
+selector_type: css
 description: "Incidents + Overtime sub-tab within STATS"
 confidence_threshold: 0.9
 timeout: 3.0

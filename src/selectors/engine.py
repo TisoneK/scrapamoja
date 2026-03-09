@@ -188,11 +188,19 @@ class SelectorEngine(ISelectorEngine):
                     correlation_id=correlation_id
                 )
             else:
+                # Extract sport, site, recipe_id from context metadata if available
+                sport = context.get_metadata('sport')
+                site = context.get_metadata('site')
+                recipe_id = context.get_metadata('recipe_id')
+                
                 await publish_selector_failed(
                     selector_name=selector_name,
                     strategy=result.strategy_used,
-                    failure_reason=result.failure_reason,
+                    failure_reason=result.failure_reason or "Unknown error",
                     resolution_time=result.resolution_time,
+                    sport=sport,
+                    site=site,
+                    recipe_id=recipe_id,
                     correlation_id=correlation_id
                 )
             

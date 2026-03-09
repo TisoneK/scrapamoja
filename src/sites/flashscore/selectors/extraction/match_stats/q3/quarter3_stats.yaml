@@ -1,3 +1,6 @@
+id: quarter3_stats
+name: Quarter3 Stats
+selector_type: css
 description: "Third quarter statistics"
 confidence_threshold: 0.8
 timeout: 5.0

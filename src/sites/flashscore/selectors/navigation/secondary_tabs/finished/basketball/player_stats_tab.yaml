@@ -1,3 +1,6 @@
+id: player_stats_tab
+name: Player Stats Tab
+selector_type: css
 description: "Player stats sub-tab for finished matches"
 confidence_threshold: 0.9
 timeout: 3.0

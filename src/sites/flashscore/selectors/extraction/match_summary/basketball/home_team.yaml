@@ -1,3 +1,6 @@
+id: home_team
+name: Home Team
+selector_type: css
 description: "Home team name in match summary"
 confidence_threshold: 0.8
 timeout: 5.0

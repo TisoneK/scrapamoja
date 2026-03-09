@@ -1,3 +1,6 @@
+id: match_history_tab
+name: Match History Tab
+selector_type: css
 # Match History Tab Selector Configuration for Finished Basketball Matches
 # This is the point-by-point history view under the Match primary tab
 # URL pattern: /match/basketball/{team1}-{id1}/{team2}-{id2}/summary/point-by-point/?mid={matchId}

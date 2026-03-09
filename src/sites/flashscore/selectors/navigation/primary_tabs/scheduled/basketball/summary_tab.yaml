@@ -1,3 +1,6 @@
+id: summary_tab
+name: Summary Tab
+selector_type: css
 description: "Summary tab for scheduled matches"
 confidence_threshold: 0.9
 timeout: 3.0

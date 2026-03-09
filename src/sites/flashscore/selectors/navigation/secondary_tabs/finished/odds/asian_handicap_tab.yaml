@@ -1,3 +1,6 @@
+id: asian_handicap_tab
+name: Asian Handicap Tab
+selector_type: css
 description: "Asian handicap sub-tab in odds section"
 confidence_threshold: 0.9
 timeout: 3.0

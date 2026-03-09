@@ -1,3 +1,6 @@
+id: ft_tab
+name: Ft Tab
+selector_type: css
 description: "Full Time sub-tab within STATS"
 confidence_threshold: 0.9
 timeout: 3.0

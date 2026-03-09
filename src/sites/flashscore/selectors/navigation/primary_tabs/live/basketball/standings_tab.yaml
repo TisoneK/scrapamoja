@@ -1,3 +1,6 @@
+id: standings_tab
+name: Standings Tab
+selector_type: css
 # Live Basketball Match Standings Tab Selector
 # Flashscore uses data-analytics-alias for tab identification
 # Primary tabs: Match, Odds, H2H, Standings

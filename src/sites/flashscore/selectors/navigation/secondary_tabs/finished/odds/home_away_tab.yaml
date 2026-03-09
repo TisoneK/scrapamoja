@@ -1,3 +1,6 @@
+id: home_away_tab
+name: Home Away Tab
+selector_type: css
 description: "Home/Away sub-tab in odds section"
 confidence_threshold: 0.9
 timeout: 3.0

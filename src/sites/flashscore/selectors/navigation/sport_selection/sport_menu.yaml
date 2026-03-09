@@ -1,3 +1,6 @@
+id: sport_menu
+name: Sport Menu
+selector_type: css
 description: "Main sports navigation menu"
 confidence_threshold: 0.9
 timeout: 3.0

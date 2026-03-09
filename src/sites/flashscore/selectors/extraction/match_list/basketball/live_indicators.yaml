@@ -1,3 +1,6 @@
+id: live_indicators
+name: Live Indicators
+selector_type: css
 description: "Live match indicator in match listing"
 confidence_threshold: 0.8
 timeout: 3.0

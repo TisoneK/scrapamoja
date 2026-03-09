@@ -1,19 +1,16 @@
 # Scrapamoja 🕷️
 
-> **A production-grade Python framework for building reliable, extensible web scrapers — with battle-tested resilience, stealth, and observability built in.**
+A production-grade Python framework for building reliable, extensible web scrapers — with battle-tested resilience, stealth, and observability built in.
 
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Playwright](https://img.shields.io/badge/playwright-1.40+-green.svg)](https://playwright.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/TisoneK/scrapamoja/actions)
+![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue) ![Playwright](https://img.shields.io/badge/Playwright-latest-green) ![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
 
 ---
 
 ## What is Scrapamoja?
 
-Scrapamoja blends the English word *Scrape* with the Swahili word *Pamoja* — meaning *together*. Scrape together. One scraper, many sites. One framework, many contributors.
+Scrapamoja blends the English word **Scrape** with the Swahili word **Pamoja** — meaning *together*. Scrape together. One scraper, many sites. One framework, many contributors.
 
-It's also a quiet nod to *Moja*, Swahili for *one* — the idea that you shouldn't need a different tool for every site you want to scrape. One framework should be enough, and it should be good enough that anyone can extend it.
+It's also a quiet nod to **Moja**, Swahili for *one* — the idea that you shouldn't need a different tool for every site you want to scrape. One framework should be enough, and it should be good enough that anyone can extend it.
 
 That philosophy shapes everything about how Scrapamoja is built. It's not a scraper — it's the infrastructure that makes scrapers reliable: handling anti-bot measures, selector drift, network failures, and browser resource leaks so you don't have to. New sites can be added by anyone, existing ones improved by the community, and the whole thing grows stronger the more people contribute to it.
 
@@ -24,25 +21,31 @@ That philosophy shapes everything about how Scrapamoja is built. It's not a scra
 ## Core Framework Capabilities
 
 ### 🎯 Intelligent Selector Engine
-The selector engine is the heart of Scrapamoja. Instead of brittle single-selector lookups, it uses a **multi-strategy approach** — CSS, XPath, and text-based selectors can all be defined for the same element. Each strategy is weighted, and the engine picks the best match with a confidence score. When a selector fails, it falls back gracefully rather than crashing. Selectors are defined in YAML, not hardcoded, making them easy to maintain without touching Python.
+
+The selector engine is the heart of Scrapamoja. Instead of brittle single-selector lookups, it uses a multi-strategy approach — CSS, XPath, and text-based selectors can all be defined for the same element. Each strategy is weighted, and the engine picks the best match with a confidence score. When a selector fails, it falls back gracefully rather than crashing. Selectors are defined in YAML, not hardcoded, making them easy to maintain without touching Python.
 
 ```
 Site → Sport → Status → Context → Element
 ```
 
 ### 🛡️ Resilience System
+
 Built around the assumption that things will go wrong. Automatic retries with exponential backoff, failure classification (network vs. selector vs. parse errors), checkpoint-based recovery so long scrapes can resume, and a coordinator that ensures graceful shutdown even mid-scrape.
 
 ### 🕵️ Stealth & Anti-Detection
+
 A dedicated stealth module handles fingerprint randomization, human-like behavior simulation, consent popup handling, and proxy rotation. Sites that actively fight scrapers are manageable targets.
 
 ### 🔍 Snapshot Debugging
+
 When a scrape fails, Scrapamoja captures a full snapshot: the page HTML, a screenshot, structured logs, and selector resolution traces — all correlated by session ID. Debugging a failure means looking at exactly what the browser saw, not guessing.
 
 ### 📊 Telemetry & Observability
+
 Structured JSON logging with correlation IDs, built-in metrics collection (execution time, success rates, selector confidence distributions), and alerting hooks. Production scrapers need production-grade monitoring.
 
 ### 🌐 Browser Lifecycle Management
+
 Browser and page pooling, session state persistence, tab management, resource monitoring (memory, CPU), and corruption detection. Long-running scrapers won't leak memory or leave orphaned browser processes.
 
 ---
@@ -79,6 +82,7 @@ scrapamoja/
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Python 3.12 or higher
 - 2GB RAM minimum (4GB recommended)
 - Internet connection
@@ -87,6 +91,7 @@ scrapamoja/
 ### Installation
 
 **Linux / macOS**
+
 ```bash
 # 1. Clone repository
 git clone https://github.com/TisoneK/scrapamoja.git
@@ -107,26 +112,28 @@ python -m src.main flashscore scrape basketball live --limit 1
 ```
 
 **Windows**
-```bash
-# 1. Clone repository
+
+```bat
+:: 1. Clone repository
 git clone https://github.com/TisoneK/scrapamoja.git
 cd scrapamoja
 
-# 2. Create virtual environment
+:: 2. Create virtual environment
 python -m venv venv
 venv\Scripts\activate
 
-# 3. Install dependencies
+:: 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Install Playwright browsers
+:: 4. Install Playwright browsers
 playwright install chromium
 
-# 5. Run your first scrape
+:: 5. Run your first scrape
 python -m src.main flashscore scrape basketball live --limit 1
 ```
 
 ### First Results
+
 ```json
 {
   "sport": "Basketball",
@@ -150,6 +157,7 @@ python -m src.main flashscore scrape basketball live --limit 1
 ### Option 1: Standard Installation
 
 **Linux / macOS**
+
 ```bash
 git clone https://github.com/TisoneK/scrapamoja.git
 cd scrapamoja
@@ -160,7 +168,8 @@ playwright install chromium
 ```
 
 **Windows**
-```bash
+
+```bat
 git clone https://github.com/TisoneK/scrapamoja.git
 cd scrapamoja
 python -m venv venv
@@ -170,6 +179,7 @@ playwright install chromium
 ```
 
 ### Option 2: Docker Installation
+
 ```dockerfile
 FROM python:3.12-slim
 
@@ -181,6 +191,7 @@ RUN pip install -r requirements.txt && \
 
 ENTRYPOINT ["python", "-m", "src.main"]
 ```
+
 ```bash
 docker build -t scrapamoja .
 docker run scrapamoja flashscore scrape basketball live --limit 5
@@ -189,6 +200,7 @@ docker run scrapamoja flashscore scrape basketball live --limit 5
 ### Option 3: Development Installation
 
 **Linux / macOS**
+
 ```bash
 git clone https://github.com/TisoneK/scrapamoja.git
 cd scrapamoja
@@ -201,7 +213,8 @@ pytest tests/
 ```
 
 **Windows**
-```bash
+
+```bat
 git clone https://github.com/TisoneK/scrapamoja.git
 cd scrapamoja
 python -m venv venv
@@ -219,11 +232,13 @@ pytest tests/
 Scrapamoja ships with a full site template at `src/sites/_template/` — it's not a stub, it's a working skeleton with flows, processors, validators, config management, and component wiring already in place.
 
 **1. Copy the template**
+
 ```bash
 cp -r src/sites/_template src/sites/mysite
 ```
 
 **2. Implement the scraper**
+
 ```python
 from src.sites.base.site_scraper import BaseSiteScraper
 
@@ -234,6 +249,7 @@ class MySiteScraper(BaseSiteScraper):
 ```
 
 **3. Define selectors in YAML**
+
 ```yaml
 # src/sites/mysite/selectors/extraction/listings.yaml
 description: "Product listing items"
@@ -247,6 +263,7 @@ strategies:
 ```
 
 **4. Register and run**
+
 ```python
 # Add to SITE_CLIS in src/main.py
 'mysite': ('src.sites.mysite.cli.main', 'MySiteCLI'),
@@ -256,10 +273,10 @@ strategies:
 
 ## Supported Sites
 
-| Site | Data | Sports/Topics | Status Types |
-|------|------|---------------|--------------|
-| [**FlashScore**](src/sites/flashscore/README.md) | Live scores, match stats, odds | Basketball, Football | Live, Finished, Scheduled |
-| [**Wikipedia**](src/sites/wikipedia/README.md) | Article content, tables, references | Any | N/A |
+| Site | Data | Sports / Topics | Status Types |
+|------|------|-----------------|--------------|
+| FlashScore | Live scores, match stats, odds | Basketball, Football | Live, Finished, Scheduled |
+| Wikipedia | Article content, tables, references | Any | N/A |
 
 Both are production implementations — the FlashScore scraper handles live match updates, status-aware extraction, and real-time polling. The Wikipedia scraper handles table parsing, multi-language articles, and reference extraction.
 
@@ -294,7 +311,7 @@ logging:
 | `--limit N` | Cap the number of results |
 | `--output, -o FORMAT` | Output format: `json`, `csv`, `xml` |
 | `--file, -f PATH` | Write output to file |
-| `--headless / --no-headless` | Browser visibility (use `--no-headless` for debugging) |
+| `--headless / --no-headless` | Browser visibility (`--no-headless` for debugging) |
 | `--verbose, -v` | Detailed logs |
 | `--quiet, -q` | Errors only |
 
@@ -343,12 +360,12 @@ docker run scrapamoja flashscore scrape basketball live --limit 5
 
 | Doc | Description |
 |-----|-------------|
-| [features.md](docs/features.md) | Complete feature reference |
-| [modular_template_guide.md](docs/modular_template_guide.md) | Guide to building new site scrapers |
-| [snapshot_api_reference.md](docs/snapshot_api_reference.md) | Snapshot debugging system API |
-| [yaml-configuration.md](docs/yaml-configuration.md) | YAML selector config reference |
-| [browser-lifecycle-management.md](docs/browser-lifecycle-management.md) | Browser pooling and session management |
-| [structured-logging-guide.md](docs/structured-logging-guide.md) | Logging and observability guide |
+| `features.md` | Complete feature reference |
+| `modular_template_guide.md` | Guide to building new site scrapers |
+| `snapshot_api_reference.md` | Snapshot debugging system API |
+| `yaml-configuration.md` | YAML selector config reference |
+| `browser-lifecycle-management.md` | Browser pooling and session management |
+| `structured-logging-guide.md` | Logging and observability guide |
 
 ---
 
@@ -390,4 +407,4 @@ MIT — see [LICENSE](LICENSE) for details.
 
 ---
 
-**Built with ❤️ by the Scrapamoja Team**
+*Built with ❤️ by the Scrapamoja Team*

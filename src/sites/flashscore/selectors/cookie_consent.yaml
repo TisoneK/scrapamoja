@@ -1,3 +1,6 @@
+id: cookie_consent
+name: Cookie Consent
+selector_type: css
 description: "Alias for cookie consent dialog - redirects to authentication.cookie_consent"
 confidence_threshold: 0.9
 timeout: 10.0

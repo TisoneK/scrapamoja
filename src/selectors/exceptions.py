@@ -294,3 +294,39 @@ def create_registration_error(selector_id: str, existing_id: Optional[str] = Non
         selector_id=selector_id,
         existing_selector_id=existing_id
     )
+
+
+class FallbackError(SelectorError):
+    """Exception raised when fallback chain execution fails."""
+    
+    def __init__(self, message: str, selector_id: Optional[str] = None,
+                 fallback_level: Optional[int] = None,
+                 attempted_selectors: Optional[List[str]] = None,
+                 chain_duration: Optional[float] = None):
+        super().__init__(message, selector_id, "FALLBACK_ERROR")
+        self.fallback_level = fallback_level
+        self.attempted_selectors = attempted_selectors or []
+        self.chain_duration = chain_duration
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert exception to dictionary representation."""
+        result = super().to_dict()
+        result.update({
+            "fallback_level": self.fallback_level,
+            "attempted_selectors": self.attempted_selectors or [],
+            "chain_duration": self.chain_duration
+        })
+        return result
+
+
+class AdaptiveModuleUnavailableError(SelectorError):
+    """Exception raised when the adaptive module is unavailable.
+    
+    This exception is used when the adaptive module (for historical stability
+    data) cannot be reached or is not available. The system should fall back
+    to using YAML hints only.
+    """
+    
+    def __init__(self, message: str = "Adaptive module unavailable",
+                 selector_id: Optional[str] = None):
+        super().__init__(message, selector_id, "ADAPTIVE_MODULE_UNAVAILABLE")

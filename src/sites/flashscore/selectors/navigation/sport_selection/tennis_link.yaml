@@ -1,3 +1,6 @@
+id: tennis_link
+name: Tennis Link
+selector_type: css
 description: "Tennis sport navigation link"
 confidence_threshold: 0.9
 timeout: 3.0

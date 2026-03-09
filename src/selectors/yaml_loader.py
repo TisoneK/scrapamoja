@@ -8,15 +8,48 @@ and convert them into selector objects that can be used by the selector engine.
 import os
 import yaml
 import time
+import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 from glob import glob
 import logging
 
-from .models import (
-    YAMLSelector, SelectorStrategy, LoadResult, SelectorValidationError,
-    ValidationResult, ErrorType, Severity
-)
+# NOTE: We use explicit module path resolution to avoid naming conflict between:
+# - src/selectors/models.py (the file we want)
+# - src/selectors/models/ (a directory/package)
+# Python's relative imports resolve to the directory first, so we explicitly
+# register the module with a unique name to avoid conflicts.
+# We also check sys.modules to avoid reloading if already loaded by validator.py
+if "selector_models" not in sys.modules:
+    import importlib.util
+    models_path = os.path.join(os.path.dirname(__file__), "models.py")
+    spec = importlib.util.spec_from_file_location("selector_models", models_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load models from {models_path}")
+    _models = importlib.util.module_from_spec(spec)
+    sys.modules["selector_models"] = _models
+    spec.loader.exec_module(_models)
+else:
+    _models = sys.modules["selector_models"]
+
+# Import other selector models that may be needed
+try:
+    from src.models.selector_models import (
+        SemanticSelector, SelectorResult, StrategyPattern, ValidationRule,
+        ConfidenceMetrics, SnapshotType, DOMSnapshot, SnapshotMetadata,
+        ElementInfo, ValidationResult as SelectorModelValidationResult
+    )
+except ImportError:
+    # These may not exist in all versions
+    pass
+
+ValidationResult = _models.ValidationResult
+ErrorType = _models.ErrorType
+Severity = _models.Severity
+YAMLSelector = _models.YAMLSelector
+SelectorStrategy = _models.SelectorStrategy
+SelectorType = _models.SelectorType
+LoadResult = _models.LoadResult
 from .exceptions import (
     SelectorLoadingError, SelectorValidationError as SelectorValidationException,
     SelectorFileError, create_file_error, create_loading_error
@@ -24,6 +57,7 @@ from .exceptions import (
 from .validator import SelectorValidator
 from .config import get_config
 from .performance_monitor import get_performance_monitor, record_metric
+from .strategies.converter import detect_format, convert_legacy_yaml, StrategyFormat
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +125,42 @@ class YAMLSelectorLoader:
                     message=f"Invalid YAML structure: expected dictionary, got {type(yaml_data).__name__}",
                     file_path=file_path
                 )
+            
+            # Handle legacy format - convert BEFORE validating required fields
+            # This is needed because legacy YAML files don't have id/name/selector_type/pattern
+            # but the legacy converter can generate them from the filename and strategies
+            format_type = detect_format(yaml_data)
+            if format_type == StrategyFormat.LEGACY:
+                self.logger.debug(f"Converting legacy format in {file_path}")
+                # Generate a default id from filename for legacy files without id
+                # Use string replace instead of regex to avoid needing 're' import
+                default_id = Path(file_path).stem
+                default_id = default_id.replace('-', '_').replace(' ', '_')
+                # Remove any non-alphanumeric chars except underscore
+                cleaned = ''
+                for c in default_id:
+                    if c.isalnum() or c == '_':
+                        cleaned += c
+                default_id = cleaned
+                if default_id[0].isdigit():
+                    default_id = 's_' + default_id
+                # Convert legacy format with the generated id
+                yaml_data = convert_legacy_yaml(yaml_data, selector_id=yaml_data.get('id', default_id))
+                
+                # Add required fields if missing
+                if 'name' not in yaml_data or not yaml_data.get('name'):
+                    yaml_data['name'] = default_id.replace('_', ' ').title()
+                if 'selector_type' not in yaml_data or not yaml_data.get('selector_type'):
+                    yaml_data['selector_type'] = 'css'
+                if 'pattern' not in yaml_data or not yaml_data.get('pattern'):
+                    # Extract pattern from first strategy
+                    strategies = yaml_data.get('strategies', [])
+                    if strategies and isinstance(strategies, list):
+                        first_strategy = strategies[0]
+                        if isinstance(first_strategy, dict):
+                            # Try to get selector from config
+                            if 'config' in first_strategy and isinstance(first_strategy.get('config'), dict):
+                                yaml_data['pattern'] = first_strategy['config'].get('selector', '')
             
             # Extract required fields
             selector_id = yaml_data.get('id')
@@ -378,6 +448,12 @@ class YAMLSelectorLoader:
     def _yaml_to_selector(self, yaml_data: Dict[str, Any], file_path: str) -> YAMLSelector:
         """Convert YAML data to YAMLSelector object."""
         try:
+            # Detect and convert legacy format to StrategyPattern format
+            format_type = detect_format(yaml_data)
+            if format_type == StrategyFormat.LEGACY:
+                self.logger.debug(f"Converting legacy format to StrategyPattern in {file_path}")
+                yaml_data = convert_legacy_yaml(yaml_data, selector_id=yaml_data.get('id', 'selector'))
+            
             # Extract strategies
             strategies_data = yaml_data.get('strategies', [])
             strategies = []
@@ -385,6 +461,10 @@ class YAMLSelectorLoader:
             for strategy_data in strategies_data:
                 strategy = SelectorStrategy.from_dict(strategy_data)
                 strategies.append(strategy)
+            
+            # Parse hints
+            from src.selectors.hints.parser import parse_hints
+            hints = parse_hints(yaml_data.get('hints'))
             
             # Create selector
             selector = YAMLSelector(
@@ -397,7 +477,8 @@ class YAMLSelectorLoader:
                 validation_rules=yaml_data.get('validation_rules'),
                 metadata=yaml_data.get('metadata'),
                 file_path=file_path,
-                version=yaml_data.get('version', '1.0.0')
+                version=yaml_data.get('version', '1.0.0'),
+                hints=hints
             )
             
             return selector

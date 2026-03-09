@@ -1,3 +1,6 @@
+id: standings_tab
+name: Standings Tab
+selector_type: css
 # Standings Tab Selector Configuration for Finished Basketball Matches
 # Flashscore uses data-analytics-alias for tab identification
 # URL pattern: /match/basketball/{team1}-{id1}/{team2}-{id2}/standings/?mid={matchId}

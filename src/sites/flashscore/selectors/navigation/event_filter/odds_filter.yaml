@@ -1,3 +1,6 @@
+id: odds_filter
+name: Odds Filter
+selector_type: css
 description: "Odds filter button"
 confidence_threshold: 0.9
 timeout: 3.0

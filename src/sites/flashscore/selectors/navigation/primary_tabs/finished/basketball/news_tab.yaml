@@ -1,3 +1,6 @@
+id: news_tab
+name: News Tab
+selector_type: css
 description: "News tab for finished matches"
 confidence_threshold: 0.9
 timeout: 3.0

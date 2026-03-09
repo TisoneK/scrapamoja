@@ -1,3 +1,6 @@
+id: previous_matches
+name: Previous Matches
+selector_type: css
 description: "Previous head-to-head matches list"
 confidence_threshold: 0.8
 timeout: 5.0

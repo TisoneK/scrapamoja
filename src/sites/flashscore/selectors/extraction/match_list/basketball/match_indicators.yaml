@@ -1,3 +1,6 @@
+id: match_indicators
+name: Match Indicators
+selector_type: css
 description: "Match element indicators - finds all match containers regardless of status"
 confidence_threshold: 0.8
 timeout: 5.0

@@ -1,3 +1,6 @@
+id: standings_tab
+name: Standings Tab
+selector_type: css
 description: "Standings tab for scheduled matches"
 confidence_threshold: 0.9
 timeout: 3.0

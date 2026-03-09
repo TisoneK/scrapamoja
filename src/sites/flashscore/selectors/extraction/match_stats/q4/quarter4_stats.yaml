@@ -1,3 +1,6 @@
+id: quarter4_stats
+name: Quarter4 Stats
+selector_type: css
 description: "Fourth quarter statistics"
 confidence_threshold: 0.8
 timeout: 5.0

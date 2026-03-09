@@ -1,3 +1,6 @@
+id: finished_games_filter
+name: Finished Games Filter
+selector_type: css
 description: "Finished games filter button"
 confidence_threshold: 0.9
 timeout: 3.0

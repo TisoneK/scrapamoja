@@ -1,3 +1,6 @@
+id: lineups_tab
+name: Lineups Tab
+selector_type: css
 description: "Lineups sub-tab for finished matches"
 confidence_threshold: 0.9
 timeout: 3.0
