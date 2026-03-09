@@ -1,3 +1,6 @@
+id: video_tab
+name: Video Tab
+selector_type: css
 description: "Video tab for finished matches"
 confidence_threshold: 0.9
 timeout: 3.0

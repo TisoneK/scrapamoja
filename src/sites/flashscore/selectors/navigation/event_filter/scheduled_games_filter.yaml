@@ -1,3 +1,6 @@
+id: scheduled_games_filter
+name: Scheduled Games Filter
+selector_type: css
 description: "Scheduled games filter button"
 confidence_threshold: 0.9
 timeout: 3.0

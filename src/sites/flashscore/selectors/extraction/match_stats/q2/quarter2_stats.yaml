@@ -1,3 +1,6 @@
+id: quarter2_stats
+name: Quarter2 Stats
+selector_type: css
 description: "Second quarter statistics"
 confidence_threshold: 0.8
 timeout: 5.0

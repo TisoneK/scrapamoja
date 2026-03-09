@@ -1,3 +1,6 @@
+id: search_input
+name: Search Input
+selector_type: css
 description: "Search input for sports"
 confidence_threshold: 0.9
 timeout: 3.0

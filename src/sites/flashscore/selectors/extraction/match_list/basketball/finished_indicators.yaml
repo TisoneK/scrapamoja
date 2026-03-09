@@ -1,3 +1,6 @@
+id: finished_indicators
+name: Finished Indicators
+selector_type: css
 description: "Finished match indicator in match listing"
 confidence_threshold: 0.8
 timeout: 3.0

@@ -1,3 +1,6 @@
+id: basketball_link
+name: Basketball Link
+selector_type: css
 description: "Basketball sport navigation link"
 confidence_threshold: 0.9
 timeout: 10.0

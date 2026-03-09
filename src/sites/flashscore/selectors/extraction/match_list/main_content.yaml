@@ -1,3 +1,6 @@
+id: main_content
+name: Main Content
+selector_type: css
 description: "Main content container for match listings"
 confidence_threshold: 0.8
 timeout: 10.0

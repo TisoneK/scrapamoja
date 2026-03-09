@@ -1,3 +1,6 @@
+id: match_history_tab
+name: Match History Tab
+selector_type: css
 # Live Basketball Match History Tab Selector (Secondary Tab)
 # Flashscore uses data-analytics-alias for tab identification
 # Secondary tabs under Match: Summary, Player stats, Stats, Lineups, Match History

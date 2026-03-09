@@ -1,3 +1,6 @@
+id: match_time
+name: Match Time
+selector_type: css
 description: "Match time/kickoff time information"
 confidence_threshold: 0.8
 timeout: 5.0

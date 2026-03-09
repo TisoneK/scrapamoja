@@ -1,3 +1,6 @@
+id: match_info
+name: Match Info
+selector_type: css
 description: "Match information (date, time, status) in match summary"
 confidence_threshold: 0.8
 timeout: 5.0

@@ -57,6 +57,7 @@ from .exceptions import (
 from .validator import SelectorValidator
 from .config import get_config
 from .performance_monitor import get_performance_monitor, record_metric
+from .strategies.converter import detect_format, convert_legacy_yaml, StrategyFormat
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,42 @@ class YAMLSelectorLoader:
                     message=f"Invalid YAML structure: expected dictionary, got {type(yaml_data).__name__}",
                     file_path=file_path
                 )
+            
+            # Handle legacy format - convert BEFORE validating required fields
+            # This is needed because legacy YAML files don't have id/name/selector_type/pattern
+            # but the legacy converter can generate them from the filename and strategies
+            format_type = detect_format(yaml_data)
+            if format_type == StrategyFormat.LEGACY:
+                self.logger.debug(f"Converting legacy format in {file_path}")
+                # Generate a default id from filename for legacy files without id
+                # Use string replace instead of regex to avoid needing 're' import
+                default_id = Path(file_path).stem
+                default_id = default_id.replace('-', '_').replace(' ', '_')
+                # Remove any non-alphanumeric chars except underscore
+                cleaned = ''
+                for c in default_id:
+                    if c.isalnum() or c == '_':
+                        cleaned += c
+                default_id = cleaned
+                if default_id[0].isdigit():
+                    default_id = 's_' + default_id
+                # Convert legacy format with the generated id
+                yaml_data = convert_legacy_yaml(yaml_data, selector_id=yaml_data.get('id', default_id))
+                
+                # Add required fields if missing
+                if 'name' not in yaml_data or not yaml_data.get('name'):
+                    yaml_data['name'] = default_id.replace('_', ' ').title()
+                if 'selector_type' not in yaml_data or not yaml_data.get('selector_type'):
+                    yaml_data['selector_type'] = 'css'
+                if 'pattern' not in yaml_data or not yaml_data.get('pattern'):
+                    # Extract pattern from first strategy
+                    strategies = yaml_data.get('strategies', [])
+                    if strategies and isinstance(strategies, list):
+                        first_strategy = strategies[0]
+                        if isinstance(first_strategy, dict):
+                            # Try to get selector from config
+                            if 'config' in first_strategy and isinstance(first_strategy.get('config'), dict):
+                                yaml_data['pattern'] = first_strategy['config'].get('selector', '')
             
             # Extract required fields
             selector_id = yaml_data.get('id')
@@ -411,6 +448,12 @@ class YAMLSelectorLoader:
     def _yaml_to_selector(self, yaml_data: Dict[str, Any], file_path: str) -> YAMLSelector:
         """Convert YAML data to YAMLSelector object."""
         try:
+            # Detect and convert legacy format to StrategyPattern format
+            format_type = detect_format(yaml_data)
+            if format_type == StrategyFormat.LEGACY:
+                self.logger.debug(f"Converting legacy format to StrategyPattern in {file_path}")
+                yaml_data = convert_legacy_yaml(yaml_data, selector_id=yaml_data.get('id', 'selector'))
+            
             # Extract strategies
             strategies_data = yaml_data.get('strategies', [])
             strategies = []

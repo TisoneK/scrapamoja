@@ -1,3 +1,6 @@
+id: h2h_tab
+name: H2H Tab
+selector_type: css
 # H2H (Head-to-Head) Tab Selector Configuration for Finished Basketball Matches
 # Flashscore uses data-analytics-alias for tab identification
 # URL pattern: /match/basketball/{team1}-{id1}/{team2}-{id2}/h2h/?mid={matchId}

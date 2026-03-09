@@ -1,3 +1,6 @@
+id: match_incidents
+name: Match Incidents
+selector_type: css
 description: "Match incidents and cards in Inc OT view"
 confidence_threshold: 0.8
 timeout: 5.0

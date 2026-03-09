@@ -1,3 +1,6 @@
+id: match_link
+name: Match Link
+selector_type: css
 description: "Individual match link to click into match details"
 confidence_threshold: 0.8
 timeout: 5.0

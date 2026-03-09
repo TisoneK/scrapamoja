@@ -1,3 +1,6 @@
+id: live_games_filter
+name: Live Games Filter
+selector_type: css
 description: "Live games filter button"
 confidence_threshold: 0.9
 timeout: 3.0

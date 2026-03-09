@@ -1,3 +1,6 @@
+id: privacy_dialog
+name: Privacy Dialog
+selector_type: css
 description: "Privacy policy dialog and close button"
 confidence_threshold: 0.7
 timeout: 3.0

@@ -1,3 +1,6 @@
+id: lineups_tab
+name: Lineups Tab
+selector_type: css
 # Live Basketball Match Lineups Tab Selector (Secondary Tab)
 # Flashscore uses data-analytics-alias for tab identification
 # Secondary tabs under Match: Summary, Player stats, Stats, Lineups, Match History

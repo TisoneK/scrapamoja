@@ -1,3 +1,6 @@
+id: competition_dropdown
+name: Competition Dropdown
+selector_type: css
 description: "Competition/league filter dropdown"
 confidence_threshold: 0.8
 timeout: 3.0

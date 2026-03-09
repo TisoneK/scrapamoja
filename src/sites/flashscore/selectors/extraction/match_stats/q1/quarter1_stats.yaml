@@ -1,3 +1,6 @@
+id: quarter1_stats
+name: Quarter1 Stats
+selector_type: css
 description: "First quarter statistics"
 confidence_threshold: 0.8
 timeout: 5.0

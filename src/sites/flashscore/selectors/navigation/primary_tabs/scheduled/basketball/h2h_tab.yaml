@@ -1,3 +1,6 @@
+id: h2h_tab
+name: H2H Tab
+selector_type: css
 description: "H2H tab for scheduled matches"
 confidence_threshold: 0.9
 timeout: 3.0

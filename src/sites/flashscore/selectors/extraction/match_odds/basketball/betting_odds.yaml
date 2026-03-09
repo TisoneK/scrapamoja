@@ -1,3 +1,6 @@
+id: betting_odds
+name: Betting Odds
+selector_type: css
 description: "Betting odds for match"
 confidence_threshold: 0.8
 timeout: 5.0

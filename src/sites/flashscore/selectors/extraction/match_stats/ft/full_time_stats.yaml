@@ -1,3 +1,6 @@
+id: full_time_stats
+name: Full Time Stats
+selector_type: css
 description: "Full time match statistics"
 confidence_threshold: 0.8
 timeout: 5.0

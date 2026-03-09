@@ -1,3 +1,6 @@
+id: match_stage
+name: Match Stage
+selector_type: css
 description: "Match stage/period information for live matches"
 confidence_threshold: 0.8
 timeout: 5.0
