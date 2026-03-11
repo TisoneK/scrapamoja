@@ -1,7 +1,6 @@
 ---
-stepsCompleted: ["step-01-validate-prerequisites", "step-02-design-epics", "step-03-create-stories", "step-04-final-validation"]
-status: "complete"
-inputDocuments: 
+stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation']
+inputDocuments:
   - "_bmad-output/planning-artifacts/prd.md"
   - "_bmad-output/planning-artifacts/architecture.md"
 ---
@@ -16,666 +15,342 @@ This document provides the complete epic and story breakdown for scrapamoja, dec
 
 ### Functional Requirements
 
-**Fallback Chain Management:**
-- FR1: System can execute primary selector for data extraction
-- FR2: System can execute fallback selector when primary fails
-- FR3: System can chain multiple fallback levels (minimum 2)
-- FR4: System can log fallback attempts with results
+**Extraction Mode Management (FR1-FR5):**
+- FR1: The system routes to the extraction mode declared in the site module configuration
+- FR2: The system supports Direct API Mode for HTTP-based extraction
+- FR3: The system supports Intercepted API Mode for network capture (Phase 2)
+- FR4: The system supports Hybrid Mode for session-harvested extraction (Phase 2)
+- FR5: Developers can explicitly specify which extraction mode to use for a site module
 
-**YAML Hints Integration:**
-- FR5: System can read hint schema from YAML selectors
-- FR6: System can use hints to determine fallback strategy
-- FR7: System can prioritize selectors based on stability hints
+**HTTP Transport / SCR-001 (FR6-FR10):**
+- FR6: The system can make HTTP requests without launching a browser
+- FR7: The system supports GET, POST, PUT, DELETE methods
+- FR8: The system supports chainable request builder interface
+- FR9: The system enforces per-domain rate limiting at transport layer (not configurable to global)
+- FR10: The system supports concurrent requests without blocking
 
-**Failure Capture & Logging:**
-- FR8: System can capture selector failure events
-- FR9: System can log failure events with full context (selectorId, URL, timestamp, failureType)
-- FR10: System can submit failure events to adaptive module DB
+**Authentication & Credentials (FR11-FR15):**
+- FR11: The system supports Bearer token authentication
+- FR12: The system supports Basic authentication
+- FR13: The system supports Cookie-based authentication
+- FR14: The system never logs credentials or auth values
+- FR15: Credentials are sourced from environment variables or secrets files, never hardcoded
 
-**Real-Time Notifications (Phase 2):**
-- FR11: System can receive WebSocket notifications for failures
-- FR12: System can receive confidence score updates
-- FR13: System can receive selector health status updates
+**Site Module Management (FR16-FR20):**
+- FR16: Developers can create new site modules via YAML configuration
+- FR17: Site modules declare target endpoint, auth method, and extraction mode
+- FR18: Site modules implement enforced output contract interface verified by static type checking
+- FR19: Adding a new site module touches only src/sites/ directory
+- FR20: Each site module declares the API version of the target site it was built against, enabling staleness detection when the target site changes
 
-**Health & Monitoring (Phase 2):**
-- FR14: System can query adaptive module for selector confidence scores
-- FR15: System can display selector health status
-- FR16: System can calculate blast radius for failures
+**Output & Data Delivery (FR21-FR24):**
+- FR21: The system delivers JSON for all structured data to consuming systems
+- FR22: The system returns raw bytes as-is for consuming layer to decode
+- FR23: The output schema is consistent regardless of extraction mode used
+- FR24: Every site module implements documented output contract interface
 
-**Integration Architecture:**
-- FR17: System can call adaptive REST API for alternative resolution
-- FR18: System can handle adaptive service unavailability gracefully
-- FR19: System can operate with sync failure capture (immediate)
-- FR20: System can operate with async failure capture (learning)
+**Error Handling (FR25-FR28):**
+- FR25: The system fails fast and loud when extraction fails
+- FR26: The system provides structured errors with context for debugging
+- FR27: The system degrades gracefully on schema changes (partial data returned where possible)
+- FR28: The system surfaces data timestamp in every response so consuming systems can make freshness decisions
+
+**CLI Interface (FR34-FR35):**
+- FR34: The system provides consistent CLI interface across all extraction modes
+- FR35: All capabilities available via CLI are also available via Python API
 
 ### NonFunctional Requirements
 
-**Performance:**
-- NFR1: Fallback Resolution Time - Sync fallback path should not add more than 5 seconds to scraper execution
-- NFR2: WebSocket Connection - Maintain stable connection for real-time notifications with automatic reconnection
+**Performance Requirements:**
+- NFR1: Target <1 second latency for direct API calls (vs 5-30 seconds for browser)
+- NFR2: Target 90% reduction in memory/CPU per extraction
+- NFR3: Target 10-100x faster than browser-based approach
+- NFR4: SCR-001 must support concurrent requests without blocking
 
-**Integration:**
-- NFR3: Graceful Degradation - When adaptive services are unavailable, scraper continues with primary selectors only (no fallback)
-- NFR4: API Timeout Handling - External API calls have configurable timeouts (default 30s) with appropriate error handling
-- NFR5: Connection Pooling - Manage adaptive API connections efficiently to avoid resource exhaustion
+**Security Requirements:**
+- NFR5: Cookies, bearer tokens, and harvested session data must never appear in logs
+- NFR6: Request URL, status code, and headers with auth values redacted - not raw tokens
+- NFR7: Credentials via environment variables or gitignored secrets file - not hardcoded in YAML
+- NFR8: API keys configured in site module config files must not be committed to version control
+- NFR9: Redact anything in auth headers and cookie values by default
+- NFR10: Opt-in verbose logging for debugging must explicitly warn developer that credentials may appear
+
+**Availability Requirements:**
+- NFR11: Target 99%+ successful extractions for supported sites
+- NFR12: When extraction fails, fail fast and loud
+- NFR13: Structured error with enough context for consuming system to decide: retry, fallback, or alert
+- NFR14: Silent failures and empty results are worse than explicit errors
+
+**Maintainability Requirements:**
+- NFR15: Adding a new site module must not require changes outside src/sites/ - verified by CI
+- NFR16: SCR-001 must contain zero retry logic - retry responsibility belongs exclusively to src/resilience/
+- NFR17: Each module independently testable in isolation
+- NFR18: Silent failures are prohibited - the system must never return an empty result that is indistinguishable from "no data found"
+- NFR19: Protobuf decoder must return partial data and a structured error on schema mismatch - never a naked exception to the consuming system
+- NFR20: The stealth module must be replaceable without touching any other module - it is a volatile dependency by design
 
 ### Additional Requirements
 
 **From Architecture Document:**
-- Integration Pattern: In-process integration (import adaptive module directly into scraper)
-- Failure Capture Strategy: Validation layer (check results after extraction)
-- Fallback Chain Pattern: Linear chain (primary → fallback1 → fallback2)
-- Connection Management: Singleton pattern (single shared connection)
-- Implementation Pattern: Use @with_fallback decorator for fallback chains
-- Data Models: Use Pydantic models for failure events
-- Custom Exceptions: Located in src/selectors/exceptions.py
-- Naming Conventions: PascalCase (classes), snake_case (functions/variables), UPPER_SNAKE_CASE (constants)
-- Test Requirements: Unit tests with pytest markers (@pytest.mark.unit, @pytest.mark.integration)
-- Phase 2 Features (Deferred): WebSocket notifications, Health API with confidence scores, Blast radius analysis
+- Brownfield project: Must not break existing FlashScore and Wikipedia scrapers
+- Python 3.11+ with asyncio-first architecture required
+- httpx as HTTP client for SCR-001
+- Output contract enforced via Protocol (duck typing), NOT Pydantic inheritance
+- Module structure: src/{module_name}/ with __init__.py and interfaces.py
+- Custom token bucket rate limiting, per-domain, enforced at transport layer
+- Build Order: Tier 1 (Foundation: SCR-001, SCR-002, SCR-003, SCR-004, SCR-006, SCR-009), Tier 2 (Composite: SCR-005, SCR-007), Tier 3 (Assembly: SCR-008)
+- CI boundary check: GitHub Actions validates site modules touch only src/sites/
+- Shared error model in src/network/ - the single deliberate cross-boundary import
+- Retry logic boundary: SCR-001 raises errors, resilience module handles retries
+- Testing: pytest-asyncio
+- Data Formats: JSON for structured data, raw bytes for consuming layer decoding
 
 ### FR Coverage Map
 
 | FR | Epic | Description |
 |----|------|-------------|
-| FR1 | Epic 1 | Primary selector execution |
-| FR2 | Epic 1 | Fallback selector execution |
-| FR3 | Epic 1 | Multi-level fallback chaining |
-| FR4 | Epic 1 | Fallback attempt logging |
-| FR5 | Epic 2 | YAML hint schema reading |
-| FR6 | Epic 2 | Hint-based fallback strategy |
-| FR7 | Epic 2 | Stability-based prioritization |
-| FR8 | Epic 3 | Failure event capture |
-| FR9 | Epic 3 | Full context failure logging |
-| FR10 | Epic 3 | Adaptive DB submission |
-| FR11 | Epic 5 | WebSocket failure notifications |
-| FR12 | Epic 5 | Confidence score updates |
-| FR13 | Epic 5 | Health status streaming |
-| FR14 | Epic 6 | Confidence score queries |
-| FR15 | Epic 6 | Health status display |
-| FR16 | Epic 6 | Blast radius calculation |
-| FR17 | Epic 4 | Adaptive REST API calls |
-| FR18 | Epic 4 | Service unavailability handling |
-| FR19 | Epic 3 | Sync failure capture |
-| FR20 | Epic 3 | Async failure capture |
+| FR1 | Epic 7 (Phase 2) | Route to extraction mode declared in config |
+| FR2 | Epic 1 | Support Direct API Mode |
+| FR3 | Epic 7 (Phase 2) | Support Intercepted API Mode (Phase 2) |
+| FR4 | Epic 7 (Phase 2) | Support Hybrid Mode (Phase 2) |
+| FR5 | Epic 7 (Phase 2) | Explicit mode specification |
+| FR6 | Epic 1 | Make HTTP requests without browser |
+| FR7 | Epic 1 | Support GET, POST, PUT, DELETE methods |
+| FR8 | Epic 1 | Chainable request builder interface |
+| FR9 | Epic 1 | Per-domain rate limiting at transport layer |
+| FR10 | Epic 1 | Concurrent requests without blocking |
+| FR11 | Epic 2 | Bearer token authentication |
+| FR12 | Epic 2 | Basic authentication |
+| FR13 | Epic 2 | Cookie-based authentication |
+| FR14 | Epic 2 | Never log credentials or auth values |
+| FR15 | Epic 2 | Credentials from env vars or secrets files |
+| FR16 | Epic 3 | Create site modules via YAML config |
+| FR17 | Epic 3 | Declare endpoint, auth method, extraction mode |
+| FR18 | Epic 3 (Phase 2) | Output contract interface (SCR-008) |
+| FR19 | Epic 3 (Phase 2) | Boundary rule - touch only src/sites/ (SCR-008) |
+| FR20 | Epic 3 (Phase 2) | API version declaration (SCR-008) |
+| FR21 | Epic 4 | Deliver JSON for structured data |
+| FR22 | Epic 4 | Return raw bytes as-is |
+| FR23 | Epic 4 | Consistent output schema regardless of mode |
+| FR24 | Epic 4 | Implement output contract interface |
+| FR25 | Epic 5 | Fail fast and loud on extraction failure |
+| FR26 | Epic 5 | Structured errors with context |
+| FR27 | Epic 5 | Graceful degradation on schema changes |
+| FR28 | Epic 5 | Surface data timestamp in response |
+| FR34 | Epic 6 | Consistent CLI across extraction modes |
+| FR35 | Epic 6 | CLI and Python API parity |
 
 ## Epic List
 
-### Epic 1: Automatic Fallback Resolution
-**Goal:** Enable the scraper to automatically recover from selector failures without manual intervention, ensuring continuous data extraction.
+### Epic 1: HTTP Transport Foundation
+The SCR-001 module provides async HTTP transport with chainable request builder, enabling developers to make HTTP requests without launching a browser.
+**FRs covered:** FR6, FR7, FR8, FR9, FR10
 
-**FRs covered:** FR1, FR2, FR3, FR4 (Fallback Chain Management)
+#### Stories
 
----
-
-#### Story 1.1: Primary Selector Execution
-
-As a **scraper system**,
-I want **to execute a primary selector for data extraction**,
-So that **data can be extracted from web pages using the main selector defined in the YAML configuration**.
-
+### Story 1.1: Async HTTP Client Base
+As a developer, I want an async HTTP client that can make requests without launching a browser, so that I can achieve millisecond-level latency compared to browser-based extraction.
 **Acceptance Criteria:**
+- Given a target URL
+- When I make a request using the async client
+- Then the request completes without launching a browser
+- And latency is under 1 second for typical API responses
 
-**Given** a YAML-configured selector with a primary selector defined
-**When** the scraper invokes the selector engine for data extraction
-**Then** the primary selector is executed against the page
-**And** the extracted data is returned to the caller
-
-**Given** a valid page with the expected DOM structure
-**When** the primary selector is executed
-**Then** the selector successfully extracts the data
-**And** returns the expected value
-
----
-
-#### Story 1.2: Fallback Selector Execution
-
-As a **scraper system**,
-I want **to execute a fallback selector when the primary fails**,
-So that **data extraction continues even when the primary selector breaks due to DOM changes**.
-
+### Story 1.2: HTTP Method Support
+As a developer, I want to use GET, POST, PUT, DELETE methods through a consistent interface, so that I can interact with any API endpoint.
 **Acceptance Criteria:**
+- Given a target endpoint
+- When I specify GET, POST, PUT, or DELETE
+- Then the corresponding HTTP method is used
+- And the response is returned to the caller
 
-**Given** a primary selector that fails (returns empty or raises exception)
-**When** the fallback mechanism is triggered
-**Then** the fallback selector is executed against the same page
-**And** the fallback result is returned if successful
-
-**Given** a primary selector failure with error details
-**When** the fallback is attempted
-**Then** the failure event is logged with selector ID, URL, timestamp, and failure type
-**And** the fallback attempt result is also logged
-
----
-
-#### Story 1.3: Multi-Level Fallback Chain
-
-As a **scraper system**,
-I want **to chain multiple fallback levels (minimum 2)**,
-So that **there are multiple recovery options when the first fallback also fails**.
-
+### Story 1.3: Chainable Request Builder
+As a developer, I want a chainable request builder interface, so that I can construct complex requests with a fluent, readable syntax.
 **Acceptance Criteria:**
+- Given I need to build a request with headers, params, body
+- When I use chainable methods like .header(), .param(), .body()
+- Then each method returns the builder for chaining
+- And the final .execute() executes the request
 
-**Given** a primary selector failure
-**When** the fallback chain is executed
-**Then** fallback1 is attempted first
-**And** if fallback1 succeeds, the result is returned
-**And** if fallback1 fails, fallback2 is attempted
-
-**Given** both fallback1 and fallback2 fail
-**When** the fallback chain completes
-**Then** the system returns failure with all attempted selectors logged
-**And** the chain stops at the first successful fallback
-
-**Given** a linear chain configuration (primary → fallback1 → fallback2)
-**When** the chain executes
-**Then** each selector is tried in order until success or all fail
-**And** the total fallback resolution time is tracked for performance monitoring
-
----
-
-#### Story 1.4: Fallback Attempt Logging
-
-As a **developer**,
-I want **to log all fallback attempts with results**,
-So that **I can debug issues and understand selector stability over time**.
-
+### Story 1.4: Per-Domain Rate Limiting
+As a developer, I want per-domain rate limiting enforced at the transport layer, so that my requests don't get blocked due to hitting rate limits.
 **Acceptance Criteria:**
+- Given multiple requests to the same domain
+- When requests exceed the rate limit
+- Then requests are queued and executed within the limit
+- And different domains don't share rate limits
 
-**Given** any fallback attempt (success or failure)
-**When** the fallback chain completes
-**Then** a log entry is created with: selector ID, page URL, timestamp, attempted selectors in order, final result
-
-**Given** a fallback success
-**When** logging the event
-**Then** log includes which fallback succeeded and the extracted value
-
-**Given** a fallback failure
-**When** logging the event
-**Then** log includes all attempted selectors that failed
-**And** includes the failure reason for each attempt
-
----
-
-### Epic 2: YAML Hints & Selector Prioritization
-**Goal:** Leverage YAML-defined hints to intelligently choose fallback strategies based on selector stability.
-
-**FRs covered:** FR5, FR6, FR7 (YAML Hints Integration)
-
----
-
-#### Story 2.1: YAML Hint Schema Reading
-
-As a **scraper system**,
-I want **to read hint schema from YAML selectors**,
-So that **the system can understand the metadata and hints defined for each selector**.
-
+### Story 1.5: Concurrent Request Support
+As a developer, I want to make multiple concurrent requests without blocking, so that I can efficiently poll multiple endpoints.
 **Acceptance Criteria:**
+- Given I need to make 10 requests to different endpoints
+- When I use async gather or similar concurrency
+- Then all requests run concurrently
+- And no request blocks another
 
-**Given** a YAML selector configuration file
-**When** the selector engine loads the configuration
-**Then** all hint fields are parsed from the YAML
-**And** the hints are available to the fallback chain logic
+### Epic 2: Authentication & Credentials
+Secure handling of various authentication methods for target APIs, with credentials sourced from environment variables and never logged.
+**FRs covered:** FR11, FR12, FR13, FR14, FR15
 
-**Given** a YAML selector with hints defined (stability, priority, alternatives)
-**When** the selector is loaded
-**Then** the hints are deserialized into a structured format
-**And** stored with the selector metadata
+#### Stories
 
-**Given** a YAML selector without hints
-**When** the selector is loaded
-**Then** default hint values are applied
-**And** no errors are raised
-
----
-
-#### Story 2.2: Hint-Based Fallback Strategy
-
-As a **scraper system**,
-I want **to use hints to determine fallback strategy**,
-So that **the fallback chain follows intelligent routing based on selector metadata**.
-
+### Story 2.1: Unified .auth() Method
+As a developer, I want a single .auth() builder method that accepts bearer token, basic credentials, or cookie jar, so that I can authenticate with any API type using a consistent interface.
+**FRs covered:** FR11, FR12, FR13
 **Acceptance Criteria:**
+- Given I need to authenticate to an API
+- When I use .auth(bearer='token'), .auth(basic=('user','pass')), or .auth(cookie=...)
+- Then the appropriate auth header is sent
+- And the cookie form is tested explicitly for SCR-007 compatibility
 
-**Given** a selector with defined hints including alternative selectors
-**When** the primary selector fails
-**Then** the fallback chain uses the hints to determine which alternatives to try
-**And** the alternatives are attempted in the order specified in hints
-
-**Given** a selector with a "strategy" hint (e.g., "linear", "priority", "adaptive")
-**When** the fallback chain executes
-**Then** the strategy determines how fallbacks are attempted
-**And** the appropriate fallback behavior is applied
-
-**Given** a selector with custom hint rules
-**When** fallback is triggered
-**Then** the custom rules are evaluated
-**And** the fallback behavior follows the custom logic
-
----
-
-#### Story 2.3: Stability-Based Prioritization
-
-As a **developer**,
-I want **to prioritize selectors based on stability hints**,
-So that **more stable selectors are tried first, reducing the likelihood of repeated failures**.
-
+### Story 2.2: Credential Security
+As a developer, I want credentials sourced from environment variables and automatically redacted from all logs, so that secrets are never hardcoded or accidentally leaked through debug output.
+**FRs covered:** FR14, FR15
 **Acceptance Criteria:**
+- Given credentials configured in environment variables
+- When requests are made
+- Then credentials are read from env vars
+- And auth values never appear in logs
 
-**Given** multiple selectors with different stability scores in hints
-**When** building the fallback chain
-**Then** selectors are ordered by stability (highest first)
-**And** the most stable fallback is attempted before less stable ones
+### Epic 3: Site Module Configuration
+YAML-based configuration for declaring target endpoints and authentication methods. Site module creation via config files.
+**FRs covered:** FR16, FR17
+*Note: FR18-FR20 (output contract, boundary rule, API versioning) moved to Phase 2 for SCR-008*
 
-**Given** a selector with a stability score of 0.9 (high)
-**When** compared to a selector with stability 0.5 (low)
-**Then** the high-stability selector is prioritized in the fallback order
-**And** low-stability selectors are tried as last resorts
+#### Stories
 
-**Given** historical stability data from the adaptive module
-**When** constructing the fallback chain
-**Then** the system can optionally use real stability metrics
-**And** combine with YAML hints for optimal ordering
-
----
-
-### Epic 3: Failure Event Capture & Logging
-**Goal:** Capture all selector failure events with full context and submit them to the adaptive module database for analysis.
-
-**FRs covered:** FR8, FR9, FR10, FR19, FR20 (Failure Capture + Sync/Async Capture)
-
----
-
-#### Story 3.1: Selector Failure Event Capture
-
-As a **scraper system**,
-I want **to capture selector failure events**,
-So that **all failures are detected and recorded for analysis and learning**.
-
+### Story 3.1: YAML Site Configuration
+As a developer, I want to configure a site's target endpoint, authentication method, and extraction mode using a YAML file, so that connection details are declared separately from implementation code.
+**FRs covered:** FR16, FR17
 **Acceptance Criteria:**
+- Given a YAML config file
+- When the site module loads
+- Then endpoint, auth method, and extraction mode are read
+- And the transport uses these configurations
 
-**Given** a selector that returns empty or null result
-**When** the validation layer checks the result
-**Then** a failure event is created
-**And** the failure type is set to "empty_result"
+### Epic 4: Data Output & Delivery
+Consistent JSON delivery regardless of extraction mode, with raw bytes returned as-is for consuming layer decoding.
+**FRs covered:** FR21, FR22
+*Note: FR23 and FR24 move to Phase 2 when SCR-008 is built*
 
-**Given** a selector that throws an exception
-**When** the exception is caught
-**Then** a failure event is created
-**And** the failure type is set to "exception" with error details
+#### Stories
 
-**Given** a selector that times out
-**When** the timeout is detected
-**Then** a failure event is created
-**And** the failure type is set to "timeout"
-
-**Given** any failure detection
-**When** the event is captured
-**Then** the event includes: selector_id, page_url, timestamp, failure_type, extractor_id
-
----
-
-#### Story 3.2: Full Context Failure Logging
-
-As a **developer**,
-I want **to log failure events with full context**,
-So that **I can debug issues and understand the root cause of failures**.
-
+### Story 4.1: Raw Response Delivery
+As a developer, I want SCR-001 to return the raw httpx.Response object without decoding or wrapping, so that the calling layer decides how to handle the content — whether as JSON, bytes, or any other format.
+**FRs covered:** FR21, FR22
 **Acceptance Criteria:**
+- Given an HTTP response
+- When SCR-001 returns
+- Then the raw httpx.Response is returned
+- And the caller decides parsing strategy
 
-**Given** a failure event with all required fields
-**When** the event is logged
-**Then** the log includes: selector_id, page_url, timestamp, failure_type, extractor_id
-**And** attempted_fallbacks array is included (even if empty)
+### Epic 5: Error Handling & Resilience
+Fail-fast error handling with structured errors, graceful degradation on schema changes, and data timestamps for freshness decisions.
+**FRs covered:** FR25, FR26, FR28
+*Note: FR27 moves to Phase 2 with SCR-005*
 
-**Given** a failure event during fallback chain execution
-**When** logging the event
-**Then** the attempted_fallbacks array includes all selectors that were tried
-**And** each fallback includes its result (success/failure)
+#### Stories
 
-**Given** a page context with additional metadata
-**When** creating the failure event
-**Then** the page_url includes full URL with any relevant parameters
-**And** timestamp is in ISO8601 format
-
-**Given** a failure event
-**When** logging to structured logger
-**Then** correlation ID is included for tracing
-**And** log level is set appropriately (WARNING for single failure, ERROR for critical)
-
----
-
-#### Story 3.3: Adaptive Module DB Submission
-
-As a **scraper system**,
-I want **to submit failure events to the adaptive module database**,
-So that **the adaptive system can learn from failures and improve selector suggestions**.
-
+### Story 5.1: Structured Fail-Fast Errors
+As a developer, I want the system to fail immediately with a structured error containing module, operation, URL, status code, and detail — so that failures are visible and debuggable without guessing what went wrong.
+**FRs covered:** FR25, FR26
 **Acceptance Criteria:**
+- Given an error condition
+- When the request fails
+- Then a structured error is raised with module, operation, URL, status_code, detail
+- And the error can be parsed programmatically
 
-**Given** a captured failure event
-**When** the sync failure capture is triggered
-**Then** the event is submitted to the adaptive module DB
-**And** the submission completes before continuing
-
-**Given** a submission to the adaptive module
-**When** the DB operation succeeds
-**Then** the event is stored with all fields
-**And** no error is raised to the caller
-
-**Given** a submission to the adaptive module
-**When** the DB operation fails
-**Then** the error is logged
-**And** the failure is handled gracefully (doesn't crash the scraper)
-
-**Given** the adaptive module is unavailable
-**When** submitting a failure event
-**Then** the event is queued for later retry
-**And** the scraper continues without blocking
-
----
-
-#### Story 3.4: Sync Failure Capture (Immediate)
-
-As a **scraper system**,
-I want **to operate with sync failure capture (immediate)**,
-So that **failures are captured and submitted right away during extraction**.
-
+### Story 5.2: Data Timestamps
+As a consuming system, I want the HTTP response date header surfaced in every response, so that I can make data freshness decisions without parsing the response body.
+**FRs covered:** FR28
 **Acceptance Criteria:**
+- Given an HTTP response
+- When the response is returned
+- Then response.headers.get('date') is surfaced
+- And the caller can make freshness decisions
 
-**Given** a selector execution that returns empty
-**When** the validation layer detects the failure
-**Then** the failure event is captured synchronously
-**And** the fallback chain is triggered immediately
-**And** the total added latency is ≤ 5 seconds (NFR1)
+### Epic 6: CLI for Direct API Mode
+Command-line interface for SCR-001's Direct API mode, with consistent patterns that will extend to other modes in Phase 2.
+**FRs covered:** FR34, FR35
+*Note: Cross-mode consistency validated in Phase 2*
 
-**Given** a sync failure capture in progress
-**When** the adaptive module DB is slow
-**Then** the timeout is applied (default 30s per NFR4)
-**And** the scraper continues with primary selectors if timeout occurs
+#### Stories
 
-**Given** high-volume scraping operations
-**When** many failures occur in quick succession
-**Then** each failure is captured and submitted
-**And** the system handles the load without blocking
-
----
-
-#### Story 3.5: Async Failure Capture (Learning) - Phase 2
-
-As a **scraper system**,
-I want **to operate with async failure capture (learning)**,
-So that **failures are captured for learning without impacting extraction performance**.
-
+### Story 6.1: CLI Interface
+As a developer, I want a consistent CLI interface for Direct API mode, so that I can interact with the scraper from the command line.
+**FRs covered:** FR34
 **Acceptance Criteria:**
+- Given the CLI is installed
+- When I run scrape commands
+- Then the command works consistently for Direct API mode
 
-**Given** a selector execution that completes successfully
-**When** the validation layer validates the result
-**Then** a failure event (if any) is captured asynchronously
-**And** submitted via fire-and-forget to the adaptive DB
-**And** the extraction result is returned immediately without waiting
-
-**Given** async failure capture
-**When** the adaptive module DB is unavailable
-**Then** events are queued locally
-**And** retried when connection is restored
-**And** no data is lost
-
-**Given** learning-mode enabled
-**When** successful extractions occur
-**Then** success events are also captured
-**And** submitted to the adaptive module
-**And** used to update stability scores
-
----
-
-### Epic 4: Graceful Degradation
-**Goal:** Ensure the scraper continues operating with primary selectors when adaptive services are unavailable.
-
-**FRs covered:** FR17, FR18 (Integration Architecture)
-
----
-
-#### Story 4.1: Adaptive REST API Integration
-
-As a **scraper system**,
-I want **to call the adaptive REST API for alternative resolution**,
-So that **I can get alternative selector suggestions when primary selectors fail**.
-
+### Story 6.2: CLI and Python API Parity
+As a developer, I want all CLI capabilities available via Python API, so that I can use the library programmatically with feature parity.
+**FRs covered:** FR35
 **Acceptance Criteria:**
+- Given a capability available via CLI
+- When I use the Python API
+- Then the same functionality is accessible
+- And both interfaces are consistent
 
-**Given** a failed primary selector
-**When** calling the adaptive REST API
-**Then** a request is sent with selector_id and page_url
-**And** alternative selectors are returned if available
+### Epic 7: Extraction Mode Support (Phase 2)
+Routing between extraction modes (Direct API, Intercepted, Hybrid). Moved to Phase 2 since only Direct API mode exists initially.
+**FRs covered:** FR1, FR2, FR3, FR4, FR5
+*Note: FR1-FR2 implicitly satisfied by SCR-001 existing; FR3-FR5 are Phase 2*
 
-**Given** a successful API call
-**When** alternatives are received
-**Then** the alternatives are used as fallbacks
-**And** the fallback chain is extended with these alternatives
+#### Stories
 
-**Given** an API call with a selector that has no alternatives
-**When** the API responds
-**Then** an empty alternatives list is returned
-**And** no error is raised
+### Story 7.1: Mode Declaration and Routing
+As a developer, I want to declare the extraction mode in the site module config and have the framework route to it automatically, so that mode selection is explicit and predictable.
+**FRs covered:** FR1, FR2, FR5
+**Note:** Direct API Mode already built in Epic 1
 
-**Given** adaptive API integration
-**When** configuring the API client
-**Then** timeout is configurable (default 30s per NFR4)
-**And** connection pooling is enabled (per NFR5)
+### Story 7.2: Intercepted API Mode (Phase 2)
+As a developer, I want to use Intercepted API Mode for network capture, so that I can extract data from sites that require browser initialization.
+**FRs covered:** FR3 - SCR-002
 
----
-
-#### Story 4.2: Service Unavailability Handling
-
-As a **scraper system**,
-I want **to handle adaptive service unavailability gracefully**,
-So that **the scraper continues with primary selectors when the adaptive module is down**.
-
-**Acceptance Criteria:**
-
-**Given** the adaptive module is completely unavailable
-**When** a selector fails and fallback is needed
-**Then** the system detects the unavailability
-**And** continues with primary selectors only
-**And** logs a warning about adaptive service being unavailable
-
-**Given** adaptive service timeout
-**When** the API call exceeds the timeout
-**Then** the timeout exception is caught
-**And** fallback to primary selector continues
-**And** the timeout is logged for diagnostics
-
-**Given** intermittent adaptive service failures
-**When** a request fails
-**Then** retry logic is applied (configurable retries)
-**And** if all retries fail, graceful degradation kicks in
-
-**Given** recovery of adaptive service
-**When** a new request is made after unavailability
-**Then** the system detects the service is back
-**And** normal adaptive integration resumes
-**And** no manual restart is required
+### Story 7.3: Hybrid Mode (Phase 2)
+As a developer, I want to use Hybrid Mode for session-harvested extraction, so that I can combine browser session with direct HTTP.
+**FRs covered:** FR4 - SCR-007
 
 ---
 
-### Epic 5: Real-Time Notifications (Phase 2)
-**Goal:** Provide WebSocket-based notifications for failures, confidence score updates, and selector health status.
+## Phase 1 Stories Summary (SCR-001 Scope)
 
-**FRs covered:** FR11, FR12, FR13 (Real-Time Notifications)
+### Epic 1: HTTP Transport Foundation
+- Story 1.1: Async HTTP Client Base
+- Story 1.2: HTTP Method Support
+- Story 1.3: Chainable Request Builder
+- Story 1.4: Per-Domain Rate Limiting
+- Story 1.5: Concurrent Request Support
 
----
+### Epic 2: Authentication & Credentials
+- Story 2.1: Unified .auth() Method (Bearer, Basic, Cookie)
+- Story 2.2: Credential Security (Env vars + log redaction)
 
-#### Story 5.1: WebSocket Connection for Failure Notifications
+### Epic 3: Site Module Configuration
+- Story 3.1: YAML Site Configuration
 
-As a **user**,
-I want **to receive WebSocket notifications for failures**,
-So that **I can be immediately aware when selector failures occur**.
+### Epic 4: Data Output & Delivery
+- Story 4.1: Raw Response Delivery
 
-**Acceptance Criteria:**
+### Epic 5: Error Handling & Resilience
+- Story 5.1: Structured Fail-Fast Errors
+- Story 5.2: Data Timestamps (HTTP date header)
 
-**Given** a WebSocket connection established
-**When** a selector failure is captured
-**Then** a failure notification is sent via WebSocket
-**And** the notification includes: selector_id, page_url, timestamp, failure_type
-
-**Given** a stable WebSocket connection
-**When** the scraper runs
-**Then** all failure events are streamed in real-time
-**And** no failures are missed due to buffering
-
-**Given** WebSocket connection loss
-**When** the connection drops
-**Then** automatic reconnection is attempted
-**And** the reconnection follows exponential backoff
-**And** the system continues to buffer failures during disconnection (per NFR2)
-
-**Given** WebSocket reconnection
-**When** the connection is restored
-**Then** the system resumes streaming notifications
-**And** no duplicate notifications are sent
+### Epic 6: CLI for Direct API Mode
+- Story 6.1: CLI Interface
+- Story 6.2: CLI and Python API Parity
 
 ---
 
-#### Story 5.2: Confidence Score Updates via WebSocket
+## Implementation Notes for BMAD Agent
 
-As a **user**,
-I want **to receive confidence score updates**,
-So that **I can track selector stability in real-time**.
+1. **Epic 1 - Story 1.1 and 1.3** are tightly coupled — the async client base and chainable builder are the same object. Build together in same PR.
 
-**Acceptance Criteria:**
+2. **Epic 2 - Story 2.1** cookie form is most critical — SCR-007 uses it to inject harvested session credentials. Test explicitly.
 
-**Given** a selector's confidence score changes
-**When** the adaptive module updates the score
-**Then** a confidence update notification is sent via WebSocket
-**And** the notification includes: selector_id, old_score, new_score, reason
+3. **Epic 7 (Phase 2)** stories should be implemented when SCR-002, SCR-007 are in scope.
 
-**Given** periodic confidence score refresh
-**When** scores are recalculated
-**Then** updated scores are broadcast to all connected clients
-**And** notifications include the recalculation timestamp
+<!-- Epic breakdown to be completed in Step 02 -->
 
-**Given** confidence score dropping below threshold
-**When** the update is received
-**Then** an alert notification is sent
-**And** the alert indicates the selector needs attention
-
----
-
-#### Story 5.3: Selector Health Status Streaming
-
-As a **user**,
-I want **to receive selector health status updates**,
-So that **I can monitor which selectors are working vs degraded**.
-
-**Acceptance Criteria:**
-
-**Given** a selector health status change
-**When** the status changes (healthy → degraded → failed)
-**Then** a status update notification is sent via WebSocket
-**And** the notification includes: selector_id, old_status, new_status, timestamp
-
-**Given** periodic health check completion
-**When** health status is evaluated
-**Then** the current health snapshot is broadcast
-**And** all connected clients receive the full status list
-
-**Given** multiple selectors with different health states
-**When** health status is streamed
-**Then** each selector's status is individually updateable
-**And** clients can subscribe to specific selectors if needed
-
----
-
-### Epic 6: Health Monitoring & Blast Radius (Phase 2)
-**Goal:** Enable querying of selector confidence scores, displaying health status, and calculating failure impact.
-
-**FRs covered:** FR14, FR15, FR16 (Health & Monitoring)
-
----
-
-#### Story 6.1: Confidence Score Query API
-
-As a **developer**,
-I want **to query the adaptive module for selector confidence scores**,
-So that **I can understand which selectors are stable and which need attention**.
-
-**Acceptance Criteria:**
-
-**Given** a selector ID
-**When** querying the confidence score API
-**Then** the current confidence score (0.0-1.0) is returned
-**And** the last updated timestamp is included
-
-**Given** multiple selector IDs
-**When** batch querying confidence scores
-**Then** all requested scores are returned in a single response
-**And** missing selectors return null or not found
-
-**Given** no selector ID specified
-**When** querying the API
-**Then** all selector confidence scores are returned
-**And** pagination is supported for large result sets
-
-**Given** a selector with no historical data
-**When** querying the score
-**Then** a default score (e.g., 0.5) is returned
-**And** a flag indicates the score is estimated
-
----
-
-#### Story 6.2: Selector Health Status Display
-
-As a **user**,
-I want **to display selector health status**,
-So that **I can quickly see which selectors are working, degraded, or failed**.
-
-**Acceptance Criteria:**
-
-**Given** a selector's performance history
-**When** calculating health status
-**Then** the status is one of: healthy (≥0.8), degraded (0.5-0.79), failed (<0.5)
-**And** status is calculated based on recent success rate
-
-**Given** a dashboard request
-**When** displaying selector health
-**Then** all selectors are grouped by status
-**And** the display shows: selector_id, status, confidence_score, last_failure
-
-**Given** a degraded selector
-**When** displaying health
-**Then** the recommended action is shown
-**And** any available alternatives are suggested
-
-**Given** real-time status updates
-**When** WebSocket connection is active
-**Then** health status changes are pushed immediately
-**And** the dashboard auto-updates without refresh
-
----
-
-#### Story 6.3: Blast Radius Calculation
-
-As a **user**,
-I want **to calculate blast radius for failures**,
-So that **I can understand the impact of a selector failure on data quality**.
-
-**Acceptance Criteria:**
-
-**Given** a selector failure event
-**When** calculating blast radius
-**Then** the affected data fields are identified
-**And** the count of affected records is returned
-
-**Given** a failed selector that extracts "home_team"
-**When** blast radius is calculated
-**Then** the impact includes: which match records are affected
-**And** the severity level (critical/major/minor)
-
-**Given** multiple related selectors
-**When** one fails and impacts others
-**Then** the blast radius includes cascading effects
-**And** all dependent data fields are marked as affected
-
-**Given** a blast radius query
-**When** presenting results
-**Then** the output includes: failed_selector, affected_fields, affected_records, severity, recommended_actions

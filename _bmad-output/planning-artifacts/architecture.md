@@ -1,412 +1,478 @@
 ---
 stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
-workflowType: 'architecture'
-lastStep: 8
-status: 'complete'
-completedAt: '2026-03-06T19:30:27.230Z'
 inputDocuments:
   - "_bmad-output/planning-artifacts/prd.md"
-  - "_bmad-output/planning-artifacts/prd-validation-report.md"
+  - "_bmad-output/planning-artifacts/product-brief-scrapamoja-2026-03-10.md"
   - "_bmad-output/project-context.md"
+  - "docs/proposals/browser_api_hybrid/SCRAPAMOJA_BUILD_ORDER.md"
+  - "docs/features.md"
+  - "docs/summary.md"
+  - "docs/yaml-configuration.md"
+  - "docs/modular_template_guide.md"
 workflowType: 'architecture'
 project_name: 'scrapamoja'
 user_name: 'Tisone'
-date: '2026-03-06T19:10:39.009Z'
+date: '2026-03-11'
+lastStep: 8
+status: 'complete'
+completedAt: '2026-03-11'
 ---
 
 # Architecture Decision Document
 
 _This document builds collaboratively through step-by-step discovery. Sections are appended as we work through each architectural decision together._
 
+## ⭐ Architecture Complete - Implementation Ready
+
 ## Project Context Analysis
 
 ### Requirements Overview
 
 **Functional Requirements:**
-- 20 FRs organized into 6 categories: Fallback Chain (4), YAML Hints (3), Failure Capture (3), Notifications (3 - Phase 2), Health/Monitoring (4 - Phase 2), Integration Architecture (4)
-- MVP requires fallback chain, YAML hints for critical selectors, sync failure capture
-- Phase 2 adds WebSocket notifications, health API, blast radius analysis
+
+The PRD defines 28 functional requirements organized into 7 categories:
+
+1. **Extraction Mode Management (FR1-FR5):** System routes to extraction modes declared in site module config. Supports Direct API Mode (MVP), Intercepted API Mode (Phase 2), Hybrid Mode (Phase 2). DOM Mode is existing behavior - must remain unaffected.
+
+2. **HTTP Transport/SCR-001 (FR6-FR10):** Async HTTP client using httpx supporting GET/POST/PUT/DELETE. Chainable request builder interface. Per-domain rate limiting enforced at transport layer (not configurable to global). Concurrent requests without blocking.
+
+3. **Authentication & Credentials (FR11-FR15):** Bearer token, Basic auth, Cookie-based auth support. Credentials never logged. Sourced from environment variables or secrets files, never hardcoded.
+
+4. **Site Module Management (FR16-FR20):** YAML-based site module configuration. Site modules declare endpoint, auth method, extraction mode. Enforced output contract interface verified by static type checking. Boundary rule: adding new site module touches only `src/sites/`.
+
+5. **Output & Data Delivery (FR21-FR24):** JSON for all structured data. Raw bytes returned as-is. Consistent output schema regardless of extraction mode. Every site module implements documented output contract.
+
+6. **Error Handling (FR25-FR28):** Fail fast and loud. Structured errors with context. Graceful degradation on schema changes (partial data returned). Data timestamp surfaced in every response.
 
 **Non-Functional Requirements:**
-- Performance: Sync fallback resolution < 5 seconds, stable WebSocket with auto-reconnection
-- Integration: Graceful degradation, configurable API timeouts (default 30s), connection pooling
+
+- **Performance:** <1 second latency for direct API calls (vs 5-30 seconds browser). 90% reduction in memory/CPU per extraction. 10-100x faster than browser-based.
+- **Security:** Credentials never in logs. Redact auth headers/cookies by default. Opt-in verbose logging with explicit warning.
+- **Availability:** 99%+ successful extraction target. Fallback tiers: retry via resilience → alternative extraction mode → alert consuming system.
+- **Maintainability:** Resilience module handles all retry logic - site modules have zero retry code. Module boundaries enforced - changes outside `src/sites/` indicate boundary failure.
 
 ### Scale & Complexity
 
-- Primary domain: API Backend / Web Scraping
-- Complexity level: Low-Medium
-- Estimated architectural components: 5-7 (scraper, adaptive module, API layer, WebSocket handler, failure capture, health API, monitoring)
+- **Primary domain:** API Backend / Developer Tool
+- **Complexity level:** Medium-to-High
+- **Estimated architectural components:** 9 new modules (SCR-001 through SCR-009) across 3 tiers
 
 ### Technical Constraints & Dependencies
 
-- Brownfield integration—must work with existing: BrowserSession, selector engine, snapshot system, storage adapter, observability stack
-- Python 3.11+ async-first architecture required
-- Must leverage existing resilience engine for retry mechanisms
-- 45 AI agent rules in project-context.md define implementation patterns
+1. **Brownfield project:** Must not break existing FlashScore and Wikipedia scrapers
+2. **Python 3.11+:** asyncio-first architecture required
+3. **httpx:** HTTP client choice for SCR-001
+4. **Output contract:** Enforced via static type checking, not informal convention
+5. **AiScore protobuf:** Undocumented schema - must handle changes gracefully
 
 ### Cross-Cutting Concerns Identified
 
-- Error handling with correlation IDs across async operations
-- Connection pooling and resource management
-- Graceful degradation patterns
-- Performance monitoring via telemetry
+1. **Async-first architecture:** Required for high-frequency polling scenarios
+2. **Unified interface:** Same CLI and config patterns across all 4 extraction modes
+3. **Resilience patterns:** Retry logic delegated to `src/resilience/` module - SCR-001 has zero retry code
+4. **Per-domain rate limiting:** HARD requirement enforced at transport layer, not left to caller
+5. **Protobuf schema handling:** Graceful degradation - return partial data or clear error, never silent failure
+6. **Credential management:** Environment-based configuration, gitignored secrets, never hardcoded
 
 ## Starter Template Evaluation
 
-### Note: Brownfield Integration Project
+### Project Type: Brownfield Extension
 
-This is a **brownfield integration project** - the adaptive selector module already exists in `src/selectors/adaptive/`. The task is to integrate it into the existing Flashscore scraper, not build a new project from scratch.
+This is a **brownfield project** - Scrapamoja already exists and is being extended with new modules (SCR-001 through SCR-009). Unlike a new project that needs a starter template, this project extends existing architectural patterns.
 
-**Starter Template Evaluation:** Not Applicable
+### Existing Architecture to Extend
 
-- This is an integration task, not a new project
-- Existing technology stack already defined in project-context.md
-- Architecture decisions will focus on integration patterns and wiring existing components
+- **Base modules:** Browser management, stealth, resilience (already exist in `src/`)
+- **CLI patterns:** Site-specific CLI classes in `src/sites/{site}/cli/main.py`
+- **Module structure:** `src/module_name/` with `__init__.py` for clean API
+- **Interfaces:** `src/module_name/interfaces.py` for dependency injection
+
+### Technology Stack for SCR-001 through SCR-009
+
+| Component | Technology | Notes |
+|-----------|-----------|-------|
+| Runtime | Python 3.11+ | asyncio-first architecture |
+| HTTP Client | httpx | For SCR-001 Direct API Mode |
+| Async | asyncio | Native, no external library |
+| Data Validation | Pydantic | Config models and structured output/error models **within modules only** |
+| Logging | structlog | Structured logging with correlation IDs |
+| Browser | Playwright | For SCR-002, SCR-003, SCR-006, SCR-007 only |
+
+### Excluded Technologies
+
+- **FastAPI:** Exists in project but NOT used by SCR-001-009
+- **SQLAlchemy:** Exists in project but NOT needed for scraping modules
+
+### Key Architectural Decision: Output Contract Interface
+
+**CRITICAL:** The output contract interface is a **Protocol** (duck typing), NOT a Pydantic BaseModel inheritance chain.
+
+- Pydantic is used for config models and structured output/error models **within each module**
+- Do NOT impose Pydantic models across module boundaries
+- Output contract uses Python `Protocol` for loose coupling
+- Enables any implementation to satisfy the contract without inheritance
+
+### Build Order (from SCRAPAMOJA_BUILD_ORDER.md)
+
+| Tier | Phase | Modules | Notes |
+|------|-------|---------|-------|
+| 1 | Foundation | SCR-001, SCR-002, SCR-003, SCR-004, SCR-006, SCR-009 | No internal dependencies, can be built in parallel |
+| 2 | Composite | SCR-005, SCR-007 | SCR-005 depends on SCR-004; SCR-007 depends on 001, 003, 006 |
+| 3 | Assembly | SCR-008 | Depends on all previous modules |
 
 ## Core Architectural Decisions
 
 ### Decision Priority Analysis
 
 **Critical Decisions (Block Implementation):**
-- Integration Architecture: In-process (import adaptive module directly)
-- Failure Capture Strategy: Validation layer (check results after extraction)
-- Fallback Chain Pattern: Linear chain (primary → fallback1 → fallback2)
-- Connection Management: Singleton (single shared connection)
+- Rate limiting implementation approach
+- CI boundary enforcement
 
 **Important Decisions (Shape Architecture):**
-- Sync failure capture for MVP (async for Phase 2)
-- YAML hints priority-based fallback strategy
-- Graceful degradation when adaptive unavailable
+- All other decisions already specified in PRD
 
 **Deferred Decisions (Post-MVP):**
-- WebSocket notifications (Phase 2)
-- Health API with confidence scores (Phase 2)
-- Blast radius analysis (Phase 2)
+- None identified at this time
 
-### Integration Architecture
+### Module Structure
 
-**Decision: In-process Integration**
-- Import adaptive module directly into scraper
-- Simpler than HTTP, no network overhead
-- Tightly coupled but appropriate for this use case
-- Version: N/A (existing module)
+**Decision:** Follow existing `src/{module_name}/` pattern
+- Each module has `__init__.py` for clean API
+- Each module has `interfaces.py` for dependency injection
+- Confirmed from existing Scrapamoja patterns
 
-### Failure Capture Strategy
+### HTTP Transport (SCR-001)
 
-**Decision: Validation Layer**
-- Check results after extraction completes
-- More flexible than post-query intercept
-- Allows for post-processing validation
-- Captures: selectorId, pageUrl, timestamp, failureType
+**Decision:** Chainable request builder pattern
+- Confirmed from SCAMPER session and PRD
+- httpx-based async client
+- No further discussion needed
 
-### Fallback Chain Pattern
+### Rate Limiting Implementation
 
-**Decision: Linear Chain**
-- Primary → Fallback1 → Fallback2
-- Sequential execution, stops at first success
-- Simple and predictable
-- YAML hints determine fallback order
+**Decision:** Custom token bucket implementation
+- **Approach:** Custom implementation, not library
+- **Keying:** Per-domain
+- **Location:** Inside SCR-001 module boundary
+- **Implementation:** ~30-40 lines of code
+- **Rationale:** Thin implementation provides full control. Libraries would need wrapping anyway. Per-domain requirement is specific enough that a library would add complexity without benefit.
 
-### Connection Management
+### Testing Approach
 
-**Decision: Singleton Pattern**
-- Single shared connection to adaptive module
-- Simplest pattern, reduces complexity
-- Appropriate for solo developer use case
-- No connection pooling overhead
+**Decision:** pytest-asyncio
+- Natural choice for asyncio-first project
+- Implied by NFR17 - each module independently testable in isolation
+- Follows existing project patterns
 
-### Decision Impact Analysis
+### CI/CD Boundary Enforcement (NFR15)
 
-**Implementation Sequence:**
-1. Wire adaptive module import into scraper
-2. Implement validation layer for failure capture
-3. Create linear fallback chain logic
-4. Set up singleton connection manager
-5. Add sync failure capture for MVP
+**Decision:** GitHub Actions workflow step
+- **Mechanism:** `git diff --name-only` against base branch
+- **Validation:** Any changed files outside `src/sites/` in a PR that modifies `src/sites/` causes failure
+- **Location:** GitHub Actions workflow step
+- **Note:** This is a CI check, NOT a pytest test
+- **Rationale:** Enforces the NFR15 requirement - CI must verify new site modules do not modify files outside `src/sites/`
 
-**Cross-Component Dependencies:**
-- Scraper → Adaptive module (in-process)
-- Validation layer → Failure logging (async DB)
-- Fallback chain → YAML hints reader
-- Connection manager → Adaptive module API
+### Complete Decision Matrix
+
+| Category | Decision | Rationale |
+|----------|----------|----------|
+| Runtime | Python 3.11+ (asyncio-first) | PRD requirement |
+| HTTP Client | httpx | PRD SCR-001 |
+| Output Contract | Protocol (duck typing) | Loose coupling, not Pydantic inheritance |
+| Pydantic Usage | Within modules only | Technical preference - don't impose across boundaries |
+| Logging | structlog | Project context |
+| Rate Limiting | Custom token bucket, per-domain | User decision - thin implementation, full control |
+| Boundary Rule | Site modules touch only `src/sites/` | PRD NFR15 |
+| Error Handling | Fail fast, structured errors | PRD |
+| Credentials | Env vars, never logged | PRD security |
+| Module Structure | `src/{module_name}/` with interfaces.py | Existing pattern |
+| Chainable Builder | Confirmed | SCAMPER session |
+| Testing | pytest-asyncio | Asyncio-first project |
+| CI Boundary Check | GitHub Actions git diff step | User decision - enforce NFR15 |
 
 ## Implementation Patterns & Consistency Rules
 
-### Pattern Categories Defined
+### Overview
 
-**Critical Conflict Points Identified:** 4 areas where AI agents could make different choices
+This section defines implementation patterns that prevent AI agent conflicts. These patterns build on the 45 rules in `project-context.md` with additional specificity for SCR-001 through SCR-009.
 
-### Naming Patterns
+### Pattern 1: HTTP Response Handling
 
-All naming follows project-context.md rules:
-- Classes: PascalCase (BrowserSession, SnapshotManager)
-- Functions/variables: snake_case (capture_snapshot, browser_config)
-- Constants: UPPER_SNAKE_CASE (MAX_RETRIES, DEFAULT_TIMEOUT)
-- Modules: snake_case (browser_management, selector_engine)
+**Rule:** SCR-001 returns raw `httpx.Response` — never decoded, never wrapped.
 
-### Error Handling Patterns
+**Rationale:** Without this pattern, different agents will make different choices:
+- One agent returns httpx.Response directly
+- Another wraps it in a dataclass
+- Another decodes it immediately
 
-**Decision: Custom Exceptions per Module**
-- SelectorError: Base exception for selector failures
-- FallbackError: Fallback chain failures
-- ValidationError: Validation layer failures
-- IntegrationError: Adaptive module integration errors
-- All in src/selectors/exceptions.py
+The chain breaks when modules expect different types.
 
-### Failure Event Patterns
+**Implementation:**
+- Caller decides what to do with the response
+- Any module needing decoded content passes the response to SCR-004 (encoding detector) first
+- No module between SCR-001 and SCR-004 touches the response body
 
-**Decision: Pydantic Models**
+### Pattern 2: Error Structure (SHARED - Exception to Boundary Rule)
+
+**Rule:** Every error in SCR-001 through SCR-009 must carry this structure:
+
 ```python
-class FailureEvent(BaseModel):
-    selector_id: str
-    page_url: str
-    timestamp: datetime
-    failure_type: str
-    extractor_id: str
-    attempted_fallbacks: list[str] = []
-```
-- Located in src/selectors/models/
-- Validated and typed
-- Serialization support for logging
-
-### Fallback Chain Patterns
-
-**Decision: Decorator Pattern**
-```python
-@with_fallback(fallbacks=[fallback_selector_1, fallback_selector_2])
-def extract_primary(page):
-    ...
-```
-- Declarative, easy to understand
-- Chain multiple fallbacks cleanly
-- Located in src/selectors/decorators/
-
-### Integration Patterns
-
-**Decision: Hook into Selector Engine**
-- Pre-extraction hook: Validate selectors before extraction
-- Post-extraction hook: Validate results after extraction
-- Minimal intrusion into existing code
-- Clear separation: scraper ↔ adaptive module
-
-### Enforcement Guidelines
-
-**All AI Agents MUST:**
-- Follow project-context.md naming conventions exactly
-- Use custom exceptions from src/selectors/exceptions.py
-- Use Pydantic models for all data transfer objects
-- Use @with_fallback decorator for fallback chains
-- Use structured logging with correlation IDs (per project-context)
-
-**Pattern Enforcement:**
-- MyPy strict mode for type checking
-- Black for formatting (88 char limit)
-- Ruff for linting
-- Tests in tests/ folder with pytest markers
-
-### Pattern Examples
-
-**Good Examples:**
-```python
-from src.selectors.exceptions import SelectorError
-from src.selectors.models import FailureEvent
-from src.selectors.decorators import with_fallback
-
-@with_fallback(fallbacks=['fallback_home_team'])
-async def extract_home_team(page: Page) -> str:
-    ...
+{
+    "module": "scr_001",        # which module raised it
+    "operation": "execute",      # what operation failed
+    "url": "...",               # redacted if auth present
+    "status_code": 403,         # if HTTP error
+    "detail": "...",            # human readable
+    "partial_data": {...}       # whatever was extracted before failure, or None
+}
 ```
 
-**Anti-Patterns:**
-- ❌ Creating new exceptions outside src/selectors/exceptions.py
-- ❌ Using dictionaries instead of Pydantic models
-- ❌ Hardcoding fallback logic instead of using decorator
-- ❌ Bypassing selector engine for DOM operations
+**Location:** `src/network/`
+
+**IMPORTANT - Intentional Cross-Boundary Import:**
+- The shared error model lives in `src/network/` because most errors originate there
+- However, it is imported by ALL modules that raise structured errors (src/encodings/, src/stealth/, src/browser/)
+- This is the **single deliberate cross-boundary import** in the entire codebase
+- Must be documented as INTENTIONAL to prevent future "clean up cross-boundary imports" passes from breaking it
+
+### Pattern 3: Retry Logic Boundary
+
+**Rule:** SCR-001 raises errors — it does NOT retry. The resilience module handles retries.
+
+**Error Categories:**
+- **Retryable:** network timeout, connection reset, 429, 503 — resilience module retries these
+- **Terminal:** 401, 403, schema mismatch, malformed URL — resilience module does not retry these, surfaces immediately
+
+**Implementation Detail (CRITICAL):**
+- The retryable/terminal tag is an **enum field** on the shared error model (Pattern 2)
+- NOT a separate exception class hierarchy
+- Agents must NOT create RetryableError and TerminalError subclasses
+- One error type, one tag field — ensures resilience module handles consistently
+
+This is the interface contract between SCR-001 and src/resilience/.
+
+### Pattern 4: Config Model Structure
+
+**Rule:** Each module that reads YAML config maps it to a Pydantic model defined inside that module.
+
+**Boundaries:**
+- The model is never imported by other modules
+- Config flows inward — the module owns its config shape
+- If two modules need the same config value, they each define their own model for it
+- No shared config models across module boundaries
+
+### Pattern 5: CLI Entry Point
+
+**Rule:** Already established in `project-context.md`.
+
+Reference: Site-specific CLI classes in `src/sites/{site}/cli/main.py` with `create_parser()` and `run()` methods.
+
+**Do not redefine** — reference existing patterns.
+
+### Additional Rules from Project Context
+
+AI agents implementing SCR-001-009 must also follow the 45 rules in `_bmad-output/project-context.md`, including:
+
+- **Naming:** snake_case for modules/functions/variables, PascalCase for classes, UPPER_SNAKE_CASE for constants
+- **Line length:** 88 characters (Black)
+- **Async:** ALL I/O operations use `async def`
+- **Resource management:** async context managers (`__aenter__`/`__aexit__`)
+- **Type safety:** MyPy strict mode, all functions need type annotations
+
+### Enforcement
+
+1. **CI Boundary Check:** GitHub Actions step validates site modules touch only `src/sites/`
+2. **Static Type Checking:** MyPy strict mode verifies Protocol adherence
+3. **Code Quality:** Black formatting (88 char), Ruff linting
+4. **Shared Error Model:** The single cross-boundary Pydantic import is documented as intentional
 
 ## Project Structure & Boundaries
 
-### Complete Project Directory Structure
+### Existing src/ Structure Analysis
 
-This is a **brownfield integration project** - extending existing src/ structure with new modules.
+Before mapping new modules, the undocumented directories were investigated:
 
-**New Folders in src/selectors/:**
+| Directory | Contents | Relevance to SCR-001-009 |
+|----------|----------|------------------------|
+| src/core/ | logging_config.py, shutdown/, snapshot/ | Core concerns - NOT a catch-all |
+| src/models/ | selector_models.py only | Selector-specific only - NOT shared models |
+| src/api/ | FastAPI web layer | Web API - NOT relevant to SCR-001-009 |
+| src/services/ | Empty | Must remain EMPTY and unused by SCR-001-009 |
 
-```
-src/selectors/
-├── fallback/           # NEW - Fallback chain logic
-│   ├── __init__.py
-│   ├── chain.py       # Fallback chain implementation
-│   └── decorator.py   # @with_fallback decorator
-├── hooks/             # NEW - Pre/post extraction hooks
-│   ├── __init__.py
-│   ├── pre_extraction.py
-│   └── post_extraction.py
-├── engine.py          # MODIFY - Add hook registration
-├── validation.py     # MODIFY - Add validation layer
-└── models.py          # MODIFY - Add failure event models
-```
+### New Module Directory Mapping
 
-**Existing Modules to Leverage:**
-- `src/selectors/adaptive/` - Already exists (API, DB models, services)
-- `src/selectors/engine.py` - Selector engine (integration point)
-- `src/selectors/exceptions.py` - Custom exceptions
-- `src/selectors/yaml_loader.py` - YAML hints loading
+| Module | ID | Location | Status | Notes |
+|--------|-----|----------|--------|-------|
+| Direct API Mode | SCR-001 | `src/network/` | NEW | HTTP transport module |
+| Network Interception | SCR-002 | `src/network/` | Phase 2 | Not in current scope |
+| Cloudflare Support | SCR-003 | `src/stealth/` | Phase 2 | Not in current scope |
+| Auto Encoding Detection | SCR-004 | `src/encodings/` | Phase 2 | Not in current scope |
+| Protobuf Decoding | SCR-005 | `src/encodings/` | Phase 2 | Not in current scope |
+| Session Harvesting | SCR-006 | `src/browser/` | Phase 2 | Not in current scope |
+| Session Bootstrap | SCR-007 | `src/network/` | Phase 2 | Not in current scope |
+| AiScore Module | SCR-008 | `src/sites/aiscore/` | Phase 2 | Not in current scope |
+| Persistent Profile | SCR-009 | `src/browser/` | Phase 2 | Not in current scope |
 
-### Architectural Boundaries
+**Note:** Each entry represents a module directory (with `__init__.py`), not a single file. Internal file organization is the implementation agent's decision.
 
-**Component Boundaries:**
-- Scraper → hooks (pre/post extraction)
-- hooks → fallback chain → adaptive module
-- Validation layer → Failure logging
+### Important Boundary Rules
 
-**Data Boundaries:**
-- Failure events → src/selectors/adaptive/db/models/failure_event.py
-- Selector configs → src/selectors/config/*.yaml
+1. **src/services/ remains EMPTY:**
+   - Must remain unused by SCR-001-009
+   - Prevents future agents from using it as a dumping ground
+   - SCR-007 (orchestration) lives in src/network/, NOT here
 
-### Requirements to Structure Mapping
+2. **src/network/ is the new home for:**
+   - HTTP transport (SCR-001)
+   - Network interception (SCR-002)
+   - Session bootstrap orchestration (SCR-007)
+   - Shared error model (Pattern 2)
 
-| FR Category | Location |
-|-------------|----------|
-| Fallback Chain (FR1-FR4) | src/selectors/fallback/ |
-| YAML Hints (FR5-FR7) | src/selectors/yaml_loader.py (existing) |
-| Failure Capture (FR8-FR10) | src/selectors/hooks/ + validation.py |
-| Integration Architecture (FR17-FR20) | src/selectors/engine.py + hooks/ |
+3. **src/encodings/ is NEW:**
+   - Houses both encoding detection (SCR-004) and protobuf decoding (SCR-005)
+   - Not just decoder - handles detection AND decoding
 
-### Integration Points
+### Module Interaction Boundaries
 
-**Internal Communication:**
-- Pre-extraction hook: Validate selectors before extraction
-- Post-extraction hook: Validate results after extraction
-- Decorator: Chain fallback selectors on failure
-
-**External Integrations:**
-- Adaptive module API (in-process import)
-- Failure event DB (adaptive module)
-
-### File Organization Patterns
-
-**New Files:**
-- src/selectors/fallback/__init__.py
-- src/selectors/fallback/chain.py
-- src/selectors/fallback/decorator.py
-- src/selectors/hooks/__init__.py
-- src/selectors/hooks/pre_extraction.py
-- src/selectors/hooks/post_extraction.py
-
-**Modified Files:**
-- src/selectors/engine.py
-- src/selectors/validation.py
-- src/selectors/models.py
-
-### Test Organization
+> **NOTE:** This flow shows the complete architectural chain for context. For implementation scope, see the "Current Scope" statement at the end of this document.
 
 ```
-tests/selectors/
-├── fallback/
-│   ├── test_chain.py
-│   └── test_decorator.py
-├── hooks/
-│   ├── test_pre_extraction.py
-│   └── test_post_extraction.py
-└── fixtures/
+SCR-001 (HTTP Transport)
+    ↓ returns raw httpx.Response
+SCR-004 (Encoding Detection)
+    ↓ identifies format
+SCR-005 (Protobuf Decoding)
+    ↓ decodes binary
+SCR-007 (Session Bootstrap)
+    ↓ orchestrates
+SCR-008 (AiScore Site Module)
 ```
 
-**Test Requirements:**
-- All new code must have unit tests
-- Integration tests for hook wiring
-- Use pytest markers: @pytest.mark.unit, @pytest.mark.integration
+### Directory Structure Overview
+
+```
+src/
+├── network/                 # NEW - houses HTTP transport modules
+│   └── (module directories for SCR-001)
+├── encodings/              # NEW - SCR-004, SCR-005 (Phase 2)
+│   └── (module directories)
+├── stealth/                # EXTENDED - SCR-003 (Phase 2)
+│   └── (module directories)
+├── browser/                # EXTENDED - SCR-006, SCR-009 (Phase 2)
+│   └── (module directories)
+├── sites/                  # EXTENDED - SCR-008 (Phase 2)
+│   └── aiscore/
+│       └── (module directories)
+├── resilience/              # REUSED - SCR-001 uses it
+└── ...existing...
+```
+
+**Note:** Each SCR feature is a module (directory with `__init__.py`), not a single file. Internal file names are the implementation agent's decision.
+
+### CI Boundary Enforcement
+
+Per NFR15, GitHub Actions validates that site modules touch only `src/sites/`:
+
+```yaml
+# .github/workflows/boundary-check.yml
+- name: Check site module boundaries
+  run: |
+    git diff --name-only ${{ github.base_ref }}...HEAD \
+      | grep -v "^src/sites/" \
+      | grep -q "^src/sites/" && echo "ERROR: Changes outside src/sites/" && exit 1 || true
+```
+
+This ensures the boundary rule is enforced on all PRs.
 
 ## Architecture Validation Results
 
 ### Coherence Validation ✅
 
 **Decision Compatibility:**
-- All technology choices compatible (Python 3.11+, FastAPI, Playwright, SQLAlchemy)
-- Patterns align with technology stack (decorator, Pydantic, async)
-- No contradictory decisions found
-- Integration architecture (in-process) works with singleton connection pattern
+- All technology choices are compatible: Python 3.11+, httpx, asyncio, Pydantic, structlog, Playwright
+- No version conflicts identified
+- Patterns align with technology choices
+- No contradictory decisions
 
 **Pattern Consistency:**
-- Naming conventions consistent (PascalCase, snake_case, UPPER_SNAKE_CASE)
-- Error handling patterns aligned with project-context rules
-- Decorator pattern for fallback chains consistent with Python idioms
-- Hook pattern integrates cleanly with existing engine.py
+- Implementation patterns support architectural decisions
+- HTTP Response Handling → Encoding Detection → Decoding chain is coherent
+- Naming conventions consistent across all areas
+- Structure patterns align with technology stack
 
 **Structure Alignment:**
 - Project structure supports all architectural decisions
-- New folders (fallback/, hooks/) integrate with existing selectors/ modules
-- Boundaries properly defined between scraper, hooks, fallback, and adaptive module
+- Boundaries properly defined and respected
+- Structure enables chosen patterns
+- Integration points properly structured
 
 ### Requirements Coverage Validation ✅
 
 **Functional Requirements Coverage:**
-| FR Category | Status | Location |
-|------------|--------|----------|
-| Fallback Chain (FR1-FR4) | ✅ | src/selectors/fallback/ |
-| YAML Hints (FR5-FR7) | ✅ | yaml_loader.py (existing) |
-| Failure Capture (FR8-FR10) | ✅ | hooks/ + validation.py |
-| Integration Architecture (FR17-FR20) | ✅ | engine.py + hooks/ |
-| Notifications (FR11-FR13) | ✅ Deferred | Phase 2 |
-| Health/Monitoring (FR14-FFR16) | ✅ Deferred | Phase 2 |
+- FR1-FR5 (Extraction Mode Management): Supported by module routing and configuration
+- FR6-FR10 (HTTP Transport): SCR-001 provides chainable httpx client
+- FR11-FR15 (Authentication): Bearer, Basic, Cookie auth support
+- FR16-FR20 (Site Modules): YAML config, boundary rule, output contract
+- FR21-FR24 (Output): JSON delivery, Protocol-based output contract
+- FR25-FR28 (Error Handling): Structured errors with context, graceful degradation
 
 **Non-Functional Requirements Coverage:**
-- Performance (<5s fallback): ✅ Linear chain pattern ensures fast execution
-- Graceful degradation: ✅ Singleton pattern handles unavailable adaptive
-- API timeouts (30s): ✅ Configurable in implementation
+- Performance: Async-first, <1s latency target
+- Security: Credentials never logged, env var sourcing
+- Availability: 99%+ target, fallback tiers
+- Maintainability: Resilience module handles retries, boundary rule enforced
 
 ### Implementation Readiness Validation ✅
 
 **Decision Completeness:**
-- ✅ All critical decisions documented with versions
-- ✅ Technology stack fully specified
-- ✅ Integration patterns defined
-- ✅ Performance considerations addressed
+- All critical decisions documented with versions
+- Implementation patterns comprehensive enough for AI agents
+- Consistency rules clear and enforceable
+- Examples provided for major patterns
 
 **Structure Completeness:**
-- ✅ Complete directory structure defined (new + existing)
-- ✅ Component boundaries established
-- ✅ Integration points clearly specified
-- ✅ Requirements to structure mapping complete
+- Project structure complete and specific
+- All 9 modules mapped to specific directories
+- Integration points clearly specified
+- Component boundaries well-defined
 
 **Pattern Completeness:**
-- ✅ All potential conflict points addressed
-- ✅ Naming conventions comprehensive
-- ✅ Communication patterns fully specified
-- ✅ Error handling patterns documented
+- All potential conflict points addressed (HTTP response, error, retry, config, CLI)
+- Naming conventions comprehensive (from project-context.md)
+- Communication patterns fully specified (Protocol-based output contract)
+- Process patterns complete (error handling, retry boundary)
 
 ### Gap Analysis Results
 
 **Critical Gaps:** None
+
 **Important Gaps:** None
-**Nice-to-Have Gaps:**
-- Phase 2 features (WebSocket, Health API) deferred to post-MVP
-- Could add more detailed examples in future
 
-### Validation Issues Addressed
-
-No critical or important issues found during validation.
+**Nice-to-Have:**
+- Could add more code examples for complex patterns (deferred - patterns are clear enough)
 
 ### Architecture Completeness Checklist
 
-**✅ Requirements Analysis**
+✅ **Requirements Analysis**
 - [x] Project context thoroughly analyzed
 - [x] Scale and complexity assessed
 - [x] Technical constraints identified
 - [x] Cross-cutting concerns mapped
 
-**✅ Architectural Decisions**
+✅ **Architectural Decisions**
 - [x] Critical decisions documented with versions
 - [x] Technology stack fully specified
 - [x] Integration patterns defined
 - [x] Performance considerations addressed
 
-**✅ Implementation Patterns**
+✅ **Implementation Patterns**
 - [x] Naming conventions established
 - [x] Structure patterns defined
 - [x] Communication patterns specified
 - [x] Process patterns documented
 
-**✅ Project Structure**
+✅ **Project Structure**
 - [x] Complete directory structure defined
 - [x] Component boundaries established
 - [x] Integration points mapped
@@ -416,17 +482,27 @@ No critical or important issues found during validation.
 
 **Overall Status:** READY FOR IMPLEMENTATION
 
-**Confidence Level:** High - based on comprehensive validation
+**Confidence Level:** HIGH
 
 **Key Strengths:**
-- Clear mapping of FRs to architectural components
-- Established patterns follow Python best practices
-- Brownfield integration approach leverages existing code
-- Comprehensive test organization
+1. Clear module boundaries with intentional cross-boundary exception (shared error model)
+2. Explicit retry logic boundary between SCR-001 and resilience module
+3. CI boundary check enforces site module boundary rule
+4. Protocol-based output contract for loose coupling
+5. Build order provides clear dependency path
+6. All 28 FRs and all NFRs covered
 
 **Areas for Future Enhancement:**
-- Phase 2 features (WebSocket, Health API)
-- Additional pattern examples as implementation proceeds
+- SCR-007 brainstorming/interface design process (Phase 2)
+- Response caching with TTL (Phase 2)
+
+### Notes for Future Phases
+
+**1. SCR-007 Process Requirement:**
+> SCR-007 must go through the same brainstorming and interface design process as SCR-001 before implementation begins — flagged as a formal process requirement in PRD.
+
+**2. Response Caching with TTL:**
+> Response caching with TTL for high-frequency polling — deferred to Phase 2. Exists only in brainstorming session document. Must be explicitly added to Growth Features list before Phase 2 begins to avoid rediscovering and debating again.
 
 ### Implementation Handoff
 
@@ -435,10 +511,8 @@ No critical or important issues found during validation.
 - Use implementation patterns consistently across all components
 - Respect project structure and boundaries
 - Refer to this document for all architectural questions
-- Follow project-context.md for coding standards
 
 **First Implementation Priority:**
-1. Create src/selectors/fallback/ module with chain.py and decorator.py
-2. Create src/selectors/hooks/ module with pre_extraction.py and post_extraction.py
-3. Add failure event models to src/selectors/models.py
-4. Add hook registration to src/selectors/engine.py
+SCR-001 (Direct API Mode) - HTTP transport layer with custom per-domain token bucket rate limiting.
+
+**Current Scope:** SCR-001 ONLY. SCR-002 through SCR-009 are documented for architectural awareness but are NOT in scope for this implementation phase.

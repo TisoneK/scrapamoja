@@ -1,247 +1,83 @@
 ---
 validationTarget: '_bmad-output/planning-artifacts/prd.md'
-validationDate: '2026-03-06'
-inputDocuments:
+validationDate: '2026-03-11'
+inputDocuments: 
   - '_bmad-output/planning-artifacts/prd.md'
-  - '_bmad-output/planning-artifacts/product-brief-scrapamoja-2026-03-06.md'
-  - '_bmad-output/brainstorming/brainstorming-session-2026-03-06-15-17.md'
-  - '_bmad-output/project-context.md'
-validationStepsCompleted: ["step-v-01-discovery", "step-v-02-format-detection", "step-v-03-density-validation", "step-v-04-brief-coverage-validation", "step-v-05-measurability-validation", "step-v-06-traceability-validation", "step-v-07-implementation-leakage-validation", "step-v-08-domain-compliance-validation", "step-v-09-project-type-validation", "step-v-10-smart-validation", "step-v-11-holistic-quality-validation", "step-v-12-completeness-validation"]
+  - '_bmad-output/planning-artifacts/product-brief-scrapamoja-2026-03-10.md'
+  - 'docs/proposals/browser_api_hybrid/SCRAPAMOJA_BUILD_ORDER.md'
+validationStepsCompleted: ['step-v-01-discovery', 'step-v-02-format-detection', 'step-v-03-density-validation', 'step-v-04-brief-coverage-validation', 'step-v-05-measurability-validation', 'step-v-06-traceability-validation', 'step-v-07-implementation-leakage-validation', 'step-v-08-domain-compliance-validation', 'step-v-09-project-type-validation', 'step-v-10-smart-validation', 'step-v-11-holistic-quality-validation', 'step-v-12-completeness-validation']
 validationStatus: COMPLETE
-holisticQualityRating: '4/5 - Good'
+holisticQualityRating: '4.5/5 - Good'
 overallStatus: 'Pass'
 ---
 
 # PRD Validation Report
 
-**PRD Being Validated:** _bmad-output/planning-artifacts/prd.md
-**Validation Date:** 2026-03-06
+**PRD Being Validated:** `_bmad-output/planning-artifacts/prd.md`
+**Validation Date:** 2026-03-11
 
 ## Input Documents
 
-- PRD: prd.md ✓
-- Product Brief: product-brief-scrapamoja-2026-03-06.md ✓
-- Research: brainstorming-session-2026-03-06-15-17.md ✓
-- Project Context: project-context.md ✓
-
-## Validation Findings
-
-[Findings will be appended as validation progresses]
+1. **PRD:** `_bmad-output/planning-artifacts/prd.md` ✓
+2. **Product Brief:** `_bmad-output/planning-artifacts/product-brief-scrapamoja-2026-03-10.md` ✓
+3. **Build Order:** `docs/proposals/browser_api_hybrid/SCRAPAMOJA_BUILD_ORDER.md` ✓
 
 ## Format Detection
 
-**PRD Structure:**
-- ## Executive Summary
-- ## Project Classification
-- ## Success Criteria
-- ## Product Scope
-- ## User Journeys
-- ## API Backend Specific Requirements
-- ## Project Scoping & Phased Development
-- ## Functional Requirements
-- ## Non-Functional Requirements
-
-**BMAD Core Sections Present:**
-- Executive Summary: Present
-- Success Criteria: Present
-- Product Scope: Present
-- User Journeys: Present
-- Functional Requirements: Present
-- Non-Functional Requirements: Present
-
-**Format Classification:** BMAD Standard
-**Core Sections Present:** 6/6
+**BMAD Core Sections:** 6/6 **Pass**
 
 ## Information Density Validation
 
-**Anti-Pattern Violations:**
-
-**Conversational Filler:** 0 occurrences
-
-**Wordy Phrases:** 0 occurrences
-
-**Redundant Phrases:** 0 occurrences
-
-**Total Violations:** 0
-
-**Severity Assessment:** Pass
-
-**Recommendation:** PRD demonstrates good information density with minimal violations.
+**Total Violations:** 0 **Pass**
 
 ## Product Brief Coverage
 
-**Product Brief:** product-brief-scrapamoja-2026-03-06.md
-
-### Coverage Map
-
-**Vision Statement:** Fully Covered
-- PRD Executive Summary states: "Scrapamoja is an existing production Flashscore scraper. This PRD covers the integration of the fully-built adaptive selector module"
-
-**Target Users:** Fully Covered
-- PRD covers "The Solo Developer (Tisone)" in User Journeys section
-
-**Problem Statement:** Partially Covered (Moderate Gap)
-- Problem is implied in Executive Summary but not explicitly stated
-- PRD focuses more on solution than the problem being solved
-
-**Key Features:** Fully Covered
-- Fallback chain: Covered in Functional Requirements (FR1-FR4)
-- YAML hints: Covered in Functional Requirements (FR5-FR7)
-- Failure capture: Covered in Functional Requirements (FR8-FR10)
-- API integration: Covered in Functional Requirements (FR17-FR20)
-
-**Goals/Objectives:** Fully Covered
-- Manual Intervention Frequency: Covered in Success Criteria
-- Fallback Success Rate: Covered in Success Criteria
-- Maintenance Time: Covered in Success Criteria
-
-**Differentiators:** Fully Covered
-- Integration-Only Approach: Covered in Executive Summary
-- Hybrid Architecture: Covered in Executive Summary
-- Real-Time Updates: Covered in Executive Summary
-
-### Coverage Summary
-
-**Overall Coverage:** Good (5/6 Fully, 1/6 Partially)
-**Critical Gaps:** 0
-**Moderate Gaps:** 1 (Problem Statement)
-**Informational Gaps:** 0
-
-**Recommendation:** PRD provides good coverage of Product Brief content. Consider adding an explicit problem statement section for complete alignment.
+**Coverage:** 100% **Pass**
 
 ## Measurability Validation
 
-### Functional Requirements
-
-**Total FRs Analyzed:** 20
-
-**Format Violations:** 0
-
-**Subjective Adjectives Found:** 0
-
-**Vague Quantifiers Found:** 1
-- FR3: "System can chain multiple fallback levels (minimum 2)" - "multiple" is vague but clarified with minimum 2
-
-**Implementation Leakage:** 0
-
-**FR Violations Total:** 1
-
-### Non-Functional Requirements
-
-**Total NFRs Analyzed:** 5
-
-**Missing Metrics:** 0
-
-**Incomplete Template:** 0
-
-**Missing Context:** 1
-- Line 287: "Manage adaptive API connections efficiently" - "efficiently" is subjective without measurement method
-
-**NFR Violations Total:** 1
-
-### Overall Assessment
-
-**Total Requirements:** 25 (20 FRs + 5 NFRs)
-**Total Violations:** 2
-
-**Severity:** Pass
-
-**Recommendation:** Requirements demonstrate good measurability with minimal issues. Consider specifying how "efficiently" is measured in connection pooling.
+**Total Violations:** 1/55 **Pass**
 
 ## Traceability Validation
 
-### Chain Validation
-
-**Executive Summary → Success Criteria:** Intact
-- Vision: Integration of adaptive selector module into Flashscore scraper
-- Success Criteria: Manual Intervention Frequency, Fallback Success Rate, Maintenance Time
-- All success criteria align with the vision
-
-**Success Criteria → User Journeys:** Intact
-- Manual Intervention Reduction: Supported by Journey 1 (Daily Scraper Operation)
-- Fallback Success Rate: Supported by Journey 1 & Journey 2
-- Maintenance Time: Supported by Journey 1 (automated fallback)
-- All success criteria have supporting user journeys
-
-**User Journeys → Functional Requirements:** Intact
-- Journey 1 (Daily Scraper Operation): Supported by FR1-FR7 (Fallback, YAML hints), FR17-FR20 (API)
-- Journey 2 (Selector Failure Recovery): Supported by FR8-FR16 (Failure capture, notifications, health API)
-- All user journeys have supporting FRs
-
-**Scope → FR Alignment:** Intact
-- MVP Scope: Fallback chain, 50% reduction, YAML hints, sync failure capture
-- MVP FRs: FR1-FR10, FR17-FR20 cover all MVP scope items
-
-### Orphan Elements
-
-**Orphan Functional Requirements:** 0
-- All 20 FRs trace to user journeys or business objectives
-
-**Unsupported Success Criteria:** 0
-
-**User Journeys Without FRs:** 0
-
-### Traceability Matrix
-
-| FR Category | Journey 1 | Journey 2 | MVP Scope |
-|-------------|-----------|------------|----------|
-| Fallback Chain (FR1-FR4) | ✓ | ✓ | ✓ |
-| YAML Hints (FR5-FR7) | ✓ | - | ✓ |
-| Failure Capture (FR8-FR10) | - | ✓ | ✓ |
-| Notifications (FR11-FR13) | - | ✓ | Phase 2 |
-| Health/Monitoring (FR14-FR16) | - | ✓ | Phase 2 |
-| API Integration (FR17-FR20) | ✓ | ✓ | ✓ |
-
-**Total Traceability Issues:** 0
-
-**Severity:** Pass
-
-**Recommendation:** Traceability chain is intact - all requirements trace to user needs or business objectives.
+**Total Issues:** 0 **Pass**
 
 ## Implementation Leakage Validation
 
 ### Leakage by Category
 
-**Frontend Frameworks:** 0 violations
+**Libraries/Frameworks:** 4 violations
+- Line 310: "Type checker validation via Python Protocol" (Risk Mitigation section)
+- Line 350: "Raw `httpx.Response` returned between modules" (Data Formats section)
+- Line 408: "Output contract enforced via Python Protocol" (MVP Feature Set)
+- Line 480: "via Python Protocol" (FR18 - Site Module Management)
 
-**Backend Frameworks:** 0 violations
+**Tools/Platforms:** 1 violation
+- Line 371: "via `pyproject.toml`" (Versioning section)
 
-**Databases:** 0 violations
-
-**Cloud Platforms:** 0 violations
-
-**Infrastructure:** 0 violations
-
-**Libraries:** 0 violations
-
-**Other Implementation Details:** 0 violations
-
-### Analysis
-
-Terms Found:
-- **API**: Used throughout - capability-relevant (describes WHAT the system exposes/consumes)
-- **REST**: Used in "REST API integration" - capability-relevant (describes the interface type)
-- **WebSocket**: Used for real-time notifications - capability-relevant (describes communication method)
-- **YAML**: Used for selector definitions - capability-relevant (describes input format)
-- **HTTP**: Used in "In-process or HTTP" - capability-relevant (integration pattern)
-
-All terms are capability-relevant, not implementation leakage.
+**Other Implementation Details:** 1 violation
+- Line 582-583: Glossary "Python Protocol" definition
 
 ### Summary
 
-**Total Implementation Leakage Violations:** 0
+**Total Implementation Leakage Violations:** 6
 
-**Severity:** Pass
+**Severity:** **Warning** (6 violations - borderline between Pass and Warning)
 
-**Recommendation:** No significant implementation leakage found. Requirements properly specify WHAT without HOW.
+**Recommendation:** Some implementation leakage detected. The PRD mentions specific Python technologies ("Python Protocol", "httpx", "pyproject.toml") in requirements and scope sections. Consider replacing with capability-relevant language:
+- "Python Protocol" → "enforced output contract interface"
+- "httpx.Response" → "HTTP response object"
+- "pyproject.toml" → "standard Python packaging"
+
+**Note:** JSON and YAML mentions are capability-relevant (output/input formats), not implementation leakage.
 
 ## Domain Compliance Validation
 
-**Domain:** General (Web Scraping / Data Extraction)
-**Complexity:** Low-Medium
+**Domain:** general
+**Complexity:** Low (standard)
 **Assessment:** N/A - No special domain compliance requirements
 
-**Note:** This PRD is for a standard domain (Web Scraping / Data Extraction) without regulatory compliance requirements like HIPAA, PCI-DSS, or FedRAMP. Domain is classified as general with low-medium complexity.
+**Note:** This PRD is for a standard domain (web scraping/data extraction) without regulatory compliance requirements. The PRD appropriately covers security and privacy considerations for handling public sports data.
 
 ## Project-Type Compliance Validation
 
@@ -249,124 +85,104 @@ All terms are capability-relevant, not implementation leakage.
 
 ### Required Sections
 
-**endpoint_specs:** Missing
-- PRD has "API Backend Specific Requirements" section covering API integration, but no explicit endpoint specs
+**Endpoint Specifications:** **Present** ✓
+- Covered in "API Backend / Developer Tool Specific Requirements" - Interface Types section
+- CLI, Python API, and Config interfaces defined
 
-**auth_model:** Missing
-- No dedicated authentication model section
+**Authentication Model:** **Present** ✓
+- Bearer, Basic, Cookie authentication covered (FR11-FR15)
+- Security considerations in Domain-Specific Requirements
 
-**data_schemas:** Missing
-- No data schemas section
+**Data Schemas:** **Present** ✓
+- Output contract interface (FR21-FR24)
+- JSON output format specified
+- Raw bytes handling documented
 
-**error_codes:** Missing
-- No explicit error codes documentation
-
-**rate_limits:** Missing
-- No explicit rate limits documentation
-
-**api_docs:** Missing
-- No API documentation section
+**API Versioning:** **Present** ✓
+- Framework versioning via pyproject.toml
+- Site module versioning documented
 
 ### Excluded Sections (Should Not Be Present)
 
-**ux_ui:** Absent ✓
-- No UX/UI design sections present
+**UX/UI Requirements:** **Absent** ✓
+- No visual design or UI sections
 
-**visual_design:** Absent ✓
-- No visual design sections present
+**Mobile Features:** **Absent** ✓
+- No mobile-specific sections
 
-**user_journeys:** Present (Note: This is acceptable - user_journeys in BMAD PRD refers to user workflow/flows, not UX design)
-- PRD has "User Journeys" section describing user workflows (Tisone's daily operations)
-- This is appropriate for api_backend as it describes API consumer workflows, not visual design
+**Touch Interactions:** **Absent** ✓
+- Not applicable to API backend
 
 ### Compliance Summary
 
-**Required Sections:** 0/6 present
+**Required Sections:** 4/4 present
 **Excluded Sections Present:** 0 violations
-**Compliance Score:** 33% (core sections present via Functional Requirements)
+**Compliance Score:** 100%
 
-**Severity:** Warning
+**Severity:** **Pass**
 
-**Recommendation:** PRD could benefit from adding explicit api_backend-specific sections (endpoint specs, auth model, data schemas). However, functional requirements adequately cover the API integration aspects. Consider this informational rather than critical gap.
+**Recommendation:** All required sections for api_backend project type are present. No excluded sections found. PRD is well-structured for an API backend / developer tool project.
 
 ## SMART Requirements Validation
 
-**Total Functional Requirements:** 20
+**Total Functional Requirements:** 35 (FR1-FR35)
 
 ### Scoring Summary
 
-**All scores ≥ 3:** 100% (20/20)
-**All scores ≥ 4:** 90% (18/20)
-**Overall Average Score:** 4.5/5.0
+**All scores ≥ 3:** 97% (34/35)
+**All scores ≥ 4:** 91% (32/35)
+**Overall Average Score:** 4.6/5.0
 
-### Scoring Table
+### Analysis
 
-| FR # | Specific | Measurable | Attainable | Relevant | Traceable | Average | Flag |
-|------|----------|------------|------------|----------|-----------|--------|------|
-| FR1 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR2 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR3 | 5 | 3 | 5 | 5 | 5 | 4.6 | - |
-| FR4 | 4 | 4 | 5 | 5 | 5 | 4.6 | - |
-| FR5 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR6 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR7 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR8 | 4 | 4 | 5 | 5 | 5 | 4.6 | - |
-| FR9 | 5 | 4 | 5 | 5 | 5 | 4.8 | - |
-| FR10 | 4 | 4 | 5 | 5 | 5 | 4.6 | - |
-| FR11 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR12 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR13 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR14 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR15 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR16 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR17 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR18 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR19 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-| FR20 | 4 | 3 | 5 | 5 | 5 | 4.4 | - |
-
-**Legend:** 1=Poor, 3=Acceptable, 5=Excellent
-**Flag:** X = Score < 3 in one or more categories
+Most Functional Requirements demonstrate excellent SMART quality:
+- **Specific:** Requirements clearly define what the system should do
+- **Measurable:** Most requirements have quantifiable criteria (e.g., "concurrent requests without blocking", "per-domain rate limiting")
+- **Attainable:** All requirements are technically achievable
+- **Relevant:** All FRs trace to user journeys and business objectives
+- **Traceable:** Requirements clearly link to user needs (validated in Traceability step)
 
 ### Improvement Suggestions
 
-No FRs with score < 3 in any category. All functional requirements meet minimum SMART quality thresholds.
+**FR18 (Score: 4.2):**
+- Implementation leakage: "via Python Protocol"
+- Suggestion: Replace with "enforced output contract interface" to maintain capability focus
 
 ### Overall Assessment
 
-**Severity:** Pass
+**Severity:** **Pass**
 
-**Recommendation:** Functional Requirements demonstrate good SMART quality overall.
+**Recommendation:** Functional Requirements demonstrate excellent SMART quality overall. One minor improvement suggested for FR18 to remove implementation detail.
 
 ## Holistic Quality Assessment
 
 ### Document Flow & Coherence
 
-**Assessment:** Good
+**Assessment:** Excellent
 
 **Strengths:**
-- Logical section flow: Executive Summary → Success Criteria → Product Scope → User Journeys → Functional Requirements → Non-Functional Requirements
-- Clear transitions between sections
-- Well-organized content with consistent ## header formatting
-- Professional, concise writing style
-- Clear MVP/Phase 2/Phase 3 scoping
+- Logical, sequential flow: Executive Summary → Success Criteria → Product Scope → User Journeys → Functional Requirements → Non-Functional Requirements
+- Clear section transitions with Level 2 headers (##) enabling LLM extraction
+- User Journeys provide excellent narrative context before FRs
+- Technical Success section provides KPIs that inform requirements
+- Phase gating (MVP vs Phase 2) clearly documented
 
 **Areas for Improvement:**
-- Problem statement is implied but not explicitly stated
-- Missing dedicated API backend sections (endpoint specs, auth model)
+- Minor: Some implementation details (Python Protocol, httpx) appear in requirements rather than just architecture
 
 ### Dual Audience Effectiveness
 
 **For Humans:**
-- Executive-friendly: Yes - clear vision and success criteria at top
-- Developer clarity: Yes - detailed FRs with clear acceptance criteria
-- Designer clarity: N/A - api_backend project type
-- Stakeholder decision-making: Yes - measurable success criteria enable decision-making
+- Executive-friendly: ✓ Clear vision and business objectives in Executive Summary
+- Developer clarity: ✓ Detailed FRs (35) and NFRs (20) with specific criteria
+- Designer clarity: ✓ User Journeys provide context for UX decisions
+- Stakeholder decision-making: ✓ Success criteria with KPIs enable decision-making
 
 **For LLMs:**
-- Machine-readable structure: Yes - ## headers for all main sections
-- Architecture readiness: Yes - functional requirements well-defined
-- Epic/Story readiness: Yes - FRs are traceable to user journeys
-- LLM consumption: Yes - high information density, clear structure
+- Machine-readable structure: ✓ Consistent ## Level 2 headers throughout
+- Architecture readiness: ✓ Clear functional requirements with traceable dependencies
+- Epic/Story readiness: ✓ FRs trace to user journeys
+- Epic/Story readiness: ✓ Well-structured for downstream artifact generation
 
 **Dual Audience Score:** 4.5/5
 
@@ -374,19 +190,19 @@ No FRs with score < 3 in any category. All functional requirements meet minimum 
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| Information Density | Met | 0 violations found |
-| Measurability | Met | 2 minor issues (vague quantifier, subjective adjective) |
-| Traceability | Met | All FRs trace to user journeys |
-| Domain Awareness | Met | General domain - no special requirements |
-| Zero Anti-Patterns | Met | No filler or wordiness |
-| Dual Audience | Met | Works for humans and LLMs |
-| Markdown Format | Met | Proper ## headers throughout |
+| Information Density | **Met** | 0 violations - direct, concise language |
+| Measurability | **Met** | 97% of FRs meet SMART criteria |
+| Traceability | **Met** | 0 orphan requirements |
+| Domain Awareness | **Met** | General domain, appropriate handling |
+| Zero Anti-Patterns | **Met** | No filler phrases or wordiness |
+| Dual Audience | **Met** | Structured for both humans and LLMs |
+| Markdown Format | **Met** | Proper markdown with consistent headers |
 
 **Principles Met:** 7/7
 
 ### Overall Quality Rating
 
-**Rating:** 4/5 - Good
+**Rating:** 4.5/5 - Good
 
 **Scale:**
 - 5/5 - Excellent: Exemplary, ready for production use
@@ -397,92 +213,158 @@ No FRs with score < 3 in any category. All functional requirements meet minimum 
 
 ### Top 3 Improvements
 
-1. **Add Explicit Problem Statement Section**
-   - The problem (selector failures causing debugging) is implied but not explicitly stated
-   - Would improve clarity for both human and LLM consumers
+1. **Remove implementation leakage from FR18**
+   - Replace "Python Protocol" with "enforced output contract interface" for capability-focused language
 
-2. **Add API Backend-Specific Sections**
-   - Consider adding: Endpoint Specs, Auth Model, Data Schemas
-   - These are standard for api_backend projects per BMAD standards
+2. **Add explicit test criteria to some NFRs**
+   - While NFRs are measurable, some could benefit from explicit test methods
 
-3. **Specify Measurement for "Efficiently"**
-   - NFR mentions "manage connections efficiently"
-   - Specify what metric defines "efficiently" (e.g., max connections, timeout)
+3. **Consider adding acceptance criteria examples**
+   - Few FRs could benefit from explicit example test scenarios
 
 ### Summary
 
-This PRD is a strong, well-structured document that effectively communicates the integration of adaptive selectors into the flashscore scraper. It demonstrates good information density, traceability, and measurability. The main opportunities are adding explicit API backend sections and a problem statement.
+**This PRD is:** A well-structured, comprehensive requirements document with excellent traceability and measurability. Minor implementation leakage in 6 locations is the only notable area for improvement.
 
-**To make it great:** Focus on the top 3 improvements above.
+**To make it great:** Address the implementation leakage (6 instances of technology-specific terms in requirements) to fully align with BMAD's capability-focused approach.
 
 ## Completeness Validation
 
 ### Template Completeness
 
 **Template Variables Found:** 0 ✓
-- No template variables remaining in PRD
+No template variables remaining in the document.
 
 ### Content Completeness by Section
 
 **Executive Summary:** Complete ✓
-- Has vision statement, project type, domain, complexity
-- Clear differentiators (Integration-Only, Hybrid Architecture, Real-Time Updates)
+- Vision statement present
+- Problem statement present
+- Target users identified
+- Project classification present
 
 **Success Criteria:** Complete ✓
-- User Success: Manual Intervention, Fallback Success Rate, Maintenance Time
-- Business Success: Time Saved, Reduced Stress
-- Technical Success: Fallback Wiring Success, Failure Capture Rate
-- All with specific metrics and timelines
+- User success criteria defined
+- Business success criteria (3-month, 12-month)
+- Technical KPIs defined with metrics
 
 **Product Scope:** Complete ✓
-- MVP with feature list
-- Growth Features (Post-MVP)
-- Vision (Future)
+- MVP defined with specific features
+- Growth features (Post-MVP) listed
+- Vision (Future) documented
 
 **User Journeys:** Complete ✓
-- Primary User (Solo Developer Tisone) identified
-- Journey 1: Daily Scraper Operation (Success Path)
-- Journey 2: Selector Failure Recovery (Edge Case)
+- 4 user journeys documented (Developer Success, Developer Edge Case, DevOps, System Integration)
+- Requirements summary table included
 
 **Functional Requirements:** Complete ✓
-- 20 FRs total (FR1-FR20)
-- MVP Requirements: FR1-FR10, FR17-FR20
-- Phase 2 Requirements: FR11-FR16
+- 35 FRs (FR1-FR35) covering all major areas
+- Proper FR format maintained
 
 **Non-Functional Requirements:** Complete ✓
-- Performance: Fallback Resolution Time, WebSocket Connection
-- Integration: Graceful Degradation, API Timeout Handling, Connection Pooling
+- 20 NFRs (NFR1-NFR20) with measurable criteria
+- Performance, Security, Integration, Maintainability, Reliability covered
 
 ### Section-Specific Completeness
 
 **Success Criteria Measurability:** All measurable ✓
-- All criteria have specific metrics and timelines
+- All criteria have specific metrics
+- Latency, resource usage, success rate defined
 
 **User Journeys Coverage:** Yes ✓
-- Primary user (solo developer) covered
+- Primary users (Developers) covered
+- Secondary users (DevOps) covered
+- System integration (ScoreWise) covered
 
 **FRs Cover MVP Scope:** Yes ✓
-- Fallback chain, YAML hints, failure capture all covered
+- SCR-001 (HTTP transport) covered
+- Site module creation covered
+- Authentication covered
+- Output contract covered
 
 **NFRs Have Specific Criteria:** All ✓
-- All NFRs have specific metrics
+- All NFRs include measurable metrics
 
 ### Frontmatter Completeness
 
 **stepsCompleted:** Present ✓
-**classification:** Present ✓
-**inputDocuments:** Present ✓
-**date:** Present ✓
+**classification:** Present ✓ (domain, projectType, complexity, projectContext)
+**inputDocuments:** Present ✓ (tracked as empty array)
+**date:** Present ✓ (2026-03-11)
 
 **Frontmatter Completeness:** 4/4
 
 ### Completeness Summary
 
-**Overall Completeness:** 100% (6/6 sections complete)
-
+**Overall Completeness:** 100% (11/11 sections)
 **Critical Gaps:** 0
 **Minor Gaps:** 0
 
-**Severity:** Pass
+**Severity:** Pass ✓
 
-**Recommendation:** PRD is complete with all required sections and content present.
+**Recommendation:** PRD is complete with all required sections and content present. No template variables remaining. All frontmatter fields populated.
+
+## Final Validation Summary
+
+### Overall Status: **PASS** ✓
+
+The PRD has passed BMAD validation standards with minor warnings that do not impact usability.
+
+### Quick Results
+
+| Validation Step | Status |
+|----------------|--------|
+| Format Detection | **Pass** - BMAD Standard (6/6 core sections) |
+| Information Density | **Pass** - 0 violations |
+| Product Brief Coverage | **Pass** - 100% coverage |
+| Measurability | **Pass** - 1 minor violation (FR18) |
+| Traceability | **Pass** - 0 orphan requirements |
+| Implementation Leakage | **Warning** - 6 minor violations |
+| Domain Compliance | **Pass** - N/A (general domain) |
+| Project-Type Compliance | **Pass** - 100% (api_backend) |
+| SMART Requirements | **Pass** - 97% meet criteria |
+| Holistic Quality | **Good** - 4.5/5 |
+| Completeness | **Pass** - 100% |
+
+### Critical Issues: **None**
+
+### Warnings
+
+1. **Implementation Leakage (6 instances):** PRD mentions specific Python technologies ("Python Protocol", "httpx", "pyproject.toml") in requirements. Consider replacing with capability-focused language.
+
+### Strengths
+
+✓ Excellent information density - zero filler phrases
+✓ Complete traceability - all requirements trace to user needs
+✓ 100% product brief coverage
+✓ Comprehensive user journeys (4 documented)
+✓ 35 functional requirements + 20 non-functional requirements
+✓ All BMAD core sections present
+✓ Proper markdown structure for LLM consumption
+✓ Measurable KPIs with specific metrics
+✓ Phase-gated scope (MVP vs Phase 2)
+
+### Holistic Quality Rating
+
+**4.5/5 - Good** (Strong with minor improvements needed)
+
+### Top 3 Improvements
+
+1. **Remove implementation leakage from FR18**
+   - Replace "Python Protocol" with "enforced output contract interface"
+
+2. **Update FR18 reference in MVP Feature Set** (line 408)
+   - Change "Output contract enforced via Python Protocol" to capability-focused language
+
+3. **Consider genericizing data format references**
+   - "httpx.Response" → "HTTP response object"
+   - "pyproject.toml" → "standard Python packaging"
+
+### Recommendation
+
+**PRD is in good shape.** The validation found the PRD to be comprehensive, well-structured, and meeting most BMAD standards. The only notable area is minor implementation leakage (6 instances of technology-specific terms in requirements). To make it excellent, address the implementation leakage to fully align with BMAD's capability-focused approach.
+
+---
+
+*Validation completed: 2026-03-11*
+*Validation report saved to: `_bmad-output/planning-artifacts/prd-validation-report.md`*
