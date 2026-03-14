@@ -41,45 +41,46 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: HTTP Transport Foundation
-  epic-1: in-progress
+  epic-1: done
   1-1-async-http-client-base: done
   1-2-http-method-support: done
   1-3-chainable-request-builder: done
   1-4-per-domain-rate-limiting: done
-  1-5-concurrent-request-support: backlog
-  epic-1-retrospective: optional
+  1-5-concurrent-request-support: done
+  epic-1-retrospective: done
 
   # Epic 2: Authentication & Credentials
-  epic-2: backlog
-  2-1-unified-auth-method: backlog
-  2-2-credential-security: backlog
-  epic-2-retrospective: optional
+  epic-2: done
+  2-1-unified-auth-method: done
+  2-2-credential-security: done
+  epic-2-retrospective: done
 
   # Epic 3: Site Module Configuration
-  epic-3: backlog
-  3-1-yaml-site-configuration: backlog
+  epic-3: in-progress
+  3-1-yaml-site-configuration: done
   epic-3-retrospective: optional
 
   # Epic 4: Data Output & Delivery
-  epic-4: backlog
-  4-1-raw-response-delivery: backlog
+  epic-4: in-progress
+  4-1-raw-response-delivery: done
   epic-4-retrospective: optional
 
   # Epic 5: Error Handling & Resilience
-  epic-5: backlog
-  5-1-structured-fail-fast-errors: backlog
-  5-2-data-timestamps: backlog
+  epic-5: done
+  5-1-structured-fail-fast-errors: done
+  5-2-data-timestamps: done
   epic-5-retrospective: optional
 
   # Epic 6: CLI for Direct API Mode
-  epic-6: backlog
-  6-1-cli-interface: backlog
-  6-2-cli-and-python-api-parity: backlog
+  epic-6: done
+  6-1-cli-interface: done
+  6-2-cli-and-python-api-parity: done
   epic-6-retrospective: optional
 
   # Epic 7: Extraction Mode Support (Phase 2)
-  epic-7: backlog
-  7-1-mode-declaration-and-routing: backlog
-  7-2-intercepted-api-mode: backlog
-  7-3-hybrid-mode: backlog
+  epic-7: in-progress
+  7-1-mode-declaration-and-routing: done
+  7-2-intercepted-api-mode: done
+  7-3-hybrid-mode: review
   epic-7-retrospective: optional
+  
