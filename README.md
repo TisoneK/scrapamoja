@@ -48,6 +48,17 @@ Structured JSON logging with correlation IDs, built-in metrics collection (execu
 
 Browser and page pooling, session state persistence, tab management, resource monitoring (memory, CPU), and corruption detection. Long-running scrapers won't leak memory or leave orphaned browser processes.
 
+### 🌐 Hybrid Extraction Modes
+
+Scrapamoja chooses the optimal extraction method based on each target site's architecture:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **DOM Mode** (default) | Navigate with browser, extract from HTML | Sites requiring full rendering |
+| **Direct API Mode** | Skip browser, call APIs directly | Open APIs, millisecond latency |
+| **Network Interception** | Capture API responses during browser sessions | Sites requiring browser initialization |
+| **Hybrid Mode** | Browser once to harvest session, then direct HTTP | Sites requiring authenticated sessions |
+
 ---
 
 ## Architecture

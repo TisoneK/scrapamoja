@@ -1,6 +1,7 @@
 """Unit tests for the direct API HTTP client (SCR-001)."""
 
 import asyncio
+import os
 
 import pytest
 import httpx
@@ -15,7 +16,8 @@ from src.network.direct_api.client import (
     gather_requests,
 )
 from src.network.direct_api.interfaces import AuthConfig
-from src.network.errors import NetworkError
+from src.network.direct_api.metadata import ResponseMetadata
+from src.network.errors import NetworkError, Retryable
 
 
 @pytest.mark.unit
@@ -213,7 +215,8 @@ class TestAuthConfig:
         auth = AuthConfig(basic=("user", "pass"))
         headers = {}
         result = auth.apply_to_headers(headers)
-        assert result["Authorization"].startswith("Basic ")
+        # Verify the full base64 encoding is correct for "user:pass"
+        assert result["Authorization"] == "Basic dXNlcjpwYXNz"
 
     def test_apply_cookie_auth(self) -> None:
         """Test cookie auth is applied to headers.
@@ -225,6 +228,77 @@ class TestAuthConfig:
         result = auth.apply_to_headers(headers)
         assert "session=abc123" in result["Cookie"]
         assert "user=john" in result["Cookie"]
+
+    def test_auth_config_rejects_multiple_auth_types(self) -> None:
+        """Test that AuthConfig rejects multiple auth types at once."""
+        with pytest.raises(ValueError, match="Only one authentication type"):
+            AuthConfig(bearer="token", basic=("user", "pass"))
+
+    def test_auth_config_rejects_empty_bearer(self) -> None:
+        """Test that AuthConfig rejects empty bearer token."""
+        with pytest.raises(ValueError, match="Bearer token cannot be empty"):
+            AuthConfig(bearer="")
+
+    def test_auth_config_rejects_empty_basic_credentials(self) -> None:
+        """Test that AuthConfig rejects empty basic auth credentials."""
+        with pytest.raises(ValueError, match="username and password cannot be empty"):
+            AuthConfig(basic=("", "pass"))
+        with pytest.raises(ValueError, match="username and password cannot be empty"):
+            AuthConfig(basic=("user", ""))
+
+    def test_auth_config_rejects_empty_cookie(self) -> None:
+        """Test that AuthConfig rejects empty cookie dict."""
+        with pytest.raises(ValueError, match="Cookie dict cannot be empty"):
+            AuthConfig(cookie={})
+
+    def test_auto_source_bearer_from_env(self) -> None:
+        """Test that auto_source=True pulls bearer token from env var."""
+        with patch.dict(os.environ, {"SCRAPAMOJA_AUTH_TOKEN": "env-token-123"}, clear=False):
+            auth = AuthConfig(auto_source=True)
+            headers = {}
+            result = auth.apply_to_headers(headers)
+            assert result["Authorization"] == "Bearer env-token-123"
+
+    def test_auto_source_basic_from_env(self) -> None:
+        """Test that auto_source=True pulls basic auth from env vars."""
+        with patch.dict(os.environ, {"SCRAPAMOJA_BASIC_USER": "envuser", "SCRAPAMOJA_BASIC_PASSWORD": "envpass"}, clear=False):
+            auth = AuthConfig(auto_source=True)
+            headers = {}
+            result = auth.apply_to_headers(headers)
+            assert result["Authorization"] == "Basic ZW52dXNlcjplbnZwYXNz"
+
+    def test_auto_source_cookie_from_env(self) -> None:
+        """Test that auto_source=True pulls cookie from env var."""
+        with patch.dict(os.environ, {"SCRAPAMOJA_COOKIE_JAR": "session=abc123;user=john"}, clear=False):
+            auth = AuthConfig(auto_source=True)
+            headers = {}
+            result = auth.apply_to_headers(headers)
+            assert "session=abc123" in result["Cookie"]
+            assert "user=john" in result["Cookie"]
+
+    def test_auto_source_disabled(self) -> None:
+        """Test that auto_source=False doesn't pull from env vars."""
+        with patch.dict(os.environ, {"SCRAPAMOJA_AUTH_TOKEN": "env-token-123"}, clear=False):
+            auth = AuthConfig(auto_source=False)
+            headers = {}
+            result = auth.apply_to_headers(headers)
+            assert "Authorization" not in result
+
+    def test_explicit_credential_overrides_auto_source(self) -> None:
+        """Test that explicit credentials override auto-sourcing."""
+        with patch.dict(os.environ, {"SCRAPAMOJA_AUTH_TOKEN": "env-token-123"}, clear=False):
+            auth = AuthConfig(bearer="explicit-token", auto_source=True)
+            headers = {}
+            result = auth.apply_to_headers(headers)
+            assert result["Authorization"] == "Bearer explicit-token"
+
+    def test_auto_source_with_site_prefix(self) -> None:
+        """Test that auto_source works with site_prefix."""
+        with patch.dict(os.environ, {"SCRAPAMOJA_AISCORE_AUTH_TOKEN": "site-token-456"}, clear=False):
+            auth = AuthConfig(auto_source=True, site_prefix="aiscore")
+            headers = {}
+            result = auth.apply_to_headers(headers)
+            assert result["Authorization"] == "Bearer site-token-456"
 
 
 @pytest.mark.unit
@@ -255,7 +329,9 @@ class TestAsyncHttpClientIntegration:
     async def test_get_request_to_httpbin(self) -> None:
         """Test actual GET request to httpbin.org."""
         async with AsyncHttpClient() as client:
-            response = await client.get("https://httpbin.org/get").execute()
+            result = await client.get("https://httpbin.org/get").execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 200
             data = response.json()
             assert "url" in data
@@ -264,10 +340,12 @@ class TestAsyncHttpClientIntegration:
     async def test_post_request_with_json(self) -> None:
         """Test POST request with JSON body."""
         async with AsyncHttpClient() as client:
-            response = await client.post("https://httpbin.org/post")\
+            result = await client.post("https://httpbin.org/post")\
                 .header("Content-Type", "application/json")\
                 .param("test", "value")\
                 .execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 200
             data = response.json()
             assert data["headers"]["Content-Type"] == "application/json"
@@ -277,9 +355,11 @@ class TestAsyncHttpClientIntegration:
     async def test_bearer_auth(self) -> None:
         """Test bearer token authentication."""
         async with AsyncHttpClient() as client:
-            response = await client.get("https://httpbin.org/headers")\
+            result = await client.get("https://httpbin.org/headers")\
                 .auth(bearer="test-token-123")\
                 .execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 200
             data = response.json()
             assert data["headers"]["Authorization"] == "Bearer test-token-123"
@@ -300,57 +380,78 @@ class TestHttpMethodErrorHandling:
     async def test_get_error_handling_404(self) -> None:
         """Test GET error handling for 404 response."""
         async with AsyncHttpClient() as client:
-            response = await client.get("https://httpbin.org/status/404").execute()
+            result = await client.get("https://httpbin.org/status/404").execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_post_error_handling_404(self) -> None:
         """Test POST error handling for 404 response."""
         async with AsyncHttpClient() as client:
-            response = await client.post("https://httpbin.org/status/404").execute()
+            result = await client.post("https://httpbin.org/status/404").execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_put_error_handling_404(self) -> None:
         """Test PUT error handling for 404 response."""
         async with AsyncHttpClient() as client:
-            response = await client.put("https://httpbin.org/status/404").execute()
+            result = await client.put("https://httpbin.org/status/404").execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_delete_error_handling_404(self) -> None:
         """Test DELETE error handling for 404 response."""
         async with AsyncHttpClient() as client:
-            response = await client.delete("https://httpbin.org/status/404").execute()
+            result = await client.delete("https://httpbin.org/status/404").execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_get_timeout_handling(self) -> None:
-        """Test GET timeout handling."""
+        """Test GET timeout handling returns NetworkError."""
+        import time
         async with AsyncHttpClient() as client:
             # Very short timeout should cause timeout error
-            with pytest.raises(httpx.TimeoutException):
-                await client.get("https://httpbin.org/delay/10").timeout(0.001).execute()
+            start = time.time()
+            result = await client.get("https://httpbin.org/delay/10").timeout(0.001).execute()
+            elapsed = time.time() - start
+            # Should return quickly due to timeout (not wait 10 seconds)
+            assert elapsed < 2.0, f"Timeout should fail quickly, took {elapsed}s"
+            # Should return NetworkError, not raise exception
+            assert isinstance(result, NetworkError)
+            assert result.retryable == Retryable.RETRYABLE
 
     @pytest.mark.asyncio
     async def test_post_error_handling_500(self) -> None:
         """Test POST error handling for 500 server error."""
         async with AsyncHttpClient() as client:
-            response = await client.post("https://httpbin.org/status/500").execute()
+            result = await client.post("https://httpbin.org/status/500").execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 500
 
     @pytest.mark.asyncio
     async def test_put_error_handling_500(self) -> None:
         """Test PUT error handling for 500 server error."""
         async with AsyncHttpClient() as client:
-            response = await client.put("https://httpbin.org/status/500").execute()
+            result = await client.put("https://httpbin.org/status/500").execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 500
 
     @pytest.mark.asyncio
     async def test_delete_error_handling_500(self) -> None:
         """Test DELETE error handling for 500 server error."""
         async with AsyncHttpClient() as client:
-            response = await client.delete("https://httpbin.org/status/500").execute()
+            result = await client.delete("https://httpbin.org/status/500").execute()
+            # Handle new tuple return type: (response, metadata)
+            response = result[0] if isinstance(result, tuple) else result
             assert response.status_code == 500
 
 
@@ -418,14 +519,20 @@ class TestGatherRequests:
         client = AsyncHttpClient()
         prepared = client.get("https://example.com").prepare()
 
-        # Mock the httpx client
+        # Mock the httpx client with proper headers
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 200
+        mock_response.headers = {}
         client._client.request = AsyncMock(return_value=mock_response)
 
         results = await gather_requests(prepared)
         assert len(results) == 1
-        assert isinstance(results[0], httpx.Response)
+        # Handle new tuple return type: (response, metadata)
+        result = results[0]
+        assert isinstance(result, tuple)
+        response, metadata = result
+        assert isinstance(response, httpx.Response)
+        assert isinstance(metadata, ResponseMetadata)
 
     @pytest.mark.asyncio
     async def test_gather_multiple_requests_same_order(self) -> None:
@@ -438,10 +545,13 @@ class TestGatherRequests:
         # Mock responses
         mock_response1 = MagicMock(spec=httpx.Response)
         mock_response1.status_code = 200
+        mock_response1.headers = {}
         mock_response2 = MagicMock(spec=httpx.Response)
         mock_response2.status_code = 201
+        mock_response2.headers = {}
         mock_response3 = MagicMock(spec=httpx.Response)
         mock_response3.status_code = 202
+        mock_response3.headers = {}
 
         async def mock_request(**kwargs):
             url = kwargs.get("url", "")
@@ -456,9 +566,13 @@ class TestGatherRequests:
         results = await gather_requests(prepared1, prepared2, prepared3)
 
         assert len(results) == 3
-        assert results[0].status_code == 200
-        assert results[1].status_code == 201
-        assert results[2].status_code == 202
+        # Handle new tuple return type: (response, metadata)
+        r0, m0 = results[0]
+        r1, m1 = results[1]
+        r2, m2 = results[2]
+        assert r0.status_code == 200
+        assert r1.status_code == 201
+        assert r2.status_code == 202
 
     @pytest.mark.asyncio
     async def test_gather_partial_failure_returns_network_error(self) -> None:
@@ -471,6 +585,7 @@ class TestGatherRequests:
         # First succeeds, second fails, third succeeds
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 200
+        mock_response.headers = {}
 
         async def mock_request(**kwargs):
             url = kwargs.get("url", "")
@@ -483,11 +598,15 @@ class TestGatherRequests:
         results = await gather_requests(prepared1, prepared2, prepared3)
 
         assert len(results) == 3
-        assert isinstance(results[0], httpx.Response)
+        # Handle new tuple return type: (response, metadata) - but NetworkError is returned directly on failure
+        r0, m0 = results[0]
+        assert isinstance(r0, httpx.Response)
+        # results[1] is a NetworkError (not a tuple) since it failed
         assert isinstance(results[1], NetworkError)
         assert results[1].module == "direct_api"
         assert results[1].operation == "get"
-        assert isinstance(results[2], httpx.Response)
+        r2, m2 = results[2]
+        assert isinstance(r2, httpx.Response)
 
     @pytest.mark.asyncio
     async def test_gather_respects_rate_limiting(self) -> None:
@@ -499,12 +618,18 @@ class TestGatherRequests:
         # Mock responses
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 200
+        mock_response.headers = {}
         client._client.request = AsyncMock(return_value=mock_response)
 
         # Execute gather - this should work with rate limiting
         results = await gather_requests(prepared1, prepared2)
 
         assert len(results) == 2
+        # Handle new tuple return type: (response, metadata)
+        r0, m0 = results[0]
+        r1, m1 = results[1]
+        assert isinstance(r0, httpx.Response)
+        assert isinstance(r1, httpx.Response)
         # Rate limiter should have been used
         assert client._rate_limiter._buckets.get("example.com") is not None
 
@@ -518,14 +643,58 @@ class TestGatherRequests:
         # Mock responses
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 200
+        mock_response.headers = {}
         client._client.request = AsyncMock(return_value=mock_response)
 
         results = await gather_requests(prepared1, prepared2)
 
         assert len(results) == 2
+        # Handle new tuple return type: (response, metadata)
+        r0, m0 = results[0]
+        r1, m1 = results[1]
+        assert isinstance(r0, httpx.Response)
+        assert isinstance(r1, httpx.Response)
         # Both domains should have their own rate limiter buckets
         assert "example1.com" in client._rate_limiter._buckets
         assert "example2.com" in client._rate_limiter._buckets
+
+    @pytest.mark.asyncio
+    async def test_gather_with_auth(self) -> None:
+        """Test that auth is correctly applied when using gather for concurrent requests."""
+        client = AsyncHttpClient()
+        # Create requests with different auth types
+        prepared1 = client.get("https://api.example.com/secure").auth(bearer="token123").prepare()
+        prepared2 = client.get("https://api.example.com/basic").auth(basic=("user", "pass")).prepare()
+        prepared3 = client.get("https://api.example.com/cookies").auth(cookie={"session": "abc"}).prepare()
+
+        # Track what headers were sent
+        headers_sent = []
+
+        async def mock_request(**kwargs):
+            headers_sent.append(kwargs.get("headers", {}))
+            mock_response = MagicMock(spec=httpx.Response)
+            mock_response.status_code = 200
+            mock_response.headers = {}
+            return mock_response
+
+        client._client.request = mock_request
+
+        results = await gather_requests(prepared1, prepared2, prepared3)
+
+        assert len(results) == 3
+        # Handle new tuple return type: (response, metadata)
+        r0, m0 = results[0]
+        r1, m1 = results[1]
+        r2, m2 = results[2]
+        # Verify bearer auth was applied
+        assert "Authorization" in headers_sent[0]
+        assert headers_sent[0]["Authorization"] == "Bearer token123"
+        # Verify basic auth was applied
+        assert "Authorization" in headers_sent[1]
+        assert headers_sent[1]["Authorization"] == "Basic dXNlcjpwYXNz"
+        # Verify cookie auth was applied
+        assert "Cookie" in headers_sent[2]
+        assert "session=abc" in headers_sent[2]["Cookie"]
 
 
 @pytest.mark.unit

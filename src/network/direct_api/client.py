@@ -12,6 +12,7 @@ from src.network.direct_api.rate_limiting import RateLimiter, TokenBucket
 from src.network.direct_api.request_builder import RequestBuilder
 from src.network.direct_api.concurrency import gather_requests
 from src.network.direct_api.prepared_request import PreparedRequest
+from src.network.credentials import check_verbose_logging_warning
 
 
 class AsyncHttpClient:
@@ -41,6 +42,9 @@ class AsyncHttpClient:
         self._base_url = base_url
         self._client = httpx.AsyncClient()
         self._rate_limiter = RateLimiter(rate=rate_limit, capacity=rate_capacity)
+        
+        # Check for verbose logging and warn about potential credential exposure
+        check_verbose_logging_warning()
 
     async def __aenter__(self) -> "AsyncHttpClient":
         """Enter async context manager."""

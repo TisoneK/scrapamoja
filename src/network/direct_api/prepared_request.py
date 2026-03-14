@@ -6,7 +6,9 @@ a request prepared for concurrent execution via gather().
 
 import httpx
 
+from src.network.errors import NetworkError, Retryable
 from src.network.direct_api.interfaces import AuthConfig
+from src.network.direct_api.metadata import ResponseMetadata, get_response_with_metadata
 
 
 class PreparedRequest:
@@ -36,8 +38,8 @@ class PreparedRequest:
         self._timeout = timeout
         self._body = body
 
-    async def execute(self) -> httpx.Response:
-        """Execute this prepared request and return raw httpx.Response."""
+    async def execute(self) -> tuple[httpx.Response, ResponseMetadata] | NetworkError:
+        """Execute this prepared request and return response with metadata, or NetworkError on failure."""""
         # Apply auth to headers if set
         headers = self._headers.copy()
         if self._auth:
@@ -63,10 +65,57 @@ class PreparedRequest:
         if self._body is not None:
             request_kwargs["content"] = self._body
 
-        # Make the request
-        response = await self._client._client.request(**request_kwargs)
+        # Make the request with error handling
+        try:
+            response = await self._client._client.request(**request_kwargs)
+        except httpx.HTTPStatusError as e:
+            # HTTP errors (4xx, 5xx) - extract status code
+            status_code = e.response.status_code if e.response else None
+            return NetworkError(
+                module="direct_api",
+                operation=self._method.lower(),
+                url=str(self._url),
+                status_code=status_code,
+                detail=str(e),
+                retryable=self._classify_error(status_code),
+            )
+        except httpx.HTTPError as e:
+            # Other HTTP errors (connection errors, timeouts, etc.)
+            return NetworkError(
+                module="direct_api",
+                operation=self._method.lower(),
+                url=str(self._url),
+                detail=str(e),
+                retryable=Retryable.RETRYABLE,
+            )
+        except Exception as e:
+            # Unexpected errors - treat as terminal
+            return NetworkError(
+                module="direct_api",
+                operation=self._method.lower(),
+                url=str(self._url),
+                detail=str(e),
+                retryable=Retryable.TERMINAL,
+            )
 
-        return response
+        # Attach metadata with timestamp
+        return get_response_with_metadata(response)
+
+    def _classify_error(self, status_code: int | None) -> Retryable:
+        """Classify error as retryable or terminal based on HTTP status code.
+
+        Args:
+            status_code: HTTP status code if available
+
+        Returns:
+            Retryable enum value - RETRYABLE for 429/503, TERMINAL for other errors
+        """
+        if status_code is None:
+            return Retryable.RETRYABLE
+        # 429 (Too Many Requests) and 503 (Service Unavailable) are retryable
+        if status_code in (429, 503):
+            return Retryable.RETRYABLE
+        return Retryable.TERMINAL
 
 
 # Forward reference type hint for type checking

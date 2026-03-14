@@ -64,6 +64,7 @@ from src.interrupt_handling.config import InterruptConfig
 SITE_CLIS = {
     'flashscore': ('src.sites.flashscore.cli.main', 'FlashscoreCLI'),
     'wikipedia': ('src.sites.wikipedia.cli.main', 'WikipediaCLI'),
+    'direct': ('src.sites.direct.cli.main', 'DirectCLI'),
 }
 
 

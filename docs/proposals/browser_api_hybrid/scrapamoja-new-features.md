@@ -4,10 +4,11 @@
 
 ---
 
-## Feature 1: Direct API Mode
+## Feature 1: Direct API Mode ✅ COMPLETED
 **Summary:** Allow Scrapamoja to make direct HTTP calls to known API endpoints without launching a browser at all.  
 **Trigger:** Attempting to call `api.aiscore.com` directly with `httpx`.  
 **Value:** Fastest possible data retrieval when no bot protection exists.
+**Implementation:** Epic 6 - CLI for Direct API Mode (stories 6-1, 6-2)
 
 ---
 

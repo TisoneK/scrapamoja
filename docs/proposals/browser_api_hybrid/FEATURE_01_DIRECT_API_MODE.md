@@ -1,7 +1,7 @@
 # Feature Proposal: Direct API Mode
 **Project:** Scrapamoja  
 **Feature ID:** SCR-001  
-**Status:** Proposed  
+**Status:** Completed  
 **Author:** TisoneK  
 **Date:** March 2026  
 
@@ -71,6 +71,27 @@ This need was identified during the AiScore integration sprint. An attempt was m
 - Handling Cloudflare or other bot detection (that is covered by a separate feature)
 - Binary or protobuf response decoding (covered by a separate feature)
 - Session management or credential harvesting (covered by a separate feature)
+
+## 9. Completion Notes
+
+**Completed:** March 2026  
+**Implementation:** Epic 6 (CLI for Direct API Mode)
+
+### Stories Delivered:
+- 6-1: CLI Interface
+- 6-2: CLI and Python API Parity
+
+### Code Locations:
+- `src/network/direct_api/` - Core HTTP client implementation
+- `src/sites/direct/cli/main.py` - CLI interface
+
+### Success Criteria Verification:
+- ✅ Site module can use Direct API mode without browser dependency
+- ✅ CLI support (`python -m src.main direct --help`)
+- ✅ HTTP methods (GET, POST, PUT, DELETE) supported
+- ✅ Rate limiting enforced at transport layer
+- ✅ Authentication from environment variables
+- ✅ Existing browser-based modules unaffected
 
 ---
 

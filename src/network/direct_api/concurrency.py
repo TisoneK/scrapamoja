@@ -2,6 +2,17 @@
 
 This module provides the gather_requests function for executing
 multiple HTTP requests concurrently.
+
+## Raw Response Pattern
+
+This module returns raw httpx.Response objects (or NetworkError on failure)
+in a list, maintaining the same order as the input requests. The caller
+decides how to handle each response.
+
+Returns:
+    list[httpx.Response | NetworkError]: List of httpx.Response objects on success,
+    or NetworkError on failure. Callers can check isinstance(result, httpx.Response)
+to differentiate.
 """
 
 import asyncio
@@ -10,11 +21,12 @@ import httpx
 
 from src.network.errors import NetworkError, Retryable
 from src.network.direct_api.prepared_request import PreparedRequest
+from src.network.direct_api.metadata import ResponseMetadata
 
 
 async def gather_requests(
     *requests: PreparedRequest,
-) -> list[httpx.Response | NetworkError]:
+) -> list[tuple[httpx.Response, ResponseMetadata] | NetworkError]:
     """Execute multiple requests concurrently using asyncio.gather().
 
     This function executes all provided PreparedRequest objects concurrently,
@@ -24,11 +36,11 @@ async def gather_requests(
         *requests: Variable number of PreparedRequest objects to execute
 
     Returns:
-        list[httpx.Response | NetworkError]: List of responses in the same order
-            as the input requests. If a request fails, the corresponding position
-            contains a NetworkError model instance rather than raising an exception.
-            This allows partial success handling - some requests may succeed while
-            others fail.
+        list[tuple[httpx.Response, ResponseMetadata] | NetworkError]: List of
+            responses with metadata in the same order as the input requests.
+            If a request fails, the corresponding position contains a NetworkError
+            model instance rather than raising an exception. This allows partial
+            success handling - some requests may succeed while others fail.
 
     Note:
         If the calling task is cancelled, in-flight requests will continue running
@@ -40,7 +52,7 @@ async def gather_requests(
     async def execute_with_error_handling(
         request: PreparedRequest,
         index: int,
-    ) -> tuple[int, httpx.Response | NetworkError]:
+    ) -> tuple[int, tuple[httpx.Response, ResponseMetadata] | NetworkError]:
         """Execute a single request with error handling, returning index and result."""
         try:
             response = await request.execute()
@@ -84,7 +96,7 @@ async def gather_requests(
     )
 
     # Process results - convert any unexpected exceptions to NetworkError
-    processed_results: list[tuple[int, httpx.Response | NetworkError]] = []
+    processed_results: list[tuple[int, tuple[httpx.Response, ResponseMetadata] | NetworkError]] = []
     for i, result in enumerate(results):
         if isinstance(result, Exception):
             # Handle any unexpected exceptions (shouldn't happen due to error handling above)
