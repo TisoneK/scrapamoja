@@ -1,0 +1,7 @@
+# Wikipedia site configuration
+# This file defines the site-specific configuration for the Wikipedia scraper
+
+endpoint: https://en.wikipedia.org
+auth_method: none
+extraction_mode: intercepted
+timeout: 30

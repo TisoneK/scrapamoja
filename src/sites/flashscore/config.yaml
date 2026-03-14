@@ -1,0 +1,8 @@
+# Flashscore site configuration
+# This file defines the site-specific configuration for the Flashscore scraper
+
+endpoint: https://www.flashscore.com
+auth_method: cookie
+extraction_mode: intercepted
+timeout: 30
+rate_limit: 2.0
