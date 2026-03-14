@@ -170,6 +170,136 @@ class TestExtractionModeValidation:
         assert ExtractionMode.HYBRID.value == "hybrid"
 
 
+class TestHybridExtractionHandler:
+    """Tests for HybridExtractionHandler class."""
+
+    def test_handler_initialization(self):
+        """Test HybridExtractionHandler initialization."""
+        from src.extraction.router import HybridExtractionHandler
+
+        handler = HybridExtractionHandler(
+            endpoint="https://example.com",
+            site_name="test_site",
+            session_ttl=3600,
+            browser_config={"headless": True},
+            force_bootstrap=False,
+        )
+
+        assert handler.endpoint == "https://example.com"
+        assert handler.site_name == "test_site"
+        assert handler._session_ttl == 3600
+        assert handler._needs_bootstrap is True
+
+    def test_handler_default_values(self):
+        """Test HybridExtractionHandler default values."""
+        from src.extraction.router import HybridExtractionHandler
+
+        handler = HybridExtractionHandler(
+            endpoint="https://example.com",
+            site_name="test_site",
+        )
+
+        assert handler._session_ttl is None
+        assert handler._browser_config == {"headless": True}
+        assert handler._force_bootstrap is False
+        assert handler._session is None
+        assert handler._client is None
+
+    def test_handler_is_bootstrap_needed(self):
+        """Test is_bootstrap_needed property."""
+        from src.extraction.router import HybridExtractionHandler
+
+        handler = HybridExtractionHandler(
+            endpoint="https://example.com",
+            site_name="test_site",
+        )
+
+        # Initially needs bootstrap
+        assert handler.is_bootstrap_needed() is True
+
+    def test_handler_get_session(self):
+        """Test get_session returns None initially."""
+        from src.extraction.router import HybridExtractionHandler
+
+        handler = HybridExtractionHandler(
+            endpoint="https://example.com",
+            site_name="test_site",
+        )
+
+        assert handler.get_session() is None
+
+    def test_handler_repr(self):
+        """Test HybridExtractionHandler repr."""
+        from src.extraction.router import HybridExtractionHandler
+
+        handler = HybridExtractionHandler(
+            endpoint="https://example.com",
+            site_name="test_site",
+        )
+
+        assert "HybridExtractionHandler" in repr(handler)
+        assert "test_site" in repr(handler)
+
+    def test_handler_protocol_compliance(self):
+        """Test HybridExtractionHandler follows ExtractionHandlerProtocol."""
+        from src.extraction.router import HybridExtractionHandler
+
+        handler = HybridExtractionHandler(
+            endpoint="https://example.com",
+            site_name="test_site",
+        )
+
+        # Verify protocol compliance - handler has extract method
+        assert hasattr(handler, 'extract')
+        assert callable(handler.extract)
+        # Verify handler has close method
+        assert hasattr(handler, 'close')
+        assert callable(handler.close)
+
+    @pytest.mark.asyncio
+    async def test_handler_close_cleans_up(self):
+        """Test close method cleans up resources."""
+        from src.extraction.router import HybridExtractionHandler
+
+        handler = HybridExtractionHandler(
+            endpoint="https://example.com",
+            site_name="test_site",
+        )
+
+        # Set some state
+        handler._needs_bootstrap = False
+
+        # Close should reset state
+        await handler.close()
+
+        assert handler._client is None
+        assert handler._session is None
+        assert handler._needs_bootstrap is True
+
+
+class TestHybridModeRouting:
+    """Tests for routing to hybrid mode."""
+
+    def test_route_to_hybrid_mode(self):
+        """Test router returns HybridExtractionHandler for hybrid mode."""
+        from src.extraction.router import ExtractionModeRouter, HybridExtractionHandler
+        from src.sites.base.site_config import SiteConfig, ExtractionMode
+
+        config = SiteConfig(
+            site_name="test_site",
+            endpoint="https://example.com",
+            extraction_mode=ExtractionMode.HYBRID,
+        )
+
+        router = ExtractionModeRouter(config)
+        handler = router.get_handler()
+
+        # Should return HybridExtractionHandler
+        assert isinstance(handler, HybridExtractionHandler)
+        assert handler.site_name == "test_site"
+        assert handler.endpoint == "https://example.com"
+
+
 class TestInterceptedExtractionHandler:
     """Tests for InterceptedExtractionHandler."""
 

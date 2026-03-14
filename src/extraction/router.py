@@ -13,6 +13,9 @@ if TYPE_CHECKING:
     from src.network.interception import NetworkListener
     from src.network.session import SessionPackage, SessionValidator
 
+# Import SessionValidator for use in HybridExtractionHandler
+from src.network.session import SessionValidator
+
 from src.extraction.exceptions import (
     ExtractionModeNotSupportedError,
     InvalidExtractionModeError,
