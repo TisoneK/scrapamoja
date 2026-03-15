@@ -183,6 +183,10 @@ class TestNetworkInterceptorAttach:
         page = MagicMock()
         # Set up event handlers storage
         page._event_handlers = {}
+        # Set up URL for Option D fast path check (must be about:blank)
+        page.url = "about:blank"
+        # Set up page.evaluate as AsyncMock for Option D timing validation
+        page.evaluate = AsyncMock(return_value="loading")
 
         def mock_on(event: str, handler: Callable) -> None:
             page._event_handlers[event] = handler
@@ -304,6 +308,10 @@ class TestNetworkInterceptorDetach:
         """Create a mock Playwright page object."""
         page = MagicMock()
         page._event_handlers = {}
+        # Set up URL for Option D fast path check (must be about:blank)
+        page.url = "about:blank"
+        # Set up page.evaluate as AsyncMock for Option D timing validation
+        page.evaluate = AsyncMock(return_value="loading")
 
         def mock_on(event: str, handler: Callable) -> None:
             page._event_handlers[event] = handler
@@ -376,6 +384,8 @@ class TestNetworkInterceptorOnRequest:
         """Create a mock Playwright page object."""
         page = MagicMock()
         page._event_handlers = {}
+        # Set up page.evaluate as AsyncMock for Option D timing validation
+        page.evaluate = AsyncMock(return_value="loading")
 
         def mock_on(event: str, handler: Callable) -> None:
             page._event_handlers[event] = handler
@@ -509,3 +519,183 @@ class TestNetworkInterceptorOnRequest:
         )
 
         assert interceptor._patterns == patterns
+
+
+class TestNetworkInterceptorIntegration:
+    """Integration tests for NetworkInterceptor with Playwright."""
+
+    @pytest.fixture
+    def valid_handler(self) -> Callable[[CapturedResponse], Awaitable[None]]:
+        """Create a valid async handler for testing."""
+
+        async def handler(response: CapturedResponse) -> None:
+            pass
+
+        return handler
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_attach_before_navigation_flow(
+        self, valid_handler: Callable[[CapturedResponse], Awaitable[None]]
+    ) -> None:
+        """Integration test: attach() should be called before page.goto().
+        
+        This test verifies the full flow:
+        1. Create interceptor
+        2. Attach to page (before navigation)
+        3. Navigate with page.goto()
+        4. Verify interceptor detected navigation via _on_request
+        """
+        # This test demonstrates the expected usage pattern
+        # In a real integration test, you would use a real Playwright page
+        interceptor = NetworkInterceptor(
+            patterns=[r"https://.*\\.example\\.com/.*"],
+            handler=valid_handler,
+        )
+
+        # Create a mock that simulates Playwright page behavior
+        page = MagicMock()
+        page._event_handlers = {}
+        page.url = "about:blank"
+        # Set up page.evaluate as AsyncMock for Option D timing validation
+        page.evaluate = AsyncMock(return_value="loading")
+
+        def mock_on(event: str, handler: Callable) -> None:
+            page._event_handlers[event] = handler
+
+        def mock_off(event: str, handler: Callable) -> None:
+            page._event_handlers.pop(event, None)
+
+        page.on = mock_on
+        page.off = mock_off
+
+        # Step 1: Attach before navigation (should succeed)
+        await interceptor.attach(page)
+        assert interceptor.is_attached is True
+        assert interceptor._has_navigated is False
+
+        # Step 2: Simulate navigation via request event
+        # This simulates what happens when page.goto() is called
+        mock_request = MagicMock()
+        mock_request.url = "https://api.example.com/data"
+        
+        # Get the registered request handler and call it
+        request_handler = page._event_handlers.get("request")
+        assert request_handler is not None
+        request_handler(mock_request)
+
+        # Step 3: Verify navigation was detected
+        assert interceptor._has_navigated is True
+
+        # Step 4: Detach and verify clean state
+        await interceptor.detach()
+        assert interceptor.is_attached is False
+        assert interceptor._has_navigated is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_attach_after_navigation_raises_error(
+        self, valid_handler: Callable[[CapturedResponse], Awaitable[None]]
+    ) -> None:
+        """Integration test: attach() should raise TimingError if page already navigated.
+        
+        This test verifies AC #2: When attach(page) is called after page.goto()
+        has already occurred, a clear TimingError is raised.
+        """
+        interceptor = NetworkInterceptor(
+            patterns=[r"https://.*\\.example\\.com/.*"],
+            handler=valid_handler,
+        )
+
+        # Simulate page has already navigated (e.g., user called page.goto() first)
+        interceptor._has_navigated = True
+
+        # Attempt to attach should raise TimingError
+        page = MagicMock()
+        with pytest.raises(TimingError) as exc_info:
+            await interceptor.attach(page)
+
+        # Verify exact error message from AC #2
+        expected_msg = "attach() must be called before page.goto(). Call attach() first, then navigate."
+        assert str(exc_info.value) == expected_msg
+
+    @pytest.mark.asyncio
+    async def test_attach_raises_when_url_not_blank(
+        self, valid_handler: Callable[[CapturedResponse], Awaitable[None]]
+    ) -> None:
+        """Test Option D Fast Path: attach() raises TimingError if page.url is not about:blank.
+        
+        This tests the FR10 Option D fast path check: if page.url is not
+        about:blank or about:blank#blocked, the page has already navigated.
+        """
+        interceptor = NetworkInterceptor(
+            patterns=[r"https://.*\\.example\\.com/.*"],
+            handler=valid_handler,
+        )
+
+        # Create mock page with navigated URL
+        page = MagicMock()
+        page.url = "https://example.com/already-navigated"
+        page.evaluate = AsyncMock(return_value="loading")
+
+        # attach() should raise TimingError due to fast path check
+        with pytest.raises(TimingError) as exc_info:
+            await interceptor.attach(page)
+
+        assert "attach() must be called before page.goto()" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_attach_raises_when_readyState_not_loading(
+        self, valid_handler: Callable[[CapturedResponse], Awaitable[None]]
+    ) -> None:
+        """Test Option D Confirmation: attach() raises TimingError if readyState is not 'loading'.
+        
+        This tests the FR10 Option D confirmation check: if document.readyState
+        is not "loading", the page has already loaded/navigated.
+        """
+        interceptor = NetworkInterceptor(
+            patterns=[r"https://.*\\.example\\.com/.*"],
+            handler=valid_handler,
+        )
+
+        # Create mock page with URL at about:blank but readyState = "complete"
+        page = MagicMock()
+        page.url = "about:blank"
+        page.evaluate = AsyncMock(return_value="complete")  # Not "loading"!
+
+        # attach() should raise TimingError due to confirmation check
+        with pytest.raises(TimingError) as exc_info:
+            await interceptor.attach(page)
+
+        assert "attach() must be called before page.goto()" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_attach_succeeds_when_url_blank_and_loading(
+        self, valid_handler: Callable[[CapturedResponse], Awaitable[None]]
+    ) -> None:
+        """Test Option D Success: attach() succeeds when page.url is about:blank AND readyState is 'loading'.
+        
+        This tests the full Option D validation - both fast path AND confirmation
+        must pass for attach to succeed.
+        """
+        interceptor = NetworkInterceptor(
+            patterns=[r"https://.*\\.example\\.com/.*"],
+            handler=valid_handler,
+        )
+
+        # Create mock page with valid state: about:blank + loading
+        page = MagicMock()
+        page.url = "about:blank"
+        page.evaluate = AsyncMock(return_value="loading")
+        page._event_handlers = {}
+
+        def mock_on(event: str, handler: Callable) -> None:
+            page._event_handlers[event] = handler
+
+        page.on = mock_on
+
+        # attach() should succeed
+        await interceptor.attach(page)
+
+        assert interceptor.is_attached is True
+        assert interceptor._page is page

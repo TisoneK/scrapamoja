@@ -3,9 +3,14 @@
 from src.network.direct_api import AsyncHttpClient
 from src.network.direct_api.interfaces import HttpResponseProtocol
 from src.network.interception import (
+    CapturedResponse,
     InterceptionConfig,
     InterceptedResponse,
+    NetworkInterceptor,
     NetworkListener,
+    PatternError,
+    TimingError,
+    create_network_error,
 )
 from src.network.session import (
     SessionPackage,
@@ -20,9 +25,14 @@ from src.network.session import (
 __all__ = [
     "AsyncHttpClient",
     "HttpResponseProtocol",
+    "CapturedResponse",
     "InterceptionConfig",
     "InterceptedResponse",
+    "NetworkInterceptor",
     "NetworkListener",
+    "PatternError",
+    "TimingError",
+    "create_network_error",
     "SessionPackage",
     "SessionCookies",
     "SessionHeaders",

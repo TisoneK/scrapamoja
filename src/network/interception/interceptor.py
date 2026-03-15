@@ -157,6 +157,10 @@ class NetworkInterceptor:
         This method must be called BEFORE page.goto() to ensure the interceptor
         can capture all network responses from the start of navigation.
 
+        Timing validation uses Option D (FR10):
+        1. Fast path: Check page.url - if not about:blank/about:blank#blocked, raise TimingError
+        2. Confirmation: Check document.readyState via page.evaluate() - if not "loading", raise TimingError
+
         Args:
             page: Playwright page object to attach to.
 
@@ -177,7 +181,36 @@ class NetworkInterceptor:
         if self._page is not None:
             raise RuntimeError("Interceptor already attached. Call detach() first.")
 
-        # Check if page has already navigated (timing validation)
+        # Option D Timing Validation (FR10): Dual check for navigation status
+
+        # Fast path: Check page.url - if not about:blank or about:blank#blocked,
+        # the page has already navigated
+        page_url = page.url if hasattr(page, "url") else str(page)
+        if page_url not in ("about:blank", "about:blank#blocked"):
+            raise TimingError(
+                "attach() must be called before page.goto(). "
+                "Call attach() first, then navigate."
+            )
+
+        # Confirmation: Check document.readyState via page.evaluate()
+        # If not "loading", the page has already loaded/navigated
+        # Note: page.evaluate() returns a coroutine in Playwright, so we await it
+        try:
+            ready_state: str = await page.evaluate("() => document.readyState")
+        except Exception:
+            # If we can't evaluate (e.g., page closed, error), assume navigation occurred
+            raise TimingError(
+                "attach() must be called before page.goto(). "
+                "Call attach() first, then navigate."
+            )
+
+        if ready_state != "loading":
+            raise TimingError(
+                "attach() must be called before page.goto(). "
+                "Call attach() first, then navigate."
+            )
+
+        # Also check if _has_navigated flag is set (from previous request events)
         if self._has_navigated:
             raise TimingError(
                 "attach() must be called before page.goto(). "
@@ -216,9 +249,14 @@ class NetworkInterceptor:
         state. After calling detach(), the interceptor can be attached
         to a different page.
         """
-        if self._page is not None and self._request_handler is not None:
-            # Remove the event handler
-            self._page.off("request", self._request_handler)
+        # Remove the event handler if page is attached
+        if self._page is not None:
+            if self._request_handler is not None:
+                self._page.off("request", self._request_handler)
+        elif self._request_handler is not None:
+            # Edge case: handler exists but page is None - handler won't be cleaned up
+            # but this shouldn't happen in normal flow
+            pass
 
         # Reset state
         self._page = None

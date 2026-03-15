@@ -41,15 +41,15 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Core Module Setup & Pattern Matching
-  epic-1: backlog
-  1-1-create-module-structure-and-capturedresponse-dataclass: backlog
-  1-2-implement-networkinterceptor-constructor-with-pattern-validation: backlog
-  1-3-implement-pattern-matching-system: backlog
+  epic-1: in-progress
+  1-1-create-module-structure-and-capturedresponse-dataclass: done
+  1-2-implement-networkinterceptor-constructor-with-pattern-validation: done
+  1-3-implement-pattern-matching-system: done
   epic-1-retrospective: optional
 
   # Epic 2: Interceptor Lifecycle & Response Capture
-  epic-2: backlog
-  2-1-implement-attach-method-with-timing-validation: backlog
+  epic-2: in-progress
+  2-1-implement-attach-method-with-timing-validation: done
   2-2-implement-playwright-network-event-listener: backlog
   2-3-implement-response-capture: backlog
   2-4-implement-detach-method: backlog
