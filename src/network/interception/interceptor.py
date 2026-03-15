@@ -121,7 +121,8 @@ class NetworkInterceptor:
                 re.compile(pattern)
             except re.error as e:
                 raise PatternError(
-                    f"invalid regex pattern at index {i}: {pattern!r} - {e}"
+                    f"invalid regex pattern at index {i}: {pattern!r} - {e}. "
+                    "Check for: unescaped special characters, unmatched brackets, or invalid quantifiers."
                 ) from None
 
     @property
