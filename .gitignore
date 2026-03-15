@@ -40,3 +40,11 @@ node_modules/
 # Temporary files
 *.tmp
 *.temp
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Build artifacts
+*.egg-info/
