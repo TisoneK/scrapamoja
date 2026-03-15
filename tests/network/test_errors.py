@@ -258,9 +258,11 @@ class TestConcurrentErrorHandling:
         # Mock first request to succeed, second to fail
         success_response = MagicMock(spec=httpx.Response)
         success_response.status_code = 200
+        success_response.headers = {"date": "Mon, 01 Jan 2024 00:00:00 GMT"}
 
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 500
+        mock_response.headers = {"date": "Mon, 01 Jan 2024 00:00:00 GMT"}
 
         error = httpx.HTTPStatusError(
             "500 Internal Server Error",
@@ -285,13 +287,10 @@ class TestConcurrentErrorHandling:
             assert len(results[0]) == 2
             response, metadata = results[0]
             assert isinstance(response, httpx.Response)
-            # Second should also be a tuple containing NetworkError
-            assert isinstance(results[1], tuple)
-            assert len(results[1]) == 2
-            error_result, error_metadata = results[1]
-            assert isinstance(error_result, NetworkError)
-            assert error_result.status_code == 500
-            assert error_result.retryable == Retryable.TERMINAL
+            # Second should be NetworkError (not wrapped in tuple)
+            assert isinstance(results[1], NetworkError)
+            assert results[1].status_code == 500
+            assert results[1].retryable == Retryable.TERMINAL
 
 
 @pytest.mark.unit
