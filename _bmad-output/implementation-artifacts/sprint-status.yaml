@@ -50,9 +50,9 @@ development_status:
   # Epic 2: Interceptor Lifecycle & Response Capture
   epic-2: in-progress
   2-1-implement-attach-method-with-timing-validation: done
-  2-2-implement-playwright-network-event-listener: backlog
-  2-3-implement-response-capture: backlog
-  2-4-implement-detach-method: backlog
+  2-2-implement-playwright-network-event-listener: done
+  2-3-implement-response-capture: done
+  2-4-implement-detach-method: done
   epic-2-retrospective: optional
 
   # Epic 3: Error Handling & Developer Experience

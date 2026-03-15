@@ -11,11 +11,18 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 if TYPE_CHECKING:
     from src.network.interception.models import CapturedResponse
 
+# Import for runtime use
 from src.network.interception.exceptions import PatternError, TimingError
+from src.network.interception.models import CapturedResponse
 from src.network.interception.patterns import match_url
+
+# Initialize logger
+logger = structlog.get_logger(__name__)
 
 
 class NetworkInterceptor:
@@ -84,6 +91,8 @@ class NetworkInterceptor:
         self._page: Any | None = None
         self._has_navigated: bool = False
         self._request_handler: Callable[[Any], None] | None = None
+        # Response handler can be async for async operations like body capture
+        self._response_handler: Callable[[Any], Any] | None = None
 
     def _validate_patterns(self, patterns: list[str]) -> None:
         """Validate the provided patterns list.
@@ -222,6 +231,9 @@ class NetworkInterceptor:
         self._has_navigated = False
         self._request_handler = self._on_request
         page.on("request", self._request_handler)
+        # Register response listener (Story 2.2)
+        self._response_handler = self._handle_response
+        page.on("response", self._response_handler)
 
     def _on_request(self, request: Any) -> None:
         """Handle incoming request to detect navigation.
@@ -243,25 +255,63 @@ class NetworkInterceptor:
             self._has_navigated = True
 
     async def detach(self) -> None:
-        """Detach the interceptor from the page.
+        """Detach the interceptor from the page and clean up resources.
 
-        This method removes the event handler and resets the interceptor
-        state. After calling detach(), the interceptor can be attached
-        to a different page.
+        This method removes the event handlers and resets the interceptor state.
+        It is safe to call multiple times (idempotent) and handles late detach
+        scenarios gracefully where the page may have already been closed.
+
+        Late detach handling:
+        - Never raises exceptions even if page is closed
+        - Silently handles already-removed listeners
+        - Logs warning if detach called without prior attach (when dev_logging enabled)
+
+        After calling detach(), the interceptor can be attached to a different page.
         """
-        # Remove the event handler if page is attached
-        if self._page is not None:
-            if self._request_handler is not None:
-                self._page.off("request", self._request_handler)
-        elif self._request_handler is not None:
-            # Edge case: handler exists but page is None - handler won't be cleaned up
-            # but this shouldn't happen in normal flow
-            pass
+        # Check if we were ever attached (for warning logging)
+        was_attached = self._page is not None or self._request_handler is not None
 
-        # Reset state
+        # Remove the event handlers if page is attached - with try/except for late detach
+        if self._page is not None:
+            try:
+                # Remove request handler (may already be removed - that's fine)
+                if self._request_handler is not None:
+                    self._page.off("request", self._request_handler)
+
+                # Remove response handler (may already be removed - that's fine)
+                if self._response_handler is not None:
+                    self._page.off("response", self._response_handler)
+            except Exception:
+                # Page closed or invalid - silently handle late detach scenario
+                # Don't raise - resources will be cleaned up below
+                pass
+        elif self._request_handler is not None or self._response_handler is not None:
+            # Edge case: handlers exist but page is None - shouldn't happen in normal flow
+            # but handle gracefully without raising
+            if self._dev_logging:
+                logger.warning(
+                    "detach_called_with_handlers_but_no_page",
+                    has_request_handler=self._request_handler is not None,
+                    has_response_handler=self._response_handler is not None,
+                )
+
+        # Log warning if detach called without prior attach (when dev logging enabled)
+        if not was_attached and self._dev_logging:
+            logger.info(
+                "detach_called_without_attach",
+                message="detach() called without prior attach() - no-op",
+            )
+
+        # Reset state - ready for potential reattach
+        # Note: patterns and handler are set at construction and persist for reattach
         self._page = None
         self._has_navigated = False
         self._request_handler = None
+        self._response_handler: Callable[[Any], Any] | None = None
+
+        # Log cleanup completion when dev logging enabled
+        if self._dev_logging:
+            logger.info("interceptor_detached", message="Resources cleaned up")
 
     def _matches(self, url: str) -> bool:
         """Check if URL matches any registered pattern.
@@ -280,6 +330,54 @@ class NetworkInterceptor:
             True if URL matches any pattern
         """
         return match_url(self._patterns, url)
+
+    async def _handle_response(self, response: Any) -> None:
+        """Handle Playwright response event.
+
+        This callback is registered with Playwright's 'response' event
+        to capture matched network responses.
+
+        Args:
+            response: Playwright Response object.
+        """
+        # 1. Match URL against patterns
+        response_url = response.url if hasattr(response, "url") else str(response)
+        matched = match_url(self._patterns, response_url)
+
+        if not matched:
+            return
+
+        # 2. Capture raw bytes (handle edge cases: 204, 301, 304, race conditions)
+        raw_bytes: bytes | None = None
+        try:
+            body = await response.body()
+            raw_bytes = body if body else None
+        except Exception as e:
+            # Bodyless response (204, 301, 304) or race condition - raw_bytes stays None
+            if self._dev_logging:
+                logger.warning(
+                    "response_body_capture_failed",
+                    url=response_url,
+                    status=getattr(response, "status", 0),
+                    error=str(e),
+                )
+            raw_bytes = None
+
+        # 3. Construct CapturedResponse with full data
+        # Convert headers to dict (Playwright headers are case-insensitive)
+        headers: dict[str, str] = {}
+        if hasattr(response, "headers"):
+            headers = dict(response.headers)
+
+        captured = CapturedResponse(
+            url=response_url,
+            status=response.status if hasattr(response, "status") else 0,
+            headers=headers,
+            raw_bytes=raw_bytes,
+        )
+
+        # 4. Await async handler callback
+        await self._handler(captured)
 
 
 # Backward compatibility: Keep old class names
