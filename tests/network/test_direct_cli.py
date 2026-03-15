@@ -387,6 +387,8 @@ class TestDirectCLIIntegration:
             
             # Return our mock builder
             mock_client.get.return_value = mock_builder
+            
+            # Configure the class to return our mock instance when used as context manager
             mock_client_class.return_value = mock_client
             
             result = await cli.run(args)
@@ -442,6 +444,8 @@ class TestDirectCLIIntegration:
             )
             
             mock_client.get.return_value = mock_builder
+            
+            # Configure the class to return our mock instance when used as context manager
             mock_client_class.return_value = mock_client
             
             result = await cli.run(args)

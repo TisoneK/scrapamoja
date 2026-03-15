@@ -280,12 +280,18 @@ class TestConcurrentErrorHandling:
             results = await gather_requests(prepared1, prepared2)
 
             assert len(results) == 2
-            # First should be response
-            assert isinstance(results[0], httpx.Response)
-            # Second should be NetworkError
-            assert isinstance(results[1], NetworkError)
-            assert results[1].status_code == 500
-            assert results[1].retryable == Retryable.TERMINAL
+            # First should be response tuple
+            assert isinstance(results[0], tuple)
+            assert len(results[0]) == 2
+            response, metadata = results[0]
+            assert isinstance(response, httpx.Response)
+            # Second should also be a tuple containing NetworkError
+            assert isinstance(results[1], tuple)
+            assert len(results[1]) == 2
+            error_result, error_metadata = results[1]
+            assert isinstance(error_result, NetworkError)
+            assert error_result.status_code == 500
+            assert error_result.retryable == Retryable.TERMINAL
 
 
 @pytest.mark.unit

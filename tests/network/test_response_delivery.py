@@ -58,10 +58,15 @@ class TestRawResponseDelivery:
         # Mock the underlying httpx client
         client._client.request = AsyncMock(return_value=mock_response)
 
-        # Execute the request
-        response = await client.get("https://example.com").execute()
+        # Execute request
+        result = await client.get("https://example.com").execute()
 
-        # Verify we get the raw httpx.Response
+        # Verify we get a tuple (response, metadata)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        response, metadata = result
+        
+        # Verify we get raw httpx.Response
         assert isinstance(response, httpx.Response)
         verify_protocol_compliance(response)
         assert response.status_code == 200
@@ -93,7 +98,13 @@ class TestRawResponseDelivery:
                 client._client.request = AsyncMock(return_value=mock_response)
 
                 # Execute the request synchronously
-                response = client.get("https://example.com").execute_sync()
+                result = client.get("https://example.com").execute_sync()
+                
+                # Verify we get a tuple (response, metadata)
+                assert isinstance(result, tuple)
+                assert len(result) == 2
+                response, metadata = result
+                
                 result_holder[0] = response
             except Exception as e:
                 exception_holder[0] = e
@@ -130,7 +141,12 @@ class TestRawResponseDelivery:
 
         client._client.request = AsyncMock(return_value=mock_response)
 
-        response = await client.get("https://example.com/api").execute()
+        result = await client.get("https://example.com/api").execute()
+        
+        # Extract response from tuple
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        response, metadata = result
 
         # Verify all required properties are accessible (AC #4)
         assert response.status_code == 200
@@ -184,12 +200,20 @@ class TestConcurrentResponseDelivery:
 
         # Verify we get raw httpx.Response objects
         assert len(results) == 2
-        assert isinstance(results[0], httpx.Response)
-        assert isinstance(results[1], httpx.Response)
-        verify_protocol_compliance(results[0])
-        verify_protocol_compliance(results[1])
-        assert results[0].status_code == 200
-        assert results[1].status_code == 201
+        # Each result should be a tuple (response, metadata)
+        assert isinstance(results[0], tuple)
+        assert isinstance(results[1], tuple)
+        
+        # Extract responses
+        response1, metadata1 = results[0]
+        response2, metadata2 = results[1]
+        
+        assert isinstance(response1, httpx.Response)
+        assert isinstance(response2, httpx.Response)
+        verify_protocol_compliance(response1)
+        verify_protocol_compliance(response2)
+        assert response1.status_code == 200
+        assert response2.status_code == 201
 
     @pytest.mark.asyncio
     async def test_gather_response_content_accessible(self) -> None:
@@ -210,11 +234,14 @@ class TestConcurrentResponseDelivery:
         results = await gather_requests(prepared)
 
         assert len(results) == 1
-        response = results[0]
+        result = results[0]
 
-        # gather_requests returns httpx.Response | NetworkError
-        # Network errors are tested separately - ensure we got a response here
-        assert isinstance(response, httpx.Response), "Expected httpx.Response, got NetworkError"
+        # gather_requests returns (response, metadata) tuples
+        assert isinstance(result, tuple), "Expected tuple (response, metadata), got NetworkError"
+        
+        # Extract response
+        response, metadata = result
+        assert isinstance(response, httpx.Response), "Expected httpx.Response in tuple"
 
         # Verify caller can access all properties directly
         assert response.status_code == 200

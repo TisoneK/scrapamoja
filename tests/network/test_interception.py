@@ -64,37 +64,36 @@ class TestInterceptedResponse:
         response = InterceptedResponse(
             url="https://example.com/api/data",
             status=200,
-            status_text="OK",
             headers={"content-type": "application/json"},
-            body=b'{"key": "value"}',
+            raw_bytes=b'{"key": "value"}',
         )
         assert response.url == "https://example.com/api/data"
         assert response.status == 200
-        assert response.status_text == "OK"
         assert response.headers == {"content-type": "application/json"}
-        assert response.body == b'{"key": "value"}'
+        assert response.raw_bytes == b'{"key": "value"}'
 
     def test_response_with_string_body(self):
         """Test creating response with string body."""
         response = InterceptedResponse(
             url="https://example.com/api/data",
             status=200,
-            status_text="OK",
             headers={},
-            body="string response",
+            raw_bytes=b"string response",
         )
-        assert response.body == "string response"
+        assert response.raw_bytes == b"string response"
 
     def test_response_with_timing(self):
         """Test creating response with timing."""
         response = InterceptedResponse(
             url="https://example.com/api/data",
             status=200,
-            status_text="OK",
             headers={},
-            timing=123.45,
+            raw_bytes=b"response body",
         )
-        assert response.timing == 123.45
+        # Note: timing is not supported in the new CapturedResponse model
+        # This test is kept for backward compatibility but timing is not stored
+        assert response.url == "https://example.com/api/data"
+        assert response.status == 200
 
 
 class TestNetworkListener:
@@ -144,8 +143,8 @@ class TestNetworkListener:
             InterceptedResponse(
                 url="https://example.com/api",
                 status=200,
-                status_text="OK",
                 headers={},
+                raw_bytes=b"response body",
             )
         )
         assert len(listener.get_captured_responses()) == 1
