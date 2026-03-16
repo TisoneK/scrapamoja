@@ -1,10 +1,10 @@
 ---
 project_name: 'scrapamoja'
 user_name: 'Tisone'
-date: '2026-03-06T20:01:00Z'
+date: '2026-03-15'
 sections_completed: ['technology_stack', 'language_specific', 'framework_specific', 'testing_rules', 'code_quality', 'development_workflow', 'critical_dont_miss_rules']
 status: 'complete'
-rule_count: 45
+rule_count: 46
 optimized_for_llm: true
 ---
 
@@ -76,6 +76,22 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **Ruff Linting Rules**: Enabled rules: pycodestyle errors/warnings, pyflakes, isort, flake8-bugbear, flake8-comprehensions, pyupgrade. Ignore E501 (line length - handled by Black). Ignore B008 (function calls in argument defaults). Per-file ignores: F401 for `__init__.py`, B011 for tests
 - **MyPy Type Checking**: Strict mode enabled with comprehensive checks. All functions must have type annotations. Disallow untyped definitions and incomplete definitions. No implicit optional types. Warn on redundant casts and unused ignores
 - **Code Organization**: Module structure: `src/module_name/` with `__init__.py` for clean API. Interfaces in `src/module_name/interfaces.py` for dependency injection. Models in `src/module_name/models/` for data structures. Use absolute imports from project root
+- **Sub-Module Structure (SCR-003+)**: Each concern gets its own subdirectory (module), NOT just separate files. The main class file orchestrates — it does NOT implement. Logic lives in dedicated sub-modules. Example correct structure:
+  ```
+  src/network/interception/
+  ├── __init__.py
+  ├── core/          # lifecycle, attach/detach
+  │   └── __init__.py
+  ├── matching/      # pattern logic
+  │   └── __init__.py
+  ├── capture/       # response capture
+  │   └── __init__.py
+  ├── models/        # data structures
+  │   └── __init__.py
+  └── exceptions/   # custom exceptions
+      └── __init__.py
+  ```
+  The anti-pattern: a single orchestrator file (e.g., `interceptor.py`) absorbing all logic, OR flat files like `models.py` and `exceptions.py`. This violates the principle that `src/module_name/` must be applied recursively inside each feature module.
 - **Naming Conventions**: Classes: PascalCase (BrowserSession, SnapshotManager). Functions/variables: snake_case (capture_snapshot, browser_config). Constants: UPPER_SNAKE_CASE (MAX_RETRIES, DEFAULT_TIMEOUT). Modules: snake_case (browser_management, selector_engine)
 - **Documentation Requirements**: Use docstrings for all public functions and classes. Structlog for logging with correlation IDs. Rich for console output and progress bars. Comprehensive README for each module
 
@@ -115,4 +131,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Review quarterly for outdated rules
 - Remove rules that become obvious over time
 
-Last Updated: 2026-03-06T20:01:00Z
+Last Updated: 2026-03-15

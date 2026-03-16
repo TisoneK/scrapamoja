@@ -67,23 +67,33 @@ Scrapamoja chooses the optimal extraction method based on each target site's arc
 scrapamoja/
 ├── src/
 │   ├── main.py                   # Unified CLI entry point
+│   ├── api/                      # FastAPI endpoints and schemas
 │   ├── sites/                    # Site implementations
 │   │   ├── _template/            # Full-featured template for new sites
 │   │   ├── base/                 # BaseSiteScraper, registry, DI container
+│   │   ├── direct/               # Direct API mode implementations
 │   │   ├── flashscore/           # FlashScore scraper (Basketball, Football)
 │   │   └── wikipedia/            # Wikipedia scraper
 │   ├── selectors/                # Selector engine (YAML-driven, multi-strategy)
 │   ├── browser/                  # Browser lifecycle, sessions, tab management
+│   ├── network/                  # Network interception, HTTP client, error handling
 │   ├── resilience/               # Retries, failure classification, checkpoints
 │   ├── stealth/                  # Anti-detection, fingerprinting, proxies
 │   ├── telemetry/                # Metrics, alerting, audit, reporting
 │   ├── navigation/               # Route planning and page discovery
 │   ├── extractor/                # Data extraction and transformation
 │   ├── observability/            # Structured logging and event system
-│   └── interrupt_handling/       # Graceful shutdown and signal handling
+│   ├── interrupt_handling/       # Graceful shutdown and signal handling
+│   ├── models/                   # Data models and schemas
+│   ├── config/                   # Configuration management
+│   ├── storage/                  # Data persistence and caching
+│   ├── core/                     # Core utilities and shared components
+│   ├── extraction/               # Extraction strategies and processors
+│   └── utils/                    # Utility functions and helpers
+├── ui/                          # Web UI for feature flag management and system monitoring
+│   └── app/                      # React/Vite application with TailwindCSS for managing flags, escalations, and audit logs
 ├── tests/                        # Unit, integration, performance, stealth tests
 ├── docs/                         # Architecture docs, workflow guides, API reference
-├── specs/                        # Feature specs (17+ completed)
 ├── examples/                     # Runnable examples
 └── scripts/                      # Migration and validation utilities
 ```
@@ -159,81 +169,6 @@ python -m src.main flashscore scrape basketball live --limit 1
   ],
   "total": 1
 }
-```
-
----
-
-## 📦 Installation
-
-### Option 1: Standard Installation
-
-**Linux / macOS**
-
-```bash
-git clone https://github.com/TisoneK/scrapamoja.git
-cd scrapamoja
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-playwright install chromium
-```
-
-**Windows**
-
-```bat
-git clone https://github.com/TisoneK/scrapamoja.git
-cd scrapamoja
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-playwright install chromium
-```
-
-### Option 2: Docker Installation
-
-```dockerfile
-FROM python:3.12-slim
-
-WORKDIR /app
-COPY . .
-
-RUN pip install -r requirements.txt && \
-    playwright install chromium --with-deps
-
-ENTRYPOINT ["python", "-m", "src.main"]
-```
-
-```bash
-docker build -t scrapamoja .
-docker run scrapamoja flashscore scrape basketball live --limit 5
-```
-
-### Option 3: Development Installation
-
-**Linux / macOS**
-
-```bash
-git clone https://github.com/TisoneK/scrapamoja.git
-cd scrapamoja
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
-pre-commit install
-pytest tests/
-```
-
-**Windows**
-
-```bat
-git clone https://github.com/TisoneK/scrapamoja.git
-cd scrapamoja
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-pip install -e .
-pre-commit install
-pytest tests/
 ```
 
 ---
@@ -325,45 +260,6 @@ logging:
 | `--headless / --no-headless` | Browser visibility (`--no-headless` for debugging) |
 | `--verbose, -v` | Detailed logs |
 | `--quiet, -q` | Errors only |
-
----
-
-## Testing
-
-```bash
-# Full suite
-pytest tests/
-
-# With coverage
-pytest --cov=src tests/
-
-# By category
-pytest tests/unit/
-pytest tests/integration/
-pytest tests/performance/
-pytest tests/stealth/
-```
-
----
-
-## Docker
-
-```dockerfile
-FROM python:3.12-slim
-
-WORKDIR /app
-COPY . .
-
-RUN pip install -r requirements.txt && \
-    playwright install chromium --with-deps
-
-ENTRYPOINT ["python", "-m", "src.main"]
-```
-
-```bash
-docker build -t scrapamoja .
-docker run scrapamoja flashscore scrape basketball live --limit 5
-```
 
 ---
 
