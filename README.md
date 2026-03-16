@@ -1,6 +1,6 @@
 # Scrapamoja 🕷️
 
-A production-grade Python framework for building reliable, extensible web scrapers — with battle-tested resilience, stealth, and observability built in.
+A Python framework for building reliable, extensible web scrapers — with battle-tested resilience, stealth, and observability built in.
 
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue) ![Playwright](https://img.shields.io/badge/Playwright-latest-green) ![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
 
