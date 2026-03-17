@@ -27,11 +27,6 @@ ehthumbs.db
 Thumbs.db
 
 # IDE files
-.vscode/
-.idea/
-.windsurf/
-.kilocode/
-.kilocodemodes
 *.swp
 *.swo
 *~
@@ -59,10 +54,6 @@ data/
 # Build artifacts
 *.egg-info/
 scorewise_scraper.egg-info/
-
-# Bmad output
-_bmad-output/
-_bmad/
 
 # Python cache
 __pycache__/
