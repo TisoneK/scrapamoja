@@ -54,8 +54,8 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Stealth/Browser Fingerprinting
-  epic-2: backlog
-  2-1-automation-signal-suppression: backlog
+  epic-2: in-progress
+  2-1-automation-signal-suppression: ready-for-dev
   2-2-canvas-webgl-fingerprint-randomization: backlog
   2-3-user-agent-rotation: backlog
   2-4-viewport-normalization: backlog
