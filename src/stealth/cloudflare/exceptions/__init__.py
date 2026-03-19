@@ -35,3 +35,9 @@ class SensitivityConfigurationError(CloudflareConfigError):
     """Raised when sensitivity configuration is invalid."""
 
     pass
+
+
+class WebdriverMaskerError(CloudflareConfigError):
+    """Raised when webdriver signal suppression fails."""
+
+    pass
