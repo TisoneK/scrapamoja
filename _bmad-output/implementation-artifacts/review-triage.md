@@ -1,99 +1,65 @@
-# Code Review - Triage Results
+# Code Review Triage Results
 
-## Raw Findings Summary
-- **Blind Hunter:** 13 findings
-- **Edge Case Hunter:** 12 findings  
-- **Acceptance Auditor:** 11 findings
-- **Total Raw:** 36 findings
-
----
-
-## Normalization & Deduplication
-
-### Merged/Deduplicated Findings (18 unique issues)
-
-| ID | Source | Title | Detail |
-|----|--------|-------|--------|
-| 1 | blind+auditor | Duplicate configuration models | Both CloudflareConfig and CloudflareConfigSchema implement identical Pydantic models - creates redundancy |
-| 2 | blind | Redundant validator | validate_cloudflare_flag in schema.py returns input unchanged - no actual validation |
-| 3 | edge | Missing YAML type handling | yaml.safe_load could return non-dict but _parse_config assumes dict |
-| 4 | blind+edge | Inconsistent timeout defaults | Default 30s is arbitrary with no connection to actual Cloudflare timing |
-| 5 | edge | Confusing fallback logic | extract_cloudflare_config uses True as default when cloudflare_protected missing |
-| 6 | blind+auditor | No resilience integration | Story requires importing from src/resilience/ but no such imports exist |
-| 7 | blind+auditor | No observability integration | Story requires importing from src/observability/ but no such imports exist |
-| 8 | blind | Deprecated Pydantic v1 style | class Config syntax deprecated in Pydantic v2 |
-| 9 | blind | No async implementation | Story requires asyncio-first but all methods are synchronous |
-| 10 | blind | Missing __aenter__/__aexit__ | Story requires resource manager methods but not implemented |
-| 11 | blind | Tests don't cover file loading | load() method that reads YAML never tested |
-| 12 | edge | Type safety issue | load_from_site_config accepts dict but merge_with_defaults also accepts None |
-| 13 | edge | Identity check issue | Using 'is True' instead of '== True' can fail for truthy values |
-| 14 | auditor | No stealth configuration activation | Code only parses config but doesn't activate bypass mechanisms |
-| 15 | auditor | No challenge detection integration | Module doesn't integrate with any challenge detection system |
-| 16 | auditor | SCR-003 pattern incomplete | Missing core/ and detection/ directories required by spec |
-| 17 | auditor | No browser context integration | No code showing how module integrates with browser context |
-| 18 | auditor | No integration tests | Story requires @pytest.mark.integration but only unit tests exist |
+## Review Summary
+- **Story**: 1-2 Challenge Wait Timeout Configuration
+- **Review Mode**: full (spec file provided)
+- **Files Reviewed**: src/stealth/cloudflare/*, tests/unit/test_cloudflare_config.py
 
 ---
 
-## Classification
-
-### Classification Rules Applied:
-- **intent_gap** - Spec/intent incomplete (review_mode=full, so applicable)
-- **bad_spec** - Spec should have prevented this
-- **patch** - Trivially fixable code issue
-- **defer** - Pre-existing issue not caused by current change
-- **reject** - Noise, false positive
-
-### Classification Results:
-
-#### INTENT_GAP (4 findings)
-| ID | Title | Detail |
-|----|-------|--------|
-| 14 | No stealth configuration activation | The spec AC1 says "framework activates all Cloudflare bypass mechanisms" but the implementation only provides data models - the spec intent seems to expect active processing, not just config parsing |
-| 15 | No challenge detection integration | AC1 requires challenge detection but no such system is integrated |
-| 16 | SCR-003 pattern incomplete | The spec requires core/ and detection/ directories but only config/, models/, exceptions/ exist - is this intentional or incomplete? |
-| 17 | No browser context integration | Spec requires read-only browser context integration but no code demonstrates this |
-
-#### BAD_SPEC (2 findings)
-| ID | Title | Detail |
-|----|-------|--------|
-| 6 | No resilience integration | Spec says "Import retry from src/resilience/" but this implies src/resilience/ already exists - is that actually true in the project? |
-| 7 | No observability integration | Same as above - src/observability/ must exist for this requirement to be valid |
-
-#### PATCH (8 findings)
-| ID | Title | Detail | Location |
-|----|-------|--------|----------|
-| 2 | Redundant validator | Remove pointless validate_cloudflare_flag | config/schema.py |
-| 3 | Missing YAML type handling | Add type check for yaml.safe_load result | config/loader.py:57-58 |
-| 5 | Confusing fallback logic | Fix default in extract_cloudflare_config | config/flags.py:64-65 |
-| 8 | Deprecated Pydantic v1 style | Replace with model_config = ConfigDict(...) | models/config.py:42-46 |
-| 11 | Tests don't cover file loading | Add test for load() method | tests/unit/test_cloudflare_config.py |
-| 12 | Type safety issue | Fix type hints for load_from_site_config | config/loader.py |
-| 13 | Identity check issue | Replace 'is True' with comparison | config/loader.py:146-148 |
-| 1 | Duplicate models | Consider removing CloudflareConfigSchema or merging | Multiple files |
-
-#### DEFER (0 findings)
-- None identified that are pre-existing issues
-
-#### REJECT (4 findings)
-| ID | Title | Reason |
-|----|-------|--------|
-| 4 | Inconsistent timeout defaults | This is a design decision, not a bug - defaults are reasonable |
-| 9 | No async implementation | Story 1.1 is just config - async may be needed in later stories |
-| 10 | Missing __aenter__/__aexit__ | May not be needed for config-only module |
+## Layer Status
+- ✅ Blind Hunter: Completed (10 findings)
+- ✅ Edge Case Hunter: Completed (8 findings)  
+- ✅ Acceptance Auditor: Completed (6 findings)
 
 ---
 
-## Summary
-- **4** intent_gap findings
-- **2** bad_spec findings
-- **8** patch findings  
-- **0** defer findings
-- **4** findings rejected as noise
+## Deduplicated Findings
 
-**Total remaining after triage: 14 actionable findings**
+### Total Findings: 14 (after deduplication)
+
+### Classification: patch (12 findings)
+
+| ID | Source | Title | Location | Detail |
+|----|--------|-------|----------|--------|
+| 1 | blind+edge | extract_cloudflare_config missing return statement | flags.py:54-56 | Function returns None even when cloudflare_protected is True - missing return CloudflareConfig(...) |
+| 2 | blind+edge | Silent exception masking in challenge check | waiter.py:176-192 | Returns True (assume resolved) on ANY exception, masking potential real errors |
+| 3 | blind | No page object validation | waiter.py:__init__ | Constructor accepts page: Any without verifying it's a valid Playwright page |
+| 4 | blind | Cookie check logic flaw | waiter.py:182-185 | Presence of cf_ cookies doesn't guarantee challenge solved - returns True prematurely |
+| 5 | blind+edge | No asyncio.CancelledError handling | waiter.py:130-145 | TimeoutError caught but CancelledError not handled - could leave resources in bad state |
+| 6 | blind+edge | Potential infinite loop | waiter.py:158-159 | _wait_loop has no max_iterations guard if check_func always returns False |
+| 7 | blind | Memory leak - no cleanup on exception | waiter.py:__aexit__ | No cleanup of state if context manager exits due to exception |
+| 8 | edge | KeyError potential in nested config | loader.py:71-73 | KeyError if nested config format unexpected - no graceful handling |
+| 9 | blind | Race condition - page closed during wait | waiter.py:_wait_loop | No mechanism to detect when page/context is no longer valid |
+| 10 | blind+auditor | Custom logger instead of observability | waiter.py:9 | Uses custom get_logger instead of importing from src/observability/ as spec requires |
+| 11 | blind+auditor | No resilience engine integration | waiter.py | Custom wait loop instead of importing retry from src/resilience/ |
+| 12 | blind | Tests pass None as page | test_cloudflare_config.py:194-196 | mock_page = None will cause AttributeError with real page operations |
+
+### Classification: defer (2 findings)
+
+| ID | Source | Title | Location | Detail |
+|----|--------|-------|----------|--------|
+| 13 | auditor | Hardcoded challenge selectors | waiter.py:178-181 | CSS selectors hardcoded; no configuration - low priority, can be enhanced later |
+| 14 | auditor | Challenge detection module integration | N/A | Integration with Epic 3 (Challenge Detection) not implemented - deferred to future story |
+
+### Classification: reject (0 findings)
+- None - all findings are actionable
 
 ---
 
-## Failed Layers Report
-- No layers failed - all reviews completed successfully
+## Reject Summary
+- **Rejected Findings**: 0
+- **Reason**: All findings represent legitimate issues
+
+---
+
+## Clean Review?
+**No** - 12 patch findings, 2 defer findings remain after triage.
+
+---
+
+## Critical Issues Requiring Immediate Attention:
+1. **extract_cloudflare_config** - returns None when should return config (flags.py)
+2. **Silent exception masking** - false challenge resolution detection (waiter.py)
+3. **Observability integration** - spec violation (waiter.py)
+4. **Resilience engine integration** - spec violation (waiter.py)

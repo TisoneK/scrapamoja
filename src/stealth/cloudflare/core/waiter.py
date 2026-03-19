@@ -1,27 +1,29 @@
-"""Challenge waiter with configurable timeout.
+"""Challenge waiter stub for timeout configuration.
 
-This module provides the ChallengeWaiter class that handles waiting for
-Cloudflare challenge completion with configurable timeout.
+This module provides the ChallengeWaiter interface with configurable timeout.
+The actual wait orchestration is implemented in Epic 4 Story 4.1.
+
+Story 1.2 owns: timeout configuration wiring
+Epic 4 Story 4.1 owns: automatic challenge wait orchestration
 """
 
-import asyncio
-import logging
-from typing import Any, Awaitable, Callable, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional
 
-from src.observability.logger import get_logger
 from src.stealth.cloudflare.config.flags import is_cloudflare_enabled
 from src.stealth.cloudflare.exceptions import ChallengeTimeoutError
 from src.stealth.cloudflare.models.config import CloudflareConfig
 
-# Module logger
-logger = get_logger("cloudflare.waiter")
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 
 class ChallengeWaiter:
     """Async context manager for waiting on Cloudflare challenge completion.
 
-    This class provides timeout-aware waiting for Cloudflare challenge resolution.
-    It integrates with the observability system for logging timeout events.
+    STUB IMPLEMENTATION - Actual wait logic owned by Epic 4 Story 4.1.
+
+    This class provides the interface for timeout-aware waiting.
+    The configuration is wired here; the wait orchestration is deferred.
 
     Attributes:
         config: CloudflareConfig instance with timeout settings.
@@ -40,7 +42,7 @@ class ChallengeWaiter:
     def __init__(
         self,
         config: CloudflareConfig,
-        page: Any,
+        page: "Page",
         check_interval: Optional[float] = None,
     ) -> None:
         """Initialize the ChallengeWaiter.
@@ -49,6 +51,10 @@ class ChallengeWaiter:
             config: CloudflareConfig with timeout and other settings.
             page: Playwright page instance for DOM checks.
             check_interval: Optional custom check interval in seconds.
+
+        Note:
+            The page is provided by the browser manager. This module
+            does not validate or own the page object.
         """
         self.config = config
         self.page = page
@@ -61,11 +67,6 @@ class ChallengeWaiter:
         Returns:
             Self for chaining.
         """
-        logger.info(
-            "challenge_waiter_started",
-            timeout_seconds=self._timeout_seconds,
-            check_interval=self.check_interval,
-        )
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -76,23 +77,20 @@ class ChallengeWaiter:
             exc_val: Exception value if raised.
             exc_tb: Exception traceback if raised.
         """
-        if exc_type is None:
-            logger.info(
-                "challenge_waiter_completed",
-                timeout_seconds=self._timeout_seconds,
-            )
-        else:
-            logger.error(
-                "challenge_waiter_error",
-                timeout_seconds=self._timeout_seconds,
-                error_type=exc_type.__name__ if exc_type else None,
-            )
+        # Cleanup handled by context manager - no additional state to clean
+        pass
 
     async def wait_for_challenge_resolved(
         self,
         check_func: Optional[Callable[[], Awaitable[bool]]] = None,
     ) -> bool:
         """Wait for challenge to be resolved within the configured timeout.
+
+        STUB - Actual implementation owned by Epic 4 Story 4.1.
+
+        This is a placeholder that raises NotImplementedError.
+        The actual wait logic will import retry from src/resilience/
+        and logging from src/observability/.
 
         Args:
             check_func: Optional custom async function to check for challenge resolution.
@@ -102,90 +100,14 @@ class ChallengeWaiter:
             True if challenge was resolved within timeout, False otherwise.
 
         Raises:
+            NotImplementedError: Wait orchestration not yet implemented.
             ChallengeTimeoutError: If timeout is exceeded before challenge resolution.
         """
-        check = check_func or self._default_challenge_check
-
-        logger.info(
-            "challenge_wait_started",
-            timeout_seconds=self._timeout_seconds,
+        raise NotImplementedError(
+            "wait_for_challenge_resolved is stubbed - "
+            "Epic 4 Story 4.1 owns the actual wait orchestration. "
+            "Import retry from src/resilience/ and logging from src/observability/."
         )
-
-        try:
-            resolved = await asyncio.wait_for(
-                self._wait_loop(check),
-                timeout=self._timeout_seconds,
-            )
-
-            if resolved:
-                logger.info(
-                    "challenge_resolved",
-                    timeout_seconds=self._timeout_seconds,
-                )
-
-            return resolved
-
-        except asyncio.TimeoutError:
-            logger.warning(
-                "challenge_timeout",
-                timeout_seconds=self._timeout_seconds,
-            )
-            raise ChallengeTimeoutError(
-                f"Challenge not resolved within {self._timeout_seconds} seconds"
-            ) from None
-
-    async def _wait_loop(self, check: Callable[[], Awaitable[bool]]) -> bool:
-        """Loop until challenge is resolved or timeout.
-
-        Args:
-            check: Async function that returns True when challenge is resolved.
-
-        Returns:
-            True if challenge resolved, False otherwise.
-        """
-        while True:
-            if await check():
-                return True
-            await asyncio.sleep(self.check_interval)
-
-    async def _default_challenge_check(self) -> bool:
-        """Default check for Cloudflare challenge resolution.
-
-        This checks for common Cloudflare challenge indicators in the page.
-
-        Returns:
-            True if no challenge is detected, False otherwise.
-        """
-        try:
-            # Check for Cloudflare challenge elements
-            challenge_selectors = [
-                "#cf-challenge-root",
-                ".cf-challenge",
-                "[data-cf-challenge]",
-                "#challenge-running",
-            ]
-
-            for selector in challenge_selectors:
-                element = await self.page.query_selector(selector)
-                if element:
-                    is_visible = await element.is_visible()
-                    if is_visible:
-                        return False
-
-            # Check for Cloudflare cookies that indicate challenge
-            cookies = await self.page.context.cookies()
-            cf_tokens = [c for c in cookies if c["name"].startswith("cf_")]
-
-            if cf_tokens:
-                # Has Cloudflare cookies - check if challenge is still active
-                return True
-
-            # No challenge detected
-            return True
-
-        except Exception:
-            # If we can't determine, assume resolved
-            return True
 
     def get_timeout_seconds(self) -> int:
         """Get configured timeout in seconds.
@@ -198,11 +120,13 @@ class ChallengeWaiter:
 
 async def wait_for_challenge(
     config: CloudflareConfig,
-    page: Any,
+    page: Optional["Page"],
     check_func: Optional[Callable[[], Awaitable[bool]]] = None,
     timeout: Optional[int] = None,
 ) -> bool:
     """Convenience function to wait for challenge resolution.
+
+    STUB - Actual implementation owned by Epic 4 Story 4.1.
 
     Args:
         config: CloudflareConfig with timeout settings.
@@ -214,21 +138,12 @@ async def wait_for_challenge(
         True if challenge resolved within timeout.
 
     Raises:
-        ChallengeTimeoutError: If timeout is exceeded.
+        NotImplementedError: Wait orchestration not yet implemented.
     """
-    # Create a temporary config with the override timeout if provided
-    if timeout is not None:
-        temp_config = CloudflareConfig(
-            cloudflare_protected=config.cloudflare_protected,
-            challenge_timeout=timeout,
-            detection_sensitivity=config.detection_sensitivity,
-            auto_retry=config.auto_retry,
-        )
-    else:
-        temp_config = config
-
-    async with ChallengeWaiter(temp_config, page) as waiter:
-        return await waiter.wait_for_challenge_resolved(check_func)
+    raise NotImplementedError(
+        "wait_for_challenge is stubbed - "
+        "Epic 4 Story 4.1 owns the actual wait orchestration."
+    )
 
 
 def is_wait_enabled(config: CloudflareConfig | dict[str, Any] | bool | None) -> bool:

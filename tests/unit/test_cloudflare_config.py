@@ -3,6 +3,7 @@
 import pytest
 from pathlib import Path
 from pydantic import ValidationError
+from unittest.mock import MagicMock
 
 from src.stealth.cloudflare.config.flags import (
     extract_cloudflare_config,
@@ -342,8 +343,8 @@ class TestChallengeWaiter:
         from src.stealth.cloudflare.core.waiter import ChallengeWaiter
 
         config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=60)
-        # Mock page object
-        mock_page = None
+        # Create a minimal mock page object
+        mock_page = MagicMock()
         waiter = ChallengeWaiter(config, mock_page)
         assert waiter.get_timeout_seconds() == 60
 
@@ -352,7 +353,7 @@ class TestChallengeWaiter:
         from src.stealth.cloudflare.core.waiter import ChallengeWaiter
 
         config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
-        mock_page = None
+        mock_page = MagicMock()
         waiter = ChallengeWaiter(config, mock_page, check_interval=0.5)
         assert waiter.check_interval == 0.5
 
@@ -361,7 +362,7 @@ class TestChallengeWaiter:
         from src.stealth.cloudflare.core.waiter import ChallengeWaiter
 
         config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=120)
-        mock_page = None
+        mock_page = MagicMock()
         waiter = ChallengeWaiter(config, mock_page)
         assert waiter.get_timeout_seconds() == 120
 
@@ -371,62 +372,57 @@ class TestChallengeWaiter:
         from src.stealth.cloudflare.core.waiter import ChallengeWaiter
 
         config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
-        mock_page = None
+        mock_page = MagicMock()
 
         async with ChallengeWaiter(config, mock_page) as waiter:
             assert waiter.get_timeout_seconds() == 30
 
     @pytest.mark.asyncio
-    async def test_wait_for_challenge_resolved_immediate(self) -> None:
-        """Test wait resolves immediately when check returns True."""
+    async def test_wait_for_challenge_resolved_is_stub(self) -> None:
+        """Test wait_for_challenge_resolved raises NotImplementedError (stub)."""
         from src.stealth.cloudflare.core.waiter import ChallengeWaiter
-        from src.stealth.cloudflare.exceptions import ChallengeTimeoutError
 
         config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
-        mock_page = None
+        mock_page = MagicMock()
 
-        # Check function that returns True immediately
         async def quick_check() -> bool:
             return True
 
         async with ChallengeWaiter(config, mock_page) as waiter:
-            result = await waiter.wait_for_challenge_resolved(quick_check)
-            assert result is True
+            with pytest.raises(NotImplementedError):
+                await waiter.wait_for_challenge_resolved(quick_check)
 
     @pytest.mark.asyncio
-    async def test_wait_for_challenge_timeout(self) -> None:
-        """Test wait raises ChallengeTimeoutError on timeout."""
-        from src.stealth.cloudflare.core.waiter import ChallengeWaiter, wait_for_challenge
-        from src.stealth.cloudflare.exceptions import ChallengeTimeoutError
+    async def test_wait_for_challenge_is_stub(self) -> None:
+        """Test wait_for_challenge raises NotImplementedError (stub)."""
+        from src.stealth.cloudflare.core.waiter import wait_for_challenge
 
         config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
-        mock_page = None
+        mock_page = MagicMock()
 
-        # Check function that always returns False - use timeout override for fast test
-        async def never_resolve() -> bool:
-            return False
+        async def quick_check() -> bool:
+            return True
 
-        # Use wait_for_challenge with timeout override for fast testing (minimum valid is 5)
-        with pytest.raises(ChallengeTimeoutError):
-            await wait_for_challenge(config, mock_page, never_resolve, timeout=5)
+        with pytest.raises(NotImplementedError):
+            await wait_for_challenge(config, mock_page, quick_check, timeout=60)
 
 
 class TestWaitForChallenge:
     """Tests for wait_for_challenge convenience function."""
 
     @pytest.mark.asyncio
-    async def test_wait_for_challenge_with_custom_timeout(self) -> None:
-        """Test wait_for_challenge accepts timeout override."""
+    async def test_wait_for_challenge_raises_not_implemented(self) -> None:
+        """Test wait_for_challenge raises NotImplementedError (stub)."""
         from src.stealth.cloudflare.core.waiter import wait_for_challenge
 
         config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
-        mock_page = None
+        mock_page = MagicMock()
 
         async def quick_check() -> bool:
             return True
 
-        result = await wait_for_challenge(config, mock_page, quick_check, timeout=60)
-        assert result is True
+        with pytest.raises(NotImplementedError):
+            await wait_for_challenge(config, mock_page, quick_check, timeout=60)
 
 
 class TestIsWaitEnabled:

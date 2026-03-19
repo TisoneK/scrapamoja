@@ -54,17 +54,20 @@ def extract_cloudflare_config(
     if not is_cloudflare_enabled(config):
         return None
 
-    cloudflare_data = config.get("cloudflare", {})
+    # Handle nested config format: {"cloudflare": {...}}
+    cloudflare_data: dict[str, Any] = {}
+    if "cloudflare" in config and isinstance(config["cloudflare"], dict):
+        cloudflare_data = config["cloudflare"]
 
-    # Only extract if cloudflare_protected is explicitly True
-    is_enabled = config.get("cloudflare_protected", False)
-    if not is_enabled and not cloudflare_data.get("cloudflare_protected", False):
+    # Determine if cloudflare_protected is True (check nested first, then top-level)
+    is_enabled = cloudflare_data.get("cloudflare_protected", False)
+    if not is_enabled:
+        is_enabled = config.get("cloudflare_protected", False)
+    if not is_enabled:
         return None
 
     return CloudflareConfig(
-        cloudflare_protected=cloudflare_data.get(
-            "cloudflare_protected", config.get("cloudflare_protected", False)
-        ),
+        cloudflare_protected=is_enabled,
         challenge_timeout=cloudflare_data.get(
             "challenge_timeout", config.get("challenge_timeout", 30)
         ),
