@@ -442,3 +442,336 @@ class TestIsWaitEnabled:
         assert is_wait_enabled(False) is False
         assert is_wait_enabled({}) is False
         assert is_wait_enabled(None) is False
+
+
+class TestSensitivityLevel:
+    """Tests for SensitivityLevel enum."""
+
+    def test_low_value(self) -> None:
+        """Test SensitivityLevel.LOW has value 1."""
+        from src.stealth.cloudflare.models.sensitivity import SensitivityLevel
+
+        assert SensitivityLevel.LOW == 1
+
+    def test_medium_value(self) -> None:
+        """Test SensitivityLevel.MEDIUM has value 3."""
+        from src.stealth.cloudflare.models.sensitivity import SensitivityLevel
+
+        assert SensitivityLevel.MEDIUM == 3
+
+    def test_high_value(self) -> None:
+        """Test SensitivityLevel.HIGH has value 5."""
+        from src.stealth.cloudflare.models.sensitivity import SensitivityLevel
+
+        assert SensitivityLevel.HIGH == 5
+
+
+class TestParseSensitivityValue:
+    """Tests for parse_sensitivity_value function."""
+
+    def test_parse_string_high(self) -> None:
+        """Test parsing 'high' string."""
+        from src.stealth.cloudflare.models.sensitivity import parse_sensitivity_value
+
+        assert parse_sensitivity_value("high") == 5
+
+    def test_parse_string_medium(self) -> None:
+        """Test parsing 'medium' string."""
+        from src.stealth.cloudflare.models.sensitivity import parse_sensitivity_value
+
+        assert parse_sensitivity_value("medium") == 3
+
+    def test_parse_string_low(self) -> None:
+        """Test parsing 'low' string."""
+        from src.stealth.cloudflare.models.sensitivity import parse_sensitivity_value
+
+        assert parse_sensitivity_value("low") == 1
+
+    def test_parse_string_case_insensitive(self) -> None:
+        """Test string parsing is case insensitive."""
+        from src.stealth.cloudflare.models.sensitivity import parse_sensitivity_value
+
+        assert parse_sensitivity_value("HIGH") == 5
+        assert parse_sensitivity_value("High") == 5
+        assert parse_sensitivity_value("MEDIUM") == 3
+        assert parse_sensitivity_value("Medium") == 3
+        assert parse_sensitivity_value("LOW") == 1
+        assert parse_sensitivity_value("Low") == 1
+
+    def test_parse_string_with_whitespace(self) -> None:
+        """Test string parsing handles whitespace."""
+        from src.stealth.cloudflare.models.sensitivity import parse_sensitivity_value
+
+        assert parse_sensitivity_value("  high  ") == 5
+        assert parse_sensitivity_value("\tmedium\n") == 3
+
+    def test_parse_integer_valid(self) -> None:
+        """Test parsing valid integers."""
+        from src.stealth.cloudflare.models.sensitivity import parse_sensitivity_value
+
+        assert parse_sensitivity_value(1) == 1
+        assert parse_sensitivity_value(3) == 3
+        assert parse_sensitivity_value(5) == 5
+
+    def test_parse_integer_boundary_values(self) -> None:
+        """Test parsing integer boundary values."""
+        from src.stealth.cloudflare.models.sensitivity import parse_sensitivity_value
+
+        assert parse_sensitivity_value(1) == 1
+        assert parse_sensitivity_value(2) == 2
+        assert parse_sensitivity_value(4) == 4
+        assert parse_sensitivity_value(5) == 5
+
+    def test_parse_invalid_string(self) -> None:
+        """Test parsing invalid string raises error."""
+        from src.stealth.cloudflare.models.sensitivity import (
+            SensitivityConfigurationError,
+            parse_sensitivity_value,
+        )
+
+        with pytest.raises(SensitivityConfigurationError):
+            parse_sensitivity_value("invalid")
+
+    def test_parse_invalid_string_extreme(self) -> None:
+        """Test parsing extreme invalid string raises error."""
+        from src.stealth.cloudflare.models.sensitivity import (
+            SensitivityConfigurationError,
+            parse_sensitivity_value,
+        )
+
+        with pytest.raises(SensitivityConfigurationError):
+            parse_sensitivity_value("ultra")
+
+    def test_parse_integer_too_low(self) -> None:
+        """Test parsing integer below 1 raises error."""
+        from src.stealth.cloudflare.models.sensitivity import (
+            SensitivityConfigurationError,
+            parse_sensitivity_value,
+        )
+
+        with pytest.raises(SensitivityConfigurationError):
+            parse_sensitivity_value(0)
+
+    def test_parse_integer_too_high(self) -> None:
+        """Test parsing integer above 5 raises error."""
+        from src.stealth.cloudflare.models.sensitivity import (
+            SensitivityConfigurationError,
+            parse_sensitivity_value,
+        )
+
+        with pytest.raises(SensitivityConfigurationError):
+            parse_sensitivity_value(6)
+
+    def test_parse_invalid_type(self) -> None:
+        """Test parsing invalid type raises error."""
+        from src.stealth.cloudflare.models.sensitivity import (
+            SensitivityConfigurationError,
+            parse_sensitivity_value,
+        )
+
+        with pytest.raises(SensitivityConfigurationError):
+            parse_sensitivity_value(3.5)  # type: ignore
+
+
+class TestSensitivityToString:
+    """Tests for sensitivity_to_string function."""
+
+    def test_to_string_low(self) -> None:
+        """Test converting 1 to 'low'."""
+        from src.stealth.cloudflare.models.sensitivity import sensitivity_to_string
+
+        assert sensitivity_to_string(1) == "low"
+
+    def test_to_string_medium(self) -> None:
+        """Test converting 3 to 'medium'."""
+        from src.stealth.cloudflare.models.sensitivity import sensitivity_to_string
+
+        assert sensitivity_to_string(3) == "medium"
+
+    def test_to_string_high(self) -> None:
+        """Test converting 5 to 'high'."""
+        from src.stealth.cloudflare.models.sensitivity import sensitivity_to_string
+
+        assert sensitivity_to_string(5) == "high"
+
+    def test_to_string_2_returns_low(self) -> None:
+        """Test 2 maps to 'low' (conservative)."""
+        from src.stealth.cloudflare.models.sensitivity import sensitivity_to_string
+
+        assert sensitivity_to_string(2) == "low"
+
+    def test_to_string_4_returns_high(self) -> None:
+        """Test 4 maps to 'high' (maximum detection)."""
+        from src.stealth.cloudflare.models.sensitivity import sensitivity_to_string
+
+        assert sensitivity_to_string(4) == "high"
+
+    def test_to_string_invalid_too_low(self) -> None:
+        """Test converting 0 raises error."""
+        from src.stealth.cloudflare.models.sensitivity import (
+            SensitivityConfigurationError,
+            sensitivity_to_string,
+        )
+
+        with pytest.raises(SensitivityConfigurationError):
+            sensitivity_to_string(0)
+
+    def test_to_string_invalid_too_high(self) -> None:
+        """Test converting 6 raises error."""
+        from src.stealth.cloudflare.models.sensitivity import (
+            SensitivityConfigurationError,
+            sensitivity_to_string,
+        )
+
+        with pytest.raises(SensitivityConfigurationError):
+            sensitivity_to_string(6)
+
+class TestCloudflareConfigStringSensitivity:
+    """Tests for CloudflareConfig with string sensitivity values."""
+
+    def test_string_sensitivity_high(self) -> None:
+        """Test config accepts 'high' string sensitivity."""
+        config = CloudflareConfig(detection_sensitivity="high")
+        assert config.detection_sensitivity == 5
+
+    def test_string_sensitivity_medium(self) -> None:
+        """Test config accepts 'medium' string sensitivity."""
+        config = CloudflareConfig(detection_sensitivity="medium")
+        assert config.detection_sensitivity == 3
+
+    def test_string_sensitivity_low(self) -> None:
+        """Test config accepts 'low' string sensitivity."""
+        config = CloudflareConfig(detection_sensitivity="low")
+        assert config.detection_sensitivity == 1
+
+    def test_string_sensitivity_case_insensitive(self) -> None:
+        """Test config accepts case-insensitive string values."""
+        config_upper = CloudflareConfig(detection_sensitivity="HIGH")
+        config_title = CloudflareConfig(detection_sensitivity="Medium")
+        config_lower = CloudflareConfig(detection_sensitivity="low")
+
+        assert config_upper.detection_sensitivity == 5
+        assert config_title.detection_sensitivity == 3
+        assert config_lower.detection_sensitivity == 1
+
+    def test_string_sensitivity_with_whitespace(self) -> None:
+        """Test config handles whitespace in string values."""
+        config = CloudflareConfig(detection_sensitivity="  high  ")
+        assert config.detection_sensitivity == 5
+
+    def test_numeric_sensitivity_still_works(self) -> None:
+        """Test numeric sensitivity still works (backward compatibility)."""
+        config = CloudflareConfig(detection_sensitivity=5)
+        assert config.detection_sensitivity == 5
+
+    def test_invalid_string_sensitivity(self) -> None:
+        """Test invalid string sensitivity raises ValidationError."""
+        with pytest.raises(ValidationError):
+            CloudflareConfig(detection_sensitivity="invalid")
+
+    def test_invalid_numeric_sensitivity_too_low(self) -> None:
+        """Test numeric sensitivity below 1 raises error."""
+        with pytest.raises(ValidationError):
+            CloudflareConfig(detection_sensitivity=0)
+
+    def test_invalid_numeric_sensitivity_too_high(self) -> None:
+        """Test numeric sensitivity above 5 raises error."""
+        with pytest.raises(ValidationError):
+            CloudflareConfig(detection_sensitivity=6)
+
+    def test_default_sensitivity_is_medium(self) -> None:
+        """Test default sensitivity is 3 (medium)."""
+        config = CloudflareConfig()
+        assert config.detection_sensitivity == 3
+
+    def test_to_dict_with_string_sensitivity(self) -> None:
+        """Test to_dict returns numeric value."""
+        config = CloudflareConfig(detection_sensitivity="high")
+        result = config.to_dict()
+        assert result["detection_sensitivity"] == 5
+
+
+class TestExtractCloudflareConfigSensitivity:
+    """Tests for extract_cloudflare_config with string sensitivity."""
+
+    def test_extract_string_sensitivity(self) -> None:
+        """Test extracting config with string sensitivity."""
+        config = {
+            "cloudflare_protected": True,
+            "detection_sensitivity": "high",
+        }
+        result = extract_cloudflare_config(config)
+        assert result is not None
+        assert result.detection_sensitivity == 5
+
+    def test_extract_numeric_sensitivity(self) -> None:
+        """Test extracting config with numeric sensitivity."""
+        config = {
+            "cloudflare_protected": True,
+            "detection_sensitivity": 4,
+        }
+        result = extract_cloudflare_config(config)
+        assert result is not None
+        assert result.detection_sensitivity == 4
+
+    def test_extract_nested_string_sensitivity(self) -> None:
+        """Test extracting config with nested string sensitivity."""
+        config = {
+            "cloudflare": {
+                "cloudflare_protected": True,
+                "detection_sensitivity": "low",
+            }
+        }
+        result = extract_cloudflare_config(config)
+        assert result is not None
+        assert result.detection_sensitivity == 1
+
+    def test_extract_mixed_sensitivity(self) -> None:
+        """Test extracting config with nested numeric, top-level string."""
+        config = {
+            "cloudflare": {"cloudflare_protected": True},
+            "detection_sensitivity": "medium",
+        }
+        result = extract_cloudflare_config(config)
+        assert result is not None
+        assert result.detection_sensitivity == 3
+
+
+class TestMergeWithDefaultsSensitivity:
+    """Tests for merge_with_defaults with string sensitivity."""
+
+    def test_merge_string_sensitivity(self) -> None:
+        """Test merging config with string sensitivity."""
+        result = merge_with_defaults({"detection_sensitivity": "high"})
+        assert result.detection_sensitivity == 5
+
+    def test_merge_numeric_sensitivity(self) -> None:
+        """Test merging config with numeric sensitivity."""
+        result = merge_with_defaults({"detection_sensitivity": 4})
+        assert result.detection_sensitivity == 4
+
+    def test_merge_default_sensitivity(self) -> None:
+        """Test merging without sensitivity uses default."""
+        result = merge_with_defaults({})
+        assert result.detection_sensitivity == 3
+
+
+class TestSensitivityConfigurationError:
+    """Tests for SensitivityConfigurationError exception."""
+
+    def test_exception_message(self) -> None:
+        """Test exception can be created with message."""
+        from src.stealth.cloudflare.exceptions import SensitivityConfigurationError
+
+        error = SensitivityConfigurationError("Invalid sensitivity")
+        assert str(error) == "Invalid sensitivity"
+
+    def test_exception_inheritance(self) -> None:
+        """Test SensitivityConfigurationError inherits from CloudflareConfigError."""
+        from src.stealth.cloudflare.exceptions import (
+            CloudflareConfigError,
+            SensitivityConfigurationError,
+        )
+
+        error = SensitivityConfigurationError("Test")
+        assert isinstance(error, CloudflareConfigError)

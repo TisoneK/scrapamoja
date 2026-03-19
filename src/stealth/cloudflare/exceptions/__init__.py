@@ -29,3 +29,9 @@ class ChallengeTimeoutError(CloudflareConfigError):
     """Raised when challenge wait timeout is exceeded."""
 
     pass
+
+
+class SensitivityConfigurationError(CloudflareConfigError):
+    """Raised when sensitivity configuration is invalid."""
+
+    pass

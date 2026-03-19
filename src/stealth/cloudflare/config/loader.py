@@ -105,9 +105,7 @@ class CloudflareConfigLoader:
             detection_sensitivity=cloudflare_data.get(
                 "detection_sensitivity", data.get("detection_sensitivity", 3)
             ),
-            auto_retry=cloudflare_data.get(
-                "auto_retry", data.get("auto_retry", True)
-            ),
+            auto_retry=cloudflare_data.get("auto_retry", data.get("auto_retry", True)),
         )
 
     @staticmethod

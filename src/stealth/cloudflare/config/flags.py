@@ -1,8 +1,23 @@
 """Flag handling logic for Cloudflare configuration."""
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from src.stealth.cloudflare.models.config import CloudflareConfig
+from src.stealth.cloudflare.models.sensitivity import parse_sensitivity_value
+
+
+def _parse_sensitivity(sensitivity: Union[int, str, None]) -> int:
+    """Parse sensitivity value to integer.
+
+    Args:
+        sensitivity: Sensitivity value as int, str, or None.
+
+    Returns:
+        Numeric sensitivity value (1-5).
+    """
+    if sensitivity is None:
+        return 3  # Default
+    return parse_sensitivity_value(sensitivity)
 
 
 def is_cloudflare_enabled(
@@ -17,6 +32,7 @@ def is_cloudflare_enabled(
     Args:
         config: Configuration in one of these formats:
             - dict with cloudflare_protected key
+            - dict with nested {"cloudflare": {"cloudflare_protected": True}} format
             - CloudflareConfig instance
             - CloudflareConfigSchema instance
             - None or empty
@@ -34,7 +50,14 @@ def is_cloudflare_enabled(
         return config.is_enabled()
 
     if isinstance(config, dict):
-        return bool(config.get("cloudflare_protected", False))
+        # Check top-level first
+        if config.get("cloudflare_protected", False):
+            return True
+        # Also check nested {"cloudflare": {...}} format
+        cloudflare_data = config.get("cloudflare")
+        if isinstance(cloudflare_data, dict):
+            return bool(cloudflare_data.get("cloudflare_protected", False))
+        return False
 
     return False
 
@@ -66,14 +89,17 @@ def extract_cloudflare_config(
     if not is_enabled:
         return None
 
+    # Get sensitivity value (string or int)
+    sensitivity_input = cloudflare_data.get(
+        "detection_sensitivity", config.get("detection_sensitivity")
+    )
+
     return CloudflareConfig(
         cloudflare_protected=is_enabled,
         challenge_timeout=cloudflare_data.get(
             "challenge_timeout", config.get("challenge_timeout", 30)
         ),
-        detection_sensitivity=cloudflare_data.get(
-            "detection_sensitivity", config.get("detection_sensitivity", 3)
-        ),
+        detection_sensitivity=_parse_sensitivity(sensitivity_input),
         auto_retry=cloudflare_data.get("auto_retry", config.get("auto_retry", True)),
     )
 
@@ -92,9 +118,12 @@ def merge_with_defaults(
     if config is None:
         return CloudflareConfig()
 
+    # Get sensitivity value (string or int)
+    sensitivity_input = config.get("detection_sensitivity")
+
     return CloudflareConfig(
         cloudflare_protected=config.get("cloudflare_protected", False),
         challenge_timeout=config.get("challenge_timeout", 30),
-        detection_sensitivity=config.get("detection_sensitivity", 3),
+        detection_sensitivity=_parse_sensitivity(sensitivity_input),
         auto_retry=config.get("auto_retry", True),
     )

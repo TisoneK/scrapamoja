@@ -1,8 +1,13 @@
 """Cloudflare configuration model."""
 
-from typing import Any
+from typing import Any, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from src.stealth.cloudflare.models.sensitivity import (
+    parse_sensitivity_value,
+    SensitivityConfigurationError,
+)
 
 
 class CloudflareConfig(BaseModel):
@@ -14,7 +19,8 @@ class CloudflareConfig(BaseModel):
     Attributes:
         cloudflare_protected: Whether Cloudflare protection is enabled for the site.
         challenge_timeout: Maximum time to wait for challenge completion (seconds).
-        detection_sensitivity: Sensitivity level for challenge detection (1-5).
+        detection_sensitivity: Sensitivity level for challenge detection (1-5) or
+            string value ("high", "medium", "low").
         auto_retry: Whether to automatically retry on challenge failure.
     """
 
@@ -28,11 +34,9 @@ class CloudflareConfig(BaseModel):
         le=300,
         description="Maximum wait time for challenge completion in seconds",
     )
-    detection_sensitivity: int = Field(
+    detection_sensitivity: Union[int, str] = Field(
         default=3,
-        ge=1,
-        le=5,
-        description="Challenge detection sensitivity level (1=low, 5=high)",
+        description="Challenge detection sensitivity level (1-5 or 'high', 'medium', 'low')",
     )
     auto_retry: bool = Field(
         default=True,
@@ -40,6 +44,27 @@ class CloudflareConfig(BaseModel):
     )
 
     model_config = ConfigDict(frozen=False, validate_assignment=True)
+
+    @field_validator("detection_sensitivity", mode="before")
+    @classmethod
+    def _parse_sensitivity(cls, v: Union[int, str]) -> int:
+        """Parse detection_sensitivity from string or int to int.
+
+        Args:
+            v: The sensitivity value (1-5 or "high", "medium", "low").
+
+        Returns:
+            The numeric sensitivity value (1-5).
+
+        Raises:
+            ValueError: If sensitivity value is invalid.
+        """
+        try:
+            if isinstance(v, str) or isinstance(v, int):
+                return parse_sensitivity_value(v)
+            return v
+        except SensitivityConfigurationError as e:
+            raise ValueError(str(e)) from e
 
     def is_enabled(self) -> bool:
         """Check if Cloudflare protection is enabled.

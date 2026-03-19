@@ -1,8 +1,14 @@
 """Pydantic validation schema for Cloudflare configuration."""
 
-from typing import Any
+from typing import Any, Union
 
 from pydantic import BaseModel, Field, field_validator
+
+from src.stealth.cloudflare.models.sensitivity import (
+    SensitivityConfigurationError,
+    VALID_SENSITIVITY_STRINGS,
+    parse_sensitivity_value,
+)
 
 
 class CloudflareConfigSchema(BaseModel):
@@ -14,7 +20,7 @@ class CloudflareConfigSchema(BaseModel):
     Attributes:
         cloudflare_protected: Whether Cloudflare protection is enabled.
         challenge_timeout: Maximum time to wait for challenge (seconds).
-        detection_sensitivity: Challenge detection sensitivity (1-5).
+        detection_sensitivity: Challenge detection sensitivity (1-5 or 'high', 'medium', 'low').
         auto_retry: Whether to automatically retry on failure.
     """
 
@@ -28,11 +34,9 @@ class CloudflareConfigSchema(BaseModel):
         le=300,
         description="Maximum wait time for challenge completion",
     )
-    detection_sensitivity: int = Field(
+    detection_sensitivity: Union[int, str] = Field(
         default=3,
-        ge=1,
-        le=5,
-        description="Detection sensitivity level",
+        description="Detection sensitivity level (1-5 or 'high', 'medium', 'low')",
     )
     auto_retry: bool = Field(
         default=True,
@@ -58,24 +62,35 @@ class CloudflareConfigSchema(BaseModel):
             raise ValueError(msg)
         return v
 
-    @field_validator("detection_sensitivity")
+    @field_validator("detection_sensitivity", mode="before")
     @classmethod
-    def validate_detection_sensitivity(cls, v: int) -> int:
+    def validate_detection_sensitivity(cls, v: Union[int, str]) -> int:
         """Validate detection sensitivity value.
 
         Args:
-            v: The sensitivity level (1-5).
+            v: The sensitivity level (1-5 or "high", "medium", "low").
 
         Returns:
-            The validated sensitivity value.
+            The validated sensitivity value (1-5).
 
         Raises:
-            ValueError: If sensitivity is out of valid range.
+            ValueError: If sensitivity is invalid.
         """
-        if v < 1 or v > 5:
-            msg = "detection_sensitivity must be between 1 and 5"
-            raise ValueError(msg)
-        return v
+        # If it's a string, validate it's a valid string value first
+        if isinstance(v, str):
+            normalized = v.lower().strip()
+            if normalized not in VALID_SENSITIVITY_STRINGS:
+                valid_options = list(VALID_SENSITIVITY_STRINGS) + ["1-5"]
+                msg = (
+                    f"detection_sensitivity must be one of: {', '.join(valid_options)}"
+                )
+                raise ValueError(msg)
+
+        # Parse the value (handles both string and int)
+        try:
+            return parse_sensitivity_value(v)
+        except SensitivityConfigurationError as e:
+            raise ValueError(str(e)) from e
 
     def to_dict(self) -> dict[str, Any]:
         """Convert schema to dictionary.
