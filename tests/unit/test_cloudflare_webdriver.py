@@ -107,23 +107,23 @@ class TestWebdriverMasker:
 
     @pytest.mark.asyncio
     async def test_apply_raises_on_invalid_context(self) -> None:
-        """Test that apply raises TypeError on invalid context."""
+        """Test that apply raises WebdriverMaskerError on invalid context."""
         masker = WebdriverMasker()
 
         # Context without add_init_script method
         mock_context = MagicMock(spec=[])  # Empty spec means no methods
 
-        with pytest.raises(TypeError, match="add_init_script"):
+        with pytest.raises(WebdriverMaskerError, match="add_init_script"):
             await masker.apply(mock_context, enabled=True)
 
     @pytest.mark.asyncio
-    async def test_remove_logs_request(self) -> None:
-        """Test that remove logs the request (actual removal not supported)."""
+    async def test_acknowledge_removal_limitation(self) -> None:
+        """Test that acknowledge_removal_limitation logs the limitation."""
         masker = WebdriverMasker()
         masker._enabled = True
         mock_context = MagicMock()
 
-        await masker.remove(mock_context)
+        await masker.acknowledge_removal_limitation(mock_context)
 
         # Note: enabled state remains as init scripts can't be removed
         assert masker.enabled is True
@@ -160,6 +160,7 @@ class TestWebdriverMaskerScript:
 
         assert "Object.defineProperty(navigator, 'webdriver'" in script
         assert "get: function() { return undefined; }" in script
+        assert "configurable: true" in script
 
     def test_script_handles_automation_props(self) -> None:
         """Test that script handles automation properties correctly."""
@@ -170,3 +171,16 @@ class TestWebdriverMaskerScript:
         assert "forEach" in script
         assert "hasOwnProperty" in script
         assert "delete" in script
+
+    @pytest.mark.asyncio
+    async def test_context_manager(self) -> None:
+        """Test that WebdriverMasker works as async context manager."""
+        async with WebdriverMasker() as masker:
+            assert masker.enabled is False
+            mock_context = MagicMock()
+            mock_context.add_init_script = AsyncMock()
+            await masker.apply(mock_context)
+            assert masker.enabled is True
+        # After exiting context, state should be reset
+        assert masker.enabled is False
+        assert masker.applied_count == 0

@@ -9,9 +9,10 @@ Classes:
     WebdriverMasker: Suppresses automation signals in browser contexts.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from src.observability.logger import get_logger
+from src.stealth.cloudflare.exceptions import WebdriverMaskerError
 
 # Initialize logger for this module
 logger = get_logger("cloudflare.webdriver")
@@ -47,7 +48,7 @@ class WebdriverMasker:
         // Suppress navigator.webdriver property
         Object.defineProperty(navigator, 'webdriver', {
             get: function() { return undefined; },
-            configurable: false
+            configurable: true
         });
 
         // Remove common automation detection properties from window
@@ -71,14 +72,6 @@ class WebdriverMasker:
         // Override Chrome runtime detection
         if (window.chrome) {
             window.chrome.runtime = undefined;
-        }
-
-        // Mask automation-related functions
-        const originalAttachShadow = Element.prototype.attachShadow;
-        if (originalAttachShadow) {
-            Element.prototype.attachShadow = function(options) {
-                return originalAttachShadow.call(this, options);
-            };
         }
     })();
     """
@@ -134,7 +127,7 @@ class WebdriverMasker:
             enabled: Whether to enable suppression (default: True).
 
         Raises:
-            TypeError: If the context doesn't support add_init_script.
+            WebdriverMaskerError: If the context doesn't support add_init_script.
         """
         if not enabled:
             logger.debug(
@@ -164,7 +157,7 @@ class WebdriverMasker:
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            raise TypeError("Context must support add_init_script() method") from e
+            raise WebdriverMaskerError("Context must support add_init_script() method") from e
         except Exception as e:
             logger.error(
                 "webdriver_masker_apply_error",
@@ -174,20 +167,19 @@ class WebdriverMasker:
             )
             raise
 
-    async def remove(self, context: Any) -> None:
-        """Remove automation signal suppression from a context.
+    async def acknowledge_removal_limitation(self, context: Any) -> None:
+        """Acknowledge that removal of init scripts is not supported by Playwright.
 
-        Note: This does not fully remove the init script as Playwright
-        doesn't support removal of init scripts. This is primarily for
-        logging and state management purposes.
+        Note: Playwright does not support removal of init scripts once applied.
+        This method exists for logging and state management purposes only.
 
         Args:
             context: A Playwright browser context.
         """
         logger.info(
-            "webdriver_masker_remove_requested",
+            "webdriver_masker_removal_acknowledged",
             component="webdriver_masker",
-            note="init_script_removal_not_supported",
+            note="init_script_removal_not_supported_by_playwright",
         )
         # Note: We keep _enabled state as removing init scripts is not supported
         # The masker will remain enabled for this instance
@@ -204,6 +196,24 @@ class WebdriverMasker:
             "webdriver_masker_state_reset",
             component="webdriver_masker",
         )
+
+    async def __aenter__(self) -> "WebdriverMasker":
+        """Enter async context manager.
+
+        Returns:
+            Self for use in async with statement.
+        """
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Exit async context manager.
+
+        Args:
+            exc_type: Exception type if an exception was raised.
+            exc_val: Exception value if an exception was raised.
+            exc_tb: Exception traceback if an exception was raised.
+        """
+        self.reset_state()
 
     def __repr__(self) -> str:
         """Return a string representation of the masker.
