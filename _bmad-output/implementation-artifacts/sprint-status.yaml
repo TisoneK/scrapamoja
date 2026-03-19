@@ -50,7 +50,7 @@ development_status:
   epic-1: in-progress
   1-1-yaml-cloudflare-flag-configuration: done
   1-2-challenge-wait-timeout-configuration: done
-  1-3-detection-sensitivity-configuration: backlog
+  1-3-detection-sensitivity-configuration: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Stealth/Browser Fingerprinting
