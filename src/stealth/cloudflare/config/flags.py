@@ -6,20 +6,6 @@ from src.stealth.cloudflare.models.config import CloudflareConfig
 from src.stealth.cloudflare.models.sensitivity import parse_sensitivity_value
 
 
-def _parse_sensitivity(sensitivity: Union[int, str, None]) -> int:
-    """Parse sensitivity value to integer.
-
-    Args:
-        sensitivity: Sensitivity value as int, str, or None.
-
-    Returns:
-        Numeric sensitivity value (1-5).
-    """
-    if sensitivity is None:
-        return 3  # Default
-    return parse_sensitivity_value(sensitivity)
-
-
 def is_cloudflare_enabled(
     config: dict[str, Any] | CloudflareConfig | bool | None,
 ) -> bool:
@@ -99,7 +85,7 @@ def extract_cloudflare_config(
         challenge_timeout=cloudflare_data.get(
             "challenge_timeout", config.get("challenge_timeout", 30)
         ),
-        detection_sensitivity=_parse_sensitivity(sensitivity_input),
+        detection_sensitivity=3 if sensitivity_input is None else parse_sensitivity_value(sensitivity_input),
         auto_retry=cloudflare_data.get("auto_retry", config.get("auto_retry", True)),
     )
 
@@ -124,6 +110,6 @@ def merge_with_defaults(
     return CloudflareConfig(
         cloudflare_protected=config.get("cloudflare_protected", False),
         challenge_timeout=config.get("challenge_timeout", 30),
-        detection_sensitivity=_parse_sensitivity(sensitivity_input),
+        detection_sensitivity=3 if sensitivity_input is None else parse_sensitivity_value(sensitivity_input),
         auto_retry=config.get("auto_retry", True),
     )

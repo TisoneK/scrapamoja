@@ -60,9 +60,7 @@ class CloudflareConfig(BaseModel):
             ValueError: If sensitivity value is invalid.
         """
         try:
-            if isinstance(v, str) or isinstance(v, int):
-                return parse_sensitivity_value(v)
-            return v
+            return parse_sensitivity_value(v)
         except SensitivityConfigurationError as e:
             raise ValueError(str(e)) from e
 

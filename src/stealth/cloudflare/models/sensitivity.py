@@ -60,6 +60,9 @@ def parse_sensitivity_value(value: int | str) -> int:
         5
     """
     if isinstance(value, str):
+        if not value or not value.strip():
+            msg = "Sensitivity value cannot be empty or whitespace only"
+            raise SensitivityConfigurationError(msg)
         normalized = value.lower().strip()
         if normalized in _SENSITIVITY_STRING_MAP:
             return _SENSITIVITY_STRING_MAP[normalized].value
@@ -67,11 +70,19 @@ def parse_sensitivity_value(value: int | str) -> int:
         msg = f"Invalid sensitivity value: '{value}'. Must be one of: {', '.join(VALID_SENSITIVITY_STRINGS)} or 1-5"
         raise SensitivityConfigurationError(msg)
 
+    if isinstance(value, bool):
+        msg = f"Invalid sensitivity value: {value}. Must be an integer 1-5 or string 'low'/'medium'/'high'"
+        raise SensitivityConfigurationError(msg)
+
     if isinstance(value, int):
         if value < 1 or value > 5:
             msg = f"Invalid sensitivity value: {value}. Must be between 1 and 5"
             raise SensitivityConfigurationError(msg)
         return value
+
+    if isinstance(value, float):
+        msg = f"Invalid sensitivity value: {value}. Must be an integer 1-5 or string 'low'/'medium'/'high', not float"
+        raise SensitivityConfigurationError(msg)
 
     # This should never be reached given the type annotation
     # but kept for safety
@@ -105,8 +116,9 @@ def sensitivity_to_string(value: int) -> str:
         raise SensitivityConfigurationError(msg)
 
     # Map numeric ranges to string values
-    if value <= 2:
+    # LOW covers values 1-2 (LOW.value=1, so <= 2 maps to "low")
+    if value <= SensitivityLevel.LOW.value + 1:
         return "low"
-    if value == 3:
+    if value == SensitivityLevel.MEDIUM.value:
         return "medium"
     return "high"
