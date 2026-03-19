@@ -24,7 +24,7 @@ class CloudflareConfigSchema(BaseModel):
     )
     challenge_timeout: int = Field(
         default=30,
-        ge=1,
+        ge=5,
         le=300,
         description="Maximum wait time for challenge completion",
     )
@@ -53,8 +53,8 @@ class CloudflareConfigSchema(BaseModel):
         Raises:
             ValueError: If timeout is out of valid range.
         """
-        if v < 1 or v > 300:
-            msg = "challenge_timeout must be between 1 and 300 seconds"
+        if v < 5 or v > 300:
+            msg = "challenge_timeout must be between 5 and 300 seconds"
             raise ValueError(msg)
         return v
 

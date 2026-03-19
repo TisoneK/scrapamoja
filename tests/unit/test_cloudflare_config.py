@@ -87,6 +87,23 @@ class TestCloudflareConfigValidation:
         with pytest.raises(ValidationError):
             CloudflareConfig(challenge_timeout=0)
 
+    def test_invalid_timeout_below_5(self) -> None:
+        """Test config rejects timeout below 5 seconds."""
+        with pytest.raises(ValidationError):
+            CloudflareConfig(challenge_timeout=4)
+
+    def test_valid_timeout_minimum(self) -> None:
+        """Test config accepts minimum valid timeout of 5 seconds."""
+        config = CloudflareConfig(challenge_timeout=5)
+        assert config.challenge_timeout == 5
+
+    def test_valid_timeout_boundary_values(self) -> None:
+        """Test config accepts boundary timeout values."""
+        config_min = CloudflareConfig(challenge_timeout=5)
+        config_max = CloudflareConfig(challenge_timeout=300)
+        assert config_min.challenge_timeout == 5
+        assert config_max.challenge_timeout == 300
+
     def test_invalid_timeout_too_high(self) -> None:
         """Test config rejects timeout above maximum."""
         with pytest.raises(ValidationError):
@@ -294,3 +311,138 @@ auto_retry: false
         loader = CloudflareConfigLoader(config_file)
         with pytest.raises(CloudflareConfigLoadError):
             loader.load()
+
+
+class TestChallengeTimeoutError:
+    """Tests for ChallengeTimeoutError exception."""
+
+    def test_exception_message(self) -> None:
+        """Test exception can be created with message."""
+        from src.stealth.cloudflare.exceptions import ChallengeTimeoutError
+
+        error = ChallengeTimeoutError("Timeout exceeded")
+        assert str(error) == "Timeout exceeded"
+
+    def test_exception_inheritance(self) -> None:
+        """Test ChallengeTimeoutError inherits from CloudflareConfigError."""
+        from src.stealth.cloudflare.exceptions import (
+            ChallengeTimeoutError,
+            CloudflareConfigError,
+        )
+
+        error = ChallengeTimeoutError("Test")
+        assert isinstance(error, CloudflareConfigError)
+
+
+class TestChallengeWaiter:
+    """Tests for ChallengeWaiter class."""
+
+    def test_waiter_initialization(self) -> None:
+        """Test ChallengeWaiter initializes with correct values."""
+        from src.stealth.cloudflare.core.waiter import ChallengeWaiter
+
+        config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=60)
+        # Mock page object
+        mock_page = None
+        waiter = ChallengeWaiter(config, mock_page)
+        assert waiter.get_timeout_seconds() == 60
+
+    def test_waiter_custom_check_interval(self) -> None:
+        """Test ChallengeWaiter accepts custom check interval."""
+        from src.stealth.cloudflare.core.waiter import ChallengeWaiter
+
+        config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
+        mock_page = None
+        waiter = ChallengeWaiter(config, mock_page, check_interval=0.5)
+        assert waiter.check_interval == 0.5
+
+    def test_get_timeout_seconds(self) -> None:
+        """Test get_timeout_seconds returns correct value."""
+        from src.stealth.cloudflare.core.waiter import ChallengeWaiter
+
+        config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=120)
+        mock_page = None
+        waiter = ChallengeWaiter(config, mock_page)
+        assert waiter.get_timeout_seconds() == 120
+
+    @pytest.mark.asyncio
+    async def test_waiter_context_manager(self) -> None:
+        """Test ChallengeWaiter async context manager."""
+        from src.stealth.cloudflare.core.waiter import ChallengeWaiter
+
+        config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
+        mock_page = None
+
+        async with ChallengeWaiter(config, mock_page) as waiter:
+            assert waiter.get_timeout_seconds() == 30
+
+    @pytest.mark.asyncio
+    async def test_wait_for_challenge_resolved_immediate(self) -> None:
+        """Test wait resolves immediately when check returns True."""
+        from src.stealth.cloudflare.core.waiter import ChallengeWaiter
+        from src.stealth.cloudflare.exceptions import ChallengeTimeoutError
+
+        config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
+        mock_page = None
+
+        # Check function that returns True immediately
+        async def quick_check() -> bool:
+            return True
+
+        async with ChallengeWaiter(config, mock_page) as waiter:
+            result = await waiter.wait_for_challenge_resolved(quick_check)
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_wait_for_challenge_timeout(self) -> None:
+        """Test wait raises ChallengeTimeoutError on timeout."""
+        from src.stealth.cloudflare.core.waiter import ChallengeWaiter, wait_for_challenge
+        from src.stealth.cloudflare.exceptions import ChallengeTimeoutError
+
+        config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
+        mock_page = None
+
+        # Check function that always returns False - use timeout override for fast test
+        async def never_resolve() -> bool:
+            return False
+
+        # Use wait_for_challenge with timeout override for fast testing (minimum valid is 5)
+        with pytest.raises(ChallengeTimeoutError):
+            await wait_for_challenge(config, mock_page, never_resolve, timeout=5)
+
+
+class TestWaitForChallenge:
+    """Tests for wait_for_challenge convenience function."""
+
+    @pytest.mark.asyncio
+    async def test_wait_for_challenge_with_custom_timeout(self) -> None:
+        """Test wait_for_challenge accepts timeout override."""
+        from src.stealth.cloudflare.core.waiter import wait_for_challenge
+
+        config = CloudflareConfig(cloudflare_protected=True, challenge_timeout=30)
+        mock_page = None
+
+        async def quick_check() -> bool:
+            return True
+
+        result = await wait_for_challenge(config, mock_page, quick_check, timeout=60)
+        assert result is True
+
+
+class TestIsWaitEnabled:
+    """Tests for is_wait_enabled function."""
+
+    def test_true_when_cloudflare_enabled(self) -> None:
+        """Test returns True when Cloudflare is enabled."""
+        from src.stealth.cloudflare.core.waiter import is_wait_enabled
+
+        assert is_wait_enabled(True) is True
+        assert is_wait_enabled({"cloudflare_protected": True}) is True
+
+    def test_false_when_cloudflare_disabled(self) -> None:
+        """Test returns False when Cloudflare is disabled."""
+        from src.stealth.cloudflare.core.waiter import is_wait_enabled
+
+        assert is_wait_enabled(False) is False
+        assert is_wait_enabled({}) is False
+        assert is_wait_enabled(None) is False

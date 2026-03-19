@@ -1,6 +1,6 @@
 # Story 1.2: Challenge Wait Timeout Configuration
 
-**Status:** ready-for-dev
+**Status:** done
 
 **Epic:** 1 - Configuration Management
 **Story Key:** 1-2-challenge-wait-timeout-configuration

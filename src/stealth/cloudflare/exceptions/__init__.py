@@ -23,3 +23,9 @@ class CloudflareConfigNotFoundError(CloudflareConfigError):
     """Raised when Cloudflare configuration file is not found."""
 
     pass
+
+
+class ChallengeTimeoutError(CloudflareConfigError):
+    """Raised when challenge wait timeout is exceeded."""
+
+    pass

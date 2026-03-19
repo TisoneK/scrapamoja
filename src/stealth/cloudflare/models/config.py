@@ -24,7 +24,7 @@ class CloudflareConfig(BaseModel):
     )
     challenge_timeout: int = Field(
         default=30,
-        ge=1,
+        ge=5,
         le=300,
         description="Maximum wait time for challenge completion in seconds",
     )
