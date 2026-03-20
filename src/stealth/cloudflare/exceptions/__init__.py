@@ -41,3 +41,9 @@ class WebdriverMaskerError(CloudflareConfigError):
     """Raised when webdriver signal suppression fails."""
 
     pass
+
+
+class FingerprintRandomizerError(CloudflareConfigError):
+    """Raised when fingerprint randomization fails."""
+
+    pass
