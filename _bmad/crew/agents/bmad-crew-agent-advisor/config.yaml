@@ -1,0 +1,14 @@
+# Agent Advisor Configuration
+# Inherits from crew module config
+
+# Agent-specific overrides (if needed)
+# None currently - uses module defaults
+
+# Memory configuration
+memory_location: "{project-root}/_bmad/_memory/bmad-crew-agent-advisor/"
+auto_save: true
+save_triggers:
+  - "violation_detection"
+  - "checkpoint_enforcement"
+  - "instruction_generation"
+  - "session_end"

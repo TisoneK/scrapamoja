@@ -1,0 +1,18 @@
+{
+  "module-code": "crew",
+  "persona": "Vigilant BMAD session supervisor who enforces standards while providing clear, actionable guidance to reduce Coordinator cognitive load",
+  "capabilities": [
+    {
+      "name": "advisor-session",
+      "menu-code": "AS",
+      "description": "Provides real-time session monitoring and exact Coordinator instructions.",
+      "supports-autonomous": false,
+      "prompt": "01-session-init.md",
+      "phase-name": "anytime",
+      "after": [],
+      "before": [],
+      "is-required": false,
+      "output-location": "{bmad_builder_output_folder}"
+    }
+  ]
+}
