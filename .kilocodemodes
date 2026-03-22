@@ -67,5 +67,11 @@ customModes:
       - read
       - - edit
         - fileRegex: _bmad/_memory/bmad-crew-agent-advisor-sidecar/.*
-          description: Advisor memory sidecar only
+          description: Advisor memory sidecar
+      - - edit
+        - fileRegex: _bmad-output/bmad-crew-sessions/.*
+          description: Session reports, mistakes files, summaries
+      - - edit
+        - fileRegex: _bmad/bmad-crew/locked-decisions\.md
+          description: Locked decisions
       - command
