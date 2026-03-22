@@ -1,0 +1,15 @@
+{
+  "module-code": "crew",
+  "capabilities": [
+    {
+      "name": "session-validation",
+      "menu-code": "SV",
+      "description": "Validates session state and detects violations with structured reporting.",
+      "supports-autonomous": true,
+      "phase-name": "anytime",
+      "after": [],
+      "before": ["bmad-crew-advisor"],
+      "is-required": true
+    }
+  ]
+}

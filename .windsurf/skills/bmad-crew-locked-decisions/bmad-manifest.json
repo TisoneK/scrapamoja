@@ -1,0 +1,15 @@
+{
+  "module-code": "crew",
+  "capabilities": [
+    {
+      "name": "locked-decisions-management",
+      "menu-code": "LD",
+      "description": "Manages locked decisions document and handles decision challenges.",
+      "supports-autonomous": true,
+      "phase-name": "anytime",
+      "after": [],
+      "before": ["bmad-crew-advisor"],
+      "is-required": false
+    }
+  ]
+}

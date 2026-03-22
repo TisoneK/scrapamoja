@@ -1,0 +1,15 @@
+{
+  "module-code": "crew",
+  "capabilities": [
+    {
+      "name": "checkpoint-enforcement",
+      "menu-code": "CE",
+      "description": "Validates checkpoint compliance and provides correction instructions.",
+      "supports-autonomous": true,
+      "phase-name": "anytime",
+      "after": ["bmad-crew-session-validator"],
+      "before": ["bmad-crew-advisor"],
+      "is-required": true
+    }
+  ]
+}
