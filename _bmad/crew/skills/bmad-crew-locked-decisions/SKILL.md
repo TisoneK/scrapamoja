@@ -18,7 +18,7 @@ This skill manages living document of locked decisions and handles pushback rule
 
 ## Process
 
-1. **Load config via bmad-init skill** — Store all returned vars for use:
+1. **Load config** — Read `{project-root}/_bmad/core/config.yaml`. Store all vars for use:
    - Use `{user_name}` from config for context
    - Use `{communication_language}` for all communications
    - Use `{document_output_language}` for output documents

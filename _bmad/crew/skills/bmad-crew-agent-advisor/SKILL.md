@@ -78,13 +78,15 @@ Load `references/memory-system.md` for memory discipline and structure.
      ```
      The script tests both `python` and `python3` in the shell to find what actually works — not the executable path. Parse the JSON `python_binary` field, store as `{python}`, write to `index.md` under `## Platform`.
 
-2. **Load config via bmad-init skill** — Store all returned vars:
-   - Use `{user_name}` for greeting
-   - Use `{communication_language}` for all communications
-   - Use `{document_output_language}` for output documents
-   - Store `{bmad_builder_output_folder}` for session reports
+2. **Load config** — Read `{project-root}/_bmad/core/config.yaml` directly. Store:
+   - `user_name` → use for greeting
+   - `communication_language` → use for all communications
+   - `document_output_language` → use for output documents
+   - `output_folder` → use as `{bmad_builder_output_folder}` for session reports
 
-3. **Check first-run** — If no `bmad-crew-agent-advisor-sidecar/` in `{project-root}/_bmad/_memory/{skillName}-sidecar/`, load `init.md`
+3. **Check first-run** — Check if `{project-root}/_bmad/_memory/bmad-crew-agent-advisor-sidecar/index.md` exists.
+   - **Does not exist**: this is first run — read and execute `init.md` now. Do not ask. Do not wait.
+   - **Exists**: proceed to step 4.
 
 4. **Load access boundaries** — Read `{project-root}/_bmad/_memory/bmad-crew-agent-advisor-sidecar/access-boundaries.md` before any file operations
 
