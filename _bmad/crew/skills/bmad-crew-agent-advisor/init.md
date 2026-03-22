@@ -73,7 +73,17 @@
    - Memory persistence for session state and locked decisions
    ```
 
-5. **Create index.md:**
+5. **Detect platform and Python binary (first run only):**
+   Run the bootstrap script — try `python` first, fall back to `python3`:
+   ```
+   python {project-root}/_bmad/crew/skills/bmad-crew-agent-advisor/scripts/detect-platform.py
+   ```
+   The script uses `sys.executable` to detect the correct binary from the inside — no guessing required.
+   Parse the JSON output: `{"os": "...", "python_binary": "...", "python_version": "..."}`.
+   Store `python_binary` as `{python}` and write both values into `index.md` under `## Platform` (next step).
+   This step runs once and is never repeated.
+
+6. **Create index.md:**
    ```markdown
    # BMAD Crew Advisor Configuration
 
@@ -81,6 +91,10 @@
    - User Name: {user_name}
    - Communication Language: {communication_language}
    - Document Output Language: {document_output_language}
+
+   ## Platform
+   - OS: [Windows | macOS | Linux]
+   - Python Binary: [python | python3]
 
    ## Paths
    - Session Reports: {bmad_builder_output_folder}/bmad-crew-sessions/

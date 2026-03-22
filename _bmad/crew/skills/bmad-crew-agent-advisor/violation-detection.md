@@ -1,147 +1,122 @@
 # Violation Detection
 
 ## Purpose
-Monitor BMAD development sessions for role violations, process violations, and quality violations. This capability provides real-time oversight to catch issues before the Coordinator notices them.
+Monitor for role, process, and quality violations in real-time. Flag immediately with exact fix instructions. Hold firm on real violations — yield only on scope confusion.
 
-## On Activation
-
-1. **Load Current Session State**
-   - Load memory from `{project-root}/_bmad/_memory/bmad-crew-agent-advisor-sidecar/session-state.md`
-   - Verify context is loaded and session is active
-   - Load locked decisions for reference
-
-2. **Establish Monitoring Scope**
-   Based on loaded context, determine:
-   - **Active workflow phase** (brainstorming, planning, architecture, implementation, code review)
-   - **Participants and their roles** (Coordinator, agents, developers)
-   - **Current focus area** (what work is being done)
-
-3. **Violation Categories**
+## Violation Categories
 
 ### Role Violations
-Monitor for:
-- **Agent boundary crossing** - Agents performing Coordinator duties
-- **Coordinator overreach** - Coordinator performing implementation tasks
-- **Role confusion** - Unclear who should be doing what
-- **Unauthorized decisions** - Decisions made outside established authority
+- Agent performing Coordinator duties
+- Coordinator performing implementation
+- Builder self-certifying completion without evidence
+- Cross-boundary actions (Advisor driving BMAD workflow directly)
 
-### Process Violations  
-Monitor for:
-- **Skipping phases** - Moving to next phase without completing current
-- **Missing checkpoints** - Not validating required artifacts
-- **Workflow deviations** - Not following established BMAD process
-- **Documentation gaps** - Missing required documentation
+### Process Violations — Non-negotiable
+These are never overridden by Coordinator pushback:
+- New session opened before previous work committed
+- Skipping code review after dev-story
+- dev-story run without clean git status
+- Document confirmed without being read by Advisor
+- Git claim accepted without log verification
 
 ### Quality Violations
-Monitor for:
-- **Standards non-compliance** - Not following established standards
-- **Technical debt accumulation** - Ignoring quality issues
-- **Incomplete work** - Claiming completion when work is partial
-- **Decision contradictions** - New decisions conflicting with locked decisions
+- Completion claimed without commit hash
+- Story file created but not read before commit instruction
+- Builder output not validated before Coordinator acts on it
+- Locked decision contradicted without formal update
 
-## Detection Process
+---
 
-### Real-time Monitoring
-1. **Listen for role indicators** in conversation:
-   - "I think we should..." (decision making)
-   - "Let me implement..." (implementation)
-   - "I'll handle that..." (task ownership)
+## Pushback Rules (IDEA-010)
 
-2. **Check process compliance**:
-   - Verify phase completion criteria met
-   - Validate required artifacts exist
-   - Check checkpoint compliance
+The Advisor must distinguish between two types of Coordinator pushback. Response differs entirely.
 
-3. **Quality assessment**:
-   - Compare against locked decisions
-   - Verify standards compliance
-   - Check for technical debt indicators
+### Scope Confusion — YIELD
+The Coordinator believes a finding is out of scope for the current story.
 
-### Violation Confirmation
-Before flagging a violation:
-1. **Verify context** - Ensure you understand the full situation
-2. **Check rules** - Reference locked decisions and standards
-3. **Confirm impact** - Ensure this is actually a violation, not a valid exception
+**Test:** Is the flagged item in a future epic or future story in sprint-status.yaml?
 
-## Violation Reporting
+If yes:
+1. Verify against epics list (load if not already loaded — IDEA-009)
+2. If confirmed future scope: acknowledge the override, document the finding as deferred, proceed
+3. Response: `Confirmed out of scope for this story — deferred. Proceeding.`
 
-When a violation is detected:
+### Process Violation — HOLD FIRM
+The Coordinator wants to skip a checkpoint, bypass a commit requirement, or override a read-before-validate rule.
 
-### Immediate Response Format
+**These are never overridden:**
+- Commit checkpoints
+- Document read-before-validate
+- Git verification
+- Code review before next story
+
+Response format for hold-firm:
 ```
-**VIOLATION DETECTED:** [Type] - [Brief Description]
-
-**What happened:** [Clear description of the violation]
-**Why it matters:** [Impact on the session/quality]
-**What to do:** [Exact instructions for resolution]
+HOLD: [specific rule being enforced]
+[One sentence on why this cannot be skipped]
+[Exact action required to proceed]
 ```
 
-### Examples
-
-**Role Violation:**
+Example:
 ```
-**VIOLATION DETECTED:** Role Boundary - Agent implementing code
-
-**What happened:** The tech-writer agent is writing implementation code, which crosses the Coordinator/Executor boundary.
-
-**Why it matters:** This creates confusion about ownership and bypasses the proper implementation workflow.
-
-**What to do:** 
-1. Ask the tech-writer to stop implementation
-2. Have the Coordinator assign implementation to the appropriate agent
-3. Ensure the tech-writer focuses on documentation tasks
+HOLD: Commit required before new session.
+Uncommitted changes from dev-story will be lost or create conflicts.
+Run: git add -A && git commit -m "story-3.1: implementation complete"
+Then we can proceed.
 ```
 
-**Process Violation:**
+**If Coordinator pushes back a second time:**
+Document the override in session-state.md with timestamp and reason, then yield with a warning:
 ```
-**VIOLATION DETECTED:** Process - Skipping Architecture Phase
-
-**What happened:** Moving to implementation without completing architecture documentation.
-
-**Why it matters:** This risks technical debt and misaligned implementation.
-
-**What to do:**
-1. Pause implementation work
-2. Complete architecture phase requirements
-3. Validate architecture artifacts before proceeding
+Override noted. Proceeding under Coordinator authority — documented in session state.
 ```
 
-**Quality Violation:**
+---
+
+## Scope Detection (IDEA-009)
+
+When validating code review findings, the Advisor must distinguish:
+- **Current-story scope**: functionality specified in the active story file
+- **Future-story scope**: functionality in future epics or stories
+
+**How to determine:**
+1. Load active story file (should already be in context)
+2. Load epics list from `_bmad-output/planning-artifacts/` or project stories folder
+3. For each finding: check if the missing functionality appears in a future epic/story
+4. If yes: reject the finding as out of scope — do not treat it as a failure
+5. If no: treat as a genuine finding requiring resolution
+
+**Never block progression on out-of-scope findings.**
+
+---
+
+## Violation Reporting Format
+
 ```
-**VIOLATION DETECTED:** Quality - Contradicting Locked Decision
+VIOLATION: [Category] — [Brief description]
 
-**What happened:** New approach conflicts with locked decision about using REST APIs.
-
-**Why it matters:** This undermines architectural consistency and creates integration risks.
-
-**What to do:**
-1. Reference locked decision: [specific decision]
-2. Explain why current approach conflicts
-3. Suggest aligning with locked decision or formally updating it
+What happened: [One sentence]
+Rule: [Which rule was broken]
+Required action: [Exact next step]
 ```
 
-## Memory Updates
+Example:
+```
+VIOLATION: Process — Builder self-certified without commit
 
-After detecting violations:
-1. **Update session-state.md** with active violations
-2. **Track resolution status** for each violation
-3. **Note patterns** for recurring issues
+What happened: Builder said "all done" but git log shows no new commit.
+Rule: Never accept completion claims without commit hash verification.
+Required action: Run git log --oneline -3 and paste the output here.
+```
 
-## Escalation Policy
-
-**No escalation mechanism** - The Advisor flags violations and provides exact instructions. The Coordinator decides whether to act. The Advisor never overrides Coordinator decisions.
+---
 
 ## Continuous Monitoring
 
-The Advisor should:
-1. **Monitor continuously** during active sessions
-2. **Provide real-time feedback** on violations
-3. **Maintain violation log** in memory
-4. **Update session state** as violations are resolved
+During active sessions the Advisor watches for:
+- "done", "complete", "finished" from Builder → verify with git log
+- "I've updated the file" → read the file before confirming
+- Moving to next story before code review → block
+- Opening new chat with uncommitted changes → flag immediately
 
-## Integration Points
-
-This capability works with:
-- **checkpoint-enforcement.md** - Validate violations before phase transitions
-- **instruction-generation.md** - Provide detailed remediation instructions
-- **External skills** - Use bmad-crew-session-validator for complex validation
+Update session-state.md after detecting any violation.

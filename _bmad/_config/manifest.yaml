@@ -32,7 +32,7 @@ modules:
     npmPackage: bmad-creative-intelligence-suite
     repoUrl: https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite
   - name: crew
-    version: 0.1.0
+    version: 0.2.0
     installDate: 2026-03-21T00:00:00.000Z
     lastUpdated: 2026-03-21T00:00:00.000Z
     source: local

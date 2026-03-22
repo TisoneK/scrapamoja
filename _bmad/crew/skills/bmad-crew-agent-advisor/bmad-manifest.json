@@ -1,55 +1,85 @@
 {
   "module-code": "crew",
-  "persona": "Vigilant BMAD session supervisor who enforces standards while providing clear, actionable guidance to reduce Coordinator cognitive load",
+  "replaces-skill": "bmad-crew-agent-advisor",
+  "persona": "Terse BMAD session supervisor who reads before trusting, validates before progressing, and gives the Coordinator exactly one next command at a time. Enforces all checkpoints across the full lifecycle.",
   "has-memory": true,
   "capabilities": [
     {
-      "name": "advisor-session",
-      "menu-code": "AS",
-      "description": "Provides real-time session monitoring and exact Coordinator instructions.",
+      "name": "session-init",
+      "menu-code": "SI",
+      "description": "Auto-discovers artifacts, loads context, validates git state.",
       "supports-autonomous": false,
       "prompt": "session-init.md",
       "phase-name": "anytime",
       "after": [],
-      "before": [],
-      "is-required": false,
-      "output-location": "{bmad_builder_output_folder}"
+      "before": ["violation-detection", "checkpoint-enforcement"],
+      "is-required": false
     },
     {
       "name": "violation-detection",
       "menu-code": "VD",
-      "description": "Monitors for role, process, and quality violations in real-time.",
+      "description": "Monitors for role, process, and quality violations with pushback rules.",
       "supports-autonomous": false,
       "prompt": "violation-detection.md",
       "phase-name": "anytime",
-      "after": ["advisor-session"],
+      "after": ["session-init"],
       "before": ["checkpoint-enforcement"],
-      "is-required": false,
-      "output-location": "{bmad_builder_output_folder}"
+      "is-required": false
     },
     {
       "name": "checkpoint-enforcement",
       "menu-code": "CE",
-      "description": "Validates checkpoints and enforces phase transition compliance.",
+      "description": "Validates all gates including full lifecycle commit checkpoints and summary files.",
       "supports-autonomous": false,
       "prompt": "checkpoint-enforcement.md",
       "phase-name": "anytime",
-      "after": ["violation-detection"],
+      "after": ["violation-detection", "document-verification"],
       "before": ["instruction-generation"],
-      "is-required": false,
-      "output-location": "{bmad_builder_output_folder}"
+      "is-required": false
+    },
+    {
+      "name": "document-verification",
+      "menu-code": "DV",
+      "description": "Reads and validates all Builder outputs before Coordinator acts.",
+      "supports-autonomous": false,
+      "prompt": "document-verification.md",
+      "phase-name": "anytime",
+      "after": ["session-init"],
+      "before": ["checkpoint-enforcement"],
+      "is-required": false
     },
     {
       "name": "instruction-generation",
       "menu-code": "IG",
-      "description": "Generates exact Coordinator instructions for violation remediation.",
+      "description": "Generates one-line next-command instructions with escalation paths.",
       "supports-autonomous": false,
       "prompt": "instruction-generation.md",
       "phase-name": "anytime",
       "after": ["checkpoint-enforcement"],
       "before": [],
-      "is-required": false,
-      "output-location": "{bmad_builder_output_folder}"
+      "is-required": false
+    },
+    {
+      "name": "mistakes-file",
+      "menu-code": "MF",
+      "description": "Generates mandatory ADVISOR_SESSION_MISTAKES_NNN.md after each story cycle.",
+      "supports-autonomous": false,
+      "prompt": "mistakes-file.md",
+      "phase-name": "anytime",
+      "after": ["checkpoint-enforcement"],
+      "before": ["instruction-generation"],
+      "is-required": false
+    },
+    {
+      "name": "save-memory",
+      "menu-code": "SM",
+      "description": "Saves current session state to memory sidecar.",
+      "supports-autonomous": false,
+      "prompt": "save-memory.md",
+      "phase-name": "anytime",
+      "after": [],
+      "before": [],
+      "is-required": false
     }
   ]
 }

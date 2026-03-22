@@ -1,200 +1,166 @@
 # Checkpoint Enforcement
 
 ## Purpose
-Validate required artifacts and compliance before allowing phase transitions. This capability ensures BMAD process integrity by enforcing checkpoint gates.
+Validate all required gates before phase transitions and before any "open a new chat" instruction. Every output-producing BMAD command has a checkpoint. None are optional.
 
-## On Activation
+## Commit Checkpoint — Full Lifecycle (IDEA-002)
 
-1. **Load Session Context**
-   - Load current session state from memory
-   - Identify current phase and attempted transition
-   - Load locked decisions for reference
+Every command that produces output files requires a commit before the next session opens.
 
-2. **Determine Checkpoint Type**
-   Based on transition:
-   - **Brainstorming → Planning** - Ideas validation
-   - **Planning → Architecture** - Requirements completeness
-   - **Architecture → Implementation** - Design readiness
-   - **Implementation → Code Review** - Implementation completeness
-   - **Code Review → Completion** - Quality validation
-
-## Checkpoint Validation Process
-
-### Step 1: Artifact Existence Check
-Use `checkpoint-validator.py` to verify required artifacts:
-```python
-python scripts/checkpoint-validator.py --phase [current-phase] --check-artifacts
+**Validate automatically using:**
+```
+{python} {project-root}/_bmad/crew/skills/bmad-crew-agent-advisor/scripts/git-validator.py --check-commits-after-output
 ```
 
-**Required Artifacts by Phase:**
+**Commands covered:**
+| Command | Commit required before |
+|---------|----------------------|
+| brainstorming | Any new session |
+| create-prd | architecture or epics session |
+| create-architecture | epics or dev session |
+| create-epics-and-stories | first dev session |
+| create-story | dev-story session |
+| dev-story | code-review session |
+| code-review (patches) | next create-story session |
+| retrospective | next sprint session |
 
-**Brainstorming Complete:**
-- Brainstorming session notes
-- Key insights captured
-- Decision log updated
+**If uncommitted changes detected:**
+```
+CHECKPOINT BLOCKED: Uncommitted output from [last command].
 
-**Planning Complete:**
-- Product brief or PRD
-- User stories defined
-- Acceptance criteria clear
+Run:
+git add -A && git commit -m "[descriptive message]"
 
-**Architecture Complete:**
-- Architecture document
-- Technical decisions documented
-- Integration approach defined
-
-**Implementation Complete:**
-- Code implemented
-- Unit tests passing
-- Documentation updated
-
-**Code Review Complete:**
-- Review completed
-- Issues resolved
-- Quality gates passed
-
-### Step 2: Quality Validation
-For each required artifact:
-1. **Read and validate** the artifact content
-2. **Check against standards** and locked decisions
-3. **Verify completeness** and accuracy
-4. **Identify gaps** or issues
-
-### Step 3: Git Status Validation
-Use `git-validator.py` to ensure clean state:
-```python
-python scripts/git-validator.py --check-clean --validate-commits
+Then tell me the commit hash to proceed.
 ```
 
-**Required Git State:**
-- Clean working directory (no uncommitted changes)
-- Meaningful commit messages
-- Proper branch structure (if applicable)
+## Git Validation (IDEA-004)
 
-### Step 4: Violation Check
-Review active violations from session state:
-1. **Check for unresolved violations**
-2. **Assess impact on phase transition**
-3. **Determine if violations block progression**
+The Advisor runs git validation automatically — never asks the Coordinator to run git commands and paste back.
 
-## Enforcement Decisions
-
-### ALLOW TRANSITION
-When:
-- All required artifacts exist and are valid
-- Git status is clean
-- No blocking violations
-- Quality standards met
-
-**Response:**
+**On session start:**
 ```
-**CHECKPOINT PASSED:** [Phase] → [Next Phase]
-
-All requirements satisfied:
-✅ Required artifacts complete and validated
-✅ Git status clean
-✅ No blocking violations
-✅ Quality standards met
-
-You may proceed to [Next Phase].
+{python} {project-root}/_bmad/crew/skills/bmad-crew-agent-advisor/scripts/git-validator.py --check-clean
 ```
 
-### BLOCK TRANSITION
-When:
-- Required artifacts missing or invalid
-- Git status not clean
-- Blocking violations exist
-- Quality standards not met
-
-**Response:**
+**Before any phase transition:**
 ```
-**CHECKPOINT BLOCKED:** [Phase] → [Next Phase]
-
-**Issues requiring resolution:**
-❌ [Specific issue 1]
-❌ [Specific issue 2]
-❌ [Specific issue 3]
-
-**Required actions:**
-1. [Exact instruction for issue 1]
-2. [Exact instruction for issue 2]
-3. [Exact instruction for issue 3]
-
-**Validation commands:**
-```bash
-python scripts/checkpoint-validator.py --phase [current-phase] --recheck
+{python} {project-root}/_bmad/crew/skills/bmad-crew-agent-advisor/scripts/git-validator.py --validate-commits --since-last-checkpoint
 ```
 
-Complete these actions before attempting phase transition.
+**After Builder claims completion:**
+```
+{python} {project-root}/_bmad/crew/skills/bmad-crew-agent-advisor/scripts/git-validator.py --verify-commit --expected-files [list]
 ```
 
-### CONDITIONAL PROCEED
-When:
-- Minor issues exist but don't block progression
-- Work can continue in parallel with fixes
-- Issues documented for later resolution
+Report results directly. If git is dirty: block and give exact commit command. Do not ask the Coordinator to investigate.
 
-**Response:**
+## Phase Transition Checkpoints
+
+### create-story → dev-story
+Required before giving the dev-story instruction:
+1. ✓ Story file exists at expected path
+2. ✓ Advisor has read the file (not just confirmed its existence)
+3. ✓ Validated against locked decisions, architecture, project-context.md
+4. ✓ No violations found (or violations resolved)
+5. ✓ Story file committed (git log confirms)
+6. ✓ Locked decisions re-read (IDEA-012)
+
+All six must pass. If any fail: block with specific fix instructions.
+
+### dev-story → code-review
+Required before giving the code-review instruction:
+1. ✓ Git shows new commits since story start
+2. ✓ All changed files committed
+3. ✓ Story file updated with implementation notes
+4. ✓ Locked decisions re-read (IDEA-012)
+
+### code-review → next create-story
+Required before giving the next create-story instruction:
+1. ✓ All patch findings addressed and committed
+2. ✓ No unresolved bad_spec or intent_gap findings
+3. ✓ Commit hash confirmed for all patches
+4. ✓ Mistakes file generated (IDEA-001)
+5. ✓ Phase summary file produced (IDEA-008)
+
+## Phase Summary Files (IDEA-008)
+
+A summary file is mandatory before any "open a new chat" instruction at a phase boundary. The Advisor does not give the next-chat instruction until the summary is written and confirmed saved.
+
+**Trigger conditions:**
+- End of brainstorming phase → planning
+- End of planning phase → implementation
+- End of story cycle → next story
+- Coordinator says "we are done", "open a new chat", closes story, or makes final commit of a phase (IDEA-013)
+
+**File naming:** `SUM-00X-[project]-advisor-[phase]-summary.md`
+(X = incrementing number, stored in session-state.md)
+
+**Content:**
+```markdown
+# Session Summary — [phase] — [timestamp]
+
+## What Was Validated
+- [list of documents read and validated]
+
+## Corrections Issued
+- [list of corrections given to Builder]
+
+## Locked Decisions Carried Forward
+- [decisions referenced or updated this session]
+
+## Issues Found and Resolved
+- [violations caught and their resolutions]
+
+## Next Action
+[single confirmed next command]
 ```
-**CHECKPOINT PASSED WITH CONDITIONS:** [Phase] → [Next Phase]
 
-You may proceed, but address these items:
-⚠️ [Minor issue 1] - [Timeline for resolution]
-⚠️ [Minor issue 2] - [Timeline for resolution]
+**Save to:** `{bmad_builder_output_folder}/bmad-crew-sessions/`
 
-**Documented in session state** for tracking.
+**Do not give the next-chat instruction until:**
+```
+Summary saved to [path]. Confirm saved, then open a new chat and run:
+
+/bmad-bmm-[next-command]
 ```
 
-## Memory Updates
+## Session-End Detection (IDEA-013)
 
-After checkpoint evaluation:
-1. **Update session-state.md** with checkpoint result
-2. **Record artifacts validated** and their status
-3. **Note any conditions** or requirements
-4. **Update phase status** if transition allowed
+Trigger summary file generation when any of these occur (not just phase boundaries):
 
-## Special Cases
+- Coordinator says "we are done" / "that's it for today" / "wrapping up"
+- Coordinator explicitly closes a story
+- Coordinator says "open a new chat" without the Advisor prompting it
+- A commit is made that completes the current phase work
+- No activity for a phase that appears complete in sprint-status.yaml
 
-### Emergency Exceptions
-If Coordinator needs to bypass checkpoint:
-1. **Document the exception** clearly
-2. **Record the reason** for bypass
-3. **Note the risks** introduced
-4. **Update session state** with exception details
+On detection:
+1. Check if a summary already exists for this session
+2. If not: generate summary file before yielding
+3. Offer the next-command instruction
+4. Update session-state.md with session end timestamp
 
-**Response:**
+## Checkpoint Response Formats
+
+### PASS
 ```
-**CHECKPOINT BYPASS DOCUMENTED:** [Phase] → [Next Phase]
+CHECKPOINT PASSED: [phase transition]
+[Single next instruction in plain text]
 
-**Exception recorded:**
-- Reason: [Coordinator's reason]
-- Risks: [Identified risks]
-- Mitigation: [Planned mitigation]
-
-**Note:** This exception has been documented in session state and locked decisions.
+[command in code block]
 ```
 
-### Partial Completion
-When some but not all requirements met:
-1. **Identify what's complete**
-2. **Specify what's missing**
-3. **Provide options** for proceeding
-4. **Document the decision**
+### BLOCK
+```
+CHECKPOINT BLOCKED: [specific failure]
+[One sentence: why this blocks]
+[Exact action required]
+```
 
-## Integration Points
-
-This capability works with:
-- **session-init.md** - Validate initial session setup
-- **violation-detection.md** - Check for violations before transitions
-- **instruction-generation.md** - Provide detailed remediation instructions
-- **External skills** - Use bmad-crew-checkpoint-enforcer for complex validation
-
-## Validation Scripts
-
-The checkpoint-validator.py script handles:
-- Artifact existence verification
-- File structure validation
-- Basic content quality checks
-- Git status integration
-
-For complex validation, delegate to external skills as needed.
+### BYPASS (Coordinator override)
+```
+BYPASS DOCUMENTED: [what was bypassed] — [timestamp]
+Risk: [one sentence]
+Proceeding under Coordinator authority.
+```
