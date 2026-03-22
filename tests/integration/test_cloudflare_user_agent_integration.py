@@ -1,5 +1,6 @@
 """Integration tests for Cloudflare user agent rotation module."""
 
+import random
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 

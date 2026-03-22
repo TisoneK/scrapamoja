@@ -11,10 +11,18 @@ Classes:
 """
 
 import random
-from typing import Any, Optional
+from typing import Any, Optional, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Import Playwright types only for type checking
+    try:
+        from playwright.async_api import BrowserContext
+    except ImportError:
+        BrowserContext = Any
 
 from src.observability.logger import get_logger
 from src.stealth.cloudflare.exceptions import UserAgentRotationError
+from src.stealth.cloudflare.models.config import CloudflareConfig
 
 # Initialize logger for this module
 logger = get_logger("cloudflare.user_agent")
@@ -90,6 +98,7 @@ class UserAgentManager:
         self,
         enabled: bool = True,
         preferred_browser: Optional[str] = None,
+        config: Optional[CloudflareConfig] = None,
     ) -> None:
         """Initialize the UserAgentManager.
 
@@ -97,18 +106,32 @@ class UserAgentManager:
             enabled: Whether user agent rotation is enabled.
             preferred_browser: Optional preferred browser family
                 ("chrome", "firefox", "safari", "edge").
+            config: Optional CloudflareConfig for integration with Epic 1 settings.
 
         Raises:
             UserAgentRotationError: If preferred_browser is invalid.
         """
+        # Override enabled if config is provided and Cloudflare protection is disabled
+        if config and not config.is_enabled():
+            enabled = False
+            
         self.enabled: bool = enabled
+        # Validate and normalize preferred_browser
+        if preferred_browser:
+            if not isinstance(preferred_browser, str) or not preferred_browser.strip():
+                raise UserAgentRotationError(
+                    f"Invalid preferred_browser: {preferred_browser}. "
+                    f"Must be a non-empty string."
+                )
+            preferred_browser = preferred_browser.strip().lower()
+            if preferred_browser not in BROWSER_WEIGHTS:
+                raise UserAgentRotationError(
+                    f"Invalid preferred_browser: {preferred_browser}. "
+                    f"Must be one of: {list(BROWSER_WEIGHTS.keys())}"
+                )
+        
         self.preferred_browser: Optional[str] = preferred_browser
-
-        if preferred_browser and preferred_browser not in BROWSER_WEIGHTS:
-            raise UserAgentRotationError(
-                f"Invalid preferred_browser: {preferred_browser}. "
-                f"Must be one of: {list(BROWSER_WEIGHTS.keys())}"
-            )
+        self.config: Optional[CloudflareConfig] = config
 
         logger.info(
             "UserAgentManager initialized",
@@ -208,7 +231,16 @@ class UserAgentManager:
 
         Returns:
             The browser family ("chrome", "firefox", "safari", "edge").
+            
+        Raises:
+            UserAgentRotationError: If user_agent is invalid.
         """
+        if not user_agent or not isinstance(user_agent, str):
+            raise UserAgentRotationError(
+                f"Invalid user_agent parameter: {user_agent}. "
+                f"Must be a non-empty string."
+            )
+            
         user_agent_lower = user_agent.lower()
 
         # Edge must be checked first since it also contains Chrome
@@ -218,12 +250,14 @@ class UserAgentManager:
             return "chrome"
         elif "firefox/" in user_agent_lower:
             return "firefox"
-        elif "safari/" in user_agent_lower and "chrome/" not in user_agent_lower and "version/" in user_agent_lower:
+        elif "safari/" in user_agent_lower and "chrome/" not in user_agent_lower:
+            # Safari detection: must contain safari but not chrome, and typically contains version
             return "safari"
         else:
-            return "chrome"  # Default fallback
+            # Default fallback - use chrome as it's most common
+            return "chrome"
 
-    async def apply_to_context(self, context: Any) -> None:
+    async def apply_to_context(self, context: Union["BrowserContext", Any]) -> None:
         """Apply user agent to a Playwright browser context.
 
         Args:
@@ -246,6 +280,13 @@ class UserAgentManager:
                 await context.set_extra_http_headers({
                     "User-Agent": user_agent
                 })
+            else:
+                # Context doesn't support header modification - log warning but don't fail
+                logger.warning(
+                    "Context does not support header modification, "
+                    "user agent application skipped"
+                )
+                return
 
             logger.info(
                 "User agent applied to context",

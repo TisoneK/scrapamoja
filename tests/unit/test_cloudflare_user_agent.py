@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.stealth.cloudflare.core.user_agent import UserAgentManager
 from src.stealth.cloudflare.exceptions import UserAgentRotationError
+from src.stealth.cloudflare.models.config import CloudflareConfig
 
 
 class TestUserAgentManager:
@@ -262,3 +263,22 @@ class TestUserAgentManager:
         # Check that weights sum to 1.0 (approximately)
         total_weight = sum(BROWSER_WEIGHTS.values())
         assert abs(total_weight - 1.0) < 0.01
+
+    def test_cloudflare_config_integration(self) -> None:
+        """Test CloudflareConfig integration."""
+        # Test with enabled Cloudflare protection
+        config_enabled = CloudflareConfig(cloudflare_protected=True)
+        manager = UserAgentManager(enabled=True, config=config_enabled)
+        assert manager.enabled is True
+        assert manager.config is config_enabled
+        
+        # Test with disabled Cloudflare protection (should override enabled=True)
+        config_disabled = CloudflareConfig(cloudflare_protected=False)
+        manager = UserAgentManager(enabled=True, config=config_disabled)
+        assert manager.enabled is False  # Should be disabled by config
+        assert manager.config is config_disabled
+        
+        # Test with no config (should use enabled parameter)
+        manager = UserAgentManager(enabled=False)
+        assert manager.enabled is False
+        assert manager.config is None
