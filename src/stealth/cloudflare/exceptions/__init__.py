@@ -47,3 +47,9 @@ class FingerprintRandomizerError(CloudflareConfigError):
     """Raised when fingerprint randomization fails."""
 
     pass
+
+
+class UserAgentRotationError(CloudflareConfigError):
+    """Raised when user agent rotation fails."""
+
+    pass

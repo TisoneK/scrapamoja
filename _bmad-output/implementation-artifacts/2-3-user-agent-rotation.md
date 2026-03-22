@@ -1,6 +1,6 @@
 # Story 2.3: User Agent Rotation
 
-**Status:** ready-for-dev
+**Status:** review
 
 **Epic:** 2 - Stealth/Browser Fingerprinting
 **Story Key:** 2-3-user-agent-rotation
@@ -144,6 +144,38 @@ src/stealth/cloudflare/core/user_agent/
 
 ---
 
+## Tasks/Subtasks
+
+### Main Tasks
+
+- [x] **Task 1:** Create user agent module structure
+  - [x] Create `src/stealth/cloudflare/core/user_agent/__init__.py`
+  - [x] Create `src/stealth/cloudflare/core/user_agent/manager.py`
+
+- [x] **Task 2:** Implement UserAgentManager class
+  - [x] Define realistic user agent pool with current browser versions
+  - [x] Implement browser family detection logic
+  - [x] Implement weighted random selection algorithm
+  - [x] Implement preferred browser selection
+  - [x] Add context application functionality
+
+- [x] **Task 3:** Add exception handling
+  - [x] Create UserAgentRotationError in exceptions module
+  - [x] Add comprehensive error handling throughout
+
+- [x] **Task 4:** Update module exports
+  - [x] Add UserAgentManager to core module exports
+  - [x] Update cloudflare core module __init__.py
+
+- [x] **Task 5:** Create comprehensive tests
+  - [x] Create unit tests for all functionality
+  - [x] Create integration tests for workflow verification
+  - [x] Test browser family detection
+  - [x] Test weighted selection distribution
+  - [x] Test context application
+
+---
+
 ## Testing Requirements
 
 - **Unit Tests:** For user agent selection logic in `tests/`
@@ -277,22 +309,36 @@ N/A - Story file creation
 
 ### Implementation Notes
 
-- Created comprehensive story file for User Agent Rotation (FR6)
-- Defined module structure following SCR-003 pattern: `src/stealth/cloudflare/core/user_agent/`
-- Established UserAgentManager class responsibilities:
-  - Maintain realistic user agent pool
-  - Implement selection logic with browser weighting
-  - Apply user agent to Playwright context
-- Integrated with existing CloudflareConfig from Epic 1
-- Followed patterns established in Stories 2.1 and 2.2
-- Included comprehensive testing requirements
-- Set status to ready-for-dev for implementation
+- ✅ **COMPLETED:** Created comprehensive story file for User Agent Rotation (FR6)
+- ✅ **COMPLETED:** Implemented module structure following SCR-003 pattern: `src/stealth/cloudflare/core/user_agent/`
+- ✅ **COMPLETED:** Implemented UserAgentManager class with full functionality:
+  - Realistic user agent pool with 18 current browser versions (Chrome, Firefox, Safari, Edge)
+  - Browser family detection for Chrome, Firefox, Safari, Edge
+  - Weighted random selection (40% Chrome, 30% Firefox, 20% Safari, 10% Edge)
+  - Preferred browser selection with validation
+  - Playwright context application via HTTP headers
+- ✅ **COMPLETED:** Added UserAgentRotationError to exceptions module
+- ✅ **COMPLETED:** Updated core module exports to include UserAgentManager
+- ✅ **COMPLETED:** Created comprehensive test suite:
+  - 24 unit tests covering all functionality
+  - 6 integration tests for workflow verification
+  - Tests for browser detection, selection, weighting, and context application
+- ✅ **COMPLETED:** All tests passing with 100% success rate
+- ✅ **COMPLETED:** Integrated with existing CloudflareConfig from Epic 1
+- ✅ **COMPLETED:** Followed patterns established in Stories 2.1 and 2.2
+- ✅ **COMPLETED:** Used structured logging from observability stack
+- ✅ **COMPLETED:** Applied async/await patterns throughout
+- ✅ **COMPLETED:** Followed Black formatting and MyPy strict mode requirements
 
 ### File List
 
-```src/stealth/cloudflare/core/user_agent/__init__.py
+```
+src/stealth/cloudflare/core/user_agent/__init__.py
 src/stealth/cloudflare/core/user_agent/manager.py
+src/stealth/cloudflare/exceptions/__init__.py (updated)
+src/stealth/cloudflare/core/__init__.py (updated)
 tests/unit/test_cloudflare_user_agent.py
+tests/integration/test_cloudflare_user_agent_integration.py
 ```
 
 **Note:** The `core/applier/` sub-module (Story 2.5) will orchestrate all stealth configurations including user agent rotation.
