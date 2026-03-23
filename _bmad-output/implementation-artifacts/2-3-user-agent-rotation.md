@@ -1,6 +1,6 @@
 # Story 2.3: User Agent Rotation
 
-**Status:** review
+**Status:** done
 
 **Epic:** 2 - Stealth/Browser Fingerprinting
 **Story Key:** 2-3-user-agent-rotation
