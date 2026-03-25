@@ -1,13 +1,13 @@
 # Locked Decisions
 
-## Session Information
-- **Session ID**: 
-- **Date**: 
-- **Coordinator**: 
-- **Project**: 
+## Module Decisions
+- Agent: BMAD Crew Advisor
+- Module: bmad-crew
+- Created: 2026-03-22T15:23:56.933Z
 
-## Locked Decisions
-
+## Session Rules
+- Context required before advisory work
+- No escalation mechanism
 ### Architectural Decisions
 <!-- Add locked architectural decisions here -->
 

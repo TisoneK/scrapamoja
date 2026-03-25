@@ -29,3 +29,6 @@
 - Total: 31 tests passing
 
 ### Code Review Findings
+- 8 patch issues fixed
+- 2 defer items noted
+- 3 findings rejected as noise

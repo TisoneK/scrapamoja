@@ -53,3 +53,9 @@ class UserAgentRotationError(CloudflareConfigError):
     """Raised when user agent rotation fails."""
 
     pass
+
+
+class ViewportNormalizationError(CloudflareConfigError):
+    """Raised when viewport normalization fails."""
+
+    pass

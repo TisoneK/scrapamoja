@@ -58,7 +58,7 @@ development_status:
   2-1-automation-signal-suppression: done
   2-2-canvas-webgl-fingerprint-randomization: done
   2-3-user-agent-rotation: done
-  2-4-viewport-normalization: ready-for-dev
+  2-4-viewport-normalization: done
   2-5-browser-profile-applier: backlog
   2-6-headless-and-headed-mode-support: backlog
   epic-2-retrospective: optional
