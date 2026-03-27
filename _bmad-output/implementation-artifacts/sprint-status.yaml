@@ -39,7 +39,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-18T19:54:04.819Z
-last_updated: 2026-03-23T08:49:00.000Z
+last_updated: 2026-03-27T17:02:41+03:00
 project: scrapamoja
 project_key: NOKEY
 tracking_system: file-system
@@ -59,7 +59,7 @@ development_status:
   2-2-canvas-webgl-fingerprint-randomization: done
   2-3-user-agent-rotation: done
   2-4-viewport-normalization: done
-  2-5-browser-profile-applier: backlog
+  2-5-browser-profile-applier: review
   2-6-headless-and-headed-mode-support: backlog
   epic-2-retrospective: optional
 

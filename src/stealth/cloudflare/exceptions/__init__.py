@@ -59,3 +59,9 @@ class ViewportNormalizationError(CloudflareConfigError):
     """Raised when viewport normalization fails."""
 
     pass
+
+
+class StealthProfileApplierError(CloudflareConfigError):
+    """Raised when stealth profile application fails."""
+
+    pass

@@ -22,6 +22,10 @@ class CloudflareConfig(BaseModel):
         detection_sensitivity: Sensitivity level for challenge detection (1-5) or
             string value ("high", "medium", "low").
         auto_retry: Whether to automatically retry on challenge failure.
+        webdriver_enabled: Whether to enable webdriver signal suppression.
+        fingerprint_enabled: Whether to enable canvas/WebGL fingerprint randomization.
+        user_agent_enabled: Whether to enable user agent rotation.
+        viewport_enabled: Whether to enable viewport normalization.
     """
 
     cloudflare_protected: bool = Field(
@@ -41,6 +45,22 @@ class CloudflareConfig(BaseModel):
     auto_retry: bool = Field(
         default=True,
         description="Automatically retry on challenge failure",
+    )
+    webdriver_enabled: bool = Field(
+        default=True,
+        description="Enable webdriver signal suppression",
+    )
+    fingerprint_enabled: bool = Field(
+        default=True,
+        description="Enable canvas/WebGL fingerprint randomization",
+    )
+    user_agent_enabled: bool = Field(
+        default=True,
+        description="Enable user agent rotation",
+    )
+    viewport_enabled: bool = Field(
+        default=True,
+        description="Enable viewport normalization",
     )
 
     model_config = ConfigDict(frozen=False, validate_assignment=True)
@@ -83,4 +103,8 @@ class CloudflareConfig(BaseModel):
             "challenge_timeout": self.challenge_timeout,
             "detection_sensitivity": self.detection_sensitivity,
             "auto_retry": self.auto_retry,
+            "webdriver_enabled": self.webdriver_enabled,
+            "fingerprint_enabled": self.fingerprint_enabled,
+            "user_agent_enabled": self.user_agent_enabled,
+            "viewport_enabled": self.viewport_enabled,
         }
