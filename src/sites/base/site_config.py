@@ -14,7 +14,7 @@ Example config.yaml:
 
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, List, TYPE_CHECKING
 
 import yaml
 from pydantic import BaseModel, Field, field_validator

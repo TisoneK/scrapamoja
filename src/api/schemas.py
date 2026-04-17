@@ -10,7 +10,7 @@ must stay in sync with the shapes defined here.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, List
 
 from pydantic import BaseModel, ConfigDict, Field
 

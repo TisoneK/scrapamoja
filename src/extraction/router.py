@@ -6,7 +6,7 @@ the appropriate extraction handler based on site configuration.
 Following Pattern 1: Protocol-Based Interface - uses duck typing instead of inheritance.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import Any, List, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.network.direct_api import AsyncHttpClient

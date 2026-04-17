@@ -492,7 +492,7 @@ class RealTimeMonitor:
                 # Result is already a dictionary
                 health_result = HealthCheck(
                     component=component_name,
-                    status=MonitoringStatus(result.get("status", MonitoringStatus.ERROR),
+                    status=MonitoringStatus(result.get("status", MonitoringStatus.ERROR)),
                     message=result.get("message", "Health check completed"),
                     response_time_ms=(datetime.utcnow() - start_time).total_seconds() * 1000,
                     last_check=datetime.utcnow(),

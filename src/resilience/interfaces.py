@@ -6,7 +6,7 @@ modularity principles with clear contracts and lifecycle management.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any, Callable
+from typing import Any, Callable, Dict, List, Optional, Type
 from datetime import datetime
 from .events import ResilienceEvent
 

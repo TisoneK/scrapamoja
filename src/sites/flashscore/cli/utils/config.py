@@ -7,7 +7,7 @@ Handles configuration loading and management.
 import json
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional, Set
 
 
 class CLIConfig:

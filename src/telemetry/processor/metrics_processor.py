@@ -6,7 +6,7 @@ aggregation, analysis, and reporting capabilities.
 """
 
 import asyncio
-from typing import Dict, Any, Optional, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from enum import Enum

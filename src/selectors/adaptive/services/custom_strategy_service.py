@@ -7,7 +7,7 @@ This implements Story 7.2 (Technical and Non-Technical Views) requirements:
 - Save custom strategies for future use
 """
 
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 import re

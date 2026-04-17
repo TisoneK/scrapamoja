@@ -8,7 +8,7 @@ multiple levels of the flashscore workflow interface.
 import asyncio
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple, Any, Callable
+from typing import Any, Callable, Dict, Final, List, Optional, Set, Tuple, Type
 from dataclasses import dataclass, field
 
 from src.observability.logger import get_logger

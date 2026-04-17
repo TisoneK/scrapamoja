@@ -6,7 +6,7 @@ API contracts, ensuring consistent implementation patterns.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from datetime import datetime
 from dataclasses import dataclass
 

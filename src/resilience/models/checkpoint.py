@@ -5,7 +5,7 @@ Defines the Checkpoint entity and related enums for progress saving,
 resume capability, and integrity validation with schema versioning.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Set, Type
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

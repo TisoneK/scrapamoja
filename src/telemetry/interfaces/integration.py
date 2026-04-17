@@ -6,7 +6,7 @@ following the contract specification.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any, Callable, Dict, List, Optional, Type
 from datetime import datetime
 
 from ..models import TelemetryEvent

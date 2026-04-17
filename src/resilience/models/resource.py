@@ -5,7 +5,7 @@ Defines the Resource entity and related enums for resource lifecycle control,
 memory management, and browser restart policies with monitoring capabilities.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

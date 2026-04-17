@@ -14,7 +14,7 @@ Story 5-2: Confidence Score Updates via WebSocket
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Type
 
 from src.selectors.fallback.models import FailureEvent
 from src.selectors.websocket.client import WebSocketClient

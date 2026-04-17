@@ -2,7 +2,7 @@
 Infobox processor for Wikipedia articles.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 import re
 from datetime import datetime, date
 

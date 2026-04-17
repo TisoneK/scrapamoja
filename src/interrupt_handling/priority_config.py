@@ -3,7 +3,7 @@ Cleanup priority configuration for interrupt handling.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
 

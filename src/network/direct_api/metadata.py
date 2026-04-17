@@ -4,6 +4,7 @@ This module provides the ResponseMetadata class that accompanies
 httpx.Response objects to provide additional information about the response,
 such as timestamps for data freshness decisions.
 """
+import httpx
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -81,4 +82,3 @@ def get_response_with_metadata(
 
 
 # Import httpx at module level for type hints
-import httpx

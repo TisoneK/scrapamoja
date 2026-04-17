@@ -8,7 +8,7 @@ enabling seamless connection between site-specific components and existing frame
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, Union
 from enum import Enum
 
 from .interfaces import IIntegrationBridge, IntegrationStatus

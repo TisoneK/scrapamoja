@@ -6,7 +6,7 @@ status codes, and other characteristics to determine appropriate recovery strate
 """
 
 import re
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
 from enum import Enum
 
 from .models.failure_event import FailureCategory, FailureSeverity

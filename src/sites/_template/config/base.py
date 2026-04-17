@@ -2,7 +2,7 @@
 Base configuration template for the modular site scraper template.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
 

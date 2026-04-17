@@ -7,7 +7,7 @@ problems and distribute retry attempts over time.
 
 import random
 import math
-from typing import Dict, Any, Optional, Callable
+from typing import Any, Callable, Dict, Optional, Type
 from enum import Enum
 from abc import ABC, abstractmethod
 

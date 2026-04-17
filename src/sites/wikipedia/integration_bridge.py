@@ -8,7 +8,7 @@ and resolve the blocking issue where YAML selectors are not loaded into the sele
 import asyncio
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional, Type
 from src.sites.wikipedia.selector_loader import WikipediaSelectorIntegration
 from src.selectors.context import DOMContext
 

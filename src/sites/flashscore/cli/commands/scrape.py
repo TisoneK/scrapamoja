@@ -6,7 +6,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Set
 
 from src.browser.manager import BrowserManager
 from src.sites.flashscore.scraper import FlashscoreScraper

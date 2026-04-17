@@ -14,7 +14,7 @@ Integration:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Dict, Any, TYPE_CHECKING, Union
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, Type, Union
 from bs4 import BeautifulSoup
 import logging
 import html

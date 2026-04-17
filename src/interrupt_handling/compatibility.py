@@ -4,7 +4,7 @@ Backward compatibility layer for interrupt handling system.
 
 import logging
 import warnings
-from typing import Dict, Any, Optional, Callable, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 from dataclasses import dataclass
 from enum import Enum
 

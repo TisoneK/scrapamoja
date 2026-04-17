@@ -7,7 +7,7 @@ instances with their configuration, state, and resource monitoring.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional, Set
 import asyncio
 import json
 import uuid
@@ -83,6 +83,9 @@ class BrowserSession:
         
         # Track subprocess handles for cleanup
         self._subprocess_handles = []
+        
+        # Playwright instance - stored for proper cleanup
+        self._playwright = None
         
         # Start metrics tracking
         self._metrics_collector.start_session_tracking(
@@ -214,6 +217,7 @@ class BrowserSession:
             from playwright.async_api import async_playwright
             
             playwright = await async_playwright().start()
+            self._playwright = playwright
             
             if self.configuration.browser_type.value == "chromium":
                 self.browser = await playwright.chromium.launch(**launch_args)
@@ -661,6 +665,18 @@ class BrowserSession:
             
             # Enhanced subprocess cleanup
             self._cleanup_subprocess_handles()
+            
+            # Stop playwright to cleanly release transport
+            if hasattr(self, '_playwright') and self._playwright:
+                try:
+                    await self._playwright.stop()
+                    self._playwright = None
+                except Exception as e:
+                    self._logger.warning(
+                        "playwright_stop_error",
+                        session_id=self.session_id,
+                        error=str(e)
+                    )
             
             # Ensure transport cleanup completes
             await self._ensure_transport_cleanup()

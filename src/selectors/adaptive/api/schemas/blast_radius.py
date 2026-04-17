@@ -12,7 +12,7 @@ Story: 6.3 - Blast Radius Calculation
 
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
 

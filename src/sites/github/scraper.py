@@ -7,7 +7,7 @@ and leveraging existing Scorewise framework components.
 
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Set, Type
 from datetime import datetime
 
 from src.sites.base.site_scraper import BaseSiteScraper

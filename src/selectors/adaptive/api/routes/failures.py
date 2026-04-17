@@ -13,7 +13,7 @@ Story: 4.3 - Flag Selectors for Developer Review
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 

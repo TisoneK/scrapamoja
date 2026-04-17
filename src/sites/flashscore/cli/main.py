@@ -9,7 +9,7 @@ import asyncio
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional, Set
 import json
 
 from ..scraper import FlashscoreScraper

@@ -21,7 +21,7 @@ import logging
 from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, Callable, Deque, List, Optional
+from typing import Any, Callable, Deque, List, Optional, Type
 
 import uuid
 

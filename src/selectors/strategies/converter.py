@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, Type, Union
 
 if TYPE_CHECKING:
     from src.models.selector_models import StrategyPattern as EngineStrategyPattern

@@ -5,7 +5,7 @@ Resource registration interfaces for different types of resources.
 import sqlite3
 import threading
 import time
-from typing import Any, Dict, List, Optional, Callable, Union, TextIO
+from typing import Any, Callable, Dict, List, Optional, Set, TextIO, Union
 from contextlib import contextmanager
 from abc import ABC, abstractmethod
 

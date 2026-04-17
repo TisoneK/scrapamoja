@@ -5,7 +5,7 @@ This module provides OAuth authentication functionality with support for
 OAuth 1.0a, OAuth 2.0, and common authentication flows.
 """
 
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any, Callable, Dict, List, Optional, Set
 from datetime import datetime, timedelta
 import asyncio
 import json

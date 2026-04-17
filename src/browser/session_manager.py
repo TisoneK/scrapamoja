@@ -8,7 +8,7 @@ following the IBrowserSession interface.
 import asyncio
 import time
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional, Set
 import structlog
 
 try:

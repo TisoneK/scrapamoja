@@ -30,6 +30,8 @@ Example usage::
 
 """
 
+import httpx
+
 from src.network.direct_api.client import (
     AsyncHttpClient,
     PreparedRequest,

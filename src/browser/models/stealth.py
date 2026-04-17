@@ -4,7 +4,7 @@ Stealth Settings Entity
 This module defines the StealthSettings entity for browser stealth configuration.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import structlog
@@ -486,7 +486,7 @@ class StealthSettings:
                 typing_simulation=True,
                 scroll_simulation=True,
                 canvas_fingerprint_protection=True,
-                webgl_protection=True,
+                webgl_fingerprint_protection=True,
                 audio_context_protection=True,
                 font_fingerprint_protection=True
             ),

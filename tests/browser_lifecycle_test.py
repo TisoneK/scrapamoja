@@ -12,7 +12,7 @@ from src.observability.events import EventTypes, publish_browser_session_created
 from src.observability.metrics import get_browser_metrics_collector
 from src.browser.lifecycle import lifecycle_manager, ModulePhase
 from src.browser.resilience import resilience_manager
-from src.browser.snapshot import snapshot_manager
+from src.core.snapshot import get_snapshot_manager as snapshot_manager
 from tests.fixtures.browser_configs import CHROMIUM_HEADLESS_CONFIG
 
 
@@ -56,7 +56,7 @@ async def test_browser_lifecycle_integration():
     
     # Test 6: Snapshot Manager
     print("\n6. Testing Snapshot Manager...")
-    snapshots = snapshot_manager.list_snapshots()
+    snapshots = snapshot_manager().list_snapshots()
     print(f"   ✓ Snapshot manager initialized: {len(snapshots)} snapshots found")
     
     # Test 7: Browser Session (without actual browser)

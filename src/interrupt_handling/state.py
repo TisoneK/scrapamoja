@@ -4,7 +4,7 @@ Interrupt state management for tracking and coordinating interrupt handling.
 
 import threading
 import time
-from typing import Optional, Dict, Any, List
+from typing import Any, Callable, Dict, List, Optional, Set
 from enum import Enum
 from dataclasses import dataclass, field
 from contextlib import contextmanager

@@ -7,7 +7,7 @@ context propagation, and structured output for debugging and analysis.
 
 import json
 import traceback
-from typing import Dict, Any, Optional
+from typing import Any, Dict, List, Optional, Type
 from datetime import datetime
 
 from ..correlation import get_correlation_id, with_correlation_id

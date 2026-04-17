@@ -6,7 +6,7 @@ ensuring consistent data processing patterns and enabling proper lifecycle manag
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, Union
 from dataclasses import dataclass
 from datetime import datetime
 import asyncio

@@ -7,7 +7,7 @@ comprehensive metrics gathering and event management.
 
 import asyncio
 import uuid
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Type
 from datetime import datetime
 
 from ..interfaces import ITelemetryCollector

@@ -8,7 +8,7 @@ including YAMLSelector, SelectorStrategy, and supporting data structures.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Any, Union
+from typing import Any, Dict, List, Optional, Set, Union
 import logging
 
 try:

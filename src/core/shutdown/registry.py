@@ -7,7 +7,7 @@ with timeout protection and error handling.
 
 import asyncio
 import time
-from typing import Callable, List, Tuple, Any
+from typing import Any, Callable, List, Set, Tuple
 from dataclasses import dataclass
 
 from .exceptions import TimeoutError, ShutdownError

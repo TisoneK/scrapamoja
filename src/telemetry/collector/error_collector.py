@@ -6,7 +6,7 @@ trend analysis, and recovery pattern tracking.
 """
 
 import asyncio
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Type
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from collections import defaultdict, Counter

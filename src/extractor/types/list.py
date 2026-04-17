@@ -6,7 +6,7 @@ elements and handling list data structures.
 """
 
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 from bs4 import BeautifulSoup, Tag, NavigableString
 

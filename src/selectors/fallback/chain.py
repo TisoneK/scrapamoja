@@ -8,7 +8,7 @@ and fallback selector execution against the same page context.
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from src.models.selector_models import SelectorResult
 from src.selectors.context import DOMContext

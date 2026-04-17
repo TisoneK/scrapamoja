@@ -7,7 +7,7 @@ version management, schema migrations, and rollback functionality.
 
 import json
 import yaml
-from typing import Dict, Any, List, Optional, Callable, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 from datetime import datetime
 from pathlib import Path
 from dataclasses import dataclass, field

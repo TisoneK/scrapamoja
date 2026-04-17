@@ -7,7 +7,7 @@ telemetry data collection and analysis.
 
 import time
 import asyncio
-from typing import Dict, Any, Optional, Union, Callable
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 from datetime import datetime, timedelta
 from contextlib import contextmanager, asynccontextmanager
 from dataclasses import dataclass

@@ -5,7 +5,7 @@ This implements the data access layer for user preferences and view mode managem
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional, Set
 from sqlalchemy import create_engine, select, func, desc
 from sqlalchemy.orm import Session, sessionmaker
 import os

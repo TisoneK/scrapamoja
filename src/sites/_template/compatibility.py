@@ -7,7 +7,7 @@ to ensure existing sites continue to work with the new template architecture.
 
 import warnings
 import importlib
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from pathlib import Path
 
 # Import new base classes

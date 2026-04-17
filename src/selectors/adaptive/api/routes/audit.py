@@ -7,7 +7,7 @@ connected decision detection, and user attribution.
 """
 
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, Generator, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import JSONResponse, StreamingResponse

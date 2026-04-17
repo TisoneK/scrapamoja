@@ -6,7 +6,7 @@ statistical analysis and trend tracking capabilities.
 """
 
 import asyncio
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Type
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from statistics import mean, median, stdev

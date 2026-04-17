@@ -5,7 +5,7 @@ Resource manager for coordinating cleanup during interrupts.
 import threading
 import logging
 import time
-from typing import Dict, List, Callable, Any, Optional
+from typing import Any, Callable, Dict, List, Optional, Type
 from dataclasses import dataclass, field
 from enum import Enum
 from contextlib import contextmanager

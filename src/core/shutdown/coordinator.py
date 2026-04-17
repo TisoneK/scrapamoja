@@ -7,7 +7,7 @@ cleanup coordination, and metrics collection.
 
 import asyncio
 import time
-from typing import Optional
+from typing import Optional, Set
 
 from .state import ShutdownState
 from .registry import CleanupRegistry

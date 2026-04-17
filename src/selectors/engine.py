@@ -7,7 +7,7 @@ context-aware scoping, and integration with all strategy patterns as specified i
 
 import asyncio
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass
 
 from src.models.selector_models import (
@@ -19,7 +19,7 @@ from src.selectors.strategies.base import StrategyFactory
 from src.selectors.confidence.thresholds import get_threshold_manager
 from src.selectors.validation import get_validation_engine
 from src.selectors.quality.control import get_quality_control_manager
-from src.selectors.interfaces import ISelectorEngine
+from src.selectors.interfaces import ISelectorEngine, IStrategyPattern
 from src.selectors.registry import get_selector_registry
 from src.observability.logger import get_logger, CorrelationContext
 from src.observability.events import publish_selector_resolved, publish_selector_failed
@@ -161,7 +161,7 @@ class SelectorEngine(ISelectorEngine):
                 except Exception as e:
                     self._logger.warning(f"Hook callback failed for event {event}: {e}")
     
-    async def resolve(self, selector_name: str, context: DOMContext) -> StrategyResult:
+    async def resolve(self, selector_name: str, context: DOMContext) -> SelectorResult:
         """
         Resolve a semantic selector to DOM element.
         
@@ -1051,7 +1051,7 @@ class SelectorEngine(ISelectorEngine):
                     error=str(e)
                 )
     
-    def _get_strategy(self, strategy_id: str) -> Optional[ISelectorPattern]:
+    def _get_strategy(self, strategy_id: str) -> Optional[IStrategyPattern]:
         """Get strategy by ID."""
         return self._strategies.get(strategy_id)
     

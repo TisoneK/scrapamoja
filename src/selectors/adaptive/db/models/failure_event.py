@@ -3,7 +3,7 @@ Failure Event SQLAlchemy model for storing selector failure events in the databa
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional, Type
 from sqlalchemy import Integer, String, Float, DateTime, JSON, Index, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 

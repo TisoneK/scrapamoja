@@ -30,7 +30,7 @@ class ConfigurationOperation(Enum):
 @dataclass
 class ConfigurationOperationContext:
     """Context for configuration operations."""
-    operation_id: str = field(default_factory=lambda: str(uuid.uuid4().hex[:8])
+    operation_id: str = field(default_factory=lambda: str(uuid.uuid4().hex[:8]))
     correlation_id: Optional[str] = None
     config_id: Optional[str] = None
     operation: ConfigurationOperation = ConfigurationOperation.CREATE
@@ -231,7 +231,7 @@ class ConfigurationLogger:
         self.complete_operation(
             context.operation_id,
             success=success,
-            error=None if success else "; ". ".join(validation_result.errors),
+            error=None if success else "; ".join(validation_result.errors),
             error_type="validation_error" if not success else None
         )
         
@@ -296,8 +296,8 @@ class ConfigurationLogger:
     def log_configuration_import(
         self,
         file_path: str,
-        config_id: Optional[str] = None,
         success: bool,
+        config_id: Optional[str] = None,
         error: Optional[str] = None,
         correlation_id: Optional[str] = None
     ) -> str:

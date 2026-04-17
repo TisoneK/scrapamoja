@@ -8,7 +8,7 @@ based on specific events like selector failures, retry exhaustion, and timeouts.
 import asyncio
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 
 from src.observability.logger import get_logger

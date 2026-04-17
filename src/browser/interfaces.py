@@ -6,7 +6,7 @@ following the API contracts specification.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
     from .models.session import BrowserSession, BrowserConfiguration

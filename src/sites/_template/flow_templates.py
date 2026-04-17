@@ -7,7 +7,7 @@ for common use cases and domains.
 
 import asyncio
 import re
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Type, Union
 from urllib.parse import urljoin, urlparse
 import json
 

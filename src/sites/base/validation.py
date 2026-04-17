@@ -11,6 +11,31 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 
+class ValidationResult:
+    """Validation result for scraper implementation."""
+    
+    def __init__(self):
+        self.valid: bool = True
+        self.errors: List[str] = []
+        self.warnings: List[str] = []
+        self.missing_files: List[str] = []
+        self.invalid_selectors: List[str] = []
+    
+    def add_error(self, message: str) -> None:
+        """Add a critical validation error."""
+        self.errors.append(message)
+        self.valid = False
+    
+    def add_warning(self, message: str) -> None:
+        """Add a non-critical validation warning."""
+        self.warnings.append(message)
+    
+    def is_valid(self) -> bool:
+        """Check if validation passed."""
+        return self.valid
+
+
+
 class InterfaceValidator:
     """Validator for interface compliance."""
     
@@ -84,30 +109,6 @@ class InterfaceValidator:
         
         except Exception as e:
             result.add_warning(f"Could not validate {method_name}() method signature: {str(e)}")
-
-
-class ValidationResult:
-    """Validation result for scraper implementation."""
-    
-    def __init__(self):
-        self.valid: bool = True
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
-        self.missing_files: List[str] = []
-        self.invalid_selectors: List[str] = []
-    
-    def add_error(self, message: str) -> None:
-        """Add a critical validation error."""
-        self.errors.append(message)
-        self.valid = False
-    
-    def add_warning(self, message: str) -> None:
-        """Add a non-critical validation warning."""
-        self.warnings.append(message)
-    
-    def is_valid(self) -> bool:
-        """Check if validation passed."""
-        return self.valid
 
 
 class FileValidator:

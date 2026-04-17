@@ -8,7 +8,7 @@ This implements Story 7.2 (Technical and Non-Technical Views) requirements:
 
 import base64
 import io
-from typing import Optional, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 import logging
 

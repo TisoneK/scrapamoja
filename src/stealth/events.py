@@ -10,7 +10,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set, Type
 
 from .models import AntiDetectionEvent, EventSeverity, EventType
 

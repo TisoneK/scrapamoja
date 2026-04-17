@@ -5,7 +5,7 @@ This module provides comprehensive configuration merging capabilities, including
 environment-specific overrides, inheritance, and conflict resolution.
 """
 
-from typing import Dict, Any, List, Optional, Union, Callable, Type
+from typing import Any, Callable, Dict, Final, List, Optional, Set, Type, Union
 from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum

@@ -6,7 +6,7 @@ ensuring consistent navigation patterns and enabling proper lifecycle management
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Set, Type
 from dataclasses import dataclass
 from datetime import datetime
 import asyncio

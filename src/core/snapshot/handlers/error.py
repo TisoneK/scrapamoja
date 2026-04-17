@@ -8,7 +8,7 @@ to automatically capture snapshots when unhandled exceptions occur.
 import asyncio
 import traceback
 from datetime import datetime
-from typing import Any, Dict, Optional, List, Callable
+from typing import Any, Callable, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 
 from src.observability.logger import get_logger

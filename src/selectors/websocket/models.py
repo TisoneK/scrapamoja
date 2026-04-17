@@ -12,7 +12,7 @@ Story 5-1: WebSocket Connection for Failure Notifications
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
 

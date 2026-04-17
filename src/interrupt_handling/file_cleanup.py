@@ -7,7 +7,7 @@ import tempfile
 import threading
 import time
 import logging
-from typing import Any, Dict, List, Optional, Callable, TextIO, BinaryIO
+from typing import Any, BinaryIO, Callable, Dict, List, Optional, TextIO, Union
 from contextlib import contextmanager
 
 from .resource_interfaces import FileResource, ResourceRegistry

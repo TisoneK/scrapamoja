@@ -7,7 +7,7 @@ and structured output for debugging and analysis.
 
 import json
 import traceback
-from typing import Dict, Any, Optional
+from typing import Any, Dict, List, Optional, Type
 from datetime import datetime
 
 from ..models.failure_event import FailureEvent, FailureSeverity, FailureCategory, RecoveryAction

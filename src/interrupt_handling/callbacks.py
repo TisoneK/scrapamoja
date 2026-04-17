@@ -4,7 +4,7 @@ Interrupt callback infrastructure for custom interrupt handling.
 
 import logging
 import threading
-from typing import Callable, List, Any, Optional
+from typing import Any, Callable, List, Optional, Set
 from dataclasses import dataclass
 from enum import Enum
 

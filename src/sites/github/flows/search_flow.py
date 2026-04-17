@@ -7,7 +7,7 @@ result navigation, and result extraction.
 
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Type
 from urllib.parse import quote
 
 from ..flow import GitHubFlow

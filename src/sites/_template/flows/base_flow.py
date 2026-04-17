@@ -5,7 +5,7 @@ This module provides a base template for creating navigation flows
 with common functionality and best practices.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Type
 from datetime import datetime
 import asyncio
 

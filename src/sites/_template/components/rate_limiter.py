@@ -5,7 +5,7 @@ This module provides rate limiting functionality with multiple algorithms
 and configurable limits to prevent overwhelming target servers.
 """
 
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any, Callable, Dict, List, Optional, Set
 from datetime import datetime, timedelta
 import asyncio
 import time

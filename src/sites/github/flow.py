@@ -7,7 +7,7 @@ following the BaseFlow pattern from the existing framework.
 
 import asyncio
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Type
 from urllib.parse import quote, urljoin
 
 from src.sites.base.flow import BaseFlow

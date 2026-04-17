@@ -9,7 +9,7 @@ Classes:
     StealthProfileApplier: Applies all stealth configurations to browser contexts.
 """
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional, Set, TYPE_CHECKING
 
 from src.observability.logger import get_logger
 from src.stealth.cloudflare.models.config import CloudflareConfig

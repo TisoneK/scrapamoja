@@ -9,7 +9,7 @@ import asyncio
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Type, Union
 from playwright.async_api import Page, ElementHandle
 
 from src.models.selector_models import (

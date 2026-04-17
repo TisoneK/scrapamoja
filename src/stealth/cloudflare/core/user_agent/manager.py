@@ -11,7 +11,7 @@ Classes:
 """
 
 import random
-from typing import Any, Optional, Union, TYPE_CHECKING
+from typing import Any, Optional, Set, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     # Import Playwright types only for type checking

@@ -7,7 +7,7 @@ This module defines the BrowserState entity for browser state persistence.
 import json
 import time
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import structlog

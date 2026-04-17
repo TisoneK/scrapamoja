@@ -7,7 +7,7 @@ including error classification, troubleshooting suggestions, and recovery recomm
 
 import traceback
 import sys
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, Union
 from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum

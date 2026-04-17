@@ -12,7 +12,7 @@ Run with: uvicorn src.selectors.adaptive.api.app:app --reload
 """
 
 import os
-from typing import Optional
+from typing import Optional, Type
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

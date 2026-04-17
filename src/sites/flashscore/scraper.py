@@ -11,7 +11,7 @@ capabilities instead of manual selector conversion. This leverages:
 """
 
 import asyncio
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from datetime import datetime
 from pathlib import Path
 from src.sites.base.site_scraper import BaseSiteScraper

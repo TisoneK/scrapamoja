@@ -9,7 +9,7 @@ Story: 4.1 - View Proposed Selectors with Visual Preview
 """
 
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
 import logging
 
 from src.selectors.adaptive.db.repositories.failure_event_repository import FailureEventRepository

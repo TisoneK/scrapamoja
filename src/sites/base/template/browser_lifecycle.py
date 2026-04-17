@@ -8,7 +8,7 @@ including screenshot capture, HTML capture, and resource monitoring.
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Union
+from typing import Any, Dict, List, Optional, Set, Type, Union
 from pathlib import Path
 
 from .integration_bridge import BaseIntegrationBridge

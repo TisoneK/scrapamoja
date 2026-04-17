@@ -8,7 +8,7 @@ import sys
 import os
 import threading
 import time
-from typing import List, Callable, Optional, Dict, Any
+from typing import Any, Callable, Dict, List, Optional, Set
 from contextlib import contextmanager
 
 from .config import InterruptConfig

@@ -5,7 +5,7 @@ This service extracts and stores comprehensive context information when
 a selector failure occurs, including page state, tab type, and confidence scores.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional, Type
 from datetime import datetime
 
 from ..db.models.failure_event import FailureEvent

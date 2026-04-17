@@ -6,7 +6,7 @@ Conforms to Constitution Principle III - Deep Modularity.
 """
 
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 import json
 
@@ -64,13 +64,13 @@ class NavigationEvent:
     # Core identification
     event_id: str
     
-    # Timing
-    timestamp: datetime = field(default_factory=datetime.utcnow)
-    
     # Navigation details
     route_id: str
     context_before: str
     context_after: str
+    
+    # Timing
+    timestamp: datetime = field(default_factory=datetime.utcnow)
     
     # Outcome
     outcome: NavigationOutcome = NavigationOutcome.SUCCESS

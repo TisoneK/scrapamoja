@@ -22,7 +22,7 @@ import uuid
 import asyncio
 from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set, Type
 
 from src.selectors.fallback.models import FailureEvent, FailureType, FallbackResult, SuccessEvent
 from src.selectors.hooks.submission import (

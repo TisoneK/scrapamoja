@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Set, Tuple
 
 
 class CredentialSource(Enum):

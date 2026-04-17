@@ -7,7 +7,7 @@ the output protocol for the HTTP client.
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING, Any, Protocol, Self, Union
+from typing import Any, Optional, Protocol, Self, TYPE_CHECKING, Tuple, Union
 
 import httpx
 

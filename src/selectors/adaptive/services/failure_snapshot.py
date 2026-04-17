@@ -5,7 +5,7 @@ This service extends the existing core snapshot system to capture snapshots
 when selector failures occur, using the established SnapshotManager and storage.
 """
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional, Set
 from datetime import datetime, timedelta
 
 from ...core.snapshot import (

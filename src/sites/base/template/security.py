@@ -14,7 +14,7 @@ import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Set, Union
+from typing import Any, Dict, List, Optional, Set, Type, Union
 from dataclasses import dataclass
 from enum import Enum
 import json

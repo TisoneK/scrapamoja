@@ -7,7 +7,7 @@ classification, recovery actions, and event publishing for all resilience compon
 
 import asyncio
 import traceback
-from typing import Dict, Any, Optional, Callable, List
+from typing import Any, Callable, Dict, List, Optional, Type
 from datetime import datetime
 
 from .interfaces import IFailureHandler, IEventSubscriber

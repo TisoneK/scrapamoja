@@ -6,7 +6,7 @@ import logging
 import sys
 import time
 import threading
-from typing import Optional, TextIO, TYPE_CHECKING
+from typing import Optional, Set, TYPE_CHECKING, TextIO
 from enum import Enum
 
 from .config import InterruptConfig

@@ -5,7 +5,7 @@ This module contains configuration settings for the GitHub scraper,
 including site-specific settings, rate limiting, and feature flags.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from datetime import datetime
 
 

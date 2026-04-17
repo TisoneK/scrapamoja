@@ -7,7 +7,7 @@ capture, storage, triggers, monitoring, and integration components.
 
 import asyncio
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import uuid
 
 from .models import (

@@ -5,7 +5,7 @@ This module defines the ResourceMetrics entity for browser resource monitoring.
 """
 
 import time
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional, Set
 from dataclasses import dataclass, field
 from datetime import datetime
 import structlog

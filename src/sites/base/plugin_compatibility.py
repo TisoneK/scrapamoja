@@ -6,7 +6,7 @@ including semantic version parsing, dependency resolution, and compatibility mat
 """
 
 import re
-from typing import Dict, Any, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from enum import Enum

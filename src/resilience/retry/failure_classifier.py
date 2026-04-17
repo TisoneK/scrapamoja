@@ -6,7 +6,7 @@ transient vs permanent failure detection with retry-specific patterns.
 """
 
 import re
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type, overload
 from enum import Enum
 
 from ..models.retry_policy import RetryCondition

@@ -6,7 +6,7 @@ must implement, including lifecycle hooks, metadata, and plugin registration.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Union, Callable, Type
+from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum

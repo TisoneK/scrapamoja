@@ -5,7 +5,7 @@ Defines the RetryPolicy entity and related enums for configurable retry
 strategies including backoff types, jitter settings, and failure classification.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

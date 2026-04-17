@@ -5,7 +5,7 @@ This module provides the main extraction flow that orchestrates the extraction
 process using the extractor module with type conversion and validation.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional, Set
 from datetime import datetime
 from src.observability.logger import get_logger
 from ..extraction.config import WikipediaExtractionConfig

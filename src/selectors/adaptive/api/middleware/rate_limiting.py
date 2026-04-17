@@ -9,7 +9,7 @@ Story: 7.3 - Fast Triage Workflow
 
 import time
 import asyncio
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Type
 from collections import defaultdict, deque
 from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse

@@ -5,7 +5,7 @@ This module provides a template for implementing login functionality
 with common authentication patterns and security considerations.
 """
 
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from datetime import datetime
 import asyncio
 

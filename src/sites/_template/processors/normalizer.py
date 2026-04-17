@@ -5,7 +5,7 @@ This module provides data normalization functionality with configurable
 rules for cleaning, standardizing, and formatting scraped data.
 """
 
-from typing import Dict, Any, List, Optional, Callable, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 from datetime import datetime
 import re
 import html

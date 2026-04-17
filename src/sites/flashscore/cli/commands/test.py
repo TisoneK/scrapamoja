@@ -6,7 +6,7 @@ Tests navigation and selector functionality.
 
 import asyncio
 import argparse
-from typing import Dict, Any
+from typing import Any, Dict, Set, Type
 
 from ...scraper import FlashscoreScraper
 from ...selector_config import sports, match_status_detection

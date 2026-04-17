@@ -7,7 +7,7 @@ following Constitution Principle V - Production Resilience.
 
 import structlog
 import uuid
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional, Set
 from contextvars import ContextVar
 
 # Context variable for correlation ID

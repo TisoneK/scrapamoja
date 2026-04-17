@@ -8,7 +8,7 @@ defragmentation, compression, index optimization, and performance tuning.
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 from dataclasses import dataclass
 from enum import Enum
 import uuid

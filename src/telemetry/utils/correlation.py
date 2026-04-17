@@ -8,7 +8,7 @@ telemetry event tracking and operation linking.
 import uuid
 import time
 import threading
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional, Set, Type
 from datetime import datetime
 import hashlib
 import base64

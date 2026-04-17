@@ -9,7 +9,7 @@ Story 6-2: Selector Health Status Display
 """
 
 import logging
-from typing import Optional
+from typing import List, Optional
 
 from src.selectors.websocket.client import WebSocketClient
 from src.selectors.websocket.config import WebSocketConfig, load_websocket_config

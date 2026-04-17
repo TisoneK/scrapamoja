@@ -5,7 +5,7 @@ This module provides comprehensive link analysis and categorization
 for Wikipedia articles, including reference citation extraction.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
 from urllib.parse import urlparse, urljoin
 import re
 from datetime import datetime

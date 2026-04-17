@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 import inspect
-from typing import Dict, Any, List, Optional, Callable, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 from dataclasses import dataclass, field
 from enum import Enum
 

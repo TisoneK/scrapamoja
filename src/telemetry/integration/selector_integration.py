@@ -7,7 +7,7 @@ providing seamless telemetry collection without modifying selector logic.
 
 import asyncio
 import time
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any, Callable, Dict, List, Optional, Type
 from datetime import datetime
 from contextlib import asynccontextmanager
 import weakref

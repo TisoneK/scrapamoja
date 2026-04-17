@@ -7,7 +7,7 @@ following the data model specification.
 
 import uuid
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional, Type
 from pydantic import BaseModel, Field, validator
 
 

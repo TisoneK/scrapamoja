@@ -5,7 +5,7 @@ This module provides functionality for extracting attribute values
 from HTML elements and other structured nodes.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Type, Union
 
 from bs4 import Tag
 

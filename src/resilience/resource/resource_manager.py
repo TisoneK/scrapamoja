@@ -8,7 +8,7 @@ automatic restarts, and cleanup with support for multiple resource types.
 import asyncio
 import psutil
 import time
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any, Callable, Dict, List, Optional, Set, Type
 from datetime import datetime, timedelta
 from collections import defaultdict
 

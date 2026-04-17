@@ -23,7 +23,7 @@ import os
 import threading
 import time
 from collections import deque
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from src.selectors.fallback.models import FailureEvent, FailureType, SuccessEvent
 from src.selectors.adaptive.db.repositories.failure_event_repository import FailureEventRepository

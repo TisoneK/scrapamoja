@@ -7,7 +7,7 @@ when new failures are detected or when existing failures are updated.
 
 import asyncio
 import json
-from typing import Dict, Set
+from typing import Dict, Optional, Set, Type
 from fastapi import WebSocket, WebSocketDisconnect
 from datetime import datetime
 

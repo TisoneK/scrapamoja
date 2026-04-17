@@ -9,7 +9,7 @@ Story: 7.3 - Fast Triage Workflow
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional, Type
 from dataclasses import dataclass, field
 
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, JSON, select, func

@@ -5,7 +5,7 @@ This module provides comprehensive statistics tracking for extraction operations
 including performance metrics, success rates, and quality assessments.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Type
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 import json

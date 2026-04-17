@@ -16,7 +16,7 @@ Routes:
 - POST /custom-strategies/{id}/test - Test strategy
 """
 
-from typing import Optional, List
+from typing import Final, List, Optional, Type
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import JSONResponse

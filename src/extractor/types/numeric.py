@@ -6,7 +6,7 @@ from text content with support for integers, floats, and various numeric formats
 """
 
 import re
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Type, Union
 
 from ..core.rules import ExtractionRule, ExtractionResult, ExtractionType, DataType
 from ..exceptions import ExtractionError, TypeConversionError

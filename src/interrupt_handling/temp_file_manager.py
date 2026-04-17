@@ -8,7 +8,7 @@ import shutil
 import time
 import logging
 import threading
-from typing import Dict, List, Optional, Union, Callable
+from typing import Callable, Dict, List, Optional, Set, Union
 from pathlib import Path
 from contextlib import contextmanager
 from dataclasses import dataclass, field

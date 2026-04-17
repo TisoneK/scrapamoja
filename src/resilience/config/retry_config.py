@@ -7,7 +7,7 @@ Manages centralized retry configuration with validation, loading, and hot-reload
 import asyncio
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable, List
+from typing import Any, Callable, Dict, List, Optional, Type
 from dataclasses import dataclass, field
 from datetime import datetime
 

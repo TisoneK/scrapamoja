@@ -8,7 +8,7 @@ ensuring only the appropriate selectors are active for each tab context.
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set, Any, Callable
+from typing import Any, Callable, Dict, List, Optional, Set, Type
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
@@ -241,7 +241,7 @@ class TabScopedSelectorManager:
         tab_id: str,
         tab_type: TabType,
         initial_context_path: Optional[str] = None,
-        initial_dom_state: Optional[str] = None
+        initial_dom_state: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
         """

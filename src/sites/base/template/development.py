@@ -11,7 +11,7 @@ import json
 import yaml
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
+from typing import Any, Dict, List, Optional, Type, Union
 from dataclasses import dataclass, asdict
 from datetime import datetime
 import subprocess

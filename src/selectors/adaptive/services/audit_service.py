@@ -7,7 +7,7 @@ Provides a high-level service for recording all human decisions in the system.
 
 import json
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional, Type
 from pathlib import Path
 
 import structlog

@@ -7,7 +7,7 @@ integrations and ensures they work together seamlessly.
 
 import asyncio
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Final, List, Optional, Set
 from dataclasses import dataclass, field
 
 from src.observability.logger import get_logger

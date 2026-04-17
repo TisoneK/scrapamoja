@@ -5,7 +5,7 @@ Pydantic models for audit trail API requests and responses.
 """
 
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
 

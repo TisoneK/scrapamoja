@@ -7,7 +7,7 @@ from text content with support for various date formats and standardization.
 
 import re
 from datetime import datetime, date
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Type, Union
 
 from dateutil import parser as date_parser
 from dateutil.relativedelta import relativedelta

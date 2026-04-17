@@ -9,7 +9,7 @@ import os
 import re
 import yaml
 from pathlib import Path
-from typing import Dict, List, Type
+from typing import Any, Dict, List, Type
 from .base.site_scraper import BaseSiteScraper
 from .base.validation import ValidationResult, FileValidator, ConfigurationValidator, InterfaceValidator
 from .base.error_formatter import ErrorFormatter

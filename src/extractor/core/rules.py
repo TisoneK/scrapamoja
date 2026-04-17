@@ -7,7 +7,7 @@ including extraction rules, results, transformations, and validation errors.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 from pydantic import BaseModel, Field
 

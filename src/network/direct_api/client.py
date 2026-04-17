@@ -4,7 +4,7 @@ This module provides the core async HTTP client that can make requests
 without launching a browser, achieving millisecond-level latency.
 """
 
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 

@@ -5,7 +5,7 @@ This module contains data structures for extraction results, quality metrics,
 and validation results specific to Wikipedia content extraction.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Type
 from dataclasses import dataclass, field
 from datetime import datetime
 

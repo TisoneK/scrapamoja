@@ -8,7 +8,7 @@ correlation ID tracking, structured output, and performance monitoring.
 import asyncio
 import json
 import time
-from typing import Dict, Any, Optional, List, Union
+from typing import Any, Dict, List, Optional, Set, Union
 from datetime import datetime
 from dataclasses import dataclass, asdict
 from enum import Enum

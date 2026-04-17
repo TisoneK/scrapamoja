@@ -6,7 +6,7 @@ HTML elements, JSON objects, and other structured nodes.
 """
 
 import re
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Type, Union
 
 from bs4 import BeautifulSoup, Tag, NavigableString
 

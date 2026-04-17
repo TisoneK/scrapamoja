@@ -6,7 +6,7 @@ settings, defaults, and validation.
 """
 
 import os
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional, Set
 from datetime import datetime, timedelta
 
 from ..exceptions import TelemetryConfigurationError

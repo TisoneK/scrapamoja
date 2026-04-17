@@ -88,7 +88,7 @@ class LRUCache:
         self,
         max_size: int = 100,
         default_ttl_seconds: Optional[float] = 300,  # 5 minutes
-        max_memory_mb: Optional[float] = 50.0  # 50MB default
+        max_memory_mb: Optional[float] = 50.0,  # 50MB default
         cleanup_interval_seconds: float = 60  # 1 minute
     ):
         """
@@ -521,7 +521,6 @@ class LRUCache:
                     "cleanup_task_running": self._running
                 }
             }
-        }
 
 
 class ContextualLRUCache:

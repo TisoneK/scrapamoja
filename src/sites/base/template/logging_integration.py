@@ -9,7 +9,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Union
+from typing import Any, Dict, List, Optional, Set, Union
 from pathlib import Path
 
 from .integration_bridge import BaseIntegrationBridge

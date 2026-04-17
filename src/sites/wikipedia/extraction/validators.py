@@ -5,7 +5,7 @@ This module provides Wikipedia-specific data validation and quality assessment
 for extracted content, ensuring data integrity and consistency.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from datetime import datetime, date
 from .models import ValidationResult, QualityMetrics
 

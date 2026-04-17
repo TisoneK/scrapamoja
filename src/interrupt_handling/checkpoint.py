@@ -8,7 +8,7 @@ import pickle
 import time
 import threading
 import logging
-from typing import Any, Dict, List, Optional, Union, Callable
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from contextlib import contextmanager

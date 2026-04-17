@@ -12,7 +12,7 @@ Story: 6.1 - Confidence Score Query API
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, Dict, List, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.selectors.adaptive.db.repositories.failure_event_repository import (
     FailureEventRepository,

@@ -7,7 +7,7 @@ This module defines the TabContext entity for browser tab management.
 import asyncio
 import time
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import structlog

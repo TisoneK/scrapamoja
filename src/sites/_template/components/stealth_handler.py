@@ -5,7 +5,7 @@ This module provides stealth functionality to avoid detection by anti-bot
 systems through human behavior emulation and browser fingerprint randomization.
 """
 
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any, Callable, Dict, List, Optional, Set, Type
 from datetime import datetime
 import asyncio
 import random

@@ -10,7 +10,7 @@ import logging
 import logging.handlers
 import sys
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Union
+from typing import Any, Dict, List, Optional, Set, Union
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from enum import Enum

@@ -7,7 +7,7 @@ schema versioning, compression, and encryption support.
 
 import json
 import gzip
-from typing import Dict, Any, Optional, List, Union
+from typing import Any, Dict, List, Optional, Type, Union
 from datetime import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field

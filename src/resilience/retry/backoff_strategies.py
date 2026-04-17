@@ -7,7 +7,7 @@ exponential, linear, fixed, and custom backoff with jitter support.
 
 import random
 import math
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional, Type
 from abc import ABC, abstractmethod
 
 from ..models.retry_policy import BackoffType, JitterType

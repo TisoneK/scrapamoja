@@ -6,7 +6,7 @@ with configurable batching, parallel processing, and error handling.
 """
 
 import asyncio
-from typing import Dict, Any, Optional, List, Callable, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from collections import defaultdict

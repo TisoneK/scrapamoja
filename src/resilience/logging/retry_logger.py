@@ -7,7 +7,7 @@ and structured output for debugging and analysis of retry behavior.
 
 import json
 import traceback
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, Final, List, Optional, Type
 from datetime import datetime
 
 from ..correlation import get_correlation_id

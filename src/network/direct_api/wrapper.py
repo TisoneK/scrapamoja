@@ -18,6 +18,7 @@ synchronous-friendly interface for making HTTP requests.
 ```python
 import asyncio
 from src.network.direct_api import DirectApi
+import httpx
 
 async def main():
     # Create API instance
@@ -60,9 +61,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, TypedDict
+from typing import Any, Optional, Set, Tuple, Type, TypedDict
 
-import httpx
 
 from src.network.direct_api.client import AsyncHttpClient
 from src.network.direct_api.interfaces import AuthConfig

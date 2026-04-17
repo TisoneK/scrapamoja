@@ -7,7 +7,7 @@ data integrity checks, and format validation.
 
 import json
 import re
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, Union
 from datetime import datetime
 from urllib.parse import urlparse
 import uuid

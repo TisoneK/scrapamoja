@@ -5,7 +5,7 @@ Detailed error information for failed selector operations
 following the data model specification.
 """
 
-from typing import Optional
+from typing import Optional, Type
 from pydantic import BaseModel, Field, validator
 
 

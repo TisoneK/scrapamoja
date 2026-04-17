@@ -5,7 +5,7 @@ This implements the data access layer for audit logging.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional, Type
 from sqlalchemy import create_engine, select, func
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import desc, and_

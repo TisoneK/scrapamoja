@@ -10,7 +10,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Type, Union
 from decimal import Decimal
 
 from src.extractor import ExtractionRule, ExtractionType, DataType, TransformationType

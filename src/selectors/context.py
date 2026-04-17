@@ -6,7 +6,7 @@ information extraction from Playwright pages.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from playwright.async_api import Page, ElementHandle
 

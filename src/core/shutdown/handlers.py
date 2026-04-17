@@ -8,7 +8,7 @@ Provides signal detection and handler registration for different platforms
 import signal
 import sys
 import asyncio
-from typing import Callable, Optional
+from typing import Callable, Optional, Set
 
 from .state import ShutdownState
 

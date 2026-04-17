@@ -5,7 +5,7 @@ This module provides data validation functionality with configurable
 rules for validating scraped data quality and integrity.
 """
 
-from typing import Dict, Any, List, Optional, Callable, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 from datetime import datetime
 import re
 from urllib.parse import urlparse

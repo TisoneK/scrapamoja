@@ -7,7 +7,7 @@ behavior emulation, consent handling, anti-detection masking) with a unified API
 
 from __future__ import annotations
 
-from typing import Optional, AsyncIterator
+from typing import AsyncIterator, List, Optional
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 import logging

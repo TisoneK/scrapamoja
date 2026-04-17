@@ -13,7 +13,7 @@ Design Goals:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, TYPE_CHECKING, Type
 from dataclasses import dataclass, field
 
 from playwright.async_api import Page
