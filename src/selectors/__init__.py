@@ -8,7 +8,7 @@ strategy patterns, confidence scoring, validation, and the main selector engine.
 from .engine import SelectorEngine, get_selector_engine
 from .registry import SelectorRegistry, get_selector_registry
 from .validation import ValidationEngine, get_validation_engine
-from .confidence import ConfidenceScorer
+# from .confidence import ConfidenceScorer  # TODO: Implement ConfidenceScorer
 from .context import DOMContext, ElementInfoExtractor, TabContextManager
 from .unified_context import (
     UnifiedContext,

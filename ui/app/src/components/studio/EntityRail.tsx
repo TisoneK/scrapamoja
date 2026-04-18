@@ -1,84 +1,122 @@
 import { useStudioStore } from "../../store/studioStore";
 
-function HealthDot({ confidence }: { confidence: number }) {
-  const color = confidence >= 0.80 ? "var(--green)" : confidence >= 0.60 ? "var(--amber)" : "var(--red)";
-  return <div style={{ width:7, height:7, borderRadius:"50%", background:color, flexShrink:0 }}/>;
+const maxConf = (e: { strategies: { confidence: number }[] }) =>
+  e.strategies.length ? Math.max(...e.strategies.map(s => s.confidence)) : 0;
+
+function ConfDot({ conf }: { conf: number }) {
+  const c = conf >= 0.80 ? "#16A34A" : conf >= 0.60 ? "#D97706" : "#DC2626";
+  return <div style={{ width: 7, height: 7, borderRadius: "50%", background: c, flexShrink: 0 }} />;
 }
 
-const maxConf = (e: { strategies: { confidence: number }[] }) =>
-  Math.max(...e.strategies.map(s => s.confidence), 0);
+function MiniBar({ conf }: { conf: number }) {
+  const c = conf >= 0.80 ? "#16A34A" : conf >= 0.60 ? "#D97706" : "#DC2626";
+  const bg = conf >= 0.80 ? "#DCFCE7" : conf >= 0.60 ? "#FEF9C3" : "#FEE2E2";
+  return (
+    <div style={{ height: 3, borderRadius: 2, background: bg, overflow: "hidden", width: "100%" }}>
+      <div style={{ height: "100%", width: `${Math.round(conf * 100)}%`, background: c, borderRadius: 2 }} />
+    </div>
+  );
+}
 
 export function EntityRail() {
-  const { config, activeEntityId, setActiveEntityId, removeEntity } = useStudioStore();
+  const { config, activeEntityId, setActiveEntityId } = useStudioStore();
   if (!config) return null;
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", height:"100%", overflow:"hidden" }}>
-      <div className="panel-header">
-        <span className="panel-title">Entities</span>
-        <button className="btn btn-ghost btn-sm" style={{ fontSize:16, padding:"0 4px", lineHeight:1 }}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden",
+      fontFamily: "system-ui, sans-serif" }}>
+
+      {/* Header */}
+      <div style={{
+        padding: "10px 14px 8px", borderBottom: "1px solid #F1F5F9",
+        display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8",
+          letterSpacing: "0.07em", textTransform: "uppercase" }}>
+          Entities
+        </span>
+        <button
+          style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid #E2E8F0",
+            background: "white", cursor: "pointer", fontSize: 16, color: "#64748B",
+            display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
           onClick={() => {
             const name = prompt("Entity name:");
             if (!name) return;
-            const { upsertEntity } = useStudioStore.getState();
-            upsertEntity({
-              id: name, name, purpose: "", strategies: [], threshold:0.70,
-              timeout_ms:1500, fallback_enabled:true,
+            useStudioStore.getState().upsertEntity({
+              id: name, name, purpose: "", strategies: [],
+              threshold: 0.70, timeout_ms: 1500, fallback_enabled: true,
             });
           }}>+</button>
       </div>
 
-      <div style={{ flex:1, overflowY:"auto", padding:"6px" }}>
+      {/* Entity list */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
         {config.entities.map(entity => {
           const active = entity.id === activeEntityId;
           const conf = maxConf(entity);
           return (
-            <div key={entity.id} className={`entity-item ${active ? "active" : ""}`}
-              onClick={() => setActiveEntityId(entity.id)}>
-              <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:3 }}>
-                <HealthDot confidence={conf}/>
-                <span style={{ fontSize:12, fontWeight:500,
-                  color: active ? "var(--accent-bright)" : "var(--text-0)",
-                  flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            <div key={entity.id}
+              onClick={() => setActiveEntityId(entity.id)}
+              style={{
+                padding: "9px 10px", borderRadius: 8, cursor: "pointer",
+                marginBottom: 2,
+                background: active ? "#EEF2FF" : "transparent",
+                border: `1px solid ${active ? "#C7D2FE" : "transparent"}`,
+                transition: "all 0.1s",
+              }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "#F8FAFC"; }}
+              onMouseLeave={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+                <ConfDot conf={conf} />
+                <span style={{ fontSize: 12, fontWeight: 600,
+                  color: active ? "#4338CA" : "#0F172A", flex: 1,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {entity.name}
                 </span>
-                <span style={{ fontSize:9, fontFamily:"var(--font-mono)",
-                  color: conf >= 0.80 ? "var(--green)" : conf >= 0.60 ? "var(--amber)" : "var(--red)" }}>
+                <span style={{ fontSize: 10, fontWeight: 600, fontFamily: "monospace",
+                  color: conf >= 0.80 ? "#16A34A" : conf >= 0.60 ? "#D97706" : "#DC2626" }}>
                   {Math.round(conf * 100)}%
                 </span>
               </div>
-              <div style={{ fontSize:10, color:"var(--text-3)", fontFamily:"var(--font-mono)",
-                paddingLeft:14, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                {entity.strategies[0]?.selector ?? "—"}
+              <MiniBar conf={conf} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                <span style={{ fontSize: 10, color: "#94A3B8", fontFamily: "monospace",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "75%" }}>
+                  {entity.strategies[0]?.selector ?? "—"}
+                </span>
+                {entity.matches_found !== undefined && (
+                  <span style={{ fontSize: 10, color: "#94A3B8", flexShrink: 0 }}>
+                    {entity.matches_found}
+                  </span>
+                )}
               </div>
-              {entity.matches_found !== undefined && (
-                <div style={{ fontSize:9, color:"var(--text-3)", paddingLeft:14, marginTop:2 }}>
-                  {entity.matches_found} matches
-                </div>
-              )}
             </div>
           );
         })}
       </div>
 
       {/* Schema fields */}
-      <div style={{ padding:"10px 10px", borderTop:"1px solid var(--border-0)" }}>
-        <div style={{ fontSize:9, fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase",
-          color:"var(--text-3)", marginBottom:6 }}>
-          Schema fields
+      <div style={{ padding: "10px 14px", borderTop: "1px solid #F1F5F9", flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: "#94A3B8",
+          letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>
+          Schema Fields
         </div>
-        {config.entities.slice(0,5).map(e => (
-          <div key={e.id} style={{ display:"flex", gap:6, alignItems:"center", marginBottom:4 }}>
-            <span style={{ fontSize:10, fontFamily:"var(--font-mono)",
-              background:"var(--bg-3)", padding:"1px 6px", borderRadius:4,
-              color:"var(--text-2)", border:"1px solid var(--border-1)" }}>
-              {e.name}
-            </span>
-            <span style={{ fontSize:9, color:"var(--text-3)" }}>
-              {e.strategies[0]?.type ?? "—"}
-            </span>
-          </div>
-        ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {config.entities.slice(0, 5).map(e => (
+            <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 10, fontFamily: "monospace",
+                background: "#F1F5F9", border: "1px solid #E2E8F0",
+                padding: "1px 7px", borderRadius: 4, color: "#475569" }}>
+                {e.name}
+              </span>
+              <span style={{ fontSize: 9, color: "#CBD5E1", textTransform: "uppercase",
+                letterSpacing: "0.04em" }}>
+                {e.strategies[0]?.type ?? "—"}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
