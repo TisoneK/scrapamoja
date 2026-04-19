@@ -1,8 +1,8 @@
 import { useStudioStore } from "../../store/studioStore";
 
 const D = {
-  bg1:"#13121a", bg2:"#1a1920", border0:"rgba(255,255,255,0.05)",
-  text2:"#5f5d7a", text3:"#3a3850",
+  bg1:"#111318", bg2:"#171820", border0:"#1a1b22",
+  text2:"#565668", text3:"#32333e",
   green:"#1D9E75", greenBg:"#0a2018", greenBorder:"rgba(29,158,117,0.25)",
   amber:"#EF9F27", amberBg:"#1a1200", amberBorder:"rgba(239,159,39,0.25)",
   red:"#E24B4A",   redBg:"#1a0808",   redBorder:"rgba(226,75,74,0.25)",

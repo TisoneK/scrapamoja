@@ -1,10 +1,10 @@
 import { useStudioStore } from "../../store/studioStore";
 
 const D = {
-  bg0:"#0d0c11", bg2:"#1a1920", bg3:"#21202b",
-  border0:"rgba(255,255,255,0.05)", border1:"rgba(255,255,255,0.09)",
-  text0:"#e8e6f0", text1:"#9f9bc4", text2:"#5f5d7a", text3:"#3a3850",
-  accent:"#6366f1", green:"#1D9E75", greenBg:"#0a2018", greenBorder:"rgba(29,158,117,0.25)",
+  bg0:"#0e0f14", bg2:"#171820", bg3:"#1c1d27",
+  border0:"#1a1b22", border1:"#22232e",
+  text0:"#e2e2e8", text1:"#a0a0b4", text2:"#565668", text3:"#32333e",
+  accent:"#4f46e5", green:"#1D9E75", greenBg:"#0a2018", greenBorder:"rgba(29,158,117,0.25)",
   blue:"#378ADD", blueBg:"#081828", blueBorder:"rgba(55,138,221,0.25)",
   amber:"#EF9F27",
 };
