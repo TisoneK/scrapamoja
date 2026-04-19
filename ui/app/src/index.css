@@ -5,160 +5,178 @@
 @tailwind utilities;
 
 @layer base {
-    :root {
-        --background: 220 14% 96%;
-        --foreground: 222 47% 11%;
-        --card: 0 0% 100%;
-        --card-foreground: 222 47% 11%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 222 47% 11%;
-        --primary: 239 84% 67%;
-        --primary-foreground: 0 0% 100%;
-        --secondary: 220 14% 96%;
-        --secondary-foreground: 222 47% 11%;
-        --muted: 220 14% 96%;
-        --muted-foreground: 215 16% 47%;
-        --accent: 220 14% 96%;
-        --accent-foreground: 222 47% 11%;
-        --destructive: 0 84% 60%;
-        --destructive-foreground: 0 0% 100%;
-        --border: 220 13% 91%;
-        --input: 220 13% 91%;
-        --ring: 239 84% 67%;
-        --radius: 0.5rem;
-    }
-
-    .dark {
-        --background: 222.2 84% 4.9%;
-        --foreground: 210 40% 98%;
-        --card: 222.2 84% 4.9%;
-        --card-foreground: 210 40% 98%;
-        --popover: 222.2 84% 4.9%;
-        --popover-foreground: 210 40% 98%;
-        --primary: 210 40% 98%;
-        --primary-foreground: 222.2 47.4% 11.2%;
-        --secondary: 217.2 32.6% 17.5%;
-        --secondary-foreground: 210 40% 98%;
-        --muted: 217.2 32.6% 17.5%;
-        --muted-foreground: 215 20.2% 65.1%;
-        --accent: 217.2 32.6% 17.5%;
-        --accent-foreground: 210 40% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 210 40% 98%;
-        --border: 217.2 32.6% 17.5%;
-        --input: 217.2 32.6% 17.5%;
-        --ring: 212.7 26.8% 83.9%;
-    }
+  :root {
+    /* ── Scrapamoja dark theme — remaps all ShadCN/Tailwind tokens ── */
+    --background:    222 20% 8%;
+    --foreground:    220 15% 90%;
+    --card:          222 18% 11%;
+    --card-foreground: 220 15% 90%;
+    --popover:       222 18% 11%;
+    --popover-foreground: 220 15% 90%;
+    --primary:       239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary:     222 16% 16%;
+    --secondary-foreground: 220 15% 75%;
+    --muted:         222 16% 14%;
+    --muted-foreground: 220 10% 45%;
+    --accent:        222 16% 18%;
+    --accent-foreground: 220 15% 90%;
+    --destructive:   0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border:        222 14% 18%;
+    --input:         222 14% 18%;
+    --ring:          239 84% 67%;
+    --radius:        0.5rem;
+  }
 }
 
 @layer base {
-    * {
-        @apply border-border;
-        box-sizing: border-box;
-    }
+  * { @apply border-border; box-sizing: border-box; }
 
-    html {
-        font-family:
-            "Inter",
-            system-ui,
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            Roboto,
-            Oxygen,
-            Ubuntu,
-            sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        text-rendering: optimizeLegibility;
-    }
+  html {
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
 
-    body {
-        @apply bg-slate-50 text-slate-900;
-        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    }
+  body {
+    background: hsl(222 20% 8%);
+    color: hsl(220 15% 90%);
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+  }
 
-    /* Refined scrollbar for WebKit browsers */
-    ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-    }
+  /* ── Override Tailwind slate utilities to dark equivalents ── */
+  /* These are the classes used by existing components */
 
-    ::-webkit-scrollbar-track {
-        background: transparent;
-    }
+  /* Backgrounds */
+  .bg-white           { background-color: hsl(222 18% 13%) !important; }
+  .bg-slate-50        { background-color: hsl(222 18% 10%) !important; }
+  .bg-slate-100       { background-color: hsl(222 16% 16%) !important; }
+  .bg-slate-200       { background-color: hsl(222 14% 20%) !important; }
+  .bg-slate-800       { background-color: hsl(222 18% 18%) !important; }
+  .bg-slate-900       { background-color: hsl(222 20% 8%)  !important; }
+  .bg-slate-950       { background-color: hsl(222 25% 6%)  !important; }
 
-    ::-webkit-scrollbar-thumb {
-        @apply bg-slate-300 rounded-full;
-    }
+  /* Hover backgrounds */
+  .hover\:bg-slate-50:hover  { background-color: hsl(222 16% 15%) !important; }
+  .hover\:bg-slate-100:hover { background-color: hsl(222 16% 18%) !important; }
+  .hover\:bg-slate-800:hover { background-color: hsl(222 16% 22%) !important; }
 
-    ::-webkit-scrollbar-thumb:hover {
-        @apply bg-slate-400;
-    }
+  /* Text */
+  .text-slate-900     { color: hsl(220 15% 90%)  !important; }
+  .text-slate-800     { color: hsl(220 12% 82%)  !important; }
+  .text-slate-700     { color: hsl(220 10% 72%)  !important; }
+  .text-slate-600     { color: hsl(220 8% 58%)   !important; }
+  .text-slate-500     { color: hsl(220 7% 46%)   !important; }
+  .text-slate-400     { color: hsl(220 6% 38%)   !important; }
 
-    /* Focus ring */
-    :focus-visible {
-        @apply outline-none ring-2 ring-indigo-500 ring-offset-2;
-    }
+  /* Borders */
+  .border-slate-100   { border-color: hsl(222 14% 16%) !important; }
+  .border-slate-200   { border-color: hsl(222 14% 20%) !important; }
+  .border-slate-300   { border-color: hsl(222 12% 26%) !important; }
+
+  /* Hover borders */
+  .hover\:border-slate-300:hover { border-color: hsl(222 12% 28%) !important; }
+
+  /* Dividers */
+  .divide-slate-100 > * + * { border-color: hsl(222 14% 16%) !important; }
+  .divide-slate-200 > * + * { border-color: hsl(222 14% 20%) !important; }
+
+  /* Ring */
+  .ring-slate-200     { --tw-ring-color: hsl(222 14% 22%) !important; }
+
+  /* Green/emerald — keep bright but darken bg */
+  .bg-emerald-50      { background-color: hsl(152 40% 8%)  !important; }
+  .text-emerald-600   { color: hsl(152 60% 45%) !important; }
+  .text-emerald-700   { color: hsl(152 55% 40%) !important; }
+  .ring-emerald-200   { --tw-ring-color: rgba(29,158,117,0.3) !important; }
+  .badge-green        { background: hsl(152 40% 8%)  !important;
+                        color: hsl(152 60% 45%) !important;
+                        --tw-ring-color: rgba(29,158,117,0.3) !important; }
+
+  /* Amber */
+  .bg-amber-50        { background-color: hsl(38 60% 8%)   !important; }
+  .text-amber-600     { color: hsl(38 85% 55%)  !important; }
+  .text-amber-700     { color: hsl(38 80% 48%)  !important; }
+  .ring-amber-200     { --tw-ring-color: rgba(239,159,39,0.3) !important; }
+  .badge-yellow       { background: hsl(38 60% 8%)   !important;
+                        color: hsl(38 85% 55%)  !important;
+                        --tw-ring-color: rgba(239,159,39,0.3) !important; }
+
+  /* Red */
+  .bg-red-50          { background-color: hsl(0 55% 8%)    !important; }
+  .text-red-500       { color: hsl(0 72% 56%)   !important; }
+  .text-red-700       { color: hsl(0 68% 50%)   !important; }
+  .ring-red-200       { --tw-ring-color: rgba(226,75,74,0.3) !important; }
+  .badge-red          { background: hsl(0 55% 8%)    !important;
+                        color: hsl(0 72% 56%)   !important;
+                        --tw-ring-color: rgba(226,75,74,0.3) !important; }
+
+  /* Blue */
+  .bg-blue-50         { background-color: hsl(213 55% 8%)  !important; }
+  .text-blue-700      { color: hsl(213 70% 55%) !important; }
+  .ring-blue-200      { --tw-ring-color: rgba(55,138,221,0.3) !important; }
+  .badge-blue         { background: hsl(213 55% 8%)  !important;
+                        color: hsl(213 70% 55%) !important;
+                        --tw-ring-color: rgba(55,138,221,0.3) !important; }
+
+  /* Badge-slate */
+  .badge-slate        { background: hsl(222 16% 16%) !important;
+                        color: hsl(220 8% 58%)  !important;
+                        --tw-ring-color: hsl(222 14% 22%) !important; }
+
+  /* Indigo — keep but adjust */
+  .bg-indigo-50       { background-color: hsl(239 50% 12%) !important; }
+  .text-indigo-600    { color: hsl(239 80% 65%) !important; }
+  .text-indigo-700    { color: hsl(239 75% 60%) !important; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(222 14% 22%); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(222 12% 30%); }
+
+  :focus-visible { @apply outline-none ring-2 ring-indigo-500 ring-offset-2; }
 }
 
 @layer components {
-    /* Compact form inputs */
-    .input {
-        @apply w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg
-      text-slate-900 placeholder-slate-400
+  .input {
+    @apply w-full px-3 py-2 text-sm rounded-lg
       focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
       transition-shadow duration-150;
-    }
+    background: hsl(222 18% 13%);
+    border: 1px solid hsl(222 14% 20%);
+    color: hsl(220 15% 85%);
+  }
+  .input::placeholder { color: hsl(220 7% 40%); }
 
-    .select {
-        @apply w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg
-      text-slate-900
+  .select {
+    @apply w-full px-3 py-2 text-sm rounded-lg
       focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
       transition-shadow duration-150 cursor-pointer;
-    }
+    background: hsl(222 18% 13%);
+    border: 1px solid hsl(222 14% 20%);
+    color: hsl(220 15% 85%);
+  }
 
-    /* Page section heading */
-    .page-title {
-        @apply text-xl font-semibold text-slate-900 tracking-tight;
-    }
+  .page-title { @apply text-xl font-semibold tracking-tight; color: hsl(220 15% 90%); }
 
-    /* Table */
-    .data-table th {
-        @apply px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider
-      bg-slate-50 border-b border-slate-200;
-    }
+  .data-table th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider;
+    background: hsl(222 18% 11%);
+    color: hsl(220 7% 46%);
+    border-bottom: 1px solid hsl(222 14% 18%);
+  }
+  .data-table td {
+    @apply px-4 py-2 text-sm;
+    color: hsl(220 10% 72%);
+    border-bottom: 1px solid hsl(222 14% 15%);
+    font-family: ui-monospace, monospace;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover td { background: hsl(222 16% 14%); }
 
-    .data-table td {
-        @apply px-4 py-2 text-sm text-slate-700 border-b border-slate-100;
-    }
-
-    .data-table tr:last-child td {
-        @apply border-b-0;
-    }
-
-    .data-table tbody tr {
-        @apply hover:bg-slate-50 transition-colors duration-100;
-    }
-
-    /* Badge variants */
-    .badge {
-        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
-    }
-
-    .badge-green {
-        @apply bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200;
-    }
-    .badge-yellow {
-        @apply bg-amber-50  text-amber-700  ring-1 ring-amber-200;
-    }
-    .badge-blue {
-        @apply bg-blue-50   text-blue-700   ring-1 ring-blue-200;
-    }
-    .badge-red {
-        @apply bg-red-50    text-red-700    ring-1 ring-red-200;
-    }
-    .badge-slate {
-        @apply bg-slate-100 text-slate-600  ring-1 ring-slate-200;
-    }
+  .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold; }
 }

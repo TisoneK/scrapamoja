@@ -2,75 +2,83 @@ import { Link, useLocation } from "react-router-dom";
 import { Flag, AlertTriangle, ScrollText, Zap, User, LayoutGrid, Play, BarChart2 } from "lucide-react";
 import { cn } from "@/utils";
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
-
-const workbenchNav = [
-  { name: "Studio",  href: "/studio",  icon: LayoutGrid, match: ["/studio","/"] },
-  { name: "Runs",    href: "/runs",    icon: Play,        match: ["/runs"] },
-  { name: "Results", href: "/results", icon: BarChart2,   match: ["/results"] },
-];
-
-const adminNav = [
-  { name: "Feature Flags", href: "/feature-flags", icon: Flag,          match: ["/feature-flags"] },
-  { name: "Escalation",    href: "/escalation",    icon: AlertTriangle, match: ["/escalation"] },
-  { name: "Audit Log",     href: "/audit-log",     icon: ScrollText,    match: ["/audit-log"] },
-];
-
-// Pages that should render full-bleed (no padding wrapper)
 const FULLBLEED = ["/studio", "/", "/runs", "/results"];
 
-export function Layout({ children }: LayoutProps) {
-  const location = useLocation();
+const workbenchNav = [
+  { name:"Studio",  href:"/studio",  icon:LayoutGrid, match:["/studio","/"] },
+  { name:"Runs",    href:"/runs",    icon:Play,        match:["/runs"] },
+  { name:"Results", href:"/results", icon:BarChart2,   match:["/results"] },
+];
+const adminNav = [
+  { name:"Feature Flags", href:"/feature-flags", icon:Flag,          match:["/feature-flags"] },
+  { name:"Escalation",    href:"/escalation",    icon:AlertTriangle, match:["/escalation"] },
+  { name:"Audit Log",     href:"/audit-log",     icon:ScrollText,    match:["/audit-log"] },
+];
+
+export function Layout({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
   const allNav = [...workbenchNav, ...adminNav];
-  const currentPage = allNav.find((n) => n.match.includes(location.pathname));
-  const isFullBleed = FULLBLEED.includes(location.pathname);
+  const current = allNav.find(n => n.match.includes(pathname));
+  const isFullBleed = FULLBLEED.includes(pathname);
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen overflow-hidden" style={{ background:"#0d0c11", fontFamily:"system-ui, sans-serif" }}>
+
       {/* ── Sidebar ── */}
-      <aside className="w-60 flex-shrink-0 bg-slate-950 flex flex-col">
-        <div className="flex items-center gap-3 px-5 h-14 border-b border-slate-800">
-          <div className="w-7 h-7 bg-indigo-500 rounded-md flex items-center justify-center flex-shrink-0">
-            <Zap className="w-4 h-4 text-white" />
+      <aside style={{ width:220, flexShrink:0, background:"#13121a",
+        borderRight:"1px solid rgba(255,255,255,0.09)",
+        display:"flex", flexDirection:"column" }}>
+
+        {/* Brand */}
+        <div style={{ height:50, display:"flex", alignItems:"center", gap:10,
+          padding:"0 16px", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+          <div style={{ width:26, height:26, background:"#6366f1", borderRadius:7,
+            display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <Zap style={{ width:13, height:13, color:"white" }}/>
           </div>
-          <div className="min-w-0">
-            <p className="text-white font-semibold text-sm leading-tight">Scrapamoja</p>
-            <p className="text-slate-500 text-xs">Desktop</p>
+          <div>
+            <p style={{ color:"#e8e6f0", fontWeight:600, fontSize:13, lineHeight:1.2 }}>Scrapamoja</p>
+            <p style={{ color:"#5f5d7a", fontSize:11 }}>Desktop</p>
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          <p className="px-3 mb-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">Workbench</p>
-          {workbenchNav.map((item) => {
-            const active = item.match.includes(location.pathname);
+        {/* Nav */}
+        <nav style={{ flex:1, padding:"10px 8px", overflowY:"auto", display:"flex", flexDirection:"column", gap:2 }}>
+          <p style={{ fontSize:9, fontWeight:600, color:"#3a3850", letterSpacing:"0.1em",
+            textTransform:"uppercase", padding:"0 8px", marginBottom:4 }}>Workbench</p>
+          {workbenchNav.map(item => {
+            const active = item.match.includes(pathname);
             const Icon = item.icon;
             return (
-              <Link key={item.name} to={item.href} className="block no-underline">
-                <div className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
-                  active ? "bg-indigo-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-                )}>
-                  <Icon className="w-4 h-4 flex-shrink-0" />
+              <Link key={item.href} to={item.href} style={{ textDecoration:"none" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 10px",
+                  borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:500,
+                  transition:"all 0.12s",
+                  background: active ? "#1e1c2e" : "transparent",
+                  color: active ? "#a5b4fc" : "#5f5d7a",
+                  border: `1px solid ${active ? "#3d3775" : "transparent"}` }}>
+                  <Icon style={{ width:15, height:15, flexShrink:0 }}/>
                   {item.name}
                 </div>
               </Link>
             );
           })}
 
-          <div className="my-3 border-t border-slate-800" />
-          <p className="px-3 mb-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">System</p>
-          {adminNav.map((item) => {
-            const active = item.match.includes(location.pathname);
+          <div style={{ height:1, background:"rgba(255,255,255,0.05)", margin:"8px 6px" }}/>
+          <p style={{ fontSize:9, fontWeight:600, color:"#3a3850", letterSpacing:"0.1em",
+            textTransform:"uppercase", padding:"0 8px", marginBottom:4 }}>System</p>
+          {adminNav.map(item => {
+            const active = item.match.includes(pathname);
             const Icon = item.icon;
             return (
-              <Link key={item.name} to={item.href} className="block no-underline">
-                <div className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
-                  active ? "bg-indigo-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-                )}>
-                  <Icon className="w-4 h-4 flex-shrink-0" />
+              <Link key={item.href} to={item.href} style={{ textDecoration:"none" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 10px",
+                  borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:500,
+                  transition:"all 0.12s",
+                  background: active ? "#1e1c2e" : "transparent",
+                  color: active ? "#a5b4fc" : "#5f5d7a",
+                  border: `1px solid ${active ? "#3d3775" : "transparent"}` }}>
+                  <Icon style={{ width:15, height:15, flexShrink:0 }}/>
                   {item.name}
                 </div>
               </Link>
@@ -78,42 +86,50 @@ export function Layout({ children }: LayoutProps) {
           })}
         </nav>
 
-        <div className="px-3 pb-4 pt-3 border-t border-slate-800">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-7 h-7 bg-indigo-700 rounded-full flex items-center justify-center flex-shrink-0">
-              <User className="w-3.5 h-3.5 text-indigo-200" />
+        {/* User */}
+        <div style={{ padding:"10px 12px", borderTop:"1px solid rgba(255,255,255,0.05)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 8px" }}>
+            <div style={{ width:26, height:26, borderRadius:"50%", background:"#1e1c2e",
+              display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+              border:"1px solid #3d3775" }}>
+              <User style={{ width:13, height:13, color:"#a5b4fc" }}/>
             </div>
-            <div className="min-w-0">
-              <p className="text-slate-200 text-sm font-medium truncate leading-tight">System Admin</p>
-              <p className="text-slate-500 text-xs truncate">Administrator</p>
+            <div style={{ minWidth:0 }}>
+              <p style={{ color:"#c8c4d8", fontSize:12, fontWeight:500, lineHeight:1.2 }}>System Admin</p>
+              <p style={{ color:"#3a3850", fontSize:11 }}>Administrator</p>
             </div>
           </div>
         </div>
       </aside>
 
       {/* ── Main ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Topbar — only show for non-fullbleed pages */}
+      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
+        {/* Topbar — shown for admin pages */}
         {!isFullBleed && (
-          <header className="h-14 bg-white border-b border-slate-200 px-8 flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-slate-400">Scrapamoja</span>
-              <span className="text-slate-300">/</span>
-              <span className="text-slate-700 font-medium">{currentPage?.name ?? "Dashboard"}</span>
+          <header style={{ height:50, background:"#13121a",
+            borderBottom:"1px solid rgba(255,255,255,0.09)",
+            padding:"0 24px", display:"flex", alignItems:"center",
+            justifyContent:"space-between", flexShrink:0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13 }}>
+              <span style={{ color:"#3a3850" }}>Scrapamoja</span>
+              <span style={{ color:"#3a3850" }}>/</span>
+              <span style={{ color:"#e8e6f0", fontWeight:600 }}>{current?.name ?? "Dashboard"}</span>
             </div>
-            <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-3 py-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:11,
+              color:"#5f5d7a", background:"#1a1920", border:"1px solid rgba(255,255,255,0.09)",
+              borderRadius:20, padding:"3px 10px" }}>
+              <span style={{ width:6, height:6, borderRadius:"50%", background:"#EF9F27",
+                animation:"pulse-dot 1.4s ease-in-out infinite" }}/>
               API Offline
             </span>
           </header>
         )}
 
-        {/* Page content */}
-        <main className={cn("flex-1 overflow-hidden", !isFullBleed && "overflow-y-auto")}>
+        <main style={{ flex:1, overflow:"hidden" }}>
           {isFullBleed ? (
-            <div className="h-full flex flex-col">{children}</div>
+            <div style={{ height:"100%", display:"flex", flexDirection:"column" }}>{children}</div>
           ) : (
-            <div className="min-h-full p-6 flex flex-col">{children}</div>
+            <div style={{ height:"100%", overflowY:"auto", padding:24 }}>{children}</div>
           )}
         </main>
       </div>

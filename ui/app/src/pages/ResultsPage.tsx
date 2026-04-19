@@ -1,172 +1,148 @@
 import { useState, useMemo } from "react";
 
+const D = {
+  bg0:"#0d0c11", bg1:"#13121a", bg2:"#1a1920", bg3:"#21202b",
+  border0:"rgba(255,255,255,0.05)", border1:"rgba(255,255,255,0.09)",
+  text0:"#e8e6f0", text1:"#9f9bc4", text2:"#5f5d7a", text3:"#3a3850",
+  accent:"#6366f1", green:"#1D9E75", greenBg:"#0a2018", greenBorder:"rgba(29,158,117,0.25)",
+  amber:"#EF9F27", amberBg:"#1a1200",
+  blue:"#378ADD", blueBg:"#081828", blueBorder:"rgba(55,138,221,0.25)",
+};
+
 interface ResultRow {
-  id: string;
-  home_team: string;
-  away_team: string;
-  score: string;
-  status: string;
-  stage: string;
-  match_url: string;
-  scraped_at: string;
+  id:string; home_team:string; away_team:string;
+  score:string; status:string; stage:string;
+  match_url:string; scraped_at:string;
 }
 
-// Demo data
-const DEMO_RESULTS: ResultRow[] = Array.from({ length: 24 }, (_, i) => ({
-  id: `row-${i}`,
-  home_team: ["Boston Celtics","LA Lakers","Golden State Warriors","Miami Heat","Chicago Bulls","NY Knicks"][i % 6],
-  away_team: ["Dallas Mavericks","Phoenix Suns","Denver Nuggets","Milwaukee Bucks","Cleveland Cavaliers","Atlanta Hawks"][i % 6],
-  score: `${Math.floor(Math.random()*40)+70}–${Math.floor(Math.random()*40)+70}`,
-  status: ["LIVE","FT","SCH"][i % 3],
-  stage: ["Q1","Q2","Q3","Q4","FT","—"][i % 6],
-  match_url: `https://www.flashscore.com/match/abc${i}`,
-  scraped_at: new Date(Date.now() - i * 120000).toISOString(),
+const DEMO:ResultRow[] = Array.from({length:24},(_,i)=>({
+  id:`row-${i}`,
+  home_team:["Boston Celtics","LA Lakers","Golden State Warriors","Miami Heat","Chicago Bulls","NY Knicks"][i%6],
+  away_team:["Dallas Mavericks","Phoenix Suns","Denver Nuggets","Milwaukee Bucks","Cleveland Cavaliers","Atlanta Hawks"][i%6],
+  score:`${Math.floor(Math.random()*40)+70}–${Math.floor(Math.random()*40)+70}`,
+  status:["LIVE","FT","SCH"][i%3], stage:["Q1","Q2","Q3","Q4","FT","—"][i%6],
+  match_url:`https://flashscore.com/match/abc${i}`,
+  scraped_at:new Date(Date.now()-i*120000).toISOString(),
 }));
 
-type SortKey = keyof ResultRow;
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour12:false, hour:"2-digit", minute:"2-digit" });
-}
+type SortKey=keyof ResultRow;
 
 export function ResultsPage() {
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("scraped_at");
-  const [sortDir, setSortDir] = useState<"asc"|"desc">("desc");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [exportFmt, setExportFmt] = useState<"json"|"csv">("json");
+  const [search,setSearch]=useState("");
+  const [sortKey,setSortKey]=useState<SortKey>("scraped_at");
+  const [sortDir,setSortDir]=useState<"asc"|"desc">("desc");
+  const [selected,setSelected]=useState<Set<string>>(new Set());
+  const [fmt,setFmt]=useState<"json"|"csv">("json");
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return DEMO_RESULTS
-      .filter(r => !q || r.home_team.toLowerCase().includes(q) || r.away_team.toLowerCase().includes(q))
-      .sort((a, b) => {
-        const va = a[sortKey], vb = b[sortKey];
-        const cmp = va < vb ? -1 : va > vb ? 1 : 0;
-        return sortDir === "asc" ? cmp : -cmp;
-      });
-  }, [search, sortKey, sortDir]);
+  const filtered=useMemo(()=>{
+    const q=search.toLowerCase();
+    return DEMO.filter(r=>!q||r.home_team.toLowerCase().includes(q)||r.away_team.toLowerCase().includes(q))
+      .sort((a,b)=>{const va=a[sortKey],vb=b[sortKey];const c=va<vb?-1:va>vb?1:0;return sortDir==="asc"?c:-c;});
+  },[search,sortKey,sortDir]);
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("desc"); }
+  const toggleSort=(k:SortKey)=>{if(sortKey===k)setSortDir(d=>d==="asc"?"desc":"asc");else{setSortKey(k);setSortDir("desc");}};
+  const toggleRow=(id:string)=>setSelected(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n;});
+  const toggleAll=()=>setSelected(p=>p.size===filtered.length?new Set():new Set(filtered.map(r=>r.id)));
+
+  const handleExport=()=>{
+    const rows=filtered.filter(r=>selected.size===0||selected.has(r.id));
+    const keys=Object.keys(rows[0]??{}) as SortKey[];
+    const content=fmt==="json"
+      ?JSON.stringify(rows,null,2)
+      :[keys.join(","),...rows.map(r=>keys.map(k=>`"${r[k]}"`).join(","))].join("\n");
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([content],{type:fmt==="json"?"application/json":"text/csv"}));
+    a.download=`scrapamoja-results.${fmt}`; a.click();
   };
 
-  const toggleRow = (id: string) => {
-    setSelectedIds(prev => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
-  };
-
-  const toggleAll = () => {
-    setSelectedIds(prev => prev.size === filtered.length ? new Set() : new Set(filtered.map(r => r.id)));
-  };
-
-  const handleExport = () => {
-    const rows = filtered.filter(r => selectedIds.size === 0 || selectedIds.has(r.id));
-    let content: string;
-    let mime: string;
-    let ext: string;
-    if (exportFmt === "json") {
-      content = JSON.stringify(rows, null, 2);
-      mime = "application/json"; ext = "json";
-    } else {
-      const keys = Object.keys(rows[0] ?? {}) as SortKey[];
-      content = [keys.join(","), ...rows.map(r => keys.map(k => `"${r[k]}"`).join(","))].join("\n");
-      mime = "text/csv"; ext = "csv";
-    }
-    const blob = new Blob([content], { type: mime });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `scrapamoja-results.${ext}`;
-    a.click();
-  };
-
-  const SortIcon = ({ col }: { col: SortKey }) => (
-    <span style={{ fontSize:9, marginLeft:4, color: sortKey === col ? "var(--accent)" : "var(--text-3)" }}>
-      {sortKey === col ? (sortDir === "asc" ? "↑" : "↓") : "⇅"}
+  const SortIcon=({col}:{col:SortKey})=>(
+    <span style={{ fontSize:9,marginLeft:4,color:sortKey===col?D.accent:D.text3 }}>
+      {sortKey===col?(sortDir==="asc"?"↑":"↓"):"⇅"}
     </span>
   );
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", height:"100%", overflow:"hidden" }}>
+    <div style={{ display:"flex",flexDirection:"column",height:"100%",overflow:"hidden",
+      background:D.bg0,fontFamily:"system-ui, sans-serif",color:D.text0 }}>
+
       {/* Topbar */}
-      <div style={{ height:44, background:"var(--bg-1)", borderBottom:"1px solid var(--border-1)",
-        display:"flex", alignItems:"center", padding:"0 16px", gap:12, flexShrink:0 }}>
-        <span style={{ fontSize:11, fontWeight:600, color:"var(--text-2)",
-          letterSpacing:"0.08em", textTransform:"uppercase" }}>
-          Results
+      <div style={{ height:50,background:D.bg1,borderBottom:`1px solid ${D.border1}`,
+        display:"flex",alignItems:"center",padding:"0 16px",gap:12,flexShrink:0 }}>
+        <span style={{ fontSize:13,fontWeight:600,color:D.text0 }}>Results</span>
+        <span style={{ fontSize:10,color:D.text3,fontFamily:"monospace" }}>
+          {filtered.length} rows{selected.size>0?` · ${selected.size} selected`:""}
         </span>
-        <span style={{ fontSize:10, color:"var(--text-3)", fontFamily:"var(--font-mono)" }}>
-          {filtered.length} rows · {selectedIds.size > 0 ? `${selectedIds.size} selected` : "all"}
-        </span>
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Filter rows…"
-          style={{ background:"var(--bg-3)", border:"1px solid var(--border-1)", borderRadius:6,
-            padding:"4px 10px", fontSize:11, color:"var(--text-0)", fontFamily:"var(--font-mono)",
-            outline:"none", width:200 }}/>
-        <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
-          <select value={exportFmt} onChange={e => setExportFmt(e.target.value as any)}
-            style={{ background:"var(--bg-3)", border:"1px solid var(--border-1)", borderRadius:6,
-              padding:"4px 8px", fontSize:11, color:"var(--text-1)", outline:"none" }}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Filter rows…"
+          style={{ background:D.bg3,border:`1px solid ${D.border1}`,borderRadius:7,
+            padding:"4px 10px",fontSize:11,color:D.text0,fontFamily:"monospace",outline:"none",width:200 }}/>
+        <div style={{ marginLeft:"auto",display:"flex",gap:8,alignItems:"center" }}>
+          <select value={fmt} onChange={e=>setFmt(e.target.value as any)}
+            style={{ background:D.bg3,border:`1px solid ${D.border1}`,borderRadius:7,
+              padding:"4px 8px",fontSize:11,color:D.text1,outline:"none",cursor:"pointer" }}>
             <option value="json">JSON</option>
             <option value="csv">CSV</option>
           </select>
-          <button className="btn btn-primary btn-sm" onClick={handleExport}>
-            Export {selectedIds.size > 0 ? `(${selectedIds.size})` : "all"}
+          <button onClick={handleExport}
+            style={{ padding:"6px 14px",fontSize:12,fontWeight:600,border:"none",
+              borderRadius:8,background:D.accent,color:"white",cursor:"pointer" }}>
+            Export {selected.size>0?`(${selected.size})`:"all"}
           </button>
         </div>
       </div>
 
       {/* Table */}
-      <div style={{ flex:1, overflowY:"auto", background:"var(--bg-0)" }}>
-        <table className="data-table">
+      <div style={{ flex:1,overflowY:"auto" }}>
+        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12 }}>
           <thead>
-            <tr>
-              <th style={{ width:36 }}>
-                <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0}
+            <tr style={{ background:D.bg2 }}>
+              <th style={{ width:36,padding:"8px 12px",textAlign:"left",
+                borderBottom:`1px solid ${D.border1}`,position:"sticky",top:0,background:D.bg2 }}>
+                <input type="checkbox"
+                  checked={selected.size===filtered.length&&filtered.length>0}
                   onChange={toggleAll} style={{ cursor:"pointer" }}/>
               </th>
-              {[
-                ["home_team","Home"],["away_team","Away"],
-                ["score","Score"],["status","Status"],
-                ["stage","Stage"],["scraped_at","Time"],
-              ].map(([key, label]) => (
-                <th key={key} onClick={() => toggleSort(key as SortKey)} style={{ cursor:"pointer" }}>
+              {[["home_team","Home"],["away_team","Away"],["score","Score"],
+                ["status","Status"],["stage","Stage"],["scraped_at","Time"]].map(([key,label])=>(
+                <th key={key} onClick={()=>toggleSort(key as SortKey)}
+                  style={{ padding:"8px 12px",textAlign:"left",cursor:"pointer",
+                    fontSize:10,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",
+                    color:D.text2,borderBottom:`1px solid ${D.border1}`,
+                    position:"sticky",top:0,background:D.bg2 }}>
                   {label}<SortIcon col={key as SortKey}/>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map(row => (
-              <tr key={row.id} onClick={() => toggleRow(row.id)}
-                style={{ cursor:"pointer", background: selectedIds.has(row.id) ? "var(--accent-bg)" : undefined }}>
-                <td onClick={e => e.stopPropagation()}>
-                  <input type="checkbox" checked={selectedIds.has(row.id)}
-                    onChange={() => toggleRow(row.id)} style={{ cursor:"pointer" }}/>
+            {filtered.map(row=>(
+              <tr key={row.id} onClick={()=>toggleRow(row.id)}
+                style={{ cursor:"pointer",
+                  background:selected.has(row.id)?"rgba(99,102,241,0.06)":"transparent" }}>
+                <td style={{ padding:"8px 12px",borderBottom:`1px solid ${D.border0}` }}
+                  onClick={e=>e.stopPropagation()}>
+                  <input type="checkbox" checked={selected.has(row.id)}
+                    onChange={()=>toggleRow(row.id)} style={{ cursor:"pointer" }}/>
                 </td>
-                <td style={{ color:"var(--text-0)", fontFamily:"var(--font-ui)", fontWeight:500 }}>
-                  {row.home_team}
+                <td style={{ padding:"8px 12px",borderBottom:`1px solid ${D.border0}`,
+                  color:D.text0,fontWeight:500 }}>{row.home_team}</td>
+                <td style={{ padding:"8px 12px",borderBottom:`1px solid ${D.border0}`,
+                  color:D.text1,fontFamily:"monospace" }}>{row.away_team}</td>
+                <td style={{ padding:"8px 12px",borderBottom:`1px solid ${D.border0}`,
+                  fontWeight:600,color:D.text0,fontFamily:"monospace" }}>{row.score}</td>
+                <td style={{ padding:"8px 12px",borderBottom:`1px solid ${D.border0}` }}>
+                  <span style={{ fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:4,
+                    background:row.status==="LIVE"?D.greenBg:row.status==="FT"?D.bg3:D.blueBg,
+                    color:row.status==="LIVE"?D.green:row.status==="FT"?D.text2:D.blue,
+                    border:`1px solid ${row.status==="LIVE"?D.greenBorder:row.status==="FT"?"rgba(255,255,255,0.06)":D.blueBorder}`,
+                  }}>{row.status}</span>
                 </td>
-                <td style={{ color:"var(--text-1)", fontFamily:"var(--font-ui)" }}>
-                  {row.away_team}
+                <td style={{ padding:"8px 12px",borderBottom:`1px solid ${D.border0}`,color:D.text2 }}>
+                  {row.stage}
                 </td>
-                <td style={{ fontWeight:600, color:"var(--text-0)" }}>{row.score}</td>
-                <td>
-                  <span style={{
-                    fontSize:9, fontWeight:600, padding:"2px 6px", borderRadius:4,
-                    background: row.status === "LIVE" ? "var(--green-bg)" : row.status === "FT" ? "var(--bg-3)" : "var(--blue-bg)",
-                    color: row.status === "LIVE" ? "var(--green)" : row.status === "FT" ? "var(--text-2)" : "var(--blue)",
-                    border: `1px solid ${row.status === "LIVE" ? "rgba(29,158,117,.3)" : row.status === "FT" ? "var(--border-1)" : "rgba(55,138,221,.3)"}`,
-                  }}>
-                    {row.status}
-                  </span>
+                <td style={{ padding:"8px 12px",borderBottom:`1px solid ${D.border0}`,
+                  color:D.text3,fontFamily:"monospace" }}>
+                  {new Date(row.scraped_at).toLocaleTimeString("en-GB",{hour12:false,hour:"2-digit",minute:"2-digit"})}
                 </td>
-                <td>{row.stage}</td>
-                <td style={{ color:"var(--text-3)" }}>{formatTime(row.scraped_at)}</td>
               </tr>
             ))}
           </tbody>
