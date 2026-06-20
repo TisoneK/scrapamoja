@@ -1,0 +1,23 @@
+id: h2h_result_indicator
+name: H2H Result Indicator
+selector_type: css
+description: "Win/Loss indicator in H2H row (W, L, D)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".h2h__icon"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='h2h__icon']"
+    weight: 0.8
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'h2h__icon')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"
+  parent_selector: ".h2h__row"

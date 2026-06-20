@@ -1,23 +1,31 @@
 id: previous_matches
-name: Previous Matches
+name: Previous Matches (H2H)
 selector_type: css
-description: "Previous head-to-head matches list"
-confidence_threshold: 0.8
+description: "H2H previous match rows (basketball)"
+confidence_threshold: 0.7
 timeout: 5.0
 retry_count: 3
+
 strategies:
   - type: "css"
-    selector: ".h2h-matches"
+    selector: ".h2h__row"
     weight: 1.0
   - type: "css"
-    selector: ".previous-matches"
-    weight: 0.9
+    selector: "a.h2h__row"
+    weight: 0.95
   - type: "css"
-    selector: "[data-testid='h2h-matches']"
+    selector: "[class*='h2h__row']"
     weight: 0.8
   - type: "xpath"
-    selector: "//div[contains(@class, 'h2h') and contains(@class, 'matches')]"
+    selector: "//a[contains(@class, 'h2h__row')]"
     weight: 0.7
+  - type: "xpath"
+    selector: "//*[contains(@class, 'h2h') and contains(@class, 'row')]"
+    weight: 0.6
+
 metadata:
   wait_for_element: true
   tab_context: "h2h"
+  stable_selectors:
+    - ".h2h__row"
+  notes: "H2H rows are <a> elements with class h2h__row. Class name is semi-stable (not obfuscated)."

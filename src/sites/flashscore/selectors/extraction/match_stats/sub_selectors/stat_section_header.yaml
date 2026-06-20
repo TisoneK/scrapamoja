@@ -1,0 +1,29 @@
+id: stat_section_header
+name: Stat Section Header
+selector_type: css
+description: "Section header in stats view (e.g., 'Scoring', 'Rebounds', 'Other')"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".stat__header"
+    weight: 1.0
+  - type: "css"
+    selector: ".stat__header.sectionHeader"
+    weight: 0.95
+  - type: "css"
+    selector: ".sectionHeader"
+    weight: 0.8
+  - type: "css"
+    selector: "[class*='sectionHeader']"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//*[contains(@class, 'stat__header')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "stats"
+  notes: "Section headers like 'Scoring', 'Rebounds', 'Other' organize stats into groups"

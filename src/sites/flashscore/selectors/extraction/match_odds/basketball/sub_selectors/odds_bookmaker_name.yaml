@@ -1,0 +1,27 @@
+id: odds_bookmaker_name
+name: Odds Bookmaker Name
+selector_type: css
+description: "Bookmaker name from logo link title attribute"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".oddsCell__bookmakerPart a[title]"
+    weight: 1.0
+  - type: "css"
+    selector: ".oddsCell__bookmakerPart img[alt]"
+    weight: 0.9
+  - type: "css"
+    selector: "[class*='bookmakerPart'] a"
+    weight: 0.7
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'bookmakerPart')]//a[@title]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "odds"
+  parent_selector: ".ui-table__row"
+  notes: "Bookmaker name from title attribute on logo link (e.g., title='1xBet'). Fallback: alt attribute on logo image."

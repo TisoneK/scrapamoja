@@ -1,26 +1,30 @@
 id: home_team
 name: Home Team
 selector_type: css
-description: "Home team name in match summary"
-confidence_threshold: 0.8
+description: "Home team name on match detail page"
+confidence_threshold: 0.7
 timeout: 5.0
 retry_count: 3
+
 strategies:
   - type: "css"
-    selector: ".event__participant--home"
+    selector: ".duelParticipant__home .participant__participantNameWrapper"
     weight: 1.0
   - type: "css"
-    selector: ".homeTeam"
+    selector: ".duelParticipant__home"
     weight: 0.9
-  - type: "xpath"
-    selector: "//div[contains(@class, 'home') and contains(@class, 'team')]"
-    weight: 0.8
   - type: "css"
-    selector: "[data-testid='home-team']"
+    selector: "[class*='duelParticipant__home']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//*[contains(@class, 'duelParticipant__home')]"
     weight: 0.7
   - type: "css"
-    selector: ".participant__home"
-    weight: 0.6
+    selector: "[data-testid='home-team']"
+    weight: 0.5
+
 metadata:
   wait_for_element: true
   tab_context: "summary"
+  stable_selectors:
+    - ".duelParticipant__home"

@@ -1,0 +1,22 @@
+id: h2h_section_header
+name: H2H Section Header
+selector_type: css
+description: "Section header in H2H tab (e.g., 'Last matches: Valencia', 'Head-to-head matches')"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".h2h__section .wcl-headerSection_SGpOR"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='headerSection']"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//*[contains(@class, 'h2h__section')]//*[contains(@class, 'headerSection')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"

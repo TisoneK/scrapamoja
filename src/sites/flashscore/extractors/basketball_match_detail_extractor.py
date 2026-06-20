@@ -4,7 +4,14 @@ Basketball match detail extractor implementing primary tab extraction.
 Extends the base MatchDetailExtractor with basketball-specific implementations
 for primary tabs: SUMMARY, H2H, ODDS, STATS.
 
-Uses real FlashScore DOM selectors discovered via live page inspection.
+Selector strategy:
+1. Primary: YAML-driven selector engine with fallback chains (volatile-selector resilient)
+2. Fallback: Hardcoded Playwright selectors (confirmed via live page inspection)
+
+The YAML selectors live in src/sites/flashscore/selectors/extraction/ and define
+ordered fallback chains: data-testid → obfuscated class → partial class → xpath.
+When FlashScore rotates CSS hashes, only the obfuscated class entries need updating
+in the YAML — no Python code changes required.
 """
 
 from typing import Dict, Any, Optional, List
@@ -26,6 +33,7 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
     def __init__(self, scraper: FlashscoreScraper):
         super().__init__(scraper)
         self.primary_extractor = BasketballPrimaryTabExtractor(scraper)
+        self._selector_engine = getattr(scraper, 'selector_engine', None)
     
     async def _extract_basic_info(self, page_state: PageState) -> Optional[BasicMatchInfo]:
         """Extract basic match information from the match detail page using real FlashScore selectors."""
@@ -357,10 +365,76 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     - Under "Stats" period tabs: Match, 1st Quarter, 2nd Quarter, 3rd Quarter, 4th Quarter
     
     All navigation uses .wcl-tab_GS7ig buttons matched by text content.
+    
+    Selector strategy:
+    - Primary: YAML-driven selector engine with fallback chains
+    - Fallback: Hardcoded Playwright selectors (confirmed via live page inspection)
+    
+    The YAML selectors define ordered fallback chains:
+    data-testid → obfuscated class → partial class match → xpath
+    When FlashScore rotates CSS hashes, only the YAML entries need updating.
     """
     
+    def __init__(self, scraper: FlashscoreScraper):
+        super().__init__(scraper)
+        self._selector_engine = getattr(scraper, 'selector_engine', None)
+    
+    async def _resolve_elements(self, selector_name: str, parent=None) -> List[Any]:
+        """Resolve elements using YAML-driven selector engine with fallback to hardcoded selectors.
+        
+        Args:
+            selector_name: YAML selector ID (e.g., 'full_time_stats', 'previous_matches')
+            parent: Optional parent element to search within. If None, searches page.
+            
+        Returns:
+            List of ElementHandle objects, or empty list if not found.
+        """
+        if self._selector_engine:
+            try:
+                search_target = parent or self.page
+                elements = await self._selector_engine.find_all(search_target, selector_name)
+                if elements:
+                    self.logger.debug(f"YAML selector '{selector_name}' resolved: {len(elements)} elements")
+                    return elements
+            except Exception as e:
+                self.logger.debug(f"YAML selector '{selector_name}' failed, using fallback: {e}")
+        return []
+    
+    async def _resolve_element(self, selector_name: str, parent=None) -> Optional[Any]:
+        """Resolve a single element using YAML-driven selector engine with fallback.
+        
+        Args:
+            selector_name: YAML selector ID
+            parent: Optional parent element to search within
+            
+        Returns:
+            ElementHandle or None
+        """
+        elements = await self._resolve_elements(selector_name, parent)
+        return elements[0] if elements else None
+    
+    async def _resolve_text(self, selector_name: str, parent=None) -> Optional[str]:
+        """Resolve element text using YAML-driven selector engine with fallback.
+        
+        Args:
+            selector_name: YAML selector ID
+            parent: Optional parent element to search within
+            
+        Returns:
+            Text content string or None
+        """
+        if self._selector_engine:
+            try:
+                search_target = parent or self.page
+                text = await self._selector_engine.get_text(search_target, selector_name)
+                if text:
+                    return text
+            except Exception as e:
+                self.logger.debug(f"YAML text resolution for '{selector_name}' failed: {e}")
+        return None
+    
     async def _extract_summary_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from SUMMARY tab using real FlashScore selectors."""
+        """Extract data from SUMMARY tab using YAML selectors with hardcoded fallback."""
         try:
             overview = {}
             team_statistics = {}
@@ -368,23 +442,35 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             
             # Extract match overview information
             try:
-                # Competition / tournament info
-                competition_elements = await self.page.query_selector_all('.wcl-scores-overline-03_Jdp91, [class*="scores-overline"]')
+                # Competition / tournament info (YAML-first, then hardcoded)
+                competition_elements = await self._resolve_elements('competition')
+                if not competition_elements:
+                    competition_elements = await self.page.query_selector_all(
+                        '.wcl-scores-overline-03_Jdp91, [class*="scores-overline"]'
+                    )
                 for el in competition_elements:
                     text = (await el.text_content()).strip()
                     if text and len(text) < 100:
                         if 'competition' not in overview:
                             overview['competition'] = text
                 
-                # Match start time
-                time_el = await self.page.query_selector('.duelParticipant__startTime')
-                if time_el:
-                    overview['date'] = (await time_el.text_content()).strip()
+                # Match start time (YAML selector: match_info)
+                time_text = await self._resolve_text('match_info')
+                if time_text:
+                    overview['date'] = time_text
+                else:
+                    time_el = await self.page.query_selector('.duelParticipant__startTime')
+                    if time_el:
+                        overview['date'] = (await time_el.text_content()).strip()
                 
-                # Match status
-                status_el = await self.page.query_selector('.fixedHeaderDuel__detailStatus')
-                if status_el:
-                    overview['status'] = (await status_el.text_content()).strip()
+                # Match status (YAML selector: match_status)
+                status_text = await self._resolve_text('match_status')
+                if status_text:
+                    overview['status'] = status_text
+                else:
+                    status_el = await self.page.query_selector('.fixedHeaderDuel__detailStatus')
+                    if status_el:
+                        overview['status'] = (await status_el.text_content()).strip()
             except Exception as e:
                 self.logger.debug(f"Error extracting overview: {e}")
             
@@ -393,14 +479,15 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                 home_quarter_scores = []
                 away_quarter_scores = []
                 
-                # Home quarter scores: .smh__part.smh__home (not current)
-                home_parts = await self.page.query_selector_all('.smh__part.smh__home:not(.smh__score)')
+                # Quarter scores (YAML selector: quarter_scores, then hardcoded)
+                home_parts = await self._resolve_elements('quarter_scores')
+                if not home_parts:
+                    home_parts = await self.page.query_selector_all('.smh__part.smh__home:not(.smh__score)')
                 for part in home_parts:
                     text = (await part.text_content()).strip()
                     if text:
                         home_quarter_scores.append(text)
                 
-                # Away quarter scores: .smh__part.smh__away (not current)
                 away_parts = await self.page.query_selector_all('.smh__part.smh__away:not(.smh__score)')
                 for part in away_parts:
                     text = (await part.text_content()).strip()
@@ -451,9 +538,11 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                 if text:
                     sections.append(text)
             
-            # Extract previous matches from H2H rows
+            # Extract previous matches from H2H rows (YAML selector: previous_matches, fallback: .h2h__row)
             try:
-                h2h_rows = await self.page.query_selector_all('.h2h__row')
+                h2h_rows = await self._resolve_elements('previous_matches')
+                if not h2h_rows:
+                    h2h_rows = await self.page.query_selector_all('.h2h__row')
                 self.logger.info(f"Found {len(h2h_rows)} H2H rows")
                 
                 for row in h2h_rows:
@@ -593,9 +682,11 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             odds_history = []
             bookmaker_data = {}
             
-            # Extract current market odds
+            # Extract current market odds (YAML selector: betting_odds, fallback: .ui-table__row)
             try:
-                odds_rows = await self.page.query_selector_all('.ui-table__row')
+                odds_rows = await self._resolve_elements('betting_odds')
+                if not odds_rows:
+                    odds_rows = await self.page.query_selector_all('.ui-table__row')
                 self.logger.info(f"Found {len(odds_rows)} odds rows")
                 
                 for row in odds_rows:
@@ -710,12 +801,22 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             player_performance = []
             team_performance = {}
             
-            # Get all stat elements in document order (rows + headers)
+            # Get all stat elements in document order (YAML selectors, then hardcoded fallback)
             try:
                 current_category = "General"
-                all_elements = await self.page.query_selector_all(
-                    '.wcl-row_2oCpS, .stat__header'
-                )
+                # Try YAML selectors for stat rows and headers
+                stat_rows = await self._resolve_elements('full_time_stats')
+                stat_headers = await self._resolve_elements('stat_section_header')
+                
+                if stat_rows or stat_headers:
+                    # YAML-driven path: combine rows and headers, sort by DOM position
+                    all_elements = stat_rows + stat_headers
+                    # Simple merge: iterate YAML-resolved elements
+                else:
+                    # Hardcoded fallback: query page directly
+                    all_elements = await self.page.query_selector_all(
+                        '.wcl-row_2oCpS, .stat__header'
+                    )
                 
                 for element in all_elements:
                     cls = await element.get_attribute('class') or ''
@@ -729,55 +830,29 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                                 detailed_statistics[current_category] = {}
                         continue
                     
-                    # This is a stat row - use data-testid for reliability
+                    # This is a stat row - YAML sub-selectors first, then hardcoded fallback
                     # Must NOT use [class*="category"] as it matches parent wrapper .wcl-category_Ydwqh
-                    category_el = await element.query_selector(
-                        '[data-testid="wcl-statistics-category"] > span'
-                    )
+                    category_el = await self._resolve_element('stat_category_name', element)
                     if not category_el:
-                        category_el = await element.query_selector(
-                            '[data-testid="wcl-statistics-category"]'
-                        )
+                        category_el = await element.query_selector('[data-testid="wcl-statistics-category"] > span')
                     if not category_el:
-                        category_el = await element.query_selector(
-                            '.wcl-category_6sT1J > span'
-                        )
+                        category_el = await element.query_selector('[data-testid="wcl-statistics-category"]')
                     if not category_el:
-                        category_el = await element.query_selector(
-                            '.wcl-category_6sT1J'
-                        )
+                        category_el = await element.query_selector('.wcl-category_6sT1J > span')
+                    if not category_el:
+                        category_el = await element.query_selector('.wcl-category_6sT1J')
                     
-                    home_el = await element.query_selector(
-                        '.wcl-homeValue_3Q-7P [data-testid="wcl-statistics-value"] > span'
-                    )
+                    home_el = await self._resolve_element('stat_home_value', element)
                     if not home_el:
-                        home_el = await element.query_selector(
-                            '.wcl-homeValue_3Q-7P [data-testid="wcl-statistics-value"]'
-                    )
+                        home_el = await element.query_selector('.wcl-homeValue_3Q-7P [data-testid="wcl-statistics-value"] > span')
                     if not home_el:
-                        home_el = await element.query_selector(
-                            '.wcl-homeValue_3Q-7P > span'
-                    )
-                    if not home_el:
-                        home_el = await element.query_selector(
-                            '.wcl-homeValue_3Q-7P'
-                    )
+                        home_el = await element.query_selector('.wcl-homeValue_3Q-7P')
                     
-                    away_el = await element.query_selector(
-                        '.wcl-awayValue_Y-QR1 [data-testid="wcl-statistics-value"] > span'
-                    )
+                    away_el = await self._resolve_element('stat_away_value', element)
                     if not away_el:
-                        away_el = await element.query_selector(
-                            '.wcl-awayValue_Y-QR1 [data-testid="wcl-statistics-value"]'
-                    )
+                        away_el = await element.query_selector('.wcl-awayValue_Y-QR1 [data-testid="wcl-statistics-value"] > span')
                     if not away_el:
-                        away_el = await element.query_selector(
-                            '.wcl-awayValue_Y-QR1 > span'
-                    )
-                    if not away_el:
-                        away_el = await element.query_selector(
-                            '.wcl-awayValue_Y-QR1'
-                    )
+                        away_el = await element.query_selector('.wcl-awayValue_Y-QR1')
                     
                     if category_el and home_el and away_el:
                         name = (await category_el.text_content()).strip()

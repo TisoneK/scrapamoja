@@ -1,24 +1,39 @@
 id: full_time_stats
 name: Full Time Stats
 selector_type: css
-description: "Full time match statistics"
-confidence_threshold: 0.8
+description: "Full time match statistics row container (basketball)"
+confidence_threshold: 0.7
 timeout: 5.0
 retry_count: 3
+
 strategies:
+  # Strategy 1: data-testid — most stable, survives CSS hash changes
   - type: "css"
-    selector: ".full-time-stats"
+    selector: "[data-testid='wcl-statistics']"
     weight: 1.0
+  # Strategy 2: Obfuscated class (current hash) — high confidence but volatile
   - type: "css"
-    selector: ".ft-statistics"
+    selector: ".wcl-row_2oCpS"
     weight: 0.9
+  # Strategy 3: Partial class match — survives minor hash changes
   - type: "css"
-    selector: "[data-testid='full-time-stats']"
+    selector: "[class*='wcl-row']"
     weight: 0.8
-  - type: "xpath"
-    selector: "//div[contains(@class, 'full-time') and contains(@class, 'stats')]"
+  # Strategy 4: Attribute match on testid pattern
+  - type: "attribute_match"
+    selector: "div[data-testid='wcl-statistics']"
     weight: 0.7
+  # Strategy 5: XPath fallback — most resilient to class changes
+  - type: "xpath"
+    selector: "//div[@data-testid='wcl-statistics']"
+    weight: 0.6
+
 metadata:
   wait_for_element: true
   tab_context: "stats"
   tertiary_context: "ft"
+  volatile_selectors:
+    - ".wcl-row_2oCpS"
+  stable_selectors:
+    - "[data-testid='wcl-statistics']"
+  notes: "FlashScore uses obfuscated class names that change periodically. data-testid selectors are more stable."

@@ -1,0 +1,26 @@
+id: quarter_scores
+name: Quarter Scores
+selector_type: css
+description: "Quarter-by-quarter score breakdown (basketball)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".smh__part.smh__home:not(.smh__score)"
+    weight: 1.0
+  - type: "css"
+    selector: ".smh__part"
+    weight: 0.8
+  - type: "css"
+    selector: "[class*='smh__part']"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//*[contains(@class, 'smh__part')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "summary"
+  notes: "Returns multiple elements. Home quarter scores: .smh__part.smh__home, Away: .smh__part.smh__away. Exclude .smh__score class to get per-quarter only."

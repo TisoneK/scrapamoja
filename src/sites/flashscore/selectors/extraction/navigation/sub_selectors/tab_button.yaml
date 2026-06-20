@@ -1,0 +1,22 @@
+id: tab_button
+name: Tab Button
+selector_type: css
+description: "Generic tab button for navigation (primary, secondary, tertiary)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".wcl-tab_GS7ig"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='wcl-tab']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//*[contains(@class, 'wcl-tab')]"
+    weight: 0.7
+
+metadata:
+  wait_for_element: false
+  notes: "Match by text content: 'Match', 'Odds', 'H2H', 'Stats', 'Summary', etc. Selected tabs have wcl-tabSelected class."

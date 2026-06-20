@@ -1,26 +1,30 @@
 id: away_team
 name: Away Team
 selector_type: css
-description: "Away team name in match summary"
-confidence_threshold: 0.8
+description: "Away team name on match detail page"
+confidence_threshold: 0.7
 timeout: 5.0
 retry_count: 3
+
 strategies:
   - type: "css"
-    selector: ".event__participant--away"
+    selector: ".duelParticipant__away .participant__participantNameWrapper"
     weight: 1.0
   - type: "css"
-    selector: ".awayTeam"
+    selector: ".duelParticipant__away"
     weight: 0.9
-  - type: "xpath"
-    selector: "//div[contains(@class, 'away') and contains(@class, 'team')]"
-    weight: 0.8
   - type: "css"
-    selector: "[data-testid='away-team']"
+    selector: "[class*='duelParticipant__away']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//*[contains(@class, 'duelParticipant__away')]"
     weight: 0.7
   - type: "css"
-    selector: ".participant__away"
-    weight: 0.6
+    selector: "[data-testid='away-team']"
+    weight: 0.5
+
 metadata:
   wait_for_element: true
   tab_context: "summary"
+  stable_selectors:
+    - ".duelParticipant__away"

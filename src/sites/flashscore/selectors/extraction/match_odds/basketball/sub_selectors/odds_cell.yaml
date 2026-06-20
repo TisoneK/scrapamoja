@@ -1,0 +1,27 @@
+id: odds_cell
+name: Odds Cell
+selector_type: css
+description: "Individual odds value cell (current odds)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".oddsCell__odd"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='oddsCell__odd']"
+    weight: 0.9
+  - type: "css"
+    selector: ".oddsCell__odd:not(.oddsCell__odd--up):not(.oddsCell__odd--down)"
+    weight: 0.8
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'oddsCell__odd')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "odds"
+  parent_selector: ".ui-table__row"
+  notes: "Text content = current odds. Title attribute = 'opening >> closing' (e.g., '1.54 >> 1.38'). Basketball moneyline has 2 cells (home/away), football 1X2 has 3 cells."

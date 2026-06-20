@@ -1,0 +1,43 @@
+id: stat_category_name
+name: Stat Category Name
+selector_type: css
+description: "Category name within a stat row (e.g., 'Field goals attempts')"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: "[data-testid='wcl-statistics-category'] > span"
+    weight: 1.0
+  # Strategy 2: data-testid without child span
+  - type: "css"
+    selector: "[data-testid='wcl-statistics-category']"
+    weight: 0.95
+  # Strategy 3: Obfuscated class (volatile)
+  - type: "css"
+    selector: ".wcl-category_6sT1J > span"
+    weight: 0.9
+  # Strategy 4: Class without child span
+  - type: "css"
+    selector: ".wcl-category_6sT1J"
+    weight: 0.85
+  # Strategy 5: Partial class match (avoids parent wrapper .wcl-category_Ydwqh)
+  - type: "css"
+    selector: "[class*='category_'] > span"
+    weight: 0.7
+  # Strategy 6: XPath by testid
+  - type: "xpath"
+    selector: ".//*[@data-testid='wcl-statistics-category']/span"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "stats"
+  parent_selector: "[data-testid='wcl-statistics']"
+  volatile_selectors:
+    - ".wcl-category_6sT1J"
+  stable_selectors:
+    - "[data-testid='wcl-statistics-category']"
+  notes: "Must NOT use [class*='category'] alone — matches parent wrapper .wcl-category_Ydwqh which contains all three values"

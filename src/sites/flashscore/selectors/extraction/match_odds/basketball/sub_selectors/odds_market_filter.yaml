@@ -1,0 +1,23 @@
+id: odds_market_filter
+name: Odds Market Filter
+selector_type: css
+description: "Odds market sub-filter tab (Home/Away, 1X2, Over/Under, etc.)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".wcl-tab_GS7ig"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='wcl-tab']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//*[contains(@class, 'wcl-tab')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "odds"
+  notes: "Click by text match: 'Home/Away', '1X2', 'Over/Under', 'Asian handicap', etc."

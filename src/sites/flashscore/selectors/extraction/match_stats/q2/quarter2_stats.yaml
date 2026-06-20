@@ -1,24 +1,38 @@
 id: quarter2_stats
-name: Quarter2 Stats
+name: Quarter 2 Stats
 selector_type: css
 description: "Second quarter statistics"
-confidence_threshold: 0.8
+confidence_threshold: 0.7
 timeout: 5.0
 retry_count: 3
+
 strategies:
+  # Strategy 1: data-testid — most stable
   - type: "css"
-    selector: ".q2-stats"
+    selector: "[data-testid='wcl-statistics']"
     weight: 1.0
+  # Strategy 2: Obfuscated class (current hash) — volatile
   - type: "css"
-    selector: ".quarter2-stats"
+    selector: ".wcl-row_2oCpS"
     weight: 0.9
+  # Strategy 3: Partial class match
   - type: "css"
-    selector: "[data-quarter='2']"
+    selector: "[class*='wcl-row']"
     weight: 0.8
+  # Strategy 4: XPath fallback
   - type: "xpath"
-    selector: "//div[contains(@class, 'quarter') and contains(@class, '2')]"
-    weight: 0.7
+    selector: "//div[@data-testid='wcl-statistics']"
+    weight: 0.6
+
 metadata:
   wait_for_element: true
   tab_context: "stats"
   tertiary_context: "q2"
+  navigation:
+    primary_tab: "Match"
+    secondary_tab: "Stats"
+    period_filter: "2nd Quarter"
+  volatile_selectors:
+    - ".wcl-row_2oCpS"
+  stable_selectors:
+    - "[data-testid='wcl-statistics']"

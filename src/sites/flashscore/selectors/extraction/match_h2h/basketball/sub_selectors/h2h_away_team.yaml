@@ -1,0 +1,34 @@
+id: h2h_away_team
+name: H2H Away Team
+selector_type: css
+description: "Away team name in H2H match row"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".h2h__awayParticipant [data-testid='wcl-scores-simple-text-01']"
+    weight: 1.0
+  - type: "css"
+    selector: ".h2h__awayParticipant .wcl-name_jjfMf"
+    weight: 0.9
+  - type: "css"
+    selector: ".h2h__awayParticipant .wcl-bold_NZXv6"
+    weight: 0.8
+  - type: "css"
+    selector: ".h2h__awayParticipant span"
+    weight: 0.6
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'h2h__awayParticipant')]//span[contains(@class, 'wcl-name')]"
+    weight: 0.5
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"
+  parent_selector: ".h2h__row"
+  volatile_selectors:
+    - ".wcl-name_jjfMf"
+    - ".wcl-bold_NZXv6"
+  stable_selectors:
+    - "[data-testid='wcl-scores-simple-text-01']"

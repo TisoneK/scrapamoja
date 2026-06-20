@@ -1,0 +1,26 @@
+id: h2h_match_date
+name: H2H Match Date
+selector_type: css
+description: "Date of H2H match (e.g., '20.06.26')"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: "[data-testid='wcl-stageTime']"
+    weight: 1.0
+  - type: "css"
+    selector: ".wclH2h__date"
+    weight: 0.9
+  - type: "css"
+    selector: "[class*='stageTime']"
+    weight: 0.7
+  - type: "xpath"
+    selector: ".//*[@data-testid='wcl-stageTime']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"
+  parent_selector: ".h2h__row"

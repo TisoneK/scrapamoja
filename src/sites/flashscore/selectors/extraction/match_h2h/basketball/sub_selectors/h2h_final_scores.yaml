@@ -1,0 +1,27 @@
+id: h2h_final_scores
+name: H2H Final Scores
+selector_type: css
+description: "Final scores in H2H match row (two score elements: home, away)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".h2h__result--final [data-testid='wcl-tableScore']"
+    weight: 1.0
+  - type: "css"
+    selector: ".h2h__result--final span"
+    weight: 0.8
+  - type: "css"
+    selector: ".h2h__result span"
+    weight: 0.7
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'h2h__result--final')]//span[@data-testid='wcl-tableScore']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"
+  parent_selector: ".h2h__row"
+  notes: "Returns TWO score elements. First = home score, Second = away score. Also check .h2h__result--fulltime for FT scores (when OT occurred)."

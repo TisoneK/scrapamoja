@@ -1,0 +1,39 @@
+id: stat_home_value
+name: Stat Home Value
+selector_type: css
+description: "Home team value within a stat row"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".wcl-homeValue_3Q-7P [data-testid='wcl-statistics-value'] > span"
+    weight: 1.0
+  - type: "css"
+    selector: ".wcl-homeValue_3Q-7P [data-testid='wcl-statistics-value']"
+    weight: 0.95
+  - type: "css"
+    selector: ".wcl-homeValue_3Q-7P > span"
+    weight: 0.9
+  - type: "css"
+    selector: ".wcl-homeValue_3Q-7P"
+    weight: 0.85
+  - type: "css"
+    selector: "[class*='homeValue'] > span"
+    weight: 0.7
+  - type: "css"
+    selector: "[class*='homeValue']"
+    weight: 0.6
+  - type: "xpath"
+    selector: ".//*[@data-testid='wcl-statistics-value']/span"
+    weight: 0.5
+
+metadata:
+  wait_for_element: false
+  tab_context: "stats"
+  parent_selector: "[data-testid='wcl-statistics']"
+  volatile_selectors:
+    - ".wcl-homeValue_3Q-7P"
+  stable_selectors:
+    - "[data-testid='wcl-statistics-value']"

@@ -1,0 +1,24 @@
+id: h2h_competition
+name: H2H Competition
+selector_type: css
+description: "Competition name in H2H match (e.g., 'ACB (Spain)')"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: ".h2h__event"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='h2h__event']"
+    weight: 0.8
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'h2h__event')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"
+  parent_selector: ".h2h__row"
+  notes: "Use title attribute for full competition name (e.g., 'ACB (Spain)'), inner text for short name (e.g., 'ACB')"

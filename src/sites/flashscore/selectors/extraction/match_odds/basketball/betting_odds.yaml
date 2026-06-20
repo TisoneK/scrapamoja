@@ -1,23 +1,25 @@
 id: betting_odds
 name: Betting Odds
 selector_type: css
-description: "Betting odds for match"
-confidence_threshold: 0.8
+description: "Betting odds table rows (basketball)"
+confidence_threshold: 0.7
 timeout: 5.0
 retry_count: 3
+
 strategies:
   - type: "css"
-    selector: ".betting-odds"
+    selector: ".ui-table__row"
     weight: 1.0
   - type: "css"
-    selector: ".odds-container"
+    selector: "[class*='ui-table__row']"
     weight: 0.9
-  - type: "css"
-    selector: "[data-testid='betting-odds']"
-    weight: 0.8
   - type: "xpath"
-    selector: "//div[contains(@class, 'odds') and contains(@class, 'betting')]"
+    selector: "//*[contains(@class, 'ui-table__row')]"
     weight: 0.7
+
 metadata:
   wait_for_element: true
   tab_context: "odds"
+  stable_selectors:
+    - ".ui-table__row"
+  notes: "Odds table rows. Each row = one bookmaker with odds cells."
