@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Browser lifecycle integration for template framework.
 

@@ -5,6 +5,7 @@ Pattern 1: Protocol-Based Interface from the architecture.
 """
 
 from typing import Protocol, Any
+import httpx
 
 
 class ExtractionHandlerProtocol(Protocol):

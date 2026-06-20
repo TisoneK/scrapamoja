@@ -8,6 +8,7 @@ for extracted content, ensuring data integrity and consistency.
 from typing import Dict, Any, List, Optional
 from datetime import datetime, date
 from .models import ValidationResult, QualityMetrics
+from src.sites.base.validation import ValidationResult
 
 
 class WikipediaDataValidator:

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Date extraction handler for the extractor module.
 

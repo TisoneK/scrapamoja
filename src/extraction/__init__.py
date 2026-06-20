@@ -16,6 +16,7 @@ It supports multiple extraction modes: raw (Direct API), intercepted, hybrid, an
 from src.extraction.router import ExtractionModeRouter
 from src.extraction.interfaces import ExtractionModeProtocol, ExtractionHandlerProtocol
 from src.extraction.exceptions import InvalidExtractionModeError
+import httpx
 
 __all__ = [
     "ExtractionModeRouter",

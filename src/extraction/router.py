@@ -22,6 +22,7 @@ from src.extraction.exceptions import (
 )
 from src.extraction.interfaces import ExtractionHandlerProtocol
 from src.sites.base.site_config import ExtractionMode, SiteConfig
+import httpx
 
 # Valid extraction modes
 VALID_EXTRACTION_MODES = {mode.value for mode in ExtractionMode}

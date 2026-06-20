@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Data transformation engine for the extractor module.
 

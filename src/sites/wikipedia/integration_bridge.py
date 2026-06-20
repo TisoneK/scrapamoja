@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Integration bridge for Wikipedia YAML selectors with existing selector engine.
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 GitHub integration bridge for connecting GitHub-specific components with framework infrastructure.
 

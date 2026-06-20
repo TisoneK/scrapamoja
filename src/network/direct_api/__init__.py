@@ -42,6 +42,7 @@ from src.network.direct_api.interfaces import (
 )
 from src.network.direct_api.metadata import ResponseMetadata
 from src.network.direct_api.wrapper import DirectApi, OutputFormat
+import httpx
 
 __all__ = [
     "AsyncHttpClient",

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Selector file naming convention validator.
 

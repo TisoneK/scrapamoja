@@ -1,4 +1,5 @@
 """Exception classes for network interception."""
+import httpx
 
 
 class TimingError(Exception):

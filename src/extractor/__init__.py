@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Extractor Module - Site-agnostic data extraction utility.
 

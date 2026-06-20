@@ -96,7 +96,7 @@ class LiveMatchExtractor(BaseExtractor):
             match_data = await self.extract_match_data(element, 'live')
             if match_data:
                 matches.append(match_data)
-                logger.info(f"Added live match: {match_data.get('home_team', 'Unknown')} vs {match_data.get('away_team', 'Unknown')}")
+                logger.info(f"Added live match: {match_data.teams.get('home', 'Unknown')} vs {match_data.teams.get('away', 'Unknown')}")
             else:
                 logger.debug("Skipped live match - no data extracted")
         

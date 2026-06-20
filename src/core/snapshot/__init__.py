@@ -14,7 +14,7 @@ Key Features:
 
 Usage Example:
     from src.core.snapshot import SnapshotManager, SnapshotContext, SnapshotConfig, SnapshotMode
-from src.core.snapshot.config import get_settings
+    from src.core.snapshot.config import get_settings
     
     # Initialize manager
     snapshot_settings = get_settings()
@@ -38,6 +38,8 @@ from src.core.snapshot.config import get_settings
     # Capture snapshot
     bundle = await manager.capture_snapshot(page, context, config)
 """
+
+from typing import Optional
 
 # Core exports
 from .manager import SnapshotManager, get_snapshot_manager

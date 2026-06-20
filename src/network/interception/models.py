@@ -1,6 +1,7 @@
 """Data models for network interception."""
 
 from dataclasses import dataclass
+import httpx
 
 
 @dataclass

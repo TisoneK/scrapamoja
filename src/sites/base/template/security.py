@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Security hardening utilities for template framework.
 

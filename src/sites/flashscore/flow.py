@@ -5,6 +5,7 @@ Handles navigation and interaction with Flashscore sports pages.
 """
 
 import asyncio
+from typing import Optional
 from src.observability.logger import get_logger
 from src.sites.base.flow import BaseFlow
 from src.selectors.context_manager import SelectorContext, DOMState
@@ -489,24 +490,45 @@ class FlashscoreFlow(BaseFlow):
     async def navigate_to_live_matches(self):
         """Navigate to live matches filter."""
         try:
-            from src.selectors.context import DOMContext
-            from datetime import datetime
             from src.observability.logger import get_logger
-            
             logger = get_logger("flashscore.flow")
             
-            dom_context = DOMContext(
-                page=self.page,
-                tab_context="flashscore_navigation",
-                url=self.page.url,
-                timestamp=datetime.utcnow()
-            )
+            # Try direct Playwright selector first (more reliable)
+            live_selectors = [
+                ".filters__tab[data-analytics-alias='live']",
+                "[data-analytics-alias='live']",
+                ".filters__tab:has-text('LIVE')",
+            ]
+            for selector in live_selectors:
+                try:
+                    live_link = await self.page.query_selector(selector)
+                    if live_link:
+                        await live_link.click()
+                        await self.page.wait_for_timeout(2000)
+                        logger.info("Clicked live filter using direct selector")
+                        return
+                except Exception:
+                    continue
             
-            # Try to find live games filter using selector engine
-            live_result = await self.selector_engine.resolve("live_games_filter", dom_context)
-            if live_result and live_result.element_info:
-                await live_result.element_info.element.click()
-                await self.page.wait_for_timeout(self._get_timeout_ms("live_games_filter", 2.0))
+            # Fallback: try selector engine
+            try:
+                from src.selectors.context import DOMContext
+                from datetime import datetime
+                
+                dom_context = DOMContext(
+                    page=self.page,
+                    tab_context="flashscore_navigation",
+                    url=self.page.url,
+                    timestamp=datetime.utcnow()
+                )
+                
+                live_result = await self.selector_engine.resolve("live_games_filter", dom_context)
+                if live_result and live_result.element_info:
+                    await live_result.element_info.element.click()
+                    await self.page.wait_for_timeout(2000)
+            except Exception as e:
+                logger.warning(f"Selector engine fallback failed: {e}")
+                
         except Exception as e:
             logger.warning(f"Error navigating to live matches: {e}")
     
@@ -773,30 +795,26 @@ class FlashscoreFlow(BaseFlow):
             except:
                 await self.page.wait_for_timeout(2000)  # Final fallback
         
-        # Try to find finished games filter
+        # Try to find finished games filter using direct Playwright queries
         finished_selectors = [
-            "navigation.event_filter.finished_games_filter",
-            "[data-analytics-element='SCN_TAB'][data-analytics-alias='finished']",
-            ".filters__tab.selected"
+            ".filters__tab[data-analytics-alias='finished']",
+            "[data-analytics-alias='finished']",
+            ".filters__tab:has-text('Finished')",
         ]
         
         filter_clicked = False
-        for selector_name in finished_selectors:
+        for selector in finished_selectors:
             try:
-                logger.info(f"Trying to find finished filter with selector: {selector_name}")
-                finished_link = await self.selector_engine.find(self.page, selector_name)
+                logger.info(f"Trying to find finished filter with selector: {selector}")
+                finished_link = await self.page.query_selector(selector)
                 if finished_link:
                     logger.info(f"Found finished filter, clicking...")
                     await finished_link.click()
-                    # Wait for match items to reload
-                    try:
-                        await self.selector_engine.find(self.page, "match_items")
-                    except:
-                        await self.page.wait_for_timeout(2000)
+                    await self.page.wait_for_timeout(2000)
                     filter_clicked = True
                     break
             except Exception as e:
-                logger.warning(f"Failed with selector {selector_name}: {e}")
+                logger.warning(f"Failed with selector {selector}: {e}")
                 continue
         
         if not filter_clicked:

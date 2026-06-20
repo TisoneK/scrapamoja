@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 GitHub scraper implementation using the Site Template Integration Framework.
 

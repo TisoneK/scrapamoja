@@ -1,3 +1,4 @@
+from __future__ import annotations
 #!/usr/bin/env python3
 """
 Template Framework CLI - Command Line Interface for Site Template Integration Framework.
@@ -21,7 +22,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.sites.base.template.site_registry import BaseSiteRegistry
-from src.sites.base.template.validation import ValidationFramework
+from src.sites.base.template.validation import IValidationFramework as ValidationFramework
 from src.sites.base.template.development import TemplateDeveloper, TemplateMetadata
 from src.sites.base.template.migration import TemplateUpgrader
 from src.sites.base.template.observability import ObservabilityManager

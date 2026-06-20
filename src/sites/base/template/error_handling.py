@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Error handling and logging configuration for the Site Template Integration Framework.
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Main Extractor class and configuration system.
 

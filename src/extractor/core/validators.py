@@ -18,6 +18,7 @@ from .rules import (
     DataType
 )
 from ..exceptions import ValidationError as ExtractorValidationError
+from src.sites.base.validation import ValidationResult
 
 
 class ValidationEngine:

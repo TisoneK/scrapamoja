@@ -495,7 +495,7 @@ class CheckpointCorruptionDetector:
         
         # Find most common issues
         most_common_type = max(type_counts.items(), key=lambda x: x[1])[0] if type_counts else ("none", 0)
-        most_common_severity = max(severity_counts.items(), key=lambda x: x[1])[0] if severity_counts else ("none", 0))
+        most_common_severity = max(severity_counts.items(), key=lambda x: x[1])[0] if severity_counts else ("none", 0)
         
         # Calculate recovery statistics
         recoverable_count = sum(1 for report in corruption_reports if report.recovery_possible)

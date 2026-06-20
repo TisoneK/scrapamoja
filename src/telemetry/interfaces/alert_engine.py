@@ -27,6 +27,7 @@ class AlertType(Enum):
     QUALITY = "quality"
     HEALTH = "health"
     USAGE = "usage"
+    MANUAL = "manual"
 
 
 class Alert:

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 GitHub extraction rules using the existing extractor module.
 

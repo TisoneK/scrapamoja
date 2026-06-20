@@ -662,5 +662,24 @@ def import_schemas(schemas_data: Dict[str, Any]) -> None:
             fields=fields,
             environment_overrides=schema_data.get('environment_overrides', {})
         )
-        
-        register_schema(schema)
+
+
+class ConfigValidator:
+    """Configuration validator using schemas."""
+    
+    def __init__(self):
+        self._schemas: Dict[str, ConfigSchema] = {}
+    
+    def register_schema(self, schema: ConfigSchema) -> None:
+        """Register a configuration schema."""
+        self._schemas[schema.name] = schema
+    
+    def validate(self, config: Dict[str, Any], schema_name: str = None, environment: str = None) -> Dict[str, Any]:
+        """Validate a configuration dictionary against a schema."""
+        if schema_name and schema_name in self._schemas:
+            return self._schemas[schema_name].validate_config(config, environment)
+        return {"valid": True, "errors": [], "warnings": []}
+    
+    def get_schema(self, schema_name: str) -> Optional[ConfigSchema]:
+        """Get a registered schema by name."""
+        return self._schemas.get(schema_name)

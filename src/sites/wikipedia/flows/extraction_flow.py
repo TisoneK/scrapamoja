@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Extraction flow for Wikipedia articles.
 

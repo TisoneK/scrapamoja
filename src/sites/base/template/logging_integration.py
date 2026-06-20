@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Logging framework integration for template framework.
 

@@ -4,7 +4,7 @@ Backward compatibility layer for interrupt handling system.
 
 import logging
 import warnings
-from typing import Dict, Any, Optional, Callable, Union
+from typing import Dict, Any, List, Optional, Callable, Union
 from dataclasses import dataclass
 from enum import Enum
 
@@ -12,6 +12,7 @@ from .config import InterruptConfig
 from .handler import InterruptHandler
 from .resource_manager import ResourceManager
 from .messaging import InterruptMessageHandler
+from .integration import InterruptAwareScraper
 
 
 class CompatibilityMode(Enum):

@@ -5,6 +5,8 @@ Provides validation result structure and validation methods
 for scraper implementations and configurations.
 """
 
+from __future__ import annotations
+
 import yaml
 import jsonschema
 from pathlib import Path

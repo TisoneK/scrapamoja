@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Performance optimization utilities for template framework.
 

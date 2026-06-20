@@ -97,13 +97,13 @@ class PermissionAuditLog:
     """Permission audit log entry."""
     plugin_id: str
     permission_id: str
-        action: str  # requested, granted, revoked, expired
-        result: bool
-        reason: str
-        context: Dict[str, Any] = field(default_factory=dict)
-        timestamp: datetime = field(default_factory=datetime.utcnow)
-        requestor: Optional[str] = None
-        expires_at: Optional[datetime] = None
+    action: str  # requested, granted, revoked, expired
+    result: bool
+    reason: str
+    context: Dict[str, Any] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    requestor: Optional[str] = None
+    expires_at: Optional[datetime] = None
 
 
 class PermissionManager:

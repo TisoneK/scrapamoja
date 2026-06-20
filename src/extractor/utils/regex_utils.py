@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Regex pattern matching utilities for the extractor module.
 

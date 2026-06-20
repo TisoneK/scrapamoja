@@ -241,7 +241,7 @@ class TabScopedSelectorManager:
         tab_id: str,
         tab_type: TabType,
         initial_context_path: Optional[str] = None,
-        initial_dom_state: Optional[str] = None
+        initial_dom_state: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
         """

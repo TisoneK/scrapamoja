@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Extraction caching mechanism for Wikipedia articles.
 

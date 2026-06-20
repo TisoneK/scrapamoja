@@ -5,7 +5,7 @@ This module provides a lightweight dependency injection container that supports
 constructor injection, method injection, and lifecycle management for components.
 """
 
-from typing import Dict, Any, List, Optional, Type, Callable, Union, get_type_hints
+from typing import Dict, Any, List, Optional, Set, Type, Callable, Union, get_type_hints
 from dataclasses import dataclass, field
 from datetime import datetime
 import asyncio

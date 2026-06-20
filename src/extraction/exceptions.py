@@ -1,6 +1,7 @@
 """Exceptions for extraction mode routing."""
 
 from src.sites.base.site_config import ExtractionMode
+import httpx
 
 
 # Valid extraction modes for error messages

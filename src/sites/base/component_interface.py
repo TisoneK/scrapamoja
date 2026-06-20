@@ -244,3 +244,66 @@ class ComponentValidationError(Exception):
 class ComponentDependencyError(Exception):
     """Exception raised when component dependencies cannot be resolved."""
     pass
+
+
+class BaseProcessor(BaseComponent):
+    """Base class for processor components."""
+    
+    @abstractmethod
+    async def process(self, data: Any, context: ComponentContext) -> ComponentResult:
+        """Process data."""
+        pass
+    
+    async def execute(self, **kwargs) -> ComponentResult:
+        """Execute processor."""
+        return await self.process(kwargs.get('data'), kwargs.get('context'))
+
+
+class ProcessorContext:
+    """Context for processor execution."""
+    def __init__(self, data: Any = None, config: Dict[str, Any] = None):
+        self.data = data
+        self.config = config or {}
+
+
+class ProcessorResult:
+    """Result of processor execution."""
+    def __init__(self, success: bool = True, data: Any = None, errors: List[str] = None):
+        self.success = success
+        self.data = data
+        self.errors = errors or []
+
+
+class BaseValidator(BaseComponent):
+    """Base class for validator components."""
+    
+    @abstractmethod
+    async def validate_component(self, data: Any) -> ComponentResult:
+        """Validate data."""
+        pass
+    
+    async def execute(self, **kwargs) -> ComponentResult:
+        """Execute validator."""
+        return await self.validate_component(kwargs.get('data'))
+    
+    async def validate(self, **kwargs) -> bool:
+        """Validate - default implementation."""
+        return True
+
+
+class BaseFlow(BaseComponent):
+    """Base class for flow components."""
+    
+    @abstractmethod
+    async def run_flow(self, context: ComponentContext) -> ComponentResult:
+        """Run the flow."""
+        pass
+    
+    async def execute(self, **kwargs) -> ComponentResult:
+        """Execute flow."""
+        return await self.run_flow(kwargs.get('context'))
+
+
+class IComponent(BaseComponent):
+    """Interface component alias for backward compatibility."""
+    pass

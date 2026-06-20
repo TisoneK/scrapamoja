@@ -9,13 +9,14 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union, Set
+from typing import Dict, Any, List, Optional, Union, Set, Tuple
 from enum import Enum
 import yaml
 import jsonschema
 from jsonschema import validate, ValidationError, Draft7Validator
 
 from .interfaces import IValidationFramework
+from src.sites.base.validation import ValidationResult
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,18 @@ class ValidationLevel(Enum):
     STRICT = "strict"
     LENIENT = "lenient"
     DISABLED = "disabled"
+
+
+class ComplianceArea(Enum):
+    """Compliance areas for framework validation."""
+    SELECTOR_CENTRIC = "selector_centric"
+    MODULARITY = "modularity"
+    ASYNC_FIRST = "async_first"
+    STEALTH_AWARE = "stealth_aware"
+    TAB_AWARE = "tab_aware"
+    DATA_INTEGRITY = "data_integrity"
+    FAULT_TOLERANCE = "fault_tolerance"
+    OBSERVABILITY = "observability"
 
 
 class YAMLSelectorValidator:

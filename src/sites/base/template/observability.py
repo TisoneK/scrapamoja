@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Monitoring and observability for template framework.
 

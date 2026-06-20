@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Extraction statistics tracking for Wikipedia articles.
 

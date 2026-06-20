@@ -277,7 +277,7 @@ class FlowExecutor:
         self, 
         flow_names: List[str],
         flow_classes: Dict[str, Type],
-        priorities: Dict[str, FlowPriority] = None
+        priorities: Dict[str, FlowPriority] = None,
         **kwargs
     ) -> List[FlowExecution]:
         """

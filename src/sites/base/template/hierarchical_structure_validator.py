@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from src.sites.base.validation import ValidationResult
 
 
 logger = logging.getLogger(__name__)

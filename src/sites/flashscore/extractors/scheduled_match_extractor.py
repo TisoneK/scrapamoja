@@ -1,6 +1,7 @@
 """
 Scheduled match extractor for Flashscore.
 """
+from typing import Dict, Any, Optional, List
 from src.sites.flashscore.models import MatchListing
 from playwright.async_api import ElementHandle
 

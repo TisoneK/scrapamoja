@@ -314,9 +314,9 @@ async def bulk_create_feature_flags(
     description="Toggle adaptive system for a sport (global flag)",
 )
 async def toggle_sport_flag(
+    flag_data: FeatureFlagToggleSchema,
     sport: str = Path(..., description="Sport name"),
     service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
-    flag_data: FeatureFlagToggleSchema,
 ) -> FeatureFlagResponseSchema:
     """
     Toggle adaptive system for a sport.
@@ -352,10 +352,10 @@ async def toggle_sport_flag(
     description="Update feature flag for a specific sport and site",
 )
 async def update_site_flag(
+    flag_data: FeatureFlagUpdateSchema,
     sport: str = Path(..., description="Sport name"),
     site: str = Path(..., description="Site name"),
     service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
-    flag_data: FeatureFlagUpdateSchema,
 ) -> FeatureFlagResponseSchema:
     """
     Update feature flag for a specific sport and site.

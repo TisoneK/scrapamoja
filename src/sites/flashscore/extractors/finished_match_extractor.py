@@ -90,7 +90,7 @@ class FinishedMatchExtractor(BaseExtractor):
             match_data = await self.extract_match_data(element, 'finished')
             if match_data:
                 matches.append(match_data)
-                logger.info(f"Added finished match: {match_data.get('home_team', 'Unknown')} vs {match_data.get('away_team', 'Unknown')}")
+                logger.info(f"Added finished match: {match_data.teams.get('home', 'Unknown')} vs {match_data.teams.get('away', 'Unknown')}")
             else:
                 logger.debug("Skipped finished match - no data extracted")
         
@@ -165,18 +165,12 @@ class FinishedMatchExtractor(BaseExtractor):
             logger.error(f"Error using finished indicators selector: {e}")
         
         # Fallback to direct CSS query for finished matches
+        # FlashScore shows finished matches by filter tab - all .event__match on the page are finished
         try:
-            finished_elements = await self.scraper.page.query_selector_all('.event__score[data-state="final"]')
-            # Get the parent match elements
-            match_elements = []
-            for score_elem in finished_elements:
-                match_elem = await score_elem.evaluate('element => element.closest(".event__match")')
-                if match_elem:
-                    match_elements.append(match_elem)
-            
-            if match_elements:
-                logger.info(f"Found {len(match_elements)} finished match elements with fallback selector")
-                return match_elements
+            finished_elements = await self.scraper.page.query_selector_all('.event__match:not([class*="skeleton"])')
+            if finished_elements:
+                logger.info(f"Found {len(finished_elements)} match elements on finished page (all are finished by filter)")
+                return finished_elements
             else:
                 logger.warning("No finished matches found with fallback selector")
         except Exception as e:

@@ -11,7 +11,7 @@ from typing import Dict, Any, List
 
 def load_config() -> Dict[str, Any]:
     """Load selector configuration from YAML file."""
-    config_path = Path(__file__).parent / "selectors" / "selector_config.yaml"
+    config_path = Path(__file__).parent / "selectors" / "_selector_config.yaml"
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 

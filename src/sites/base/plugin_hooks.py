@@ -427,14 +427,14 @@ class HookManager:
                     plugin_result = PluginResult(
                         success=result,
                         plugin_id=registration.plugin_id,
-                        registration.hook_type,
+                        hook_type=registration.hook_type,
                         execution_time_ms=(datetime.utcnow() - start_time).total_seconds() * 1000
                     )
                 else:
                     plugin_result = PluginResult(
                         success=True,
                         plugin_id=registration.plugin_id,
-                        registration.hook_type,
+                        hook_type=registration.hook_type,
                         data={"result": result},
                         execution_time_ms=(datetime.utcnow() - start_time).total_seconds() * 1000
                     )
@@ -622,7 +622,8 @@ class HookManager:
                     error=f"Parallel execution failed: {str(e)}",
                     execution_time_ms=0
                 )
-            ] for _ in hooks
+                for _ in hooks
+            ]
         finally:
             # Clean up running executions
             for hook_id in list(self._running_executions.keys()):
@@ -666,7 +667,8 @@ class HookManager:
                     error=f"Parallel execution with error handling failed: {str(e)}",
                     execution_time_ms=0
                 )
-            ] for _ in hooks
+                for _ in hooks
+            ]
         finally:
             # Clean up running executions
             for hook_id in list(self._running_executions.keys()):

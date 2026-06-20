@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import zipfile
 import tempfile
+import xml.etree.ElementTree as ET
 
 from .config_schemas import get_schema, validate_config_by_schema
 from .config_validator import validate_config

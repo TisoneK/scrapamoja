@@ -12,6 +12,7 @@ from src.network.interception.interceptor import (
 )
 from src.network.interception.models import CapturedResponse, InterceptedResponse
 from src.network.interception.patterns import (
+import httpx
     is_regex_pattern,
     match_url,
     matches_prefix,

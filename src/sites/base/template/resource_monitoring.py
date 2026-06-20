@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Resource monitoring integration for template framework.
 
