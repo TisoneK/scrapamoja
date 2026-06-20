@@ -61,12 +61,23 @@ class PrimaryTabExtractor(ABC):
         'match-history': 'summary/point-by-point'
     }
     
+    # Tabs that are sub-tabs under "Match" primary tab
+    MATCH_SUB_TABS = {'summary', 'stats', 'player-stats', 'player-statistics', 
+                      'match-stats', 'match-statistics', 'lineups', 'match-history'}
+    
     async def navigate_to_tab(self, tab_name: str) -> bool:
         """
         Navigate to a specific tab by clicking the button with matching text.
         
-        This uses the most reliable approach: finding the button element by its
-        visible text content, which matches FlashScore's actual DOM structure.
+        FlashScore tab hierarchy (confirmed via live inspection):
+        - Primary tabs: Match, Odds, H2H, Draw, Video
+        - Under "Match" sub-tabs: Summary, Player stats, Stats, Lineups, Match History
+        - Under "Odds" sub-tabs: Home/Away, 1X2, Over/Under, etc.
+        
+        Navigation strategy:
+        - For sub-tabs under "Match": first click "Match" primary tab, then the sub-tab
+        - For primary tabs (Odds, H2H): click directly
+        - For "Stats": click "Match" → "Stats" sub-tab
         """
         try:
             tab_name_lower = tab_name.lower()
@@ -88,18 +99,25 @@ class PrimaryTabExtractor(ABC):
             
             display_text = tab_display_text.get(tab_name_lower, tab_name)
             
-            # Strategy 1: Find button element by text content (most reliable)
-            try:
-                tab_buttons = await self.page.query_selector_all('.wcl-tab_GS7ig, [class*="wcl-tab"]')
-                for btn in tab_buttons:
-                    text = (await btn.text_content()).strip()
-                    if text == display_text:
-                        await btn.click()
-                        await self.page.wait_for_timeout(3000)
-                        self.logger.info(f"Successfully navigated to {tab_name} tab via button click")
-                        return True
-            except Exception as e:
-                self.logger.debug(f"Button text search failed: {e}")
+            # For sub-tabs under "Match", first ensure "Match" primary tab is active
+            if tab_name_lower in self.MATCH_SUB_TABS:
+                # Click "Match" primary tab first to reveal sub-tabs
+                match_clicked = await self._click_tab_by_text('Match')
+                if match_clicked:
+                    await self.page.wait_for_timeout(1500)
+                    self.logger.info(f"Clicked 'Match' primary tab for sub-tab access")
+                
+                # Now click the actual sub-tab
+                if await self._click_tab_by_text(display_text):
+                    await self.page.wait_for_timeout(2000)
+                    self.logger.info(f"Successfully navigated to {tab_name} sub-tab")
+                    return True
+            
+            # For primary tabs (Odds, H2H, Draw, Video), click directly
+            if await self._click_tab_by_text(display_text):
+                await self.page.wait_for_timeout(3000)
+                self.logger.info(f"Successfully navigated to {tab_name} tab via button click")
+                return True
             
             # Strategy 2: Find anchor link by data-analytics-alias
             analytics_alias = self.TAB_ANALYTICS_ALIAS.get(tab_name_lower, tab_name_lower)
@@ -122,11 +140,53 @@ class PrimaryTabExtractor(ABC):
             except Exception as e:
                 self.logger.debug(f"Analytics alias search failed: {e}")
             
+            # Strategy 3: URL-based navigation for known tab URL patterns
+            tab_url_suffix = self.TAB_URL_SUFFIX.get(tab_name_lower)
+            if tab_url_suffix is not None:
+                current_url = self.page.url
+                base_url = current_url.split('?')[0].rstrip('/')
+                # Remove any existing tab path segments
+                for suffix in ['', '/odds', '/h2h', '/standings', '/summary', 
+                               '/summary/stats', '/summary/player-stats', '/summary/lineups',
+                               '/summary/point-by-point']:
+                    if base_url.endswith(suffix):
+                        base_url = base_url[:-len(suffix)] if suffix else base_url
+                        break
+                
+                target_url = base_url + ('/' + tab_url_suffix if tab_url_suffix else '')
+                # Preserve query params
+                query = current_url.split('?')[1] if '?' in current_url else ''
+                if query:
+                    target_url += '?' + query
+                
+                self.logger.info(f"Trying URL navigation to: {target_url}")
+                await self.page.goto(target_url, wait_until='domcontentloaded')
+                await self.page.wait_for_timeout(3000)
+                return True
+            
             self.logger.warning(f"Could not find or navigate to {tab_name} tab")
             return False
             
         except Exception as e:
             self.logger.error(f"Error navigating to {tab_name} tab: {e}")
+            return False
+    
+    async def _click_tab_by_text(self, display_text: str) -> bool:
+        """Click a tab button matching the given display text.
+        
+        Searches all .wcl-tab_GS7ig buttons and clicks the first one
+        whose text content exactly matches display_text.
+        """
+        try:
+            tab_buttons = await self.page.query_selector_all('.wcl-tab_GS7ig, [class*="wcl-tab"]')
+            for btn in tab_buttons:
+                text = (await btn.text_content()).strip()
+                if text == display_text:
+                    await btn.click()
+                    return True
+            return False
+        except Exception as e:
+            self.logger.debug(f"Error clicking tab by text '{display_text}': {e}")
             return False
     
     async def _wait_for_tab_content_load(self, tab_name: str, timeout: int = 10000) -> bool:
@@ -284,36 +344,48 @@ class PrimaryTabExtractor(ABC):
             return None
     
     async def _get_current_active_tab(self) -> Optional[str]:
-        """Get the currently active tab name."""
+        """Get the currently active tab name.
+        
+        FlashScore uses .wcl-tabSelected class on active tab buttons.
+        We check both primary tabs (Match, Odds, H2H) and sub-tabs (Summary, Stats, etc.)
+        """
         try:
-            # Flashscore uses data-selected="true" on button tabs
-            active_selectors = [
-                'button[data-testid="wcl-tab"][data-selected="true"]',
-                'a[data-analytics-alias][aria-selected="true"]',
-                '.tab__title.active',
-                '.tab__title.selected'
-            ]
+            # Find all selected tab buttons - FlashScore uses wcl-tabSelected class
+            selected_tabs = await self.page.query_selector_all('.wcl-tabSelected_rHdTM, [class*="tabSelected"]')
             
-            for selector in active_selectors:
-                active_element = await self.page.query_selector(selector)
-                if active_element:
-                    # Try data-analytics-alias first (Flashscore specific)
-                    analytics_alias = await active_element.get_attribute('data-analytics-alias')
-                    if analytics_alias:
-                        # Map back to tab name
-                        for tab_name, alias in self.TAB_ANALYTICS_ALIAS.items():
-                            if alias == analytics_alias:
-                                return tab_name
-                    
-                    # Try data-tab-name
-                    tab_name = await active_element.get_attribute('data-tab-name')
-                    if tab_name:
-                        return tab_name
-                    
-                    # Fallback: get text content
-                    tab_text = await active_element.text_content()
-                    if tab_text:
-                        return tab_text.strip().lower()
+            # Map button text to internal tab names
+            text_to_tab = {
+                'Summary': 'summary',
+                'Stats': 'stats',
+                'Player stats': 'player-stats',
+                'Lineups': 'lineups',
+                'Match History': 'match-history',
+                'Odds': 'odds',
+                'H2H': 'h2h',
+                'Match': 'match',
+            }
+            
+            active_primary = None
+            active_sub = None
+            
+            for tab in selected_tabs:
+                text = (await tab.text_content()).strip()
+                tab_name = text_to_tab.get(text, text.lower())
+                
+                # Determine if this is a primary or sub-tab by checking parent
+                cls = await tab.get_attribute('class') or ''
+                if 'tabsPrimary' in cls or 'tabsPrimary' in (await tab.evaluate('el => el.closest("[class*=tabsPrimary]")?.className || ""')):
+                    active_primary = tab_name
+                else:
+                    active_sub = tab_name
+            
+            # If a sub-tab is selected under "Match", return the sub-tab name
+            if active_sub and active_sub not in ('match',):
+                return active_sub
+            
+            # If primary tab is selected (Odds, H2H), return that
+            if active_primary and active_primary != 'match':
+                return active_primary
             
             # Fallback: check URL
             current_url = self.page.url
@@ -321,8 +393,10 @@ class PrimaryTabExtractor(ABC):
                 return 'odds'
             elif '/h2h/' in current_url:
                 return 'h2h'
-            elif '/standings/' in current_url:
+            elif '/summary/stats' in current_url:
                 return 'stats'
+            elif '/summary/' in current_url:
+                return 'summary'
             else:
                 return 'summary'  # Default to summary
             

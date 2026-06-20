@@ -158,28 +158,36 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return None
     
     async def _extract_tertiary_tabs(self, page_state: PageState) -> Optional[TertiaryData]:
-        """Extract data from tertiary tabs (quarter-by-quarter stats)."""
+        """Extract data from tertiary tabs (quarter-by-quarter stats).
+        
+        FlashScore structure for basketball stats:
+        - Primary tabs: Match, Odds, H2H, Draw, Video
+        - Under "Match" sub-tabs: Summary, Player stats, Stats, Lineups, Match History
+        - Under "Stats" period filters: Match, 1st Quarter, 2nd Quarter, 3rd Quarter, 4th Quarter
+        
+        All navigation uses .wcl-tab_GS7ig buttons matched by text content.
+        """
         try:
             ft_stats = None
             q1_stats = None
             inc_ot_stats = None
             
-            # FlashScore Stats tab has sub-filters: Match, 1st Quarter, 2nd Quarter, etc.
-            # We navigate via the primary extractor which clicks the Stats sub-tab
-            # Then we use the period filter links to get quarter data
-            
-            # Navigate to Stats tab first
+            # Navigate: first click "Match" primary tab, then "Stats" sub-tab
             if await self.primary_extractor.navigate_to_tab('stats'):
                 await self.page.wait_for_timeout(2000)
                 
-                # Extract full-time (match) stats
+                # Extract full-time (Match) stats - this is the default view
                 ft_stats = await self._extract_stats_rows()
                 
-                # Try to click "1st Quarter" filter
+                # Try to click "1st Quarter" period filter
                 q1_stats = await self._extract_period_stats('1st Quarter')
                 
-                # Click back to "Match" filter, then try OT periods
-                inc_ot_stats = await self._extract_period_stats('Full Time')
+                # Click back to "Match" filter
+                await self._click_period_filter('Match')
+                await self.page.wait_for_timeout(1000)
+                
+                # The "Match" view includes OT by default for basketball
+                inc_ot_stats = ft_stats
             
             return TertiaryData(
                 inc_ot=inc_ot_stats,
@@ -192,31 +200,108 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return TertiaryData(inc_ot=None, ft=None, q1=None)
     
     async def _extract_stats_rows(self) -> Optional[Dict[str, Any]]:
-        """Extract stats from the currently visible stats content using real FlashScore DOM."""
+        """Extract stats from the currently visible stats content using real FlashScore DOM.
+        
+        DOM structure confirmed via live inspection:
+        - Each stat row: .wcl-row_2oCpS [data-testid="wcl-statistics"]
+        - Category name: .wcl-category_6sT1J [data-testid="wcl-statistics-category"] > span
+        - Home value: .wcl-homeValue_3Q-7P [data-testid="wcl-statistics-value"] > span
+        - Away value: .wcl-awayValue_Y-QR1 [data-testid="wcl-statistics-value"] > span
+        - Section headers: .stat__header.sectionHeader (text: "Scoring", "Rebounds", "Other")
+        """
         try:
             statistics = {}
+            current_section = "General"
             
-            # FlashScore uses .wcl-row_2oCpS for each stat row
-            # with .wcl-category_6sT1J for name, .wcl-homeValue for home, .wcl-awayValue for away
-            stat_rows = await self.page.query_selector_all('.wcl-row_2oCpS')
-            for row in stat_rows:
-                category_el = await row.query_selector('.wcl-category_6sT1J')
-                home_el = await row.query_selector('.wcl-homeValue_3Q-7P')
-                away_el = await row.query_selector('.wcl-awayValue_Y-QR1')
+            # Get both stat rows and section headers in document order
+            all_elements = await self.page.query_selector_all(
+                '.wcl-row_2oCpS, .stat__header'
+            )
+            
+            for element in all_elements:
+                cls = await element.get_attribute('class') or ''
                 
-                # Fallback selectors if primary ones fail (FlashScore obfuscated class names may change)
+                # Check if this is a section header (e.g., "Scoring", "Rebounds", "Other")
+                if 'stat__header' in cls:
+                    text = (await element.text_content()).strip()
+                    if text:
+                        current_section = text
+                        if current_section not in statistics:
+                            statistics[current_section] = {}
+                    continue
+                
+                # This is a stat row - extract category name, home value, away value
+                # DOM structure: .wcl-row_2oCpS > .wcl-category_Ydwqh > (.wcl-homeValue + .wcl-category_6sT1J + .wcl-awayValue)
+                # The .wcl-category_Ydwqh parent contains all three, so we must use the specific child selectors
+                
+                # Category name: use data-testid for reliability (obfuscated class names may change)
+                # Must NOT use [class*="category"] as it matches the parent wrapper .wcl-category_Ydwqh
+                category_el = await element.query_selector(
+                    '[data-testid="wcl-statistics-category"] > span'
+                )
                 if not category_el:
-                    category_el = await row.query_selector('[class*="category"]')
+                    category_el = await element.query_selector(
+                        '[data-testid="wcl-statistics-category"]'
+                    )
+                if not category_el:
+                    category_el = await element.query_selector(
+                        '.wcl-category_6sT1J > span'
+                    )
+                if not category_el:
+                    category_el = await element.query_selector(
+                        '.wcl-category_6sT1J'
+                    )
+                
+                # Home value: use specific selector first, then fallback
+                home_el = await element.query_selector(
+                    '.wcl-homeValue_3Q-7P [data-testid="wcl-statistics-value"] > span'
+                )
                 if not home_el:
-                    home_el = await row.query_selector('[class*="homeValue"]')
+                    home_el = await element.query_selector(
+                        '.wcl-homeValue_3Q-7P [data-testid="wcl-statistics-value"]'
+                    )
+                if not home_el:
+                    home_el = await element.query_selector(
+                        '.wcl-homeValue_3Q-7P > span'
+                    )
+                if not home_el:
+                    home_el = await element.query_selector(
+                        '[class*="homeValue"] > span'
+                    )
+                if not home_el:
+                    home_el = await element.query_selector(
+                        '.wcl-homeValue_3Q-7P'
+                    )
+                
+                # Away value: use specific selector first, then fallback
+                away_el = await element.query_selector(
+                    '.wcl-awayValue_Y-QR1 [data-testid="wcl-statistics-value"] > span'
+                )
                 if not away_el:
-                    away_el = await row.query_selector('[class*="awayValue"]')
+                    away_el = await element.query_selector(
+                        '.wcl-awayValue_Y-QR1 [data-testid="wcl-statistics-value"]'
+                    )
+                if not away_el:
+                    away_el = await element.query_selector(
+                        '.wcl-awayValue_Y-QR1 > span'
+                    )
+                if not away_el:
+                    away_el = await element.query_selector(
+                        '[class*="awayValue"] > span'
+                    )
+                if not away_el:
+                    away_el = await element.query_selector(
+                        '.wcl-awayValue_Y-QR1'
+                    )
                 
                 if category_el and home_el and away_el:
                     name = (await category_el.text_content()).strip()
                     home_val = (await home_el.text_content()).strip()
                     away_val = (await away_el.text_content()).strip()
-                    statistics[name] = {'home': home_val, 'away': away_val}
+                    
+                    if current_section not in statistics:
+                        statistics[current_section] = {}
+                    statistics[current_section][name] = {'home': home_val, 'away': away_val}
             
             return statistics if statistics else None
             
@@ -225,26 +310,54 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return None
     
     async def _extract_period_stats(self, period_name: str) -> Optional[Dict[str, Any]]:
-        """Click a period filter and extract stats for that period."""
+        """Click a period filter and extract stats for that period.
+        
+        FlashScore uses .wcl-tab_GS7ig buttons for period sub-filters:
+        "Match", "1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"
+        """
         try:
-            # Look for the period filter link
-            period_filters = await self.page.query_selector_all('.subFilterOver a, .filterOver a')
-            for filt in period_filters:
-                text = (await filt.text_content()).strip()
-                if text == period_name:
-                    await filt.click()
-                    await self.page.wait_for_timeout(2000)
-                    return await self._extract_stats_rows()
-            
+            if await self._click_period_filter(period_name):
+                await self.page.wait_for_timeout(2000)
+                return await self._extract_stats_rows()
             return None
-            
         except Exception as e:
             self.logger.error(f"Error extracting period stats for {period_name}: {e}")
             return None
+    
+    async def _click_period_filter(self, period_name: str) -> bool:
+        """Click a period filter tab by matching its button text.
+        
+        Period filter tabs are .wcl-tab_GS7ig buttons under the Stats sub-tab
+        with text like "Match", "1st Quarter", "2nd Quarter", etc.
+        """
+        try:
+            tab_buttons = await self.page.query_selector_all('.wcl-tab_GS7ig, [class*="wcl-tab"]')
+            for btn in tab_buttons:
+                text = (await btn.text_content()).strip()
+                if text == period_name:
+                    await btn.click()
+                    await self.page.wait_for_timeout(1500)
+                    self.logger.info(f"Clicked period filter: {period_name}")
+                    return True
+            self.logger.debug(f"Period filter not found: {period_name}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error clicking period filter {period_name}: {e}")
+            return False
 
 
 class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
-    """Basketball-specific primary tab extractor using real FlashScore DOM selectors."""
+    """Basketball-specific primary tab extractor using real FlashScore DOM selectors.
+    
+    FlashScore tab hierarchy (confirmed via live inspection):
+    - Primary tabs: Match, Odds, H2H, Draw, Video  (.wcl-tab_GS7ig)
+    - Under "Match" sub-tabs: Summary, Player stats, Stats, Lineups, Match History
+    - Under "Odds" sub-tabs: Home/Away, 1X2, Over/Under, Asian handicap, etc.
+    - Under "Odds" period tabs: FT including OT, 1st Half, 1st Qrt
+    - Under "Stats" period tabs: Match, 1st Quarter, 2nd Quarter, 3rd Quarter, 4th Quarter
+    
+    All navigation uses .wcl-tab_GS7ig buttons matched by text content.
+    """
     
     async def _extract_summary_data(self) -> Optional[Dict[str, Any]]:
         """Extract data from SUMMARY tab using real FlashScore selectors."""
@@ -313,41 +426,141 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             return None
     
     async def _extract_h2h_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from H2H tab using real FlashScore selectors."""
+        """Extract data from H2H tab using real FlashScore selectors.
+        
+        H2H DOM structure (confirmed via live inspection):
+        - Rows: <a class="h2h__row"> elements
+        - Date: span[data-testid="wcl-stageTime"] (class contains wclH2h__date)
+        - Competition: span.h2h__event > inner <span> text; title attr on .h2h__event has full name
+        - Home team: .h2h__homeParticipant .wcl-name_jjfMf (or [data-testid="wcl-scores-simple-text-01"] inside)
+        - Away team: .h2h__awayParticipant .wcl-name_jjfMf
+        - Scores: .h2h__result--final > span[data-testid="wcl-tableScore"] (two elements: home_score, away_score)
+        - Win/loss: .h2h__icon (text: "W", "L", etc.)
+        - Section headers: .wcl-headerSection_SGpOR (text: "Last matches: TeamName", "Head-to-head matches")
+        """
         try:
             previous_matches = []
             historical_statistics = {}
             win_loss_record = {}
             
+            # Extract section headers to determine which team's recent matches
+            section_headers = await self.page.query_selector_all('.h2h__section .wcl-headerSection_SGpOR, [class*="headerSection"]')
+            sections = []
+            for header in section_headers:
+                text = (await header.text_content()).strip()
+                if text:
+                    sections.append(text)
+            
             # Extract previous matches from H2H rows
             try:
                 h2h_rows = await self.page.query_selector_all('.h2h__row')
+                self.logger.info(f"Found {len(h2h_rows)} H2H rows")
+                
                 for row in h2h_rows:
-                    row_text = (await row.text_content()).strip()
-                    if not row_text:
-                        continue
+                    match_data = {}
                     
-                    # H2H rows contain: date, competition, home, away, home_score, away_score, result
-                    # Try to extract structured data
-                    match_data = {'raw': row_text}
+                    # Date: span[data-testid="wcl-stageTime"] or .wclH2h__date
+                    date_el = await row.query_selector('[data-testid="wcl-stageTime"], .wclH2h__date, [class*="stageTime"]')
+                    if date_el:
+                        match_data['date'] = (await date_el.text_content()).strip()
                     
-                    # Try individual cell extraction
-                    cells = await row.query_selector_all('td, span, div')
-                    cell_texts = []
-                    for cell in cells:
-                        text = (await cell.text_content()).strip()
-                        if text and len(text) < 50:
-                            cell_texts.append(text)
+                    # Competition: .h2h__event title attribute has full name (e.g., "ACB (Spain)")
+                    # Inner span has short name (e.g., "ACB")
+                    event_el = await row.query_selector('.h2h__event')
+                    if event_el:
+                        event_title = await event_el.get_attribute('title')
+                        event_text = (await event_el.text_content()).strip()
+                        match_data['competition'] = event_title or event_text
+                        match_data['competition_short'] = event_text
                     
-                    if len(cell_texts) >= 4:
-                        match_data['date'] = cell_texts[0] if len(cell_texts) > 0 else ''
-                        match_data['competition'] = cell_texts[1] if len(cell_texts) > 1 else ''
-                        match_data['home_team'] = cell_texts[2] if len(cell_texts) > 2 else ''
-                        match_data['away_team'] = cell_texts[3] if len(cell_texts) > 3 else ''
+                    # Home team: .h2h__homeParticipant with team name inside
+                    home_participant = await row.query_selector('.h2h__homeParticipant')
+                    if home_participant:
+                        # Try .wcl-name_jjfMf first (confirmed working), then data-testid
+                        home_name_el = await home_participant.query_selector(
+                            '.wcl-name_jjfMf, '
+                            '[data-testid="wcl-scores-simple-text-01"]'
+                        )
+                        if not home_name_el:
+                            # Fallback: any bold span inside participant
+                            home_name_el = await home_participant.query_selector(
+                                '.wcl-bold_NZXv6, span'
+                            )
+                        if home_name_el:
+                            match_data['home_team'] = (await home_name_el.text_content()).strip()
                     
-                    previous_matches.append(match_data)
+                    # Away team: .h2h__awayParticipant with team name inside
+                    away_participant = await row.query_selector('.h2h__awayParticipant')
+                    if away_participant:
+                        away_name_el = await away_participant.query_selector(
+                            '.wcl-name_jjfMf, '
+                            '[data-testid="wcl-scores-simple-text-01"]'
+                        )
+                        if not away_name_el:
+                            away_name_el = await away_participant.query_selector(
+                                '.wcl-bold_NZXv6, span'
+                            )
+                        if away_name_el:
+                            match_data['away_team'] = (await away_name_el.text_content()).strip()
+                    
+                    # Scores: .h2h__result--final > span[data-testid="wcl-tableScore"]
+                    # There are two score elements: home_score and away_score
+                    final_result = await row.query_selector('.h2h__result--final')
+                    if final_result:
+                        score_spans = await final_result.query_selector_all('[data-testid="wcl-tableScore"]')
+                        if len(score_spans) >= 2:
+                            match_data['home_score'] = (await score_spans[0].text_content()).strip()
+                            match_data['away_score'] = (await score_spans[1].text_content()).strip()
+                    
+                    # Also extract full-time result if different from final (for OT games)
+                    ft_result = await row.query_selector('.h2h__result--fulltime')
+                    if ft_result:
+                        ft_spans = await ft_result.query_selector_all('[data-testid="wcl-tableScore"]')
+                        if len(ft_spans) >= 2:
+                            ft_home = (await ft_spans[0].text_content()).strip()
+                            ft_away = (await ft_spans[1].text_content()).strip()
+                            if ft_home and ft_away:
+                                match_data['ft_home_score'] = ft_home
+                                match_data['ft_away_score'] = ft_away
+                    
+                    # Win/loss indicator: .h2h__icon
+                    icon_el = await row.query_selector('.h2h__icon')
+                    if icon_el:
+                        match_data['result_indicator'] = (await icon_el.text_content()).strip()
+                    
+                    # Match URL from the anchor's href
+                    href = await row.get_attribute('href')
+                    if href:
+                        match_data['match_url'] = href
+                    
+                    # Only add if we got at least home/away teams
+                    if 'home_team' in match_data or 'away_team' in match_data:
+                        previous_matches.append(match_data)
+                
+                self.logger.info(f"Extracted {len(previous_matches)} H2H matches")
+                
             except Exception as e:
                 self.logger.debug(f"Error extracting H2H matches: {e}")
+            
+            # Calculate win/loss record from extracted matches
+            if previous_matches:
+                home_wins = 0
+                away_wins = 0
+                draws = 0
+                for m in previous_matches:
+                    indicator = m.get('result_indicator', '')
+                    if indicator == 'W':
+                        home_wins += 1
+                    elif indicator == 'L':
+                        away_wins += 1
+                    else:
+                        draws += 1
+                win_loss_record = {
+                    'home_wins': home_wins,
+                    'away_wins': away_wins,
+                    'draws': draws,
+                    'total': len(previous_matches)
+                }
             
             return {
                 'previous_matches': previous_matches,
@@ -360,37 +573,112 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             return None
     
     async def _extract_odds_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from ODDS tab using real FlashScore selectors."""
+        """Extract data from ODDS tab using real FlashScore selectors.
+        
+        Odds DOM structure (confirmed via live inspection):
+        - Rows: .ui-table__row
+        - Bookmaker name: .oddsCell__bookmakerPart a[title] attribute (e.g., "1xBet", "bet365")
+        - Odds cells: .oddsCell__odd elements
+          - Text content = current odds value
+          - Title attribute = "opening » current" (e.g., "1.54 » 1.38")
+          - data-analytics-label = "block-table-N-marketType_position"
+        - Market sub-filters: Home/Away, 1X2, Over/Under, etc.
+        - Period sub-filters: FT including OT, 1st Half, 1st Qrt
+        
+        Basketball typically has 2 odds per row (home/away moneyline),
+        while football/soccer has 3 (1/X/2).
+        """
         try:
             betting_odds = {}
             odds_history = []
             bookmaker_data = {}
             
-            # Extract odds from the odds table
-            # FlashScore uses .ui-table__row for each bookmaker row
-            # with odds cells inside
+            # Extract current market odds
             try:
                 odds_rows = await self.page.query_selector_all('.ui-table__row')
+                self.logger.info(f"Found {len(odds_rows)} odds rows")
+                
                 for row in odds_rows:
-                    cells = await row.query_selector_all('.ui-table__cell, .oddsCell__odds')
-                    cell_texts = []
-                    for cell in cells:
-                        text = (await cell.text_content()).strip()
-                        if text:
-                            cell_texts.append(text)
+                    # Bookmaker name from the logo link's title attribute
+                    bookmaker_link = await row.query_selector('.oddsCell__bookmakerPart a[title]')
+                    bookmaker_name = ""
+                    if bookmaker_link:
+                        bookmaker_name = await bookmaker_link.get_attribute('title') or ""
+                    if not bookmaker_name:
+                        # Fallback: try alt attribute on the logo image
+                        logo_img = await row.query_selector('.oddsCell__bookmakerPart img[alt]')
+                        if logo_img:
+                            bookmaker_name = await logo_img.get_attribute('alt') or ""
                     
-                    if len(cell_texts) >= 3:
-                        # Typically: bookmaker_name, home_odds, away_odds (or 1, X, 2)
-                        bookmaker = cell_texts[0]
-                        home_odds = cell_texts[1]
-                        away_odds = cell_texts[-1]  # Last cell is away odds
+                    if not bookmaker_name:
+                        continue
+                    
+                    # Odds values from .oddsCell__odd elements
+                    odds_cells = await row.query_selector_all('.oddsCell__odd')
+                    odds_values = []
+                    opening_values = []
+                    
+                    for cell in odds_cells:
+                        current_text = (await cell.text_content()).strip()
+                        title_attr = await cell.get_attribute('title') or ""
                         
-                        betting_odds[bookmaker] = {
-                            'home': home_odds,
-                            'away': away_odds
-                        }
-                        if len(cell_texts) >= 4:
-                            betting_odds[bookmaker]['draw'] = cell_texts[2]
+                        # Parse opening odds from title (format: "1.54 » 1.38")
+                        opening_val = None
+                        if ' » ' in title_attr:
+                            parts = title_attr.split(' » ')
+                            if len(parts) == 2:
+                                try:
+                                    opening_val = parts[0].strip()
+                                except:
+                                    pass
+                        
+                        odds_values.append(current_text)
+                        if opening_val:
+                            opening_values.append(opening_val)
+                    
+                    # Determine market type from analytics label or cell count
+                    # Basketball moneyline (Home/Away): 2 cells
+                    # Football 1X2: 3 cells
+                    market_type = 'moneyline'  # Default
+                    
+                    # Get analytics label from first odds cell for market type detection
+                    if odds_cells:
+                        analytics_label = await odds_cells[0].get_attribute('data-analytics-label') or ''
+                        if '1x2' in analytics_label.lower():
+                            market_type = '1x2'
+                        elif 'moneyline' in analytics_label.lower():
+                            market_type = 'moneyline'
+                        elif 'over' in analytics_label.lower():
+                            market_type = 'over_under'
+                    
+                    # Store odds data
+                    odds_entry = {}
+                    if len(odds_values) >= 2:
+                        odds_entry['home'] = odds_values[0]
+                        odds_entry['away'] = odds_values[-1]
+                    if len(odds_values) >= 3:
+                        odds_entry['draw'] = odds_values[1]
+                    
+                    # Store opening odds if available
+                    if opening_values:
+                        opening_entry = {}
+                        if len(opening_values) >= 2:
+                            opening_entry['home'] = opening_values[0]
+                            opening_entry['away'] = opening_values[-1]
+                        if len(opening_values) >= 3:
+                            opening_entry['draw'] = opening_values[1]
+                        odds_entry['opening'] = opening_entry
+                    
+                    odds_entry['market_type'] = market_type
+                    
+                    betting_odds[bookmaker_name] = odds_entry
+                    bookmaker_data[bookmaker_name] = {
+                        'market_type': market_type,
+                        'cell_count': len(odds_values)
+                    }
+                
+                self.logger.info(f"Extracted odds for {len(betting_odds)} bookmakers")
+                
             except Exception as e:
                 self.logger.debug(f"Error extracting odds rows: {e}")
             
@@ -405,24 +693,35 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             return None
     
     async def _extract_stats_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from STATS tab using real FlashScore selectors."""
+        """Extract data from STATS tab using real FlashScore selectors.
+        
+        Stats DOM structure (confirmed via live inspection):
+        - Navigation: Click "Match" primary tab → "Stats" sub-tab
+        - Each stat row: .wcl-row_2oCpS [data-testid="wcl-statistics"]
+        - Category name: .wcl-category_6sT1J [data-testid="wcl-statistics-category"] > span
+          (e.g., "Field goals attempts", "Field goals made", "Field goals %")
+        - Home value: .wcl-homeValue_3Q-7P [data-testid="wcl-statistics-value"] > span
+        - Away value: .wcl-awayValue_Y-QR1 [data-testid="wcl-statistics-value"] > span
+        - Section headers: .stat__header.sectionHeader (text: "Scoring", "Rebounds", "Other")
+        - Period sub-filters: .wcl-tab_GS7ig with text "Match", "1st Quarter", etc.
+        """
         try:
             detailed_statistics = {}
             player_performance = []
             team_performance = {}
             
-            # FlashScore Stats tab uses .wcl-row for each stat row
-            # with .wcl-category for name, .wcl-homeValue for home, .wcl-awayValue for away
+            # Get all stat elements in document order (rows + headers)
             try:
-                # Get section headers (e.g., "Scoring", "Rebounding")
                 current_category = "General"
-                stat_rows = await self.page.query_selector_all('.wcl-row_2oCpS, .stat__header, [class*="sectionHeader"]')
+                all_elements = await self.page.query_selector_all(
+                    '.wcl-row_2oCpS, .stat__header'
+                )
                 
-                for element in stat_rows:
+                for element in all_elements:
                     cls = await element.get_attribute('class') or ''
                     
-                    # Check if this is a section header
-                    if 'sectionHeader' in cls or 'stat__header' in cls:
+                    # Check if this is a section header (e.g., "Scoring", "Rebounds", "Other")
+                    if 'stat__header' in cls:
                         text = (await element.text_content()).strip()
                         if text:
                             current_category = text
@@ -430,10 +729,55 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                                 detailed_statistics[current_category] = {}
                         continue
                     
-                    # This is a stat row
-                    category_el = await element.query_selector('[class*="category"]')
-                    home_el = await element.query_selector('[class*="homeValue"]')
-                    away_el = await element.query_selector('[class*="awayValue"]')
+                    # This is a stat row - use data-testid for reliability
+                    # Must NOT use [class*="category"] as it matches parent wrapper .wcl-category_Ydwqh
+                    category_el = await element.query_selector(
+                        '[data-testid="wcl-statistics-category"] > span'
+                    )
+                    if not category_el:
+                        category_el = await element.query_selector(
+                            '[data-testid="wcl-statistics-category"]'
+                        )
+                    if not category_el:
+                        category_el = await element.query_selector(
+                            '.wcl-category_6sT1J > span'
+                        )
+                    if not category_el:
+                        category_el = await element.query_selector(
+                            '.wcl-category_6sT1J'
+                        )
+                    
+                    home_el = await element.query_selector(
+                        '.wcl-homeValue_3Q-7P [data-testid="wcl-statistics-value"] > span'
+                    )
+                    if not home_el:
+                        home_el = await element.query_selector(
+                            '.wcl-homeValue_3Q-7P [data-testid="wcl-statistics-value"]'
+                    )
+                    if not home_el:
+                        home_el = await element.query_selector(
+                            '.wcl-homeValue_3Q-7P > span'
+                    )
+                    if not home_el:
+                        home_el = await element.query_selector(
+                            '.wcl-homeValue_3Q-7P'
+                    )
+                    
+                    away_el = await element.query_selector(
+                        '.wcl-awayValue_Y-QR1 [data-testid="wcl-statistics-value"] > span'
+                    )
+                    if not away_el:
+                        away_el = await element.query_selector(
+                            '.wcl-awayValue_Y-QR1 [data-testid="wcl-statistics-value"]'
+                    )
+                    if not away_el:
+                        away_el = await element.query_selector(
+                            '.wcl-awayValue_Y-QR1 > span'
+                    )
+                    if not away_el:
+                        away_el = await element.query_selector(
+                            '.wcl-awayValue_Y-QR1'
+                    )
                     
                     if category_el and home_el and away_el:
                         name = (await category_el.text_content()).strip()
@@ -446,6 +790,9 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                             'home': home_val,
                             'away': away_val
                         }
+                
+                self.logger.info(f"Extracted stats in {len(detailed_statistics)} categories")
+                
             except Exception as e:
                 self.logger.debug(f"Error extracting stats data: {e}")
             
