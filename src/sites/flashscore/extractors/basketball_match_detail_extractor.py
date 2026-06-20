@@ -3,6 +3,8 @@ Basketball match detail extractor implementing primary tab extraction.
 
 Extends the base MatchDetailExtractor with basketball-specific implementations
 for primary tabs: SUMMARY, H2H, ODDS, STATS.
+
+Uses real FlashScore DOM selectors discovered via live page inspection.
 """
 
 from typing import Dict, Any, Optional, List
@@ -26,39 +28,61 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
         self.primary_extractor = BasketballPrimaryTabExtractor(scraper)
     
     async def _extract_basic_info(self, page_state: PageState) -> Optional[BasicMatchInfo]:
-        """Extract basic match information from the match detail page."""
+        """Extract basic match information from the match detail page using real FlashScore selectors."""
         try:
-            # Extract team names
-            home_team_element = await self.page.query_selector('.participant__home .participant-name')
-            away_team_element = await self.page.query_selector('.participant__away .participant-name')
+            # Extract team names - FlashScore uses .duelParticipant__home/away
+            # with .participant__participantNameWrapper inside
+            home_team = "Unknown"
+            away_team = "Unknown"
             
-            home_team = await home_team_element.text_content() if home_team_element else "Unknown"
-            away_team = await away_team_element.text_content() if away_team_element else "Unknown"
+            home_el = await self.page.query_selector('.duelParticipant__home .participant__participantNameWrapper')
+            if not home_el:
+                home_el = await self.page.query_selector('.duelParticipant__home')
+            if home_el:
+                text = await home_el.text_content()
+                if text:
+                    home_team = text.strip()
             
-            # Extract score
-            score_elements = await self.page.query_selector_all('.scoreBox')
+            away_el = await self.page.query_selector('.duelParticipant__away .participant__participantNameWrapper')
+            if not away_el:
+                away_el = await self.page.query_selector('.duelParticipant__away')
+            if away_el:
+                text = await away_el.text_content()
+                if text:
+                    away_team = text.strip()
+            
+            # Extract scores - FlashScore uses .smh__score with smh__home/smh__away classes
             home_score = None
             away_score = None
-            if len(score_elements) >= 2:
-                home_score = await score_elements[0].text_content()
-                away_score = await score_elements[1].text_content()
+            
+            home_score_el = await self.page.query_selector('.smh__score.smh__home')
+            if home_score_el:
+                home_score = (await home_score_el.text_content()).strip()
+            
+            away_score_el = await self.page.query_selector('.smh__score.smh__away')
+            if away_score_el:
+                away_score = (await away_score_el.text_content()).strip()
             
             current_score = f"{home_score}-{away_score}" if home_score and away_score else None
             
-            # Extract match time/status
-            time_element = await self.page.query_selector('.mch__header__time')
-            match_time = await time_element.text_content() if time_element else "Unknown"
+            # Extract match time - FlashScore uses .duelParticipant__startTime
+            match_time = "Unknown"
+            time_el = await self.page.query_selector('.duelParticipant__startTime')
+            if time_el:
+                match_time = (await time_el.text_content()).strip()
             
-            # Extract status
-            status_element = await self.page.query_selector('.mch__header__status')
-            status = await status_element.text_content() if status_element else "Unknown"
+            # Extract status - FlashScore uses .fixedHeaderDuel__detailStatus
+            status = "Unknown"
+            status_el = await self.page.query_selector('.fixedHeaderDuel__detailStatus')
+            if status_el:
+                status = (await status_el.text_content()).strip()
             
             return BasicMatchInfo(
-                home_team=home_team.strip(),
-                away_team=away_team.strip(),
+                home_team=home_team,
+                away_team=away_team,
                 current_score=current_score,
-                match_time=match_time.strip(),
-                status=status.strip()
+                match_time=match_time,
+                status=status
             )
             
         except Exception as e:
@@ -134,25 +158,96 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return None
     
     async def _extract_tertiary_tabs(self, page_state: PageState) -> Optional[TertiaryData]:
-        """Extract data from tertiary tabs."""
+        """Extract data from tertiary tabs (quarter-by-quarter stats)."""
         try:
-            # For now, return empty tertiary data - will be implemented in tertiary extractor
+            ft_stats = None
+            q1_stats = None
+            inc_ot_stats = None
+            
+            # FlashScore Stats tab has sub-filters: Match, 1st Quarter, 2nd Quarter, etc.
+            # We navigate via the primary extractor which clicks the Stats sub-tab
+            # Then we use the period filter links to get quarter data
+            
+            # Navigate to Stats tab first
+            if await self.primary_extractor.navigate_to_tab('stats'):
+                await self.page.wait_for_timeout(2000)
+                
+                # Extract full-time (match) stats
+                ft_stats = await self._extract_stats_rows()
+                
+                # Try to click "1st Quarter" filter
+                q1_stats = await self._extract_period_stats('1st Quarter')
+                
+                # Click back to "Match" filter, then try OT periods
+                inc_ot_stats = await self._extract_period_stats('Full Time')
+            
             return TertiaryData(
-                inc_ot=None,
-                ft=None,
-                q1=None
+                inc_ot=inc_ot_stats,
+                ft=ft_stats,
+                q1=q1_stats
             )
             
         except Exception as e:
             self.logger.error(f"Error extracting tertiary tabs: {e}")
+            return TertiaryData(inc_ot=None, ft=None, q1=None)
+    
+    async def _extract_stats_rows(self) -> Optional[Dict[str, Any]]:
+        """Extract stats from the currently visible stats content using real FlashScore DOM."""
+        try:
+            statistics = {}
+            
+            # FlashScore uses .wcl-row_2oCpS for each stat row
+            # with .wcl-category_6sT1J for name, .wcl-homeValue for home, .wcl-awayValue for away
+            stat_rows = await self.page.query_selector_all('.wcl-row_2oCpS')
+            for row in stat_rows:
+                category_el = await row.query_selector('.wcl-category_6sT1J')
+                home_el = await row.query_selector('.wcl-homeValue_3Q-7P')
+                away_el = await row.query_selector('.wcl-awayValue_Y-QR1')
+                
+                # Fallback selectors if primary ones fail (FlashScore obfuscated class names may change)
+                if not category_el:
+                    category_el = await row.query_selector('[class*="category"]')
+                if not home_el:
+                    home_el = await row.query_selector('[class*="homeValue"]')
+                if not away_el:
+                    away_el = await row.query_selector('[class*="awayValue"]')
+                
+                if category_el and home_el and away_el:
+                    name = (await category_el.text_content()).strip()
+                    home_val = (await home_el.text_content()).strip()
+                    away_val = (await away_el.text_content()).strip()
+                    statistics[name] = {'home': home_val, 'away': away_val}
+            
+            return statistics if statistics else None
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting stats rows: {e}")
+            return None
+    
+    async def _extract_period_stats(self, period_name: str) -> Optional[Dict[str, Any]]:
+        """Click a period filter and extract stats for that period."""
+        try:
+            # Look for the period filter link
+            period_filters = await self.page.query_selector_all('.subFilterOver a, .filterOver a')
+            for filt in period_filters:
+                text = (await filt.text_content()).strip()
+                if text == period_name:
+                    await filt.click()
+                    await self.page.wait_for_timeout(2000)
+                    return await self._extract_stats_rows()
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting period stats for {period_name}: {e}")
             return None
 
 
 class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
-    """Basketball-specific primary tab extractor."""
+    """Basketball-specific primary tab extractor using real FlashScore DOM selectors."""
     
     async def _extract_summary_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from SUMMARY tab."""
+        """Extract data from SUMMARY tab using real FlashScore selectors."""
         try:
             overview = {}
             team_statistics = {}
@@ -160,57 +255,52 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             
             # Extract match overview information
             try:
-                venue_element = await self.page.query_selector('.venueInfo')
-                if venue_element:
-                    overview['venue'] = await venue_element.text_content()
+                # Competition / tournament info
+                competition_elements = await self.page.query_selector_all('.wcl-scores-overline-03_Jdp91, [class*="scores-overline"]')
+                for el in competition_elements:
+                    text = (await el.text_content()).strip()
+                    if text and len(text) < 100:
+                        if 'competition' not in overview:
+                            overview['competition'] = text
                 
-                date_element = await self.page.query_selector('.mch__header__date')
-                if date_element:
-                    overview['date'] = await date_element.text_content()
+                # Match start time
+                time_el = await self.page.query_selector('.duelParticipant__startTime')
+                if time_el:
+                    overview['date'] = (await time_el.text_content()).strip()
                 
-                competition_element = await self.page.query_selector('.tournamentHeader')
-                if competition_element:
-                    overview['competition'] = await competition_element.text_content()
-            except:
-                pass
+                # Match status
+                status_el = await self.page.query_selector('.fixedHeaderDuel__detailStatus')
+                if status_el:
+                    overview['status'] = (await status_el.text_content()).strip()
+            except Exception as e:
+                self.logger.debug(f"Error extracting overview: {e}")
             
-            # Extract team statistics
+            # Extract quarter/period scores from summary header
             try:
-                stat_elements = await self.page.query_selector_all('.statRow')
-                for stat_element in stat_elements:
-                    stat_name_element = await stat_element.query_selector('.statName')
-                    home_value_element = await stat_element.query_selector('.statValue--home')
-                    away_value_element = await stat_element.query_selector('.statValue--away')
-                    
-                    if stat_name_element and home_value_element and away_value_element:
-                        stat_name = await stat_name_element.text_content()
-                        home_value = await home_value_element.text_content()
-                        away_value = await away_value_element.text_content()
-                        
-                        team_statistics[stat_name.strip()] = {
-                            'home': home_value.strip(),
-                            'away': away_value.strip()
-                        }
-            except:
-                pass
-            
-            # Extract match events
-            try:
-                event_elements = await self.page.query_selector_all('.incident')
-                for event_element in event_elements:
-                    time_element = await event_element.query_selector('.incident__time')
-                    type_element = await event_element.query_selector('.incident__type')
-                    player_element = await event_element.query_selector('.incident__player')
-                    
-                    if time_element and type_element:
-                        event = {
-                            'time': await time_element.text_content(),
-                            'type': await type_element.text_content(),
-                            'player': await player_element.text_content() if player_element else None
-                        }
-                        match_events.append(event)
-            except:
-                pass
+                home_quarter_scores = []
+                away_quarter_scores = []
+                
+                # Home quarter scores: .smh__part.smh__home (not current)
+                home_parts = await self.page.query_selector_all('.smh__part.smh__home:not(.smh__score)')
+                for part in home_parts:
+                    text = (await part.text_content()).strip()
+                    if text:
+                        home_quarter_scores.append(text)
+                
+                # Away quarter scores: .smh__part.smh__away (not current)
+                away_parts = await self.page.query_selector_all('.smh__part.smh__away:not(.smh__score)')
+                for part in away_parts:
+                    text = (await part.text_content()).strip()
+                    if text:
+                        away_quarter_scores.append(text)
+                
+                if home_quarter_scores or away_quarter_scores:
+                    team_statistics['quarter_scores'] = {
+                        'home': home_quarter_scores,
+                        'away': away_quarter_scores
+                    }
+            except Exception as e:
+                self.logger.debug(f"Error extracting quarter scores: {e}")
             
             return {
                 'overview': overview,
@@ -223,51 +313,41 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             return None
     
     async def _extract_h2h_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from H2H tab."""
+        """Extract data from H2H tab using real FlashScore selectors."""
         try:
             previous_matches = []
             historical_statistics = {}
             win_loss_record = {}
             
-            # Extract previous matches
+            # Extract previous matches from H2H rows
             try:
-                match_elements = await self.page.query_selector_all('.h2h__match')
-                for match_element in match_elements:
-                    date_element = await match_element.query_selector('.h2h__date')
-                    home_team_element = await match_element.query_selector('.h2h__home')
-                    away_team_element = await match_element.query_selector('.h2h__away')
-                    score_element = await match_element.query_selector('.h2h__score')
+                h2h_rows = await self.page.query_selector_all('.h2h__row')
+                for row in h2h_rows:
+                    row_text = (await row.text_content()).strip()
+                    if not row_text:
+                        continue
                     
-                    if date_element and home_team_element and away_team_element:
-                        match = {
-                            'date': await date_element.text_content(),
-                            'home_team': await home_team_element.text_content(),
-                            'away_team': await away_team_element.text_content(),
-                            'score': await score_element.text_content() if score_element else None
-                        }
-                        previous_matches.append(match)
-            except:
-                pass
-            
-            # Extract win/loss record
-            try:
-                record_elements = await self.page.query_selector_all('.h2h__record')
-                for record_element in record_elements:
-                    team_element = await record_element.query_selector('.h2h__team')
-                    wins_element = await record_element.query_selector('.h2h__wins')
-                    losses_element = await record_element.query_selector('.h2h__losses')
+                    # H2H rows contain: date, competition, home, away, home_score, away_score, result
+                    # Try to extract structured data
+                    match_data = {'raw': row_text}
                     
-                    if team_element and wins_element and losses_element:
-                        team = await team_element.text_content()
-                        wins = await wins_element.text_content()
-                        losses = await losses_element.text_content()
-                        
-                        win_loss_record[team.strip()] = {
-                            'wins': wins.strip(),
-                            'losses': losses.strip()
-                        }
-            except:
-                pass
+                    # Try individual cell extraction
+                    cells = await row.query_selector_all('td, span, div')
+                    cell_texts = []
+                    for cell in cells:
+                        text = (await cell.text_content()).strip()
+                        if text and len(text) < 50:
+                            cell_texts.append(text)
+                    
+                    if len(cell_texts) >= 4:
+                        match_data['date'] = cell_texts[0] if len(cell_texts) > 0 else ''
+                        match_data['competition'] = cell_texts[1] if len(cell_texts) > 1 else ''
+                        match_data['home_team'] = cell_texts[2] if len(cell_texts) > 2 else ''
+                        match_data['away_team'] = cell_texts[3] if len(cell_texts) > 3 else ''
+                    
+                    previous_matches.append(match_data)
+            except Exception as e:
+                self.logger.debug(f"Error extracting H2H matches: {e}")
             
             return {
                 'previous_matches': previous_matches,
@@ -280,34 +360,39 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             return None
     
     async def _extract_odds_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from ODDS tab."""
+        """Extract data from ODDS tab using real FlashScore selectors."""
         try:
             betting_odds = {}
             odds_history = []
             bookmaker_data = {}
             
-            # Extract current betting odds
+            # Extract odds from the odds table
+            # FlashScore uses .ui-table__row for each bookmaker row
+            # with odds cells inside
             try:
-                odds_elements = await self.page.query_selector_all('.oddsRow')
-                for odds_element in odds_elements:
-                    bookmaker_element = await odds_element.query_selector('.oddsBookmaker')
-                    home_odds_element = await odds_element.query_selector('.oddsHome')
-                    draw_odds_element = await odds_element.query_selector('.oddsDraw')
-                    away_odds_element = await odds_element.query_selector('.oddsAway')
+                odds_rows = await self.page.query_selector_all('.ui-table__row')
+                for row in odds_rows:
+                    cells = await row.query_selector_all('.ui-table__cell, .oddsCell__odds')
+                    cell_texts = []
+                    for cell in cells:
+                        text = (await cell.text_content()).strip()
+                        if text:
+                            cell_texts.append(text)
                     
-                    if bookmaker_element and home_odds_element and away_odds_element:
-                        bookmaker = await bookmaker_element.text_content()
-                        home_odds = await home_odds_element.text_content()
-                        away_odds = await away_odds_element.text_content()
-                        draw_odds = await draw_odds_element.text_content() if draw_odds_element else None
+                    if len(cell_texts) >= 3:
+                        # Typically: bookmaker_name, home_odds, away_odds (or 1, X, 2)
+                        bookmaker = cell_texts[0]
+                        home_odds = cell_texts[1]
+                        away_odds = cell_texts[-1]  # Last cell is away odds
                         
-                        betting_odds[bookmaker.strip()] = {
-                            'home': home_odds.strip(),
-                            'away': away_odds.strip(),
-                            'draw': draw_odds.strip() if draw_odds else None
+                        betting_odds[bookmaker] = {
+                            'home': home_odds,
+                            'away': away_odds
                         }
-            except:
-                pass
+                        if len(cell_texts) >= 4:
+                            betting_odds[bookmaker]['draw'] = cell_texts[2]
+            except Exception as e:
+                self.logger.debug(f"Error extracting odds rows: {e}")
             
             return {
                 'betting_odds': betting_odds,
@@ -320,65 +405,49 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             return None
     
     async def _extract_stats_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from STATS tab."""
+        """Extract data from STATS tab using real FlashScore selectors."""
         try:
             detailed_statistics = {}
             player_performance = []
             team_performance = {}
             
-            # Extract detailed statistics
+            # FlashScore Stats tab uses .wcl-row for each stat row
+            # with .wcl-category for name, .wcl-homeValue for home, .wcl-awayValue for away
             try:
-                stat_categories = await self.page.query_selector_all('.statsCategory')
-                for category in stat_categories:
-                    category_name_element = await category.query_selector('.statsCategoryName')
-                    if category_name_element:
-                        category_name = await category_name_element.text_content()
-                        category_stats = {}
+                # Get section headers (e.g., "Scoring", "Rebounding")
+                current_category = "General"
+                stat_rows = await self.page.query_selector_all('.wcl-row_2oCpS, .stat__header, [class*="sectionHeader"]')
+                
+                for element in stat_rows:
+                    cls = await element.get_attribute('class') or ''
+                    
+                    # Check if this is a section header
+                    if 'sectionHeader' in cls or 'stat__header' in cls:
+                        text = (await element.text_content()).strip()
+                        if text:
+                            current_category = text
+                            if current_category not in detailed_statistics:
+                                detailed_statistics[current_category] = {}
+                        continue
+                    
+                    # This is a stat row
+                    category_el = await element.query_selector('[class*="category"]')
+                    home_el = await element.query_selector('[class*="homeValue"]')
+                    away_el = await element.query_selector('[class*="awayValue"]')
+                    
+                    if category_el and home_el and away_el:
+                        name = (await category_el.text_content()).strip()
+                        home_val = (await home_el.text_content()).strip()
+                        away_val = (await away_el.text_content()).strip()
                         
-                        stat_rows = await category.query_selector_all('.statRow')
-                        for stat_row in stat_rows:
-                            stat_name_element = await stat_row.query_selector('.statName')
-                            home_value_element = await stat_row.query_selector('.statValue--home')
-                            away_value_element = await stat_row.query_selector('.statValue--away')
-                            
-                            if stat_name_element and home_value_element and away_value_element:
-                                stat_name = await stat_name_element.text_content()
-                                home_value = await home_value_element.text_content()
-                                away_value = await away_value_element.text_content()
-                                
-                                category_stats[stat_name.strip()] = {
-                                    'home': home_value.strip(),
-                                    'away': away_value.strip()
-                                }
-                        
-                        detailed_statistics[category_name.strip()] = category_stats
-            except:
-                pass
-            
-            # Extract player performance
-            try:
-                player_tables = await self.page.query_selector_all('.statsTable')
-                for table in player_tables:
-                    team_element = await table.query_selector('.statsTeamName')
-                    if team_element:
-                        team_name = await team_element.text_content()
-                        
-                        player_rows = await table.query_selector_all('.statsPlayerRow')
-                        for player_row in player_rows:
-                            player_name_element = await player_row.query_selector('.statsPlayerName')
-                            player_stats_element = await player_row.query_selector('.statsPlayerStats')
-                            
-                            if player_name_element and player_stats_element:
-                                player_name = await player_name_element.text_content()
-                                player_stats = await player_stats_element.text_content()
-                                
-                                player_performance.append({
-                                    'team': team_name.strip(),
-                                    'player': player_name.strip(),
-                                    'stats': player_stats.strip()
-                                })
-            except:
-                pass
+                        if current_category not in detailed_statistics:
+                            detailed_statistics[current_category] = {}
+                        detailed_statistics[current_category][name] = {
+                            'home': home_val,
+                            'away': away_val
+                        }
+            except Exception as e:
+                self.logger.debug(f"Error extracting stats data: {e}")
             
             return {
                 'detailed_statistics': detailed_statistics,

@@ -43,12 +43,13 @@ class FlashscoreOrchestrator:
         if not isinstance(scraper, InterruptAwareScraper):
             raise TypeError("Scraper must inherit from InterruptAwareScraper for interrupt handling support")
     
-    async def execute_basketball_workflow(self, limit: Optional[int] = None) -> List[StructuredMatch]:
+    async def execute_basketball_workflow(self, limit: Optional[int] = None, status: str = 'scheduled') -> List[StructuredMatch]:
         """
         Execute the complete basketball workflow with match detail extraction.
         
         Args:
             limit: Maximum number of matches to process (default: 50)
+            status: Match status to extract (live, finished, scheduled)
             
         Returns:
             List of StructuredMatch objects with complete match data
@@ -70,11 +71,11 @@ class FlashscoreOrchestrator:
                 self.scraper.logger.error("Failed to navigate to basketball section")
                 return []
             
-            # Step 2: Extract match listings
-            scheduled_extractor = self.extractors['scheduled']
+            # Step 2: Extract match listings using the correct extractor for the status
+            extractor = self.extractors.get(status, self.extractors['scheduled'])
             sport_config = self._get_sport_config('basketball')
             listing_result = await self.scraper.scrape_with_interrupt_handling(
-                scheduled_extractor.extract_matches, sport_config, max_matches
+                extractor.extract_matches, sport_config, max_matches
             )
             
             if not listing_result or 'matches' not in listing_result:
@@ -272,7 +273,7 @@ class FlashscoreOrchestrator:
             if full_workflow:
                 # Execute new basketball workflow
                 self.scraper.logger.info(f"Starting basketball workflow with max {args.limit or 50} matches")
-                structured_matches = await self.execute_basketball_workflow(args.limit)
+                structured_matches = await self.execute_basketball_workflow(args.limit, status=args.status)
                 return {
                     'matches': [self._structured_match_to_dict(match) for match in structured_matches],
                     'workflow_type': 'full_basketball_workflow',

@@ -63,63 +63,64 @@ class PrimaryTabExtractor(ABC):
     
     async def navigate_to_tab(self, tab_name: str) -> bool:
         """
-        Navigate to a specific primary tab.
+        Navigate to a specific tab by clicking the button with matching text.
         
-        Args:
-            tab_name: Name of the tab to navigate to (summary, h2h, odds, stats)
-            
-        Returns:
-            True if navigation successful, False otherwise
+        This uses the most reliable approach: finding the button element by its
+        visible text content, which matches FlashScore's actual DOM structure.
         """
         try:
             tab_name_lower = tab_name.lower()
+            
+            # Map tab names to FlashScore button display text
+            tab_display_text = {
+                'summary': 'Summary',
+                'odds': 'Odds',
+                'h2h': 'H2H',
+                'stats': 'Stats',
+                'player-stats': 'Player stats',
+                'player-statistics': 'Player stats',
+                'match-stats': 'Stats',
+                'match-statistics': 'Stats',
+                'lineups': 'Lineups',
+                'match-history': 'Match History',
+                'standings': 'Standings',
+            }
+            
+            display_text = tab_display_text.get(tab_name_lower, tab_name)
+            
+            # Strategy 1: Find button element by text content (most reliable)
+            try:
+                tab_buttons = await self.page.query_selector_all('.wcl-tab_GS7ig, [class*="wcl-tab"]')
+                for btn in tab_buttons:
+                    text = (await btn.text_content()).strip()
+                    if text == display_text:
+                        await btn.click()
+                        await self.page.wait_for_timeout(3000)
+                        self.logger.info(f"Successfully navigated to {tab_name} tab via button click")
+                        return True
+            except Exception as e:
+                self.logger.debug(f"Button text search failed: {e}")
+            
+            # Strategy 2: Find anchor link by data-analytics-alias
             analytics_alias = self.TAB_ANALYTICS_ALIAS.get(tab_name_lower, tab_name_lower)
-            
-            # Flashscore tabs are navigation links with data-analytics-alias
-            tab_selectors = [
-                # Primary: data-analytics-alias selector (most reliable)
-                f'a[data-analytics-alias="{analytics_alias}"]',
-                # Secondary: tab button with testid
-                f'button[data-testid="wcl-tab"][data-analytics-alias="{analytics_alias}"]',
-                # Tertiary: href-based navigation
-                f'a[href*="/{tab_name_lower}/?mid="]',
-                f'a[href*="/{tab_name_lower}"][data-testid="wcl-tab"]'
-            ]
-            
-            for selector in tab_selectors:
-                try:
-                    # Wait for selector to be visible and clickable
-                    tab_element = await self.page.wait_for_selector(
-                        selector, 
-                        state="visible", 
-                        timeout=5000
-                    )
-                    if tab_element:
-                        # Get the href for URL-based navigation (more reliable)
-                        href = await tab_element.get_attribute('href')
-                        if href:
-                            # Navigate directly via URL - this is more reliable
-                            await self.page.goto(f"https://www.flashscore.com{href}")
-                            await self.page.wait_for_load_state("networkidle", timeout=10000)
-                        else:
-                            # Fallback to click
-                            await tab_element.click()
-                            await self.page.wait_for_timeout(1000)
-                        
-                        # Wait for tab content to load
-                        await self._wait_for_tab_content_load(tab_name_lower)
-                        
-                        # Verify tab is active
-                        is_active = await self._verify_tab_active(tab_name_lower)
-                        if is_active:
-                            self.logger.info(f"Successfully navigated to {tab_name} tab")
-                            return True
-                        else:
-                            self.logger.warning(f"Tab clicked but not active: {tab_name}")
-                            continue
-                except Exception as selector_error:
-                    self.logger.debug(f"Selector {selector} failed: {selector_error}")
-                    continue
+            try:
+                link = await self.page.query_selector(f'a[data-analytics-alias="{analytics_alias}"]')
+                if link:
+                    href = await link.get_attribute('href')
+                    if href:
+                        if not href.startswith('http'):
+                            href = f"https://www.flashscore.com{href}"
+                        await self.page.goto(href, wait_until='domcontentloaded')
+                        await self.page.wait_for_timeout(3000)
+                        self.logger.info(f"Successfully navigated to {tab_name} tab via URL")
+                        return True
+                    else:
+                        await link.click()
+                        await self.page.wait_for_timeout(3000)
+                        self.logger.info(f"Successfully navigated to {tab_name} tab via link click")
+                        return True
+            except Exception as e:
+                self.logger.debug(f"Analytics alias search failed: {e}")
             
             self.logger.warning(f"Could not find or navigate to {tab_name} tab")
             return False
