@@ -11,10 +11,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from src.network.direct_api import AsyncHttpClient
     from src.network.interception import NetworkListener
-    from src.network.session import SessionPackage, SessionValidator
 
-# Import SessionValidator for use in HybridExtractionHandler
-from src.network.session import SessionValidator
+# Runtime imports needed for type annotations and instantiation
+from src.network.session import SessionPackage, SessionValidator
 
 from src.extraction.exceptions import (
     ExtractionModeNotSupportedError,
@@ -152,12 +151,41 @@ class ExtractionModeRouter:
     def _create_hybrid_handler(self) -> "HybridExtractionHandler":
         """Create handler for hybrid mode.
 
+        Passes full HybridConfig from SiteConfig to the handler, including
+        session_ttl, max_retries, force_bootstrap, intercept_patterns,
+        and browser_config.
+
         Returns:
             HybridExtractionHandler: Handler combining browser + HTTP
         """
+        hybrid_config = self._config.get_hybrid_config()
+
+        # Extract hybrid config values with defaults
+        session_ttl = None
+        max_retries = 2
+        force_bootstrap = False
+        intercept_patterns = None
+        browser_config = None
+
+        if hybrid_config:
+            session_ttl = hybrid_config.session_ttl
+            max_retries = hybrid_config.max_retries
+            force_bootstrap = hybrid_config.force_bootstrap
+            intercept_patterns = hybrid_config.intercept_patterns or None
+            browser_config = hybrid_config.browser_config
+
+        # Fall back to rate_limit from top-level config
+        rate_limit = self._config.rate_limit
+
         return HybridExtractionHandler(
             endpoint=self._config.endpoint,
             site_name=self._config.site_name,
+            session_ttl=session_ttl,
+            max_retries=max_retries,
+            force_bootstrap=force_bootstrap,
+            intercept_patterns=intercept_patterns,
+            browser_config=browser_config,
+            rate_limit=rate_limit,
         )
 
     def _create_playwright_handler(self) -> "PlaywrightExtractionHandler":
@@ -373,12 +401,21 @@ class InterceptedExtractionHandler:
 
 
 class HybridExtractionHandler:
-    """Handler for hybrid mode (Session Bootstrap).
+    """Handler for hybrid mode (Session Bootstrap - SCR-007).
 
     Combines browser session with HTTP requests in a two-phase flow:
-    - Phase 1 (Bootstrap): Launch browser, navigate to site, harvest session,
-      close browser
-    - Phase 2 (Extract): Use harvested credentials for direct HTTP calls
+    - Phase 1 (Bootstrap): Launch browser, optionally intercept API responses,
+      navigate to site, harvest session credentials, close browser.
+    - Phase 2 (Extract): Use harvested credentials for direct HTTP calls.
+
+    If intercept_patterns are configured, the bootstrap phase also captures
+    API responses matching those patterns, enabling a "browser once, HTTP
+    thereafter" strategy where the first browser visit harvests both session
+    credentials AND initial API data.
+
+    Re-bootstrap is triggered automatically on auth errors (401/403/419/440)
+    with configurable retry logic (max_retries). Session TTL ensures stale
+    sessions are refreshed proactively.
 
     This handler follows ExtractionHandlerProtocol for consistency.
     """
@@ -388,8 +425,11 @@ class HybridExtractionHandler:
         endpoint: str,
         site_name: str,
         session_ttl: int | None = None,
-        browser_config: dict[str, Any] | None = None,
+        max_retries: int = 2,
         force_bootstrap: bool = False,
+        intercept_patterns: list[str] | None = None,
+        browser_config: dict[str, Any] | None = None,
+        rate_limit: float | None = None,
     ) -> None:
         """Initialize hybrid extraction handler.
 
@@ -397,38 +437,55 @@ class HybridExtractionHandler:
             endpoint: Base URL endpoint
             site_name: Name of the site
             session_ttl: Optional session time-to-live in seconds
+            max_retries: Maximum re-bootstrap attempts on auth failure (default 2)
+            force_bootstrap: If True, always perform fresh bootstrap
+            intercept_patterns: Optional URL patterns to intercept during bootstrap
             browser_config: Optional browser launch configuration
                 - headless: bool (default True)
                 - stealth: bool (default False)
                 - user_agent: str (optional)
                 - viewport: dict with width/height (optional)
-            force_bootstrap: If True, always perform fresh bootstrap
+            rate_limit: Rate limit in requests per second (default 10.0)
         """
         self.endpoint = endpoint
         self.site_name = site_name
         self._session_ttl = session_ttl
-        self._browser_config = browser_config or {"headless": True}
+        self._max_retries = max_retries
         self._force_bootstrap = force_bootstrap
+        self._intercept_patterns = intercept_patterns or []
+        self._browser_config = browser_config or {"headless": True}
+        self._rate_limit = rate_limit or 10.0
 
         # Session state
         self._session: SessionPackage | None = None
         self._client: AsyncHttpClient | None = None
 
+        # Interception state: captured responses from bootstrap phase
+        self._captured_responses: list[Any] = []
+
         # Validator for session freshness
         self._validator = SessionValidator(session_ttl=session_ttl)
 
-        # Track if bootstrap is needed
+        # Track bootstrap state
         self._needs_bootstrap = True
+        self._retry_count = 0
 
-    async def _bootstrap(self) -> SessionPackage:
+    async def _bootstrap(self) -> tuple["SessionPackage", list[Any]]:
         """Perform browser bootstrap to harvest session.
 
+        If intercept_patterns are configured, also captures API responses
+        during the browser navigation phase using NetworkInterceptor.
+
         Returns:
-            SessionPackage with harvested credentials
+            Tuple of (SessionPackage with harvested credentials, list of
+            CapturedResponse objects from interception or empty list)
         """
         from playwright.async_api import async_playwright
 
         from src.network.session import SessionHarvester
+
+        captured: list[Any] = []
+        interceptor = None
 
         # Configure browser launch
         browser_kwargs = {}
@@ -449,7 +506,21 @@ class HybridExtractionHandler:
 
             page = await browser.new_page(**page_options)
 
-            # Navigate to the endpoint (use the base URL for initial navigation)
+            # If intercept_patterns are configured, attach interceptor
+            # BEFORE navigation to capture API responses during bootstrap
+            if self._intercept_patterns:
+                from src.network.interception import NetworkInterceptor, CapturedResponse
+
+                async def _handle_captured(response: "CapturedResponse") -> None:
+                    captured.append(response)
+
+                interceptor = NetworkInterceptor(
+                    patterns=self._intercept_patterns,
+                    handler=_handle_captured,
+                )
+                await interceptor.attach(page)
+
+            # Navigate to the endpoint
             await page.goto(self.endpoint)
 
             # Wait for page to be fully loaded
@@ -459,10 +530,14 @@ class HybridExtractionHandler:
             harvester = SessionHarvester()
             session = await harvester.harvest(page, site_name=self.site_name)
 
+            # Detach interceptor if it was attached
+            if interceptor is not None:
+                await interceptor.detach()
+
             # Close browser after harvesting (AC #6: no browser process remaining)
             await browser.close()
 
-            return session
+            return session, captured
 
     async def _ensure_client(self) -> "AsyncHttpClient":
         """Get or create HTTP client with harvested session credentials.
@@ -473,17 +548,18 @@ class HybridExtractionHandler:
         from src.network.direct_api import AsyncHttpClient
 
         if self._client is None:
-            # Create client with base URL
-            rate_limit = self._browser_config.get("rate_limit", 10.0)
             self._client = AsyncHttpClient(
                 base_url=self.endpoint,
-                rate_limit=rate_limit,
+                rate_limit=self._rate_limit,
             )
 
         return self._client
 
     def _build_request(self, url: str):
         """Build a request with session credentials applied.
+
+        Applies harvested cookies, bearer tokens, auth headers, and
+        user-agent from the session package to every outgoing request.
 
         Args:
             url: URL to request
@@ -518,15 +594,42 @@ class HybridExtractionHandler:
 
         return builder
 
+    def _is_session_expired(self) -> bool:
+        """Check if the current session has expired based on TTL.
+
+        Returns:
+            True if session exists but has exceeded its TTL
+        """
+        if self._session is None:
+            return True
+        return self._validator.is_expired(self._session)
+
     async def _bootstrap_if_needed(self) -> None:
         """Bootstrap session if needed (lazy initialization).
 
-        This implements the two-phase flow: bootstrap once, then extract.
+        Triggers bootstrap when:
+        - No session exists yet (first call)
+        - force_bootstrap is True
+        - Current session has expired based on TTL
+
+        On successful bootstrap, resets the auth failure counter and
+        stores any intercepted responses from the bootstrap phase.
         """
-        if self._needs_bootstrap or self._force_bootstrap:
+        needs_fresh = (
+            self._needs_bootstrap
+            or self._force_bootstrap
+            or self._is_session_expired()
+        )
+
+        if needs_fresh:
             # Phase 1: Bootstrap - harvest session from browser
-            self._session = await self._bootstrap()
+            self._session, captured = await self._bootstrap()
             self._needs_bootstrap = False
+            self._retry_count = 0
+
+            # Store intercepted responses from bootstrap
+            if captured:
+                self._captured_responses = captured
 
             # Reset auth failure count after successful bootstrap
             self._validator.reset_auth_failures()
@@ -535,8 +638,12 @@ class HybridExtractionHandler:
         """Extract data using hybrid mode.
 
         Implements two-phase flow:
-        1. First call: Launch browser, harvest session, close browser
-        2. Subsequent calls: Use harvested credentials for direct HTTP
+        1. First call: Launch browser, harvest session (optionally intercept
+           API responses), close browser.
+        2. Subsequent calls: Use harvested credentials for direct HTTP.
+
+        On auth errors (401/403/419/440), automatically triggers re-bootstrap
+        up to max_retries times before giving up.
 
         Args:
             url: URL to fetch
@@ -544,38 +651,47 @@ class HybridExtractionHandler:
 
         Returns:
             Response from HTTP client
+
+        Raises:
+            ExtractionHandlerError: If max retries exhausted after auth failures
         """
-        # Phase 1: Bootstrap if needed (first call or forced)
+        from src.extraction.exceptions import ExtractionHandlerError
+
+        # Phase 1: Bootstrap if needed (first call, forced, or TTL expired)
         await self._bootstrap_if_needed()
 
         # Phase 2: Use harvested session for HTTP requests
         try:
             client = await self._ensure_client()
             async with client:
-                # Build request with session credentials
                 builder = self._build_request(url)
                 response = await builder.execute()
                 return response
         except Exception as e:
             # Check if this is an auth error that requires re-bootstrap
-            # NetworkError has status_code attribute
             error_status = getattr(e, "status_code", None)
+            if not error_status:
+                # Try to extract status from httpx response or NetworkError
+                response_obj = getattr(e, "response", None)
+                if response_obj and hasattr(response_obj, "status_code"):
+                    error_status = response_obj.status_code
+
             if error_status and self._validator.is_auth_error(error_status):
-                # Trigger re-bootstrap
-                self._needs_bootstrap = True
-                self._client = None  # Reset client
+                self._validator.record_auth_failure()
 
-                # Check if we've hit max failures
-                if self._validator.record_auth_failure():
-                    # Attempt re-bootstrap once
-                    await self._bootstrap_if_needed()
+                # Check if we still have retries left
+                if self._retry_count < self._max_retries:
+                    self._retry_count += 1
+                    self._needs_bootstrap = True
+                    self._client = None  # Reset client for fresh connection
 
-                    # Try again with fresh session
-                    client = await self._ensure_client()
-                    async with client:
-                        builder = self._build_request(url)
-                        response = await builder.execute()
-                        return response
+                    # Recursive retry with fresh bootstrap
+                    return await self.extract(url, **kwargs)
+                else:
+                    raise ExtractionHandlerError(
+                        f"Hybrid mode exhausted {self._max_retries} re-bootstrap attempts "
+                        f"for site '{self.site_name}'. Last auth error: {error_status}"
+                    ) from e
 
             raise
 
@@ -586,6 +702,8 @@ class HybridExtractionHandler:
             self._client = None
         self._session = None
         self._needs_bootstrap = True
+        self._retry_count = 0
+        self._captured_responses.clear()
 
     def get_session(self) -> SessionPackage | None:
         """Get the current session package.
@@ -595,16 +713,32 @@ class HybridExtractionHandler:
         """
         return self._session
 
+    def get_captured_responses(self) -> list[Any]:
+        """Get API responses captured during bootstrap phase.
+
+        These are responses intercepted during the browser navigation
+        when intercept_patterns are configured in HybridConfig.
+
+        Returns:
+            List of CapturedResponse objects from bootstrap interception
+        """
+        return list(self._captured_responses)
+
     def is_bootstrap_needed(self) -> bool:
         """Check if bootstrap is needed.
 
         Returns:
             True if next extract() call will trigger bootstrap
         """
-        return self._needs_bootstrap
+        return self._needs_bootstrap or self._is_session_expired()
 
     def __repr__(self) -> str:
-        return f"HybridExtractionHandler(site_name={self.site_name!r})"
+        return (
+            f"HybridExtractionHandler("
+            f"site_name={self.site_name!r}, "
+            f"ttl={self._session_ttl}, "
+            f"max_retries={self._max_retries})"
+        )
 
 
 class PlaywrightExtractionHandler:

@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+import httpx
+
 
 @dataclass
 class ResponseMetadata:
@@ -78,7 +80,3 @@ def get_response_with_metadata(
     timestamp = extract_timestamp(response)
     metadata = ResponseMetadata(timestamp=timestamp)
     return response, metadata
-
-
-# Import httpx at module level for type hints
-import httpx

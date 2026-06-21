@@ -427,6 +427,8 @@ class NetworkListener:
     """Network response listener for Playwright browser sessions (backward compatibility).
 
     This is a backward-compatible class that mirrors the old NetworkListener.
+    Now properly wires Playwright response events to capture network responses
+    matching the configured URL patterns.
     """
 
     def __init__(
@@ -445,6 +447,7 @@ class NetworkListener:
         self._captured_responses: list[CapturedResponse] = []
         self._page = None
         self._handlers: list[Any] = []
+        self._response_handler: Callable[[Any], Any] | None = None
 
     def get_captured_responses(self) -> list[CapturedResponse]:
         """Get all captured responses."""
@@ -454,15 +457,74 @@ class NetworkListener:
         """Clear captured responses list."""
         self._captured_responses.clear()
 
+    async def _handle_response(self, response: Any) -> None:
+        """Handle Playwright response event.
+
+        Matches the response URL against configured patterns and captures
+        matching responses. Also invokes the on_response callback if set.
+
+        Args:
+            response: Playwright Response object
+        """
+        response_url = response.url if hasattr(response, "url") else str(response)
+
+        # Check if URL matches configured patterns
+        if not self.config.matches(response_url):
+            return
+
+        # Capture body if configured
+        raw_bytes: bytes | None = None
+        if self.config.capture_body:
+            try:
+                body = await response.body()
+                raw_bytes = body if body else None
+            except Exception:
+                raw_bytes = None
+
+        # Capture headers if configured
+        headers: dict[str, str] = {}
+        if self.config.capture_headers and hasattr(response, "headers"):
+            headers = dict(response.headers)
+
+        captured = CapturedResponse(
+            url=response_url,
+            status=response.status if hasattr(response, "status") else 0,
+            headers=headers,
+            raw_bytes=raw_bytes,
+        )
+        self._captured_responses.append(captured)
+
+        # Invoke callback if set
+        if self._on_response:
+            await self._on_response(captured)
+
     async def attach(self, page: Any) -> None:
-        """Attach network listener to Playwright page."""
+        """Attach network listener to Playwright page.
+
+        Wires the Playwright 'response' event to capture matching responses.
+        Must be called BEFORE page.goto() to capture all responses.
+
+        Args:
+            page: Playwright async page object
+        """
         self._page = page
+        self._response_handler = self._handle_response
+        page.on("response", self._response_handler)
 
     async def detach(self) -> None:
         """Detach listener from page and clean up."""
+        # Remove the response handler from the page
+        if self._page is not None and self._response_handler is not None:
+            try:
+                self._page.off("response", self._response_handler)
+            except Exception:
+                # Page may already be closed - silently handle
+                pass
+
         self._captured_responses.clear()
         self._handlers.clear()
         self._page = None
+        self._response_handler = None
 
 
 def create_network_error(

@@ -6,3 +6,27 @@ auth_method: cookie
 extraction_mode: intercepted
 timeout: 30
 rate_limit: 2.0
+
+# Interception mode config (active when extraction_mode=intercepted)
+intercepted:
+  url_patterns:
+    - "^https://api\\.flashscore\\.com/v1/.*"
+    - "^https://d\\.flashscore\\.com/.*"
+  capture_body: true
+  capture_headers: true
+
+# Hybrid mode config (active when extraction_mode=hybrid)
+# Uncomment extraction_mode above and switch to 'hybrid' to use this
+hybrid:
+  session_ttl: 1800          # 30 minutes — cookies expire, re-bootstrap proactively
+  max_retries: 2             # re-bootstrap up to 2 times on auth failure
+  force_bootstrap: false     # set true to always re-bootstrap (debugging)
+  intercept_patterns:        # capture API responses during bootstrap phase
+    - "^https://api\\.flashscore\\.com/v1/.*"
+    - "^https://d\\.flashscore\\.com/.*"
+  browser_config:
+    headless: true
+    stealth: true
+    viewport:
+      width: 1920
+      height: 1080

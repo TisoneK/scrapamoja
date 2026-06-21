@@ -13,7 +13,6 @@ from src.network.interception import (
     create_network_error,
 )
 from src.network.session import (
-import httpx
     SessionPackage,
     SessionCookies,
     SessionHeaders,

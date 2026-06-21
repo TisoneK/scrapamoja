@@ -66,6 +66,46 @@ class InterceptedConfig(BaseModel):
     model_config = {"str_strip_whitespace": True}
 
 
+class HybridConfig(BaseModel):
+    """Configuration for hybrid extraction mode.
+
+    Hybrid mode uses a two-phase approach: browser bootstrap to harvest
+    session credentials, then direct HTTP requests using those credentials.
+
+    Attributes:
+        session_ttl: Session time-to-live in seconds (None = no expiry)
+        max_retries: Maximum re-bootstrap attempts on auth failure (default 2)
+        force_bootstrap: If True, always perform fresh bootstrap
+        intercept_patterns: URL patterns to intercept during bootstrap phase
+        browser_config: Browser launch configuration for bootstrap phase
+    """
+
+    session_ttl: int | None = Field(
+        default=None,
+        description="Session time-to-live in seconds. None = no expiry",
+    )
+    max_retries: int = Field(
+        default=2,
+        ge=1,
+        le=5,
+        description="Maximum re-bootstrap attempts on auth failure",
+    )
+    force_bootstrap: bool = Field(
+        default=False,
+        description="If True, always perform fresh bootstrap",
+    )
+    intercept_patterns: list[str] = Field(
+        default_factory=list,
+        description="URL patterns to intercept during bootstrap phase",
+    )
+    browser_config: dict[str, Any] = Field(
+        default_factory=lambda: {"headless": True},
+        description="Browser launch configuration for bootstrap phase",
+    )
+
+    model_config = {"str_strip_whitespace": True}
+
+
 class SiteConfig(BaseModel):
     """
     Pydantic model for site configuration.
@@ -103,6 +143,10 @@ class SiteConfig(BaseModel):
     intercepted: InterceptedConfig | None = Field(
         default=None,
         description="Configuration for intercepted extraction mode"
+    )
+    hybrid: HybridConfig | None = Field(
+        default=None,
+        description="Configuration for hybrid extraction mode"
     )
 
     @field_validator("endpoint")
@@ -145,6 +189,10 @@ class SiteConfig(BaseModel):
     def get_intercepted_config(self) -> InterceptedConfig | None:
         """Get the intercepted mode configuration."""
         return self.intercepted
+
+    def get_hybrid_config(self) -> HybridConfig | None:
+        """Get the hybrid mode configuration."""
+        return self.hybrid
 
 
 class SiteConfigLoader:
