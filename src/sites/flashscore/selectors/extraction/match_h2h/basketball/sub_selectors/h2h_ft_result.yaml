@@ -1,0 +1,30 @@
+id: h2h_ft_result
+name: H2H Full-Time Result
+selector_type: css
+description: "Full-time result container in H2H row (regulation time score, before OT)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: Fulltime result class — most specific
+  - type: "css"
+    selector: ".h2h__result--fulltime"
+    weight: 1.0
+  # Strategy 2: Partial class match for fulltime variant — survives hash rotation
+  - type: "css"
+    selector: "[class*='h2h__result--fulltime']"
+    weight: 0.8
+  # Strategy 3: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//*[contains(@class, 'h2h__result--fulltime')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"
+  parent_selector: ".h2h__row"
+  volatile_selectors:
+    - ".h2h__result--fulltime"
+  stable_selectors:
+    - "[class*='h2h__result--fulltime']"

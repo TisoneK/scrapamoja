@@ -1,0 +1,30 @@
+id: h2h_event
+name: H2H Event
+selector_type: css
+description: "Competition event element in H2H row (e.g., competition name/link)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: Event class — most specific
+  - type: "css"
+    selector: ".h2h__event"
+    weight: 1.0
+  # Strategy 2: Partial class match — survives hash rotation
+  - type: "css"
+    selector: "[class*='h2h__event']"
+    weight: 0.8
+  # Strategy 3: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//*[contains(@class, 'h2h__event')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"
+  parent_selector: ".h2h__row"
+  volatile_selectors:
+    - ".h2h__event"
+  stable_selectors:
+    - "[class*='h2h__event']"

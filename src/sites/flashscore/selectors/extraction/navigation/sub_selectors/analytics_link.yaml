@@ -1,0 +1,25 @@
+id: analytics_link
+name: Analytics Link
+selector_type: css
+description: "Navigation link with data-analytics-alias attribute (parameterized selector for link identification)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: Anchor with data-analytics-alias — most specific and semantic
+  - type: "css"
+    selector: "a[data-analytics-alias]"
+    weight: 1.0
+  # Strategy 2: Any element with data-analytics-alias — broader match
+  - type: "css"
+    selector: "[data-analytics-alias]"
+    weight: 0.8
+  # Strategy 3: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//a[@data-analytics-alias]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  notes: "Parameterized selector — match specific analytics-alias values (e.g., 'summary', 'h2h', 'odds', 'stats') by combining with attribute value: a[data-analytics-alias='summary']"

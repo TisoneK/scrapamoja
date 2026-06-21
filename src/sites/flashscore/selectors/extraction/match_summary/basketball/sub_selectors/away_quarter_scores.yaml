@@ -1,0 +1,33 @@
+id: away_quarter_scores
+name: Away Quarter Scores
+selector_type: css
+description: "Away team quarter score elements on match detail page (excludes total score)"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+
+strategies:
+  # Strategy 1: Part+away excluding total score — most precise
+  - type: "css"
+    selector: ".smh__part.smh__away:not(.smh__score)"
+    weight: 1.0
+  # Strategy 2: Part+away without exclusion — may include total score
+  - type: "css"
+    selector: ".smh__part.smh__away"
+    weight: 0.9
+  # Strategy 3: Partial class match for part+away — survives hash changes
+  - type: "css"
+    selector: "[class*='smh__part'][class*='away']"
+    weight: 0.8
+  # Strategy 4: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//*[contains(@class, 'smh__part') and contains(@class, 'smh__away') and not(contains(@class, 'smh__score'))]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "summary"
+  volatile_selectors:
+    - ".smh__part.smh__away"
+  stable_selectors:
+    - "[class*='smh__part'][class*='away']"

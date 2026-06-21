@@ -1,0 +1,33 @@
+id: competition
+name: Competition
+selector_type: css
+description: "Competition name on match detail page (e.g., 'NBA', 'EuroLeague')"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+
+strategies:
+  # Strategy 1: Obfuscated overline class with hash — most specific
+  - type: "css"
+    selector: ".wcl-scores-overline-03_Jdp91"
+    weight: 1.0
+  # Strategy 2: Partial class match for scores-overline — survives hash rotation
+  - type: "css"
+    selector: "[class*='scores-overline']"
+    weight: 0.9
+  # Strategy 3: Broader partial class match for overline — less specific but stable
+  - type: "css"
+    selector: "[class*='overline']"
+    weight: 0.7
+  # Strategy 4: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//*[contains(@class, 'scores-overline')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  tab_context: "summary"
+  volatile_selectors:
+    - ".wcl-scores-overline-03_Jdp91"
+  stable_selectors:
+    - "[class*='scores-overline']"

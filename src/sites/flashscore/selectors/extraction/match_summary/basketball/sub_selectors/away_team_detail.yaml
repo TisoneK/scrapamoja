@@ -1,0 +1,33 @@
+id: away_team_detail
+name: Away Team Detail
+selector_type: css
+description: "Away team name element on match detail page (sub-selector for granular extraction)"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+
+strategies:
+  # Strategy 1: Specific participant name wrapper inside away container — most stable
+  - type: "css"
+    selector: ".duelParticipant__away .participant__participantNameWrapper"
+    weight: 1.0
+  # Strategy 2: Away participant container — volatile obfuscated class
+  - type: "css"
+    selector: ".duelParticipant__away"
+    weight: 0.9
+  # Strategy 3: Partial class match — survives class hash changes
+  - type: "css"
+    selector: "[class*='duelParticipant__away']"
+    weight: 0.8
+  # Strategy 4: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//*[contains(@class, 'duelParticipant__away')]//*[contains(@class, 'participantNameWrapper')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  tab_context: "summary"
+  volatile_selectors:
+    - ".duelParticipant__away"
+  stable_selectors:
+    - "[class*='duelParticipant__away']"

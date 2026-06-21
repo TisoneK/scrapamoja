@@ -19,8 +19,8 @@ strategies:
   - type: "css"
     selector: "[class*='wcl-row']"
     weight: 0.8
-  # Strategy 4: Attribute match on testid pattern
-  - type: "attribute_match"
+  # Strategy 4: CSS with element tag + data-testid
+  - type: "css"
     selector: "div[data-testid='wcl-statistics']"
     weight: 0.7
   # Strategy 5: XPath fallback — most resilient to class changes

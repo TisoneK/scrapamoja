@@ -1,0 +1,30 @@
+id: h2h_ft_scores
+name: H2H Full-Time Scores
+selector_type: css
+description: "Full-time score elements in H2H row (for overtime games where FT differs from final)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: Fulltime result with data-testid score element — most stable
+  - type: "css"
+    selector: ".h2h__result--fulltime [data-testid='wcl-tableScore']"
+    weight: 1.0
+  # Strategy 2: Fulltime result with any span — broader match
+  - type: "css"
+    selector: ".h2h__result--fulltime span"
+    weight: 0.8
+  # Strategy 3: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//*[contains(@class, 'h2h__result--fulltime')]//*[@data-testid='wcl-tableScore']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"
+  parent_selector: ".h2h__row"
+  volatile_selectors:
+    - ".h2h__result--fulltime"
+  stable_selectors:
+    - "[data-testid='wcl-tableScore']"

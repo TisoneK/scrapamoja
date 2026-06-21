@@ -1,0 +1,28 @@
+id: tab_content
+name: Tab Content Container
+selector_type: css
+description: "Tab content container element for visibility check"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: "[data-testid='tab-content']"
+    weight: 1.0
+  - type: "css"
+    selector: ".tabContent"
+    weight: 0.9
+  - type: "css"
+    selector: ".wcl-colXs-12"
+    weight: 0.8
+  - type: "css"
+    selector: "[class*='tabContent']"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//*[@data-testid='tab-content']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  notes: "Used for verifying tab content visibility after navigation"

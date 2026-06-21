@@ -1,0 +1,33 @@
+id: tab_selected
+name: Selected Tab
+selector_type: css
+description: "Currently selected/active tab button in navigation"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: Obfuscated tabSelected class with hash — most specific
+  - type: "css"
+    selector: ".wcl-tabSelected_rHdTM"
+    weight: 1.0
+  # Strategy 2: Partial class match for tabSelected — survives hash rotation
+  - type: "css"
+    selector: "[class*='tabSelected']"
+    weight: 0.9
+  # Strategy 3: data-selected attribute — semantic, stable
+  - type: "css"
+    selector: "[data-selected='true']"
+    weight: 0.8
+  # Strategy 4: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//*[contains(@class, 'tabSelected')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  volatile_selectors:
+    - ".wcl-tabSelected_rHdTM"
+  stable_selectors:
+    - "[class*='tabSelected']"
+    - "[data-selected='true']"

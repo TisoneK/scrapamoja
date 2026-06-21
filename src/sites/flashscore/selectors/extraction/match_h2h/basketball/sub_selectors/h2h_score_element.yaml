@@ -1,0 +1,30 @@
+id: h2h_score_element
+name: H2H Score Element
+selector_type: css
+description: "Individual score element inside H2H result containers (home/away score value)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: data-testid table score — most stable
+  - type: "css"
+    selector: "[data-testid='wcl-tableScore']"
+    weight: 1.0
+  # Strategy 2: Partial class match for tableScore — survives hash rotation
+  - type: "css"
+    selector: "[class*='tableScore']"
+    weight: 0.8
+  # Strategy 3: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//*[@data-testid='wcl-tableScore']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "h2h"
+  parent_selector: ".h2h__row"
+  volatile_selectors:
+    - "[class*='tableScore']"
+  stable_selectors:
+    - "[data-testid='wcl-tableScore']"

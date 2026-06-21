@@ -14,17 +14,43 @@ from datetime import datetime
 
 
 class PrimaryTabExtractor(ABC):
-    """Base class for primary tab extraction from match detail pages."""
+    """Base class for primary tab extraction from match detail pages.
+    
+    All selectors are YAML-driven. Zero hardcoded CSS strings.
+    """
     
     def __init__(self, scraper: FlashscoreScraper):
         self.scraper = scraper
         self.logger = self._get_logger()
         self.page: Page = scraper.page  # type: ignore[assignment]
+        self._selector_engine = getattr(scraper, 'selector_engine', None)
     
     def _get_logger(self):
         """Get logger instance."""
         from src.observability.logger import get_logger
         return get_logger(f"flashscore.primary_tab_extractor.{self.__class__.__name__.lower()}")
+    
+    async def _resolve_element(self, selector_name: str, parent=None) -> Optional[Any]:
+        """Resolve a single element via YAML selector engine."""
+        if self._selector_engine:
+            try:
+                search_target = parent or self.page
+                return await self._selector_engine.find(search_target, selector_name)
+            except Exception as e:
+                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
+        return None
+    
+    async def _resolve_elements(self, selector_name: str, parent=None) -> List[Any]:
+        """Resolve multiple elements via YAML selector engine."""
+        if self._selector_engine:
+            try:
+                search_target = parent or self.page
+                elements = await self._selector_engine.find_all(search_target, selector_name)
+                if elements:
+                    return elements
+            except Exception as e:
+                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
+        return []
     
     # Mapping of tab names to Flashscore data-analytics-alias values
     # Primary tabs: Match, Odds, H2H, Standings
@@ -119,10 +145,17 @@ class PrimaryTabExtractor(ABC):
                 self.logger.info(f"Successfully navigated to {tab_name} tab via button click")
                 return True
             
-            # Strategy 2: Find anchor link by data-analytics-alias
+            # Strategy 2: Find anchor link by data-analytics-alias (YAML: analytics_link)
             analytics_alias = self.TAB_ANALYTICS_ALIAS.get(tab_name_lower, tab_name_lower)
             try:
-                link = await self.page.query_selector(f'a[data-analytics-alias="{analytics_alias}"]')
+                # Find all analytics links via YAML selector, then match by alias
+                all_links = await self._resolve_elements('analytics_link')
+                link = None
+                for l in all_links:
+                    alias = await l.get_attribute('data-analytics-alias')
+                    if alias == analytics_alias:
+                        link = l
+                        break
                 if link:
                     href = await link.get_attribute('href')
                     if href:
@@ -172,13 +205,9 @@ class PrimaryTabExtractor(ABC):
             return False
     
     async def _click_tab_by_text(self, display_text: str) -> bool:
-        """Click a tab button matching the given display text.
-        
-        Searches all .wcl-tab_GS7ig buttons and clicks the first one
-        whose text content exactly matches display_text.
-        """
+        """Click a tab button matching the given display text — YAML selector: tab_button."""
         try:
-            tab_buttons = await self.page.query_selector_all('.wcl-tab_GS7ig, [class*="wcl-tab"]')
+            tab_buttons = await self._resolve_elements('tab_button')
             for btn in tab_buttons:
                 text = (await btn.text_content()).strip()
                 if text == display_text:
@@ -222,18 +251,16 @@ class PrimaryTabExtractor(ABC):
             
             # Flashscore uses data-selected="true" on button tabs
             # and data-analytics-alias for navigation links
-            active_selectors = [
-                # Primary: button with data-selected
-                f'button[data-testid="wcl-tab"][data-selected="true"][data-analytics-alias="{analytics_alias}"]',
-                # Secondary: navigation link with aria-selected
-                f'a[data-analytics-alias="{analytics_alias}"][aria-selected="true"]',
-                # Tertiary: check URL contains tab path
-                f'a[data-analytics-alias="{analytics_alias}"].active'
-            ]
-            
-            for selector in active_selectors:
-                active_element = await self.page.query_selector(selector)
-                if active_element:
+            # Use YAML-driven tab_selected selector to check active state
+            selected_tabs = await self._resolve_elements('tab_selected')
+            for tab in selected_tabs:
+                text = (await tab.text_content()).strip()
+                text_to_tab = {
+                    'Summary': 'summary', 'Stats': 'stats', 'Odds': 'odds',
+                    'H2H': 'h2h', 'Match': 'match', 'Player stats': 'player-stats',
+                    'Lineups': 'lineups', 'Match History': 'match-history',
+                }
+                if text_to_tab.get(text) == tab_name:
                     return True
             
             # Fallback: check URL path contains tab indicator
@@ -247,20 +274,12 @@ class PrimaryTabExtractor(ABC):
             if tab_name in ('stats', 'standings') and '/standings/' in current_url:
                 return True
             
-            # Fallback: check if tab content is visible
-            content_selectors = [
-                f'.tabContent__{analytics_alias}',
-                f'.{tab_name}__content',
-                '[data-testid="tab-content"]'
-            ]
-            
-            for selector in content_selectors:
-                content_element = await self.page.query_selector(selector)
-                if content_element:
-                    # Check if element is visible
-                    is_visible = await content_element.is_visible()
-                    if is_visible:
-                        return True
+            # Fallback: check if tab content is visible via YAML selector
+            content_element = await self._resolve_element('tab_content')
+            if content_element:
+                is_visible = await content_element.is_visible()
+                if is_visible:
+                    return True
             
             return False
             
@@ -351,7 +370,7 @@ class PrimaryTabExtractor(ABC):
         """
         try:
             # Find all selected tab buttons - FlashScore uses wcl-tabSelected class
-            selected_tabs = await self.page.query_selector_all('.wcl-tabSelected_rHdTM, [class*="tabSelected"]')
+            selected_tabs = await self._resolve_elements('tab_selected')
             
             # Map button text to internal tab names
             text_to_tab = {

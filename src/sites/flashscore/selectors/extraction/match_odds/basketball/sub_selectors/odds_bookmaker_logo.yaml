@@ -1,0 +1,31 @@
+id: odds_bookmaker_logo
+name: Odds Bookmaker Logo
+selector_type: css
+description: "Bookmaker logo image element (for alt text fallback when title attribute is unavailable)"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: Logo image with alt inside bookmaker part — most specific
+  - type: "css"
+    selector: ".oddsCell__bookmakerPart img[alt]"
+    weight: 1.0
+  # Strategy 2: Any image inside bookmaker part — partial class match
+  - type: "css"
+    selector: "[class*='bookmakerPart'] img"
+    weight: 0.8
+  # Strategy 3: XPath fallback — last resort
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'bookmakerPart')]//img[@alt]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: false
+  tab_context: "odds"
+  parent_selector: ".ui-table__row"
+  volatile_selectors:
+    - ".oddsCell__bookmakerPart"
+  stable_selectors:
+    - "[class*='bookmakerPart']"
+  notes: "Use alt attribute on logo image as fallback for bookmaker identification when link title is unavailable."

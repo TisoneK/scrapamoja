@@ -1,0 +1,33 @@
+id: away_score
+name: Away Score
+selector_type: css
+description: "Away team score element on match detail page"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+
+strategies:
+  # Strategy 1: Specific score+away class combo — most stable
+  - type: "css"
+    selector: ".smh__score.smh__away"
+    weight: 1.0
+  # Strategy 2: Away score container only — volatile obfuscated class
+  - type: "css"
+    selector: ".smh__away"
+    weight: 0.9
+  # Strategy 3: Partial class match for score+away — survives hash changes
+  - type: "css"
+    selector: "[class*='smh__score'][class*='away']"
+    weight: 0.8
+  # Strategy 4: XPath fallback — last resort
+  - type: "xpath"
+    selector: "//*[contains(@class, 'smh__score') and contains(@class, 'smh__away')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  tab_context: "summary"
+  volatile_selectors:
+    - ".smh__away"
+  stable_selectors:
+    - "[class*='smh__score'][class*='away']"
