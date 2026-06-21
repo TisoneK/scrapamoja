@@ -194,9 +194,17 @@ class ExtractionModeRouter:
         Returns:
             PlaywrightExtractionHandler: Handler using browser automation
         """
+        # Get browser config from intercepted config if available, else defaults
+        browser_config = None
+        intercepted_config = self._config.get_intercepted_config()
+        if intercepted_config:
+            browser_config = getattr(intercepted_config, 'browser_config', None)
+
         return PlaywrightExtractionHandler(
             endpoint=self._config.endpoint,
             site_name=self._config.site_name,
+            timeout=self._config.timeout,
+            browser_config=browser_config,
         )
 
 
@@ -744,39 +752,170 @@ class HybridExtractionHandler:
 class PlaywrightExtractionHandler:
     """Handler for DOM/Playwright mode.
 
-    Uses browser automation for extraction - placeholder for future implementation.
+    Uses browser automation to navigate pages, capture HTML, and extract
+    structured data using the framework's Extractor module with site-specific
+    ExtractionRules.
+
+    This handler supports two usage patterns:
+    1. **With extraction_rules**: Automatically parse HTML and apply rules
+       using the Extractor module for structured data extraction.
+    2. **Without extraction_rules**: Return raw HTML content for the caller
+       to process with site-specific scrapers.
+
+    The handler manages browser lifecycle: launch, navigate, capture, close.
+    No browser process remains after extraction completes.
     """
 
-    def __init__(self, endpoint: str, site_name: str) -> None:
+    def __init__(
+        self,
+        endpoint: str,
+        site_name: str,
+        timeout: int = 30,
+        browser_config: dict[str, Any] | None = None,
+    ) -> None:
         """Initialize playwright extraction handler.
 
         Args:
             endpoint: Base URL endpoint
             site_name: Name of the site
+            timeout: Navigation timeout in seconds
+            browser_config: Optional browser launch configuration
+                - headless: bool (default True)
+                - stealth: bool (default False)
+                - user_agent: str (optional)
+                - viewport: dict with width/height (optional)
         """
         self.endpoint = endpoint
         self.site_name = site_name
+        self._timeout = timeout
+        self._browser_config = browser_config or {"headless": True}
+        self._page = None
+        self._browser = None
 
-    async def extract(self, url: str, **kwargs: Any) -> Any:
-        """Extract data using Playwright/DOM mode.
+    def _apply_extraction_rules(
+        self,
+        html_content: str,
+        extraction_rules: list[Any] | dict[str, Any],
+    ) -> dict[str, Any]:
+        """Apply ExtractionRules to parsed HTML content.
 
-        Note: This is a placeholder - DOM Mode is handled by existing scraper.
+        Uses BeautifulSoup for HTML parsing and the framework's Extractor
+        module for rule-driven data extraction.
 
         Args:
-            url: URL to fetch
-            **kwargs: Additional parameters
+            html_content: Raw HTML string
+            extraction_rules: List of ExtractionRule objects or dict of rules
 
         Returns:
-            Placeholder return
+            Dictionary mapping field_path → extracted value
         """
-        raise NotImplementedError(
-            "Playwright/DOM Mode is not yet implemented in extraction router. "
-            "Use site-specific scraper classes for DOM extraction."
+        from bs4 import BeautifulSoup
+        from src.extractor import Extractor, ExtractionContext
+
+        # Parse HTML
+        soup = BeautifulSoup(html_content, "html.parser")
+
+        # Create extractor
+        extractor = Extractor()
+
+        # Build context
+        context = ExtractionContext(
+            extraction_id=f"playwright_{self.site_name}",
+            source_url=self.endpoint,
+            source_type="html",
         )
+
+        # Apply rules
+        results = extractor.extract(soup, extraction_rules, context)
+
+        # Normalize results to dict of field_path → value
+        if isinstance(results, dict):
+            return {
+                path: result.value if hasattr(result, 'value') else result
+                for path, result in results.items()
+            }
+        else:
+            # Single result
+            return {"result": results.value if hasattr(results, 'value') else results}
+
+    async def extract(
+        self,
+        url: str,
+        extraction_rules: list[Any] | dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Extract data using Playwright/DOM mode.
+
+        Launches a browser, navigates to the URL, captures the HTML, and
+        optionally applies extraction rules for structured data extraction.
+
+        Args:
+            url: URL to navigate to
+            extraction_rules: Optional ExtractionRule objects for structured
+                extraction. If provided, returns dict of field_path → value.
+                If None, returns raw HTML string.
+            **kwargs: Additional parameters
+                - wait_for_selector: CSS selector to wait for before capture
+                - wait_for_timeout: Milliseconds to wait before capture
+
+        Returns:
+            If extraction_rules provided: dict of field_path → extracted value
+            If no extraction_rules: raw HTML content string
+        """
+        from playwright.async_api import async_playwright
+
+        # Configure browser launch
+        browser_kwargs = {}
+        if self._browser_config.get("headless", True):
+            browser_kwargs["headless"] = True
+        if self._browser_config.get("stealth", False):
+            browser_kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(**browser_kwargs)
+
+            # Configure page with optional settings
+            page_options = {}
+            if "viewport" in self._browser_config:
+                page_options["viewport"] = self._browser_config["viewport"]
+            if "user_agent" in self._browser_config:
+                page_options["user_agent"] = self._browser_config["user_agent"]
+
+            page = await browser.new_page(**page_options)
+
+            # Navigate with timeout
+            await page.goto(url, timeout=self._timeout * 1000)
+
+            # Optional: wait for specific selector or timeout
+            wait_selector = kwargs.get("wait_for_selector")
+            wait_timeout = kwargs.get("wait_for_timeout")
+
+            if wait_selector:
+                await page.wait_for_selector(wait_selector)
+            elif wait_timeout:
+                await page.wait_for_timeout(wait_timeout)
+            else:
+                await page.wait_for_load_state("networkidle")
+
+            # Capture HTML content
+            html_content = await page.content()
+
+            # Close browser immediately — no process remaining
+            await browser.close()
+
+        # If extraction rules provided, apply them
+        if extraction_rules:
+            return self._apply_extraction_rules(html_content, extraction_rules)
+
+        # Otherwise return raw HTML for caller to process
+        return html_content
 
     async def close(self) -> None:
         """Close the handler and clean up resources."""
-        pass
+        if self._browser is not None:
+            await self._browser.close()
+            self._browser = None
+        self._page = None
 
     def __repr__(self) -> str:
         return f"PlaywrightExtractionHandler(site_name={self.site_name!r})"
