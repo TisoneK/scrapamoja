@@ -1,0 +1,14 @@
+description: "Search result description"
+confidence_threshold: 0.6
+timeout: 3.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".searchresult .searchresult_description"
+    weight: 1.0
+  - type: "css"
+    selector: ".mw-search-result-description"
+    weight: 0.9
+  - type: "xpath"
+    selector: ".//div[contains(@class, 'searchresult_description')]"
+    weight: 0.8

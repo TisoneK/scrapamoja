@@ -1,0 +1,23 @@
+name: issue_list
+description: "GitHub issues list container"
+selector_type: hybrid
+confidence_threshold: 0.8
+strategies:
+  - type: attribute
+    selector: "[data-testid='issue-list']"
+    weight: 0.9
+  - type: semantic
+    selector: ".js-issue-row"
+    weight: 0.8
+  - type: attribute
+    selector: ".issue-list"
+    weight: 0.7
+  - type: semantic
+    selector: "div[id*='issue_']"
+    weight: 0.6
+validation_rules:
+  - type: existence
+    required: true
+  - type: child_elements
+    min_children: 1
+    required: true

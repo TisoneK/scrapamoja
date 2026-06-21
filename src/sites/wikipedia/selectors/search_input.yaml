@@ -1,0 +1,18 @@
+description: "Wikipedia search input field"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: "input[name='search']"
+    weight: 1.0
+  - type: "css"
+    selector: "#searchInput"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//input[@name='search']"
+    weight: 0.8
+  - type: "attribute"
+    selector: "placeholder"
+    attribute: "Search Wikipedia"
+    weight: 0.6

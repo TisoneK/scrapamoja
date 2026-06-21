@@ -1,0 +1,14 @@
+description: "Wikipedia search results list"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".mw-search-results li"
+    weight: 1.0
+  - type: "css"
+    selector: ".searchresults li"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//ul[contains(@class, 'mw-search-results')]/li"
+    weight: 0.8

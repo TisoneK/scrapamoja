@@ -1,0 +1,23 @@
+name: repository_details
+description: "Repository details on repository page including title, description, and stats"
+selector_type: hybrid
+confidence_threshold: 0.8
+strategies:
+  - type: attribute
+    selector: "main"
+    weight: 0.9
+  - type: semantic
+    selector: "article[itemprop='about']"
+    weight: 0.8
+  - type: attribute
+    selector: "[data-testid='repository-details']"
+    weight: 0.7
+  - type: semantic
+    selector: ".repository-content"
+    weight: 0.6
+validation_rules:
+  - type: existence
+    required: true
+  - type: child_elements
+    min_children: 3
+    required: true

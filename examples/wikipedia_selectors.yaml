@@ -1,0 +1,358 @@
+# Wikipedia Selector Configurations
+# Based on actual Wikipedia HTML structure analysis from main page and article pages
+
+# Search Input Configuration - Works on main page, search page, and article header
+search_input:
+  element_purpose: "Wikipedia search input field"
+  confidence_threshold: 0.7
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # Main page search input (pure-form style)
+    - type: "css"
+      selector: "input#searchInput"
+      priority: 1
+      expected_attributes:
+        type: "text"
+        name: "search"
+        placeholder: "Search Wikipedia"
+      description: "Main page search input with ID selector"
+    
+    # Article page search input (Vector 2022 style)
+    - type: "css"
+      selector: ".mw-searchInput"
+      priority: 2
+      expected_attributes:
+        type: "search"
+        name: "search"
+        class: "mw-searchInput"
+      description: "Article page search input class selector"
+    
+    # Combined search input selector (works on both page types)
+    - type: "xpath"
+      selector: "//input[@name='search']"
+      priority: 3
+      expected_attributes:
+        name: "search"
+      description: "Universal search input by name attribute"
+    
+    # Type-based search input (covers all search inputs)
+    - type: "css"
+      selector: "input[type='search'], input[name='search']"
+      priority: 4
+      expected_attributes:
+        name: "search"
+      description: "Combined type and name search input selector"
+    
+    # Text-based fallback for dynamic content
+    - type: "text"
+      selector: "Search Wikipedia"
+      priority: 5
+      search_context: "input"
+      description: "Text-based fallback for dynamic content"
+
+# Search Button Configuration - Works on both main page and article pages
+search_button:
+  element_purpose: "Wikipedia search button"
+  confidence_threshold: 0.7
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # Main page search button
+    - type: "css"
+      selector: "button[type='submit']"
+      priority: 1
+      expected_attributes:
+        type: "submit"
+        tag: "button"
+      description: "Main page submit button"
+    
+    # Article page search button (Vector 2022)
+    - type: "css"
+      selector: ".cdx-search-input__end-button"
+      priority: 2
+      expected_attributes:
+        tag: "button"
+        class: "cdx-search-input__end-button"
+      description: "Article page search button"
+    
+    # Generic submit button
+    - type: "css"
+      selector: "form button"
+      priority: 3
+      expected_attributes:
+        tag: "button"
+      description: "Generic form button"
+    
+    # XPath for search form buttons
+    - type: "xpath"
+      selector: "//form//button"
+      priority: 4
+      expected_attributes:
+        tag: "button"
+      description: "XPath for form buttons"
+    
+    # Text-based button matching
+    - type: "text"
+      selector: "Search"
+      priority: 5
+      search_context: "button"
+      description: "Text-based button matching"
+
+# Search Results Configuration - For Wikipedia search results pages
+search_results:
+  element_purpose: "Wikipedia search result links"
+  confidence_threshold: 0.6
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # Primary search result heading links
+    - type: "css"
+      selector: ".mw-search-result-heading a"
+      priority: 1
+      expected_attributes:
+        tag: "a"
+      description: "Primary search result heading links"
+    
+    # Alternative search result data links
+    - type: "css"
+      selector: ".mw-search-result-data a"
+      priority: 2
+      expected_attributes:
+        tag: "a"
+      description: "Alternative search result data links"
+    
+    # XPath for nested result heading links
+    - type: "xpath"
+      selector: "//div[@class='mw-search-result-heading']//a"
+      priority: 3
+      expected_attributes:
+        tag: "a"
+      description: "XPath for nested result heading links"
+    
+    # XPath for search result list items
+    - type: "xpath"
+      selector: "//li[@class='mw-search-result']//a"
+      priority: 4
+      expected_attributes:
+        tag: "a"
+      description: "XPath for search result list items"
+    
+    # Text-based matching for specific search terms
+    - type: "text"
+      selector: "python"
+      priority: 5
+      search_context: "link"
+      description: "Text-based matching for specific search terms"
+
+# Article Content Configuration - For navigating article content
+article_content:
+  element_purpose: "Wikipedia article main content"
+  confidence_threshold: 0.8
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # Main article content area
+    - type: "css"
+      selector: "#mw-content-text"
+      priority: 1
+      expected_attributes:
+        id: "mw-content-text"
+      description: "Main article content area"
+    
+    # Body content class selector
+    - type: "css"
+      selector: ".mw-body-content"
+      priority: 2
+      description: "Body content class selector"
+    
+    # XPath for main content area
+    - type: "xpath"
+      selector: "//div[@id='mw-content-text']"
+      priority: 3
+      expected_attributes:
+        id: "mw-content-text"
+      description: "XPath for main content area"
+
+# Article Title Configuration - For getting article title
+article_title:
+  element_purpose: "Wikipedia article title"
+  confidence_threshold: 0.9
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # Primary article title heading
+    - type: "css"
+      selector: "#firstHeading"
+      priority: 1
+      expected_attributes:
+        id: "firstHeading"
+      description: "Primary article title heading"
+    
+    # Class-based title selector
+    - type: "css"
+      selector: ".mw-first-heading"
+      priority: 2
+      description: "Class-based title selector"
+    
+    # XPath for title heading with tag validation
+    - type: "xpath"
+      selector: "//h1[@id='firstHeading']"
+      priority: 3
+      expected_attributes:
+        id: "firstHeading"
+        tag: "h1"
+      description: "XPath for title heading with tag validation"
+
+# Main Page Content Configuration - For main page specific elements
+main_page_content:
+  element_purpose: "Wikipedia main page content"
+  confidence_threshold: 0.7
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # Main page featured content
+    - type: "css"
+      selector: ".central-featured"
+      priority: 1
+      expected_attributes:
+        class: "central-featured"
+      description: "Main page featured content area"
+    
+    # Main page content wrapper
+    - type: "css"
+      selector: "#main-page"
+      priority: 2
+      description: "Main page content wrapper"
+    
+    # XPath for main page content
+    - type: "xpath"
+      selector: "//div[@class='central-featured']"
+      priority: 3
+      expected_attributes:
+        class: "central-featured"
+      description: "XPath for main page content"
+
+# Navigation Links Configuration - For page navigation
+navigation_links:
+  element_purpose: "Wikipedia navigation menu links"
+  confidence_threshold: 0.6
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # Navigation panel links
+    - type: "css"
+      selector: "#p-navigation a"
+      priority: 1
+      expected_attributes:
+        tag: "a"
+      description: "Navigation panel links"
+    
+    # Vector menu content links
+    - type: "css"
+      selector: ".vector-menu-content a"
+      priority: 2
+      expected_attributes:
+        tag: "a"
+      description: "Vector menu content links"
+    
+    # Generic navigation links
+    - type: "xpath"
+      selector: "//nav//a"
+      priority: 3
+      expected_attributes:
+        tag: "a"
+      description: "Generic navigation links"
+
+# Table of Contents Configuration - For article TOC
+table_of_contents:
+  element_purpose: "Wikipedia table of contents"
+  confidence_threshold: 0.7
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # Table of contents container
+    - type: "css"
+      selector: "#toc"
+      priority: 1
+      expected_attributes:
+        id: "toc"
+      description: "Table of contents container"
+    
+    # Vector TOC class selector
+    - type: "css"
+      selector: ".vector-toc"
+      priority: 2
+      description: "Vector TOC class selector"
+    
+    # XPath for TOC container
+    - type: "xpath"
+      selector: "//div[@id='toc']"
+      priority: 3
+      expected_attributes:
+        id: "toc"
+      description: "XPath for TOC container"
+
+# External Links Configuration - For external reference links
+external_links:
+  element_purpose: "Wikipedia external reference links"
+  confidence_threshold: 0.6
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # External link styling
+    - type: "css"
+      selector: ".external.text"
+      priority: 1
+      expected_attributes:
+        tag: "a"
+        class: "external text"
+      description: "External link styling"
+    
+    # Nofollow external links
+    - type: "css"
+      selector: "a[rel='nofollow']"
+      priority: 2
+      expected_attributes:
+        rel: "nofollow"
+        tag: "a"
+      description: "Nofollow external links"
+    
+    # XPath with external class matching
+    - type: "xpath"
+      selector: "//a[contains(@class, 'external')]"
+      priority: 3
+      expected_attributes:
+        tag: "a"
+      description: "XPath with external class matching"
+
+# Language Links Configuration - For language selection
+language_links:
+  element_purpose: "Wikipedia language selection links"
+  confidence_threshold: 0.6
+  timeout_per_strategy_ms: 1500
+  enable_fallback: true
+  strategies:
+    # Language links container
+    - type: "css"
+      selector: "#p-lang a"
+      priority: 1
+      expected_attributes:
+        tag: "a"
+      description: "Language panel links"
+    
+    # Interlanguage links
+    - type: "css"
+      selector: ".interlanguage-link"
+      priority: 2
+      expected_attributes:
+        tag: "a"
+      description: "Interlanguage links"
+    
+    # XPath for language links
+    - type: "xpath"
+      selector: "//div[@id='p-lang']//a"
+      priority: 3
+      expected_attributes:
+        tag: "a"
+      description: "XPath for language panel links"

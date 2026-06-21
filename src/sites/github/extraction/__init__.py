@@ -1,0 +1,3 @@
+"""
+GitHub extraction module initialization.
+"""

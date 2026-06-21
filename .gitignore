@@ -50,23 +50,25 @@ node_modules/
 *.db-shm
 *.db-wal
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-venv/
+# Build artifacts
+*.egg-info/
+
+# Data directory
+data/
 
 # Build artifacts
 *.egg-info/
 scorewise_scraper.egg-info/
 
-# Data directories (runtime artifacts, not source)
-data/
-.checkpoints/
-
 # Bmad output
 _bmad-output/
 _bmad/
+
+# Python cache
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+venv/
+data/
+.checkpoints/

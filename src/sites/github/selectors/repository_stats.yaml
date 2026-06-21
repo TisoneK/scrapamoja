@@ -1,0 +1,23 @@
+name: repository_stats
+description: "Repository statistics (stars, forks, issues, etc.)"
+selector_type: hybrid
+confidence_threshold: 0.8
+strategies:
+  - type: attribute
+    selector: "ul[data-testid='repository-stats']"
+    weight: 0.9
+  - type: semantic
+    selector: "ul.pagehead-actions"
+    weight: 0.8
+  - type: attribute
+    selector: ".repository-stats"
+    weight: 0.7
+  - type: semantic
+    selector: "nav[aria-label='Repository']"
+    weight: 0.6
+validation_rules:
+  - type: existence
+    required: true
+  - type: child_elements
+    min_children: 2
+    required: true

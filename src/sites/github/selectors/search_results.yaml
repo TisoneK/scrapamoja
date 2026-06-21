@@ -1,0 +1,23 @@
+name: search_results
+description: "GitHub search results container"
+selector_type: hybrid
+confidence_threshold: 0.8
+strategies:
+  - type: attribute
+    selector: "[data-testid='results-list']"
+    weight: 0.9
+  - type: semantic
+    selector: ".repo-list"
+    weight: 0.8
+  - type: attribute
+    selector: ".search-results"
+    weight: 0.7
+  - type: semantic
+    selector: "div[data-hpc]"
+    weight: 0.6
+validation_rules:
+  - type: existence
+    required: true
+  - type: child_elements
+    min_children: 1
+    required: true

@@ -1,0 +1,23 @@
+name: user_profile
+description: "User profile information container"
+selector_type: hybrid
+confidence_threshold: 0.8
+strategies:
+  - type: attribute
+    selector: "[data-testid='profile-header']"
+    weight: 0.9
+  - type: semantic
+    selector: "main[itemprop='mainEntityOfPage']"
+    weight: 0.8
+  - type: attribute
+    selector: ".profile-header"
+    weight: 0.7
+  - type: semantic
+    selector: "article[itemprop='about']"
+    weight: 0.6
+validation_rules:
+  - type: existence
+    required: true
+  - type: child_elements
+    min_children: 2
+    required: true
