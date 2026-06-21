@@ -1,3 +1,0 @@
-"""
-GitHub template unit tests
-"""

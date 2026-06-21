@@ -1,3 +1,0 @@
-"""
-GitHub flows module initialization.
-"""
