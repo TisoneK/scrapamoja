@@ -165,7 +165,7 @@ class ModularSiteScraper(ABC):
         """
         try:
             if not self.component_manager:
-                print("Component manager not available")
+                logger.warning("Component manager not available")
                 return False
             
             # Initialize processor
@@ -393,7 +393,7 @@ class ModularSiteScraper(ABC):
             
         except Exception as e:
             self._execution_stats['failed_scrapes'] += 1
-            self.logger.error(f"Modular scraping failed: {str(e)}")
+            logger.error(f"Modular scraping failed: {str(e)}")
             return {
                 'error': str(e),
                 'stats': self._execution_stats

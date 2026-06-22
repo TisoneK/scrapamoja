@@ -1,0 +1,42 @@
+id: period_stats
+name: Period Stats
+selector_type: css
+description: "Period statistics content within a period stat row"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: "[data-testid='period-stats']"
+    weight: 1.0
+  # Strategy 2: Semantic class
+  - type: "css"
+    selector: ".periodStats"
+    weight: 0.9
+  # Strategy 3: Partial class match
+  - type: "css"
+    selector: "[class*='periodStats']"
+    weight: 0.7
+  # Strategy 4: CSS with nested span
+  - type: "css"
+    selector: ".periodStats > span"
+    weight: 0.65
+  # Strategy 5: XPath fallback
+  - type: "xpath"
+    selector: "//*[@data-testid='period-stats']"
+    weight: 0.6
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'periodStats')]"
+    weight: 0.5
+
+metadata:
+  wait_for_element: false
+  tab_context: "stats"
+  tertiary_context: "inc_ot"
+  parent_selector: "[data-testid='wcl-statistics']"
+  volatile_selectors:
+    - ".periodStats"
+  stable_selectors:
+    - "[data-testid='period-stats']"

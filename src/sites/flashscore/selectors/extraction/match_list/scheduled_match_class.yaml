@@ -1,0 +1,26 @@
+id: scheduled_match_class
+name: Scheduled Match Class
+selector_type: css
+description: "CSS class indicating a scheduled match element in match listing"
+confidence_threshold: 0.9
+timeout: 5.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".event__match--scheduled"
+    weight: 1.0
+  - type: "css"
+    selector: ".event__match.event__match--scheduled"
+    weight: 0.95
+  - type: "css"
+    selector: "[data-testid='match-scheduled']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//div[contains(@class, 'event__match--scheduled')]"
+    weight: 0.7
+metadata:
+  wait_for_element: false
+  volatile_selectors: [".event__match--scheduled"]
+  stable_selectors: ["[data-testid='match-scheduled']"]
+  dom_state: "scheduled"
+  status_class_fragment: "event__match--scheduled"

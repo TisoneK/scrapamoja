@@ -1,0 +1,43 @@
+id: inc_ot_filter_button
+name: Inc OT Filter Button
+selector_type: css
+description: "Inc OT (Including Overtime) statistical filter navigation button"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: '.statsFilter[data-filter="inc_ot"]'
+    weight: 1.0
+  - type: "css"
+    selector: '.filter__item[data-name="inc_ot"]'
+    weight: 0.9
+  - type: "css"
+    selector: '[data-stats-filter="inc_ot"]'
+    weight: 0.85
+  - type: "css"
+    selector: '.stats__filter[href*="inc_ot"]'
+    weight: 0.8
+  - type: "css"
+    selector: "[data-subtab='inc-ot']"
+    weight: 0.75
+  - type: "css"
+    selector: ".subtab-inc-ot"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//a[contains(text(), 'Inc OT') or contains(text(), 'Incidents')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  required_for_navigation: false
+  tab_context: "stats"
+  tertiary_context: "inc_ot"
+  volatile_selectors:
+    - '.statsFilter[data-filter="inc_ot"]'
+    - '.filter__item[data-name="inc_ot"]'
+    - ".subtab-inc-ot"
+  stable_selectors:
+    - '[data-stats-filter="inc_ot"]'
+    - "[data-subtab='inc-ot']"

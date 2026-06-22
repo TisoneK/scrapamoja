@@ -1,0 +1,28 @@
+id: real_match_content
+name: Real Match Content
+selector_type: css
+description: "Non-skeleton match elements indicating real content has loaded"
+confidence_threshold: 0.8
+timeout: 10.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".event__match:not([class*='skeleton'])"
+    weight: 1.0
+  - type: "css"
+    selector: ".event__match:not(.event__match--skeleton)"
+    weight: 0.9
+  - type: "css"
+    selector: ".event__match"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//div[contains(@class, 'event__match') and not(contains(@class, 'skeleton'))]"
+    weight: 0.6
+metadata:
+  wait_for_element: true
+  volatile_selectors: [".event__match:not([class*='skeleton'])"]
+  stable_selectors: []
+  dom_state_indicators:
+    live: ["event__match"]
+    scheduled: ["event__match"]
+    finished: ["event__match"]

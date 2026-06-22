@@ -1,0 +1,44 @@
+id: q1_filter_active
+name: Q1 Filter Active
+selector_type: css
+description: "Active state indicator for the Q1 (First Quarter) statistical filter"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: '.statsFilter[data-filter="q1"].active'
+    weight: 1.0
+  - type: "css"
+    selector: '.filter__item[data-name="q1"].selected'
+    weight: 0.9
+  - type: "css"
+    selector: '.stats__filter[href*="q1"].active'
+    weight: 0.85
+  - type: "css"
+    selector: '[data-stats-filter="q1"].active'
+    weight: 0.8
+  - type: "css"
+    selector: '.statsContent[data-filter="q1"]'
+    weight: 0.7
+  - type: "css"
+    selector: '[data-content="q1"]'
+    weight: 0.65
+  - type: "xpath"
+    selector: "//*[@data-stats-filter='q1' and contains(@class, 'active')]"
+    weight: 0.5
+
+metadata:
+  wait_for_element: false
+  tab_context: "stats"
+  tertiary_context: "q1"
+  volatile_selectors:
+    - '.statsFilter[data-filter="q1"].active'
+    - '.filter__item[data-name="q1"].selected'
+    - '.stats__filter[href*="q1"].active'
+    - '.q1__content'
+  stable_selectors:
+    - '[data-stats-filter="q1"].active'
+    - '.statsContent[data-filter="q1"]'
+    - '[data-content="q1"]'

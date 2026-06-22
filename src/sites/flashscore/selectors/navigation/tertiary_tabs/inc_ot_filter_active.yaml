@@ -1,0 +1,44 @@
+id: inc_ot_filter_active
+name: Inc OT Filter Active
+selector_type: css
+description: "Active state indicator for the Inc OT statistical filter"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: '.statsFilter[data-filter="inc_ot"].active'
+    weight: 1.0
+  - type: "css"
+    selector: '.filter__item[data-name="inc_ot"].selected'
+    weight: 0.9
+  - type: "css"
+    selector: '.stats__filter[href*="inc_ot"].active'
+    weight: 0.85
+  - type: "css"
+    selector: '[data-stats-filter="inc_ot"].active'
+    weight: 0.8
+  - type: "css"
+    selector: '.statsContent[data-filter="inc_ot"]'
+    weight: 0.7
+  - type: "css"
+    selector: '[data-content="inc_ot"]'
+    weight: 0.65
+  - type: "xpath"
+    selector: "//*[@data-stats-filter='inc_ot' and contains(@class, 'active')]"
+    weight: 0.5
+
+metadata:
+  wait_for_element: false
+  tab_context: "stats"
+  tertiary_context: "inc_ot"
+  volatile_selectors:
+    - '.statsFilter[data-filter="inc_ot"].active'
+    - '.filter__item[data-name="inc_ot"].selected'
+    - '.stats__filter[href*="inc_ot"].active'
+    - '.inc_ot__content'
+  stable_selectors:
+    - '[data-stats-filter="inc_ot"].active'
+    - '.statsContent[data-filter="inc_ot"]'
+    - '[data-content="inc_ot"]'

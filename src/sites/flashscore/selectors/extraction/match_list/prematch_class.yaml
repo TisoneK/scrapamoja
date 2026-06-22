@@ -1,0 +1,26 @@
+id: prematch_class
+name: Pre-Match CSS Class
+selector_type: css
+description: "Volatile obfuscated CSS class indicating pre-match/scheduled state on score elements"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".wcl-isPreMatch_FgNtO"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='isPreMatch']"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-testid='score-prematch']"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//*[contains(@class, 'isPreMatch')]"
+    weight: 0.6
+metadata:
+  wait_for_element: false
+  volatile_selectors: [".wcl-isPreMatch_FgNtO"]
+  stable_selectors: ["[data-testid='score-prematch']"]
+  dom_state: "scheduled"
+  notes: "The wcl-isPreMatch_* class suffix is an obfuscated hash that changes on FlashScore CSS rotations. Update this YAML when the hash changes."

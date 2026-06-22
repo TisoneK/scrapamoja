@@ -1,0 +1,47 @@
+id: ot_stat_row
+name: Overtime Stat Row
+selector_type: css
+description: "Stat row element for overtime statistics (basketball)"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: "[data-testid='wcl-statistics'][data-period='ot']"
+    weight: 1.0
+  # Strategy 2: Tertiary-specific class with OT marker
+  - type: "css"
+    selector: ".statRow--ot"
+    weight: 0.9
+  # Strategy 3: Alternative overtime stat class
+  - type: "css"
+    selector: ".overtimeStat"
+    weight: 0.85
+  # Strategy 4: Obfuscated class (volatile)
+  - type: "css"
+    selector: ".wcl-row_2oCpS"
+    weight: 0.8
+  # Strategy 5: Partial class match — survives minor hash changes
+  - type: "css"
+    selector: "[class*='statRow--ot']"
+    weight: 0.7
+  - type: "css"
+    selector: "[class*='overtimeStat']"
+    weight: 0.65
+  # Strategy 6: XPath fallback
+  - type: "xpath"
+    selector: "//div[@data-testid='wcl-statistics' and @data-period='ot']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "inc_ot"
+  volatile_selectors:
+    - ".statRow--ot"
+    - ".overtimeStat"
+    - ".wcl-row_2oCpS"
+  stable_selectors:
+    - "[data-testid='wcl-statistics'][data-period='ot']"

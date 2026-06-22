@@ -7,18 +7,23 @@ timeout: 5.0
 retry_count: 3
 strategies:
   - type: "css"
-    selector: ".event__time"
+    selector: "[data-testid='event-time']"
     weight: 1.0
+  - type: "css"
+    selector: ".event__time"
+    weight: 0.9
   - type: "xpath"
-    selector: "//div[contains(@class, 'event__time')]"
+    selector: ".//div[contains(@class, 'event__time')]"
     weight: 0.8
   - type: "css"
     selector: "[class*='event__time']"
     weight: 0.7
   - type: "xpath"
-    selector: "//span[contains(@class, 'time')]"
+    selector: ".//span[contains(@class, 'time')]"
     weight: 0.6
 metadata:
+  volatile_selectors: [".event__time", "[class*='event__time']"]
+  stable_selectors: ["[data-testid='event-time']"]
   wait_for_element: false
   required_for_navigation: false
   dom_state_indicators:

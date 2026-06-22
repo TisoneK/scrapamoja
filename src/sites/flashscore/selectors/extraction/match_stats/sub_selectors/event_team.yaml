@@ -1,0 +1,42 @@
+id: event_team
+name: Event Team
+selector_type: css
+description: "Team indicator within a Q1 scoring event entry"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: "[data-testid='event-team']"
+    weight: 1.0
+  # Strategy 2: Semantic class
+  - type: "css"
+    selector: ".eventTeam"
+    weight: 0.9
+  # Strategy 3: Partial class match
+  - type: "css"
+    selector: "[class*='eventTeam']"
+    weight: 0.7
+  # Strategy 4: CSS with nested span
+  - type: "css"
+    selector: ".eventTeam > span"
+    weight: 0.65
+  # Strategy 5: XPath fallback
+  - type: "xpath"
+    selector: "//*[@data-testid='event-team']"
+    weight: 0.6
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'eventTeam')]"
+    weight: 0.5
+
+metadata:
+  wait_for_element: false
+  tab_context: "stats"
+  tertiary_context: "q1"
+  parent_selector: "[data-testid='wcl-statistics']"
+  volatile_selectors:
+    - ".eventTeam"
+  stable_selectors:
+    - "[data-testid='event-team']"

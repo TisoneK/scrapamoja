@@ -1,0 +1,43 @@
+id: ft_filter_button
+name: FT Filter Button
+selector_type: css
+description: "FT (Full Time) statistical filter navigation button"
+confidence_threshold: 0.9
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: '.statsFilter[data-filter="ft"]'
+    weight: 1.0
+  - type: "css"
+    selector: '.filter__item[data-name="ft"]'
+    weight: 0.9
+  - type: "css"
+    selector: '[data-stats-filter="ft"]'
+    weight: 0.85
+  - type: "css"
+    selector: '.stats__filter[href*="ft"]'
+    weight: 0.8
+  - type: "css"
+    selector: "[data-subtab='ft']"
+    weight: 0.75
+  - type: "css"
+    selector: ".subtab-ft"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//a[contains(text(), 'FT') or contains(text(), 'Full Time')]"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  required_for_navigation: false
+  tab_context: "stats"
+  tertiary_context: "ft"
+  volatile_selectors:
+    - '.statsFilter[data-filter="ft"]'
+    - '.filter__item[data-name="ft"]'
+    - ".subtab-ft"
+  stable_selectors:
+    - '[data-stats-filter="ft"]'
+    - "[data-subtab='ft']"

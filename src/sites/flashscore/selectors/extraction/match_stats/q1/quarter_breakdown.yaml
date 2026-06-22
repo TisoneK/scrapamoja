@@ -1,0 +1,41 @@
+id: quarter_breakdown
+name: Quarter Breakdown
+selector_type: css
+description: "Quarter breakdown entries within Q1 filter (basketball)"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: "[data-testid='quarter-breakdown']"
+    weight: 1.0
+  # Strategy 2: Semantic class
+  - type: "css"
+    selector: ".quarterBreakdown"
+    weight: 0.9
+  # Strategy 3: Partial class match
+  - type: "css"
+    selector: "[class*='quarterBreakdown']"
+    weight: 0.7
+  # Strategy 4: Data attribute approach
+  - type: "css"
+    selector: "[data-type='quarter-breakdown']"
+    weight: 0.65
+  # Strategy 5: XPath fallback
+  - type: "xpath"
+    selector: "//*[@data-testid='quarter-breakdown']"
+    weight: 0.6
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'quarterBreakdown')]"
+    weight: 0.5
+
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "q1"
+  volatile_selectors:
+    - ".quarterBreakdown"
+  stable_selectors:
+    - "[data-testid='quarter-breakdown']"

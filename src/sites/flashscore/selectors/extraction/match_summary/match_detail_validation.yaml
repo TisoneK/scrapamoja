@@ -1,0 +1,31 @@
+id: match_detail_validation
+name: Match Detail Validation
+selector_type: css
+description: "Compound selector for validating match detail page structure - checks for key content indicators"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".duelParticipant__startTime"
+    weight: 1.0
+  - type: "css"
+    selector: ".detailScore__status"
+    weight: 0.95
+  - type: "css"
+    selector: "[data-testid='match-status']"
+    weight: 0.9
+  - type: "css"
+    selector: ".tournamentHeader__content"
+    weight: 0.85
+  - type: "css"
+    selector: ".wcl-colXs-12"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//*[contains(@class, 'duelParticipant__startTime') or contains(@class, 'detailScore__status') or @data-testid='match-status']"
+    weight: 0.6
+metadata:
+  wait_for_element: true
+  volatile_selectors: [".duelParticipant__startTime", ".detailScore__status", ".wcl-colXs-12"]
+  stable_selectors: ["[data-testid='match-status']", ".tournamentHeader__content"]
+  tab_context: "summary"

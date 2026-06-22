@@ -1,0 +1,25 @@
+id: live_score
+name: Live Score
+selector_type: css
+description: "Score elements in live state within a match listing row"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".event__score[data-state='live']"
+    weight: 1.0
+  - type: "css"
+    selector: "[data-state='live']"
+    weight: 0.9
+  - type: "xpath"
+    selector: "//span[contains(@class, 'event__score') and @data-state='live']"
+    weight: 0.7
+  - type: "css"
+    selector: "[data-testid='score-live']"
+    weight: 0.5
+metadata:
+  wait_for_element: false
+  volatile_selectors: [".event__score[data-state='live']"]
+  stable_selectors: ["[data-state='live']", "[data-testid='score-live']"]
+  dom_state: "live"

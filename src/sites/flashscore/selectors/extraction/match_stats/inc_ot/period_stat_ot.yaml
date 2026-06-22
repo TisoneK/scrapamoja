@@ -1,0 +1,41 @@
+id: period_stat_ot
+name: Period Stat OT
+selector_type: css
+description: "Period statistics row for overtime periods (basketball)"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: "[data-testid='period-stat-ot']"
+    weight: 1.0
+  # Strategy 2: Tertiary-specific class
+  - type: "css"
+    selector: ".periodStat--ot"
+    weight: 0.9
+  # Strategy 3: Partial class match
+  - type: "css"
+    selector: "[class*='periodStat--ot']"
+    weight: 0.7
+  # Strategy 4: Generic period with data attribute
+  - type: "css"
+    selector: ".periodStat[data-period='ot']"
+    weight: 0.65
+  # Strategy 5: XPath fallback
+  - type: "xpath"
+    selector: "//*[@data-testid='period-stat-ot']"
+    weight: 0.6
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'periodStat--ot')]"
+    weight: 0.5
+
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "inc_ot"
+  volatile_selectors:
+    - ".periodStat--ot"
+  stable_selectors:
+    - "[data-testid='period-stat-ot']"

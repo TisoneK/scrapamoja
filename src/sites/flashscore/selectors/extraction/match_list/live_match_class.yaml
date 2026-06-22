@@ -1,0 +1,26 @@
+id: live_match_class
+name: Live Match Class
+selector_type: css
+description: "CSS class indicating a live match element in match listing"
+confidence_threshold: 0.9
+timeout: 5.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".event__match--live"
+    weight: 1.0
+  - type: "css"
+    selector: ".event__match.event__match--live"
+    weight: 0.95
+  - type: "css"
+    selector: "[data-testid='match-live']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//div[contains(@class, 'event__match--live')]"
+    weight: 0.7
+metadata:
+  wait_for_element: false
+  volatile_selectors: [".event__match--live"]
+  stable_selectors: ["[data-testid='match-live']"]
+  dom_state: "live"
+  status_class_fragment: "event__match--live"

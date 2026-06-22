@@ -1,5 +1,12 @@
 """
 Finished match extractor for Flashscore.
+
+ALL selectors are YAML-driven via the selector engine. Zero hardcoded CSS strings.
+Each selector lives in its own YAML file under src/sites/flashscore/selectors/extraction/
+with ordered fallback chains: data-testid → obfuscated class → partial class → xpath.
+
+When FlashScore rotates CSS hashes, only the YAML entries need updating.
+No Python code changes required.
 """
 from typing import Dict, Any, Optional
 from playwright.async_api import ElementHandle
@@ -8,43 +15,40 @@ from .base_extractor import BaseExtractor
 
 
 class FinishedMatchExtractor(BaseExtractor):
-    """Extractor for finished matches."""
-    
+    """Extractor for finished matches — 100% YAML-driven selectors."""
+
     async def is_match_status(self, element: ElementHandle) -> bool:
         """Check if a match element is actually finished using multiple reliable indicators."""
         try:
             # Method 1: Check for finished score state indicators (most reliable)
-            finished_scores = await element.query_selector_all('.event__score[data-state="final"]')
+            finished_scores = await self._resolve_elements('final_score', parent=element)
             if finished_scores:
-                self.logger.debug(f"Finished match detected via {len(finished_scores)} final score elements")
+                self.logger.debug(f"Finished match detected via {len(finished_scores)} final score elements (YAML: final_score)")
                 return True
-            
+
             # Method 2: Check for finished score CSS classes
-            finished_score_classes = await element.query_selector_all('.wcl-isFinal_7U4ca')
+            finished_score_classes = await self._resolve_elements('final_class', parent=element)
             if finished_score_classes:
-                self.logger.debug(f"Finished match detected via {len(finished_score_classes)} final score CSS classes")
+                self.logger.debug(f"Finished match detected via {len(finished_score_classes)} final score CSS classes (YAML: final_class)")
                 return True
-            
+
             # Method 3: Check for explicit finished CSS class
-            class_name = await element.get_attribute('class')
-            if class_name and 'event__match--finished' in class_name:
-                self.logger.debug("Finished match detected via CSS class")
+            if await self._element_matches(element, 'finished_match_class'):
+                self.logger.debug("Finished match detected via CSS class (YAML: finished_match_class)")
                 return True
-            
+
             # Method 4: Check for finished stage text
             try:
-                stage_element = await element.query_selector('.event__stage--block')
-                if stage_element:
-                    stage_text = await stage_element.text_content()
-                    if stage_text and ('finished' in stage_text.lower() or 'after' in stage_text.lower() or 'ft' in stage_text.lower()):
-                        self.logger.debug(f"Finished match detected via stage text: {stage_text}")
-                        return True
+                stage_text = await self._resolve_text('match_stage', parent=element)
+                if stage_text and ('finished' in stage_text.lower() or 'after' in stage_text.lower() or 'ft' in stage_text.lower()):
+                    self.logger.debug(f"Finished match detected via stage text: {stage_text} (YAML: match_stage)")
+                    return True
             except Exception as e:
                 self.logger.debug(f"Stage check failed: {e}")
-            
+
             # Method 5: Check for actual finished scores (not "-" and not live)
             try:
-                score_elements = await element.query_selector_all('.event__score')
+                score_elements = await self._resolve_elements('match_score', parent=element)
                 if len(score_elements) >= 2:
                     home_score = await score_elements[0].text_content()
                     away_score = await score_elements[1].text_content()
@@ -52,40 +56,40 @@ class FinishedMatchExtractor(BaseExtractor):
                         # Additional check: verify these are actually finished scores
                         score_state = await score_elements[0].get_attribute('data-state')
                         if score_state == 'final':
-                            self.logger.debug(f"Finished match detected via actual final scores: {home_score}-{away_score}")
+                            self.logger.debug(f"Finished match detected via actual final scores: {home_score}-{away_score} (YAML: match_score)")
                             return True
             except Exception as e:
                 self.logger.debug(f"Score check failed: {e}")
-            
+
             # If none of the finished indicators are found, it's not a finished match
             self.logger.debug("No finished indicators found - match is not finished")
             return False
-            
+
         except Exception as e:
             self.logger.error(f"Error in is_match_status: {e}")
             return False
-    
+
     async def extract_matches(self, sport_config: dict, limit: Optional[int] = None) -> Dict[str, Any]:
         """Extract finished matches."""
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.finished")
-        
+
         # Navigate to finished games
         await self.scraper.flow.navigate_to_finished_games(sport_config['path_segment'])
-        
+
         # Wait for real content to load
         await self._wait_for_content()
-        
+
         # Find match elements
         match_elements = await self._get_match_elements()
         logger.info(f"Found {len(match_elements)} finished matches on page")
-        
+
         matches = []
         for i, element in enumerate(match_elements):
             if limit and i >= limit:
-                logger.info(f"Reached limit of {limit} finished match{'s' if limit > 1 else ''}")
+                logger.info(f"Reached limit of {limit} finished match{'es' if limit > 1 else ''}")
                 break
-            
+
             # Elements are already finished (from finished_indicators), no need to check status
             match_data = await self.extract_match_data(element, 'finished')
             if match_data:
@@ -93,69 +97,78 @@ class FinishedMatchExtractor(BaseExtractor):
                 logger.info(f"Added finished match: {match_data.teams.get('home', 'Unknown')} vs {match_data.teams.get('away', 'Unknown')}")
             else:
                 logger.debug("Skipped finished match - no data extracted")
-        
+
         if limit and len(match_elements) > limit:
             logger.info(f"Extracted {len(matches)} finished match{'es' if len(matches) != 1 else ''} (limit: {limit}, available: {len(match_elements)})")
         else:
             logger.info(f"Extracted {len(matches)} finished match{'es' if len(matches) != 1 else ''} from {len(match_elements)} found")
-        
+
         return {
             'sport': sport_config['name'],
             'status': 'finished',
             'matches': matches,
             'total': len(matches)
         }
-    
+
     async def _wait_for_content(self):
-        """Wait for real content to load (not skeleton placeholders)."""
+        """Wait for real content to load (not skeleton placeholders) via YAML selector."""
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.finished")
-        
+
         max_attempts = 20
         attempt = 0
-        
+
         while attempt < max_attempts:
             try:
                 # Check if we have real content (not just skeleton placeholders)
-                real_content = await self.scraper.page.query_selector('.event__match:not([class*="skeleton"])')
+                real_content = await self._resolve_element('real_match_content')
                 if real_content:
-                    logger.info(f"Real content detected on attempt {attempt + 1}")
+                    logger.info(f"Real content detected on attempt {attempt + 1} (YAML: real_match_content)")
                     break
-                
+
                 # Wait a bit and try again
                 await self.scraper.page.wait_for_timeout(500)
                 attempt += 1
-                
+
             except Exception as e:
                 logger.warning(f"Error checking for real content on attempt {attempt + 1}: {e}")
                 await self.scraper.page.wait_for_timeout(500)
                 attempt += 1
-        
+
         if attempt >= max_attempts:
             logger.warning("No real content detected after maximum attempts, proceeding anyway")
-    
+
     async def _get_match_elements(self):
-        """Get finished match elements using finished indicators directly."""
+        """Get finished match elements using YAML-driven selectors."""
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.finished")
-        
-        # Use finished_indicators selector to find only finished matches
+
+        # Primary: Use YAML selector engine to find finished matches
+        try:
+            finished_elements = await self._resolve_elements('finished_match_class')
+            if finished_elements:
+                logger.info(f"Found {len(finished_elements)} finished match elements via YAML selector (primary: finished_match_class)")
+                return finished_elements
+        except Exception as e:
+            logger.error(f"Error with YAML selector: {e}")
+
+        # Fallback: Use semantic selector path via selector engine resolve()
         try:
             from src.selectors.context import DOMContext
             from datetime import datetime
-            
+
             dom_context = DOMContext(
                 page=self.scraper.page,
                 tab_context="match_extraction",
                 url=self.scraper.page.url,
                 timestamp=datetime.utcnow()
             )
-            
+
             result = await self.scraper.selector_engine.resolve("extraction.match_list.basketball.finished_indicators", dom_context)
             if result and result.element_info:
                 elements = result.element_info.get('elements', [])
                 if elements:
-                    logger.info(f"Found {len(elements)} finished match elements via finished_indicators selector")
+                    logger.info(f"Found {len(elements)} finished match elements via semantic selector (fallback)")
                     return elements
                 else:
                     logger.warning("Finished indicators selector returned success but no elements")
@@ -163,17 +176,15 @@ class FinishedMatchExtractor(BaseExtractor):
                 logger.warning("Finished indicators selector failed to resolve")
         except Exception as e:
             logger.error(f"Error using finished indicators selector: {e}")
-        
-        # Fallback to direct CSS query for finished matches
-        # FlashScore shows finished matches by filter tab - all .event__match on the page are finished
+
+        # Final fallback: Use real_match_content YAML selector
+        # FlashScore shows finished matches by filter tab - all non-skeleton matches on the page are finished
         try:
-            finished_elements = await self.scraper.page.query_selector_all('.event__match:not([class*="skeleton"])')
-            if finished_elements:
-                logger.info(f"Found {len(finished_elements)} match elements on finished page (all are finished by filter)")
-                return finished_elements
-            else:
-                logger.warning("No finished matches found with fallback selector")
+            match_elements = await self._resolve_elements('real_match_content')
+            if match_elements:
+                logger.info(f"Found {len(match_elements)} match elements on finished page (all are finished by filter) (YAML: real_match_content)")
+                return match_elements
         except Exception as e:
-            logger.error(f"Error with fallback finished selector: {e}")
-        
+            logger.error(f"Error with real_match_content fallback: {e}")
+
         return []

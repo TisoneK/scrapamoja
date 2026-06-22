@@ -1,0 +1,26 @@
+id: finished_match_class
+name: Finished Match Class
+selector_type: css
+description: "CSS class indicating a finished match element in match listing"
+confidence_threshold: 0.9
+timeout: 5.0
+retry_count: 2
+strategies:
+  - type: "css"
+    selector: ".event__match--finished"
+    weight: 1.0
+  - type: "css"
+    selector: ".event__match.event__match--finished"
+    weight: 0.95
+  - type: "css"
+    selector: "[data-testid='match-finished']"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//div[contains(@class, 'event__match--finished')]"
+    weight: 0.7
+metadata:
+  wait_for_element: false
+  volatile_selectors: [".event__match--finished"]
+  stable_selectors: ["[data-testid='match-finished']"]
+  dom_state: "finished"
+  status_class_fragment: "event__match--finished"

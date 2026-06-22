@@ -1,0 +1,26 @@
+id: final_class
+name: Final CSS Class
+selector_type: css
+description: "Volatile obfuscated CSS class indicating final/finished state on score elements"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".wcl-isFinal_7U4ca"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='isFinal']"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-testid='score-final']"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//*[contains(@class, 'isFinal')]"
+    weight: 0.6
+metadata:
+  wait_for_element: false
+  volatile_selectors: [".wcl-isFinal_7U4ca"]
+  stable_selectors: ["[data-testid='score-final']"]
+  dom_state: "finished"
+  notes: "The wcl-isFinal_* class suffix is an obfuscated hash that changes on FlashScore CSS rotations. Update this YAML when the hash changes."

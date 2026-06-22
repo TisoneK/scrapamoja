@@ -1,0 +1,28 @@
+id: match_score
+name: Match Score
+selector_type: css
+description: "Score elements within a match listing row"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".event__score"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='event__score']"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-testid='match-score']"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//span[contains(@class, 'event__score')]"
+    weight: 0.6
+metadata:
+  wait_for_element: false
+  volatile_selectors: [".event__score"]
+  stable_selectors: ["[data-testid='match-score']"]
+  dom_state_indicators:
+    live: ["event__score"]
+    scheduled: ["event__score"]
+    finished: ["event__score"]

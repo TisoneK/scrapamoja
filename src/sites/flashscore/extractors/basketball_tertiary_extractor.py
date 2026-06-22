@@ -3,6 +3,13 @@ Basketball tertiary tab extractor implementing statistical filter extraction.
 
 Extends the base TertiaryTabExtractor with basketball-specific implementations
 for tertiary filters: Inc OT, FT, Q1.
+
+ALL selectors are YAML-driven via the selector engine. Zero hardcoded CSS strings.
+Each selector lives in its own YAML file under src/sites/flashscore/selectors/extraction/match_stats/
+with ordered fallback chains: data-testid → obfuscated class → partial class → xpath.
+
+When FlashScore rotates CSS hashes, only the YAML entries need updating.
+No Python code changes required.
 """
 
 from typing import Dict, Any, Optional, List
@@ -15,7 +22,7 @@ from datetime import datetime
 
 
 class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
-    """Basketball-specific tertiary tab extractor."""
+    """Basketball-specific tertiary tab extractor — 100% YAML-driven selectors."""
     
     async def _extract_inc_ot_data(self) -> Optional[Dict[str, Any]]:
         """Extract data from Inc OT (Including Overtime) filter."""
@@ -25,61 +32,51 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             
             # Extract overtime-specific statistics
             try:
-                # Look for overtime period statistics
-                ot_elements = await self.page.query_selector_all('.statRow--ot, .overtimeStat')
+                # Look for overtime period statistics via YAML selector
+                ot_elements = await self._resolve_elements('ot_stat_row')
                 for ot_element in ot_elements:
-                    stat_name_element = await ot_element.query_selector('.statName')
-                    home_value_element = await ot_element.query_selector('.statValue--home')
-                    away_value_element = await ot_element.query_selector('.statValue--away')
+                    stat_name = await self._resolve_text('tertiary_stat_name', parent=ot_element)
+                    home_value = await self._resolve_text('tertiary_stat_home_value', parent=ot_element)
+                    away_value = await self._resolve_text('tertiary_stat_away_value', parent=ot_element)
                     
-                    if stat_name_element and home_value_element and away_value_element:
-                        stat_name = await stat_name_element.text_content()
-                        home_value = await home_value_element.text_content()
-                        away_value = await away_value_element.text_content()
-                        
-                        overtime_stats[stat_name.strip()] = {
-                            'home': home_value.strip(),
-                            'away': away_value.strip()
+                    if stat_name and home_value and away_value:
+                        overtime_stats[stat_name] = {
+                            'home': home_value,
+                            'away': away_value
                         }
-            except:
-                pass
+            except Exception as e:
+                self.logger.warning(f"Error extracting OT stat rows: {e}")
             
             # Extract including overtime totals
             try:
-                total_elements = await self.page.query_selector_all('.totalStat--inc-ot')
+                total_elements = await self._resolve_elements('total_stat_inc_ot')
                 for total_element in total_elements:
-                    total_name_element = await total_element.query_selector('.totalName')
-                    total_value_element = await total_element.query_selector('.totalValue')
+                    total_name = await self._resolve_text('total_name', parent=total_element)
+                    total_value = await self._resolve_text('total_value', parent=total_element)
                     
-                    if total_name_element and total_value_element:
-                        total_name = await total_name_element.text_content()
-                        total_value = await total_value_element.text_content()
-                        
-                        including_ot_totals[total_name.strip()] = total_value.strip()
-            except:
-                pass
+                    if total_name and total_value:
+                        including_ot_totals[total_name] = total_value
+            except Exception as e:
+                self.logger.warning(f"Error extracting inc-ot total stats: {e}")
             
             # Extract overtime period breakdown
             try:
                 period_breakdown = []
-                period_elements = await self.page.query_selector_all('.periodStat--ot')
+                period_elements = await self._resolve_elements('period_stat_ot')
                 for period_element in period_elements:
-                    period_name_element = await period_element.query_selector('.periodName')
-                    period_stats_element = await period_element.query_selector('.periodStats')
+                    period_name = await self._resolve_text('period_name', parent=period_element)
+                    period_stats = await self._resolve_text('period_stats', parent=period_element)
                     
-                    if period_name_element and period_stats_element:
-                        period_name = await period_name_element.text_content()
-                        period_stats = await period_stats_element.text_content()
-                        
+                    if period_name and period_stats:
                         period_breakdown.append({
-                            'period': period_name.strip(),
-                            'stats': period_stats.strip()
+                            'period': period_name,
+                            'stats': period_stats
                         })
                 
                 if period_breakdown:
                     overtime_stats['period_breakdown'] = period_breakdown
-            except:
-                pass
+            except Exception as e:
+                self.logger.warning(f"Error extracting OT period breakdown: {e}")
             
             return {
                 'overtime_stats': overtime_stats,
@@ -98,60 +95,50 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             
             # Extract full-time statistics
             try:
-                ft_elements = await self.page.query_selector_all('.statRow--ft, .fulltimeStat')
+                ft_elements = await self._resolve_elements('ft_stat_row')
                 for ft_element in ft_elements:
-                    stat_name_element = await ft_element.query_selector('.statName')
-                    home_value_element = await ft_element.query_selector('.statValue--home')
-                    away_value_element = await ft_element.query_selector('.statValue--away')
+                    stat_name = await self._resolve_text('tertiary_stat_name', parent=ft_element)
+                    home_value = await self._resolve_text('tertiary_stat_home_value', parent=ft_element)
+                    away_value = await self._resolve_text('tertiary_stat_away_value', parent=ft_element)
                     
-                    if stat_name_element and home_value_element and away_value_element:
-                        stat_name = await stat_name_element.text_content()
-                        home_value = await home_value_element.text_content()
-                        away_value = await away_value_element.text_content()
-                        
-                        full_time_stats[stat_name.strip()] = {
-                            'home': home_value.strip(),
-                            'away': away_value.strip()
+                    if stat_name and home_value and away_value:
+                        full_time_stats[stat_name] = {
+                            'home': home_value,
+                            'away': away_value
                         }
-            except:
-                pass
+            except Exception as e:
+                self.logger.warning(f"Error extracting FT stat rows: {e}")
             
             # Extract match totals
             try:
-                total_elements = await self.page.query_selector_all('.totalStat--ft')
+                total_elements = await self._resolve_elements('total_stat_ft')
                 for total_element in total_elements:
-                    total_name_element = await total_element.query_selector('.totalName')
-                    total_value_element = await total_element.query_selector('.totalValue')
+                    total_name = await self._resolve_text('total_name', parent=total_element)
+                    total_value = await self._resolve_text('total_value', parent=total_element)
                     
-                    if total_name_element and total_value_element:
-                        total_name = await total_name_element.text_content()
-                        total_value = await total_value_element.text_content()
-                        
-                        match_totals[total_name.strip()] = total_value.strip()
-            except:
-                pass
+                    if total_name and total_value:
+                        match_totals[total_name] = total_value
+            except Exception as e:
+                self.logger.warning(f"Error extracting FT total stats: {e}")
             
             # Extract scoring progression
             try:
                 scoring_progression = []
-                progression_elements = await self.page.query_selector_all('.scoringProgression')
+                progression_elements = await self._resolve_elements('scoring_progression')
                 for progression_element in progression_elements:
-                    time_element = await progression_element.query_selector('.progressionTime')
-                    score_element = await progression_element.query_selector('.progressionScore')
+                    time = await self._resolve_text('progression_time', parent=progression_element)
+                    score = await self._resolve_text('progression_score', parent=progression_element)
                     
-                    if time_element and score_element:
-                        time = await time_element.text_content()
-                        score = await score_element.text_content()
-                        
+                    if time and score:
                         scoring_progression.append({
-                            'time': time.strip(),
-                            'score': score.strip()
+                            'time': time,
+                            'score': score
                         })
                 
                 if scoring_progression:
                     full_time_stats['scoring_progression'] = scoring_progression
-            except:
-                pass
+            except Exception as e:
+                self.logger.warning(f"Error extracting scoring progression: {e}")
             
             return {
                 'full_time_stats': full_time_stats,
@@ -170,63 +157,52 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             
             # Extract first quarter specific statistics
             try:
-                q1_elements = await self.page.query_selector_all('.statRow--q1, .quarterStat--q1')
+                q1_elements = await self._resolve_elements('q1_stat_row')
                 for q1_element in q1_elements:
-                    stat_name_element = await q1_element.query_selector('.statName')
-                    home_value_element = await q1_element.query_selector('.statValue--home')
-                    away_value_element = await q1_element.query_selector('.statValue--away')
+                    stat_name = await self._resolve_text('tertiary_stat_name', parent=q1_element)
+                    home_value = await self._resolve_text('tertiary_stat_home_value', parent=q1_element)
+                    away_value = await self._resolve_text('tertiary_stat_away_value', parent=q1_element)
                     
-                    if stat_name_element and home_value_element and away_value_element:
-                        stat_name = await stat_name_element.text_content()
-                        home_value = await home_value_element.text_content()
-                        away_value = await away_value_element.text_content()
-                        
-                        first_quarter_stats[stat_name.strip()] = {
-                            'home': home_value.strip(),
-                            'away': away_value.strip()
+                    if stat_name and home_value and away_value:
+                        first_quarter_stats[stat_name] = {
+                            'home': home_value,
+                            'away': away_value
                         }
-            except:
-                pass
+            except Exception as e:
+                self.logger.warning(f"Error extracting Q1 stat rows: {e}")
             
             # Extract quarter breakdown
             try:
-                quarter_elements = await self.page.query_selector_all('.quarterBreakdown')
+                quarter_elements = await self._resolve_elements('quarter_breakdown')
                 for quarter_element in quarter_elements:
-                    quarter_name_element = await quarter_element.query_selector('.quarterName')
-                    quarter_stats_element = await quarter_element.query_selector('.quarterStats')
+                    quarter_name = await self._resolve_text('quarter_name', parent=quarter_element)
+                    quarter_stats = await self._resolve_text('quarter_stats', parent=quarter_element)
                     
-                    if quarter_name_element and quarter_stats_element:
-                        quarter_name = await quarter_name_element.text_content()
-                        quarter_stats = await quarter_stats_element.text_content()
-                        
-                        q1_breakdown[quarter_name.strip()] = quarter_stats.strip()
-            except:
-                pass
+                    if quarter_name and quarter_stats:
+                        q1_breakdown[quarter_name] = quarter_stats
+            except Exception as e:
+                self.logger.warning(f"Error extracting quarter breakdown: {e}")
             
             # Extract first quarter scoring timeline
             try:
                 scoring_timeline = []
-                timeline_elements = await self.page.query_selector_all('.q1ScoringEvent')
+                timeline_elements = await self._resolve_elements('q1_scoring_event')
                 for timeline_element in timeline_elements:
-                    time_element = await timeline_element.query_selector('.eventTime')
-                    team_element = await timeline_element.query_selector('.eventTeam')
-                    points_element = await timeline_element.query_selector('.eventPoints')
+                    time = await self._resolve_text('event_time', parent=timeline_element)
+                    team = await self._resolve_text('event_team', parent=timeline_element)
+                    points = await self._resolve_text('event_points', parent=timeline_element)
                     
-                    if time_element and team_element and points_element:
-                        time = await time_element.text_content()
-                        team = await team_element.text_content()
-                        points = await points_element.text_content()
-                        
+                    if time and team and points:
                         scoring_timeline.append({
-                            'time': time.strip(),
-                            'team': team.strip(),
-                            'points': points.strip()
+                            'time': time,
+                            'team': team,
+                            'points': points
                         })
                 
                 if scoring_timeline:
                     first_quarter_stats['scoring_timeline'] = scoring_timeline
-            except:
-                pass
+            except Exception as e:
+                self.logger.warning(f"Error extracting Q1 scoring timeline: {e}")
             
             return {
                 'first_quarter_stats': first_quarter_stats,

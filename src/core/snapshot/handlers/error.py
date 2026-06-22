@@ -90,9 +90,15 @@ class ErrorSnapshot:
             self._initialized = True
             logger.info("Error handler integration initialized")
             
+        except ImportError:
+            logger.warning(
+                "src.error_handler not available — error snapshot integration disabled. "
+                "Install or create the error_handler module to enable this feature."
+            )
+            self._initialized = False
         except Exception as e:
             logger.error("Failed to initialize error handler integration", error=str(e))
-            raise
+            self._initialized = False
     
     async def _hook_error_events(self):
         """Hook into error handler events."""

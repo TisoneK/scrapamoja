@@ -1,0 +1,28 @@
+id: event_row_link
+name: Event Row Link
+selector_type: css
+description: "Link element inside a match row that carries the match URL and aria-describedby identifier"
+confidence_threshold: 0.8
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: "[data-testid='event-row-link']"
+    weight: 1.0
+  - type: "css"
+    selector: ".eventRowLink"
+    weight: 0.9
+  - type: "css"
+    selector: "[class*='eventRowLink']"
+    weight: 0.8
+  - type: "xpath"
+    selector: ".//a[contains(@class, 'eventRowLink')]"
+    weight: 0.7
+  - type: "xpath"
+    selector: ".//a[contains(@href, '/match/')]"
+    weight: 0.6
+metadata:
+  volatile_selectors: [".eventRowLink", "[class*='eventRowLink']"]
+  stable_selectors: ["[data-testid='event-row-link']"]
+  wait_for_element: false
+  required_for_navigation: false

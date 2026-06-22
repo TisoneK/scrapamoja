@@ -1,0 +1,34 @@
+id: away_team
+name: Away Team Participant
+selector_type: css
+description: "Away team name element inside a match row"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: "[data-testid='event-participant-away']"
+    weight: 1.0
+  - type: "css"
+    selector: ".event__participant--away"
+    weight: 0.9
+  - type: "css"
+    selector: ".event__participant.event__participant--away"
+    weight: 0.85
+  - type: "css"
+    selector: ".participant__away"
+    weight: 0.8
+  - type: "css"
+    selector: "[class*='participant--away']"
+    weight: 0.7
+  - type: "xpath"
+    selector: ".//div[contains(@class, 'event__participant--away')]"
+    weight: 0.6
+  - type: "xpath"
+    selector: ".//div[contains(@class, 'participant--away')]"
+    weight: 0.5
+metadata:
+  volatile_selectors: [".event__participant--away", ".participant__away", ".event__participant.event__participant--away", "[class*='participant--away']"]
+  stable_selectors: ["[data-testid='event-participant-away']"]
+  wait_for_element: false
+  required_for_navigation: false

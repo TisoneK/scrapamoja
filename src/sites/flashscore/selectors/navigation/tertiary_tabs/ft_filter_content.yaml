@@ -1,0 +1,34 @@
+id: ft_filter_content
+name: FT Filter Content
+selector_type: css
+description: "Content container for FT (Full Time) statistical filter data"
+confidence_threshold: 0.8
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: '.statsContent[data-filter="ft"]'
+    weight: 1.0
+  - type: "css"
+    selector: '.ft__content'
+    weight: 0.9
+  - type: "css"
+    selector: '[data-content="ft"]'
+    weight: 0.85
+  - type: "css"
+    selector: "[data-subtab-content='ft']"
+    weight: 0.75
+  - type: "xpath"
+    selector: "//div[@data-content='ft' or @data-filter='ft']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "ft"
+  volatile_selectors:
+    - '.ft__content'
+  stable_selectors:
+    - '.statsContent[data-filter="ft"]'
+    - '[data-content="ft"]'

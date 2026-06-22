@@ -1,0 +1,28 @@
+id: match_scores
+name: Match Scores
+selector_type: css
+description: "Score elements inside a match row (home and away); typically two sibling elements"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: "[data-testid='event-score']"
+    weight: 1.0
+  - type: "css"
+    selector: ".event__score"
+    weight: 0.9
+  - type: "css"
+    selector: "[class*='event__score']"
+    weight: 0.8
+  - type: "css"
+    selector: ".event__scores .event__score"
+    weight: 0.75
+  - type: "xpath"
+    selector: ".//div[contains(@class, 'event__score')]"
+    weight: 0.6
+metadata:
+  volatile_selectors: [".event__score", "[class*='event__score']", ".event__scores .event__score"]
+  stable_selectors: ["[data-testid='event-score']"]
+  wait_for_element: false
+  required_for_navigation: false

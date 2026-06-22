@@ -1,0 +1,47 @@
+id: ft_stat_row
+name: FT Stat Row
+selector_type: css
+description: "Stat row element for full-time statistics (basketball)"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: "[data-testid='wcl-statistics'][data-period='ft']"
+    weight: 1.0
+  # Strategy 2: Tertiary-specific class with FT marker
+  - type: "css"
+    selector: ".statRow--ft"
+    weight: 0.9
+  # Strategy 3: Alternative full-time stat class
+  - type: "css"
+    selector: ".fulltimeStat"
+    weight: 0.85
+  # Strategy 4: Obfuscated class (volatile)
+  - type: "css"
+    selector: ".wcl-row_2oCpS"
+    weight: 0.8
+  # Strategy 5: Partial class match — survives minor hash changes
+  - type: "css"
+    selector: "[class*='statRow--ft']"
+    weight: 0.7
+  - type: "css"
+    selector: "[class*='fulltimeStat']"
+    weight: 0.65
+  # Strategy 6: XPath fallback
+  - type: "xpath"
+    selector: "//div[@data-testid='wcl-statistics' and @data-period='ft']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "ft"
+  volatile_selectors:
+    - ".statRow--ft"
+    - ".fulltimeStat"
+    - ".wcl-row_2oCpS"
+  stable_selectors:
+    - "[data-testid='wcl-statistics'][data-period='ft']"

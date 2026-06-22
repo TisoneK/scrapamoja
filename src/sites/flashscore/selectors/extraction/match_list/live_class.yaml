@@ -1,0 +1,26 @@
+id: live_class
+name: Live CSS Class
+selector_type: css
+description: "Volatile obfuscated CSS class indicating live state on score elements"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".wcl-isLive_VTsUE"
+    weight: 1.0
+  - type: "css"
+    selector: "[class*='isLive']"
+    weight: 0.9
+  - type: "css"
+    selector: "[data-testid='score-live']"
+    weight: 0.7
+  - type: "xpath"
+    selector: "//*[contains(@class, 'isLive')]"
+    weight: 0.6
+metadata:
+  wait_for_element: false
+  volatile_selectors: [".wcl-isLive_VTsUE"]
+  stable_selectors: ["[data-testid='score-live']"]
+  dom_state: "live"
+  notes: "The wcl-isLive_* class suffix is an obfuscated hash that changes on FlashScore CSS rotations. Update this YAML when the hash changes."

@@ -8,7 +8,7 @@ and error reporting for all telemetry system components.
 import asyncio
 import logging
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 from dataclasses import dataclass, field

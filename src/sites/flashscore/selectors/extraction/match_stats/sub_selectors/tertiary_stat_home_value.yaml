@@ -1,0 +1,46 @@
+id: tertiary_stat_home_value
+name: Tertiary Stat Home Value
+selector_type: css
+description: "Home team value within a tertiary filter stat row"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: ".wcl-homeValue_3Q-7P [data-testid='wcl-statistics-value'] > span"
+    weight: 1.0
+  # Strategy 2: data-testid without child span
+  - type: "css"
+    selector: ".wcl-homeValue_3Q-7P [data-testid='wcl-statistics-value']"
+    weight: 0.95
+  # Strategy 3: Tertiary-specific class
+  - type: "css"
+    selector: ".statValue--home"
+    weight: 0.9
+  # Strategy 4: Obfuscated class
+  - type: "css"
+    selector: ".wcl-homeValue_3Q-7P > span"
+    weight: 0.85
+  # Strategy 5: Partial class matches
+  - type: "css"
+    selector: "[class*='homeValue'] > span"
+    weight: 0.7
+  - type: "css"
+    selector: "[class*='homeValue']"
+    weight: 0.6
+  # Strategy 6: XPath fallback
+  - type: "xpath"
+    selector: ".//*[@data-testid='wcl-statistics-value']/span"
+    weight: 0.5
+
+metadata:
+  wait_for_element: false
+  tab_context: "stats"
+  parent_selector: "[data-testid='wcl-statistics']"
+  volatile_selectors:
+    - ".statValue--home"
+    - ".wcl-homeValue_3Q-7P"
+  stable_selectors:
+    - "[data-testid='wcl-statistics-value']"

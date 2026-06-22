@@ -164,7 +164,7 @@ class SiteConfig(BaseModel):
 
     def get_site_name(self) -> str:
         """Get the site name."""
-        return ""
+        return self.site_name
 
     def get_endpoint(self) -> str:
         """Get the site endpoint URL."""

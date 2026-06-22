@@ -1,0 +1,41 @@
+id: q1_scoring_event
+name: Q1 Scoring Event
+selector_type: css
+description: "Scoring event entries within Q1 filter timeline (basketball)"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: "[data-testid='q1-scoring-event']"
+    weight: 1.0
+  # Strategy 2: Semantic class
+  - type: "css"
+    selector: ".q1ScoringEvent"
+    weight: 0.9
+  # Strategy 3: Partial class match
+  - type: "css"
+    selector: "[class*='q1ScoringEvent']"
+    weight: 0.7
+  # Strategy 4: Generic scoring event with data attribute
+  - type: "css"
+    selector: ".scoringEvent[data-quarter='q1']"
+    weight: 0.65
+  # Strategy 5: XPath fallback
+  - type: "xpath"
+    selector: "//*[@data-testid='q1-scoring-event']"
+    weight: 0.6
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'q1ScoringEvent')]"
+    weight: 0.5
+
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "q1"
+  volatile_selectors:
+    - ".q1ScoringEvent"
+  stable_selectors:
+    - "[data-testid='q1-scoring-event']"

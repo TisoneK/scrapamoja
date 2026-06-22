@@ -1,0 +1,41 @@
+id: total_value
+name: Total Value
+selector_type: css
+description: "Value within a total statistics row"
+confidence_threshold: 0.7
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  # Strategy 1: data-testid — most stable
+  - type: "css"
+    selector: "[data-testid='total-value']"
+    weight: 1.0
+  # Strategy 2: Semantic class
+  - type: "css"
+    selector: ".totalValue"
+    weight: 0.9
+  # Strategy 3: Partial class match
+  - type: "css"
+    selector: "[class*='totalValue']"
+    weight: 0.7
+  # Strategy 4: CSS with nested span
+  - type: "css"
+    selector: ".totalValue > span"
+    weight: 0.65
+  # Strategy 5: XPath fallback
+  - type: "xpath"
+    selector: "//*[@data-testid='total-value']"
+    weight: 0.6
+  - type: "xpath"
+    selector: ".//*[contains(@class, 'totalValue')]"
+    weight: 0.5
+
+metadata:
+  wait_for_element: false
+  tab_context: "stats"
+  parent_selector: "[data-testid='wcl-statistics']"
+  volatile_selectors:
+    - ".totalValue"
+  stable_selectors:
+    - "[data-testid='total-value']"

@@ -2,6 +2,13 @@
 Tertiary tab extractor for Flashscore match detail pages.
 
 Handles extraction from tertiary statistical filters: Inc OT, FT, Q1.
+
+ALL selectors are YAML-driven via the selector engine. Zero hardcoded CSS strings.
+Each selector lives in its own YAML file under src/sites/flashscore/selectors/
+with ordered fallback chains: data-testid → obfuscated class → partial class → xpath.
+
+When FlashScore rotates CSS hashes, only the YAML entries need updating.
+No Python code changes required.
 """
 
 from abc import ABC, abstractmethod
@@ -13,6 +20,26 @@ from src.sites.flashscore.models import PageState, TertiaryData
 from datetime import datetime
 
 
+# Mapping from filter_name to YAML selector names for navigation
+_FILTER_BUTTON_SELECTORS = {
+    'inc_ot': 'inc_ot_filter_button',
+    'ft': 'ft_filter_button',
+    'q1': 'q1_filter_button',
+}
+
+_FILTER_ACTIVE_SELECTORS = {
+    'inc_ot': 'inc_ot_filter_active',
+    'ft': 'ft_filter_active',
+    'q1': 'q1_filter_active',
+}
+
+_FILTER_CONTENT_SELECTORS = {
+    'inc_ot': 'inc_ot_filter_content',
+    'ft': 'ft_filter_content',
+    'q1': 'q1_filter_content',
+}
+
+
 class TertiaryTabExtractor(ABC):
     """Base class for tertiary tab extraction from match detail pages."""
     
@@ -20,11 +47,45 @@ class TertiaryTabExtractor(ABC):
         self.scraper = scraper
         self.logger = self._get_logger()
         self.page = scraper.page
+        self._selector_engine = getattr(scraper, 'selector_engine', None)
     
     def _get_logger(self):
         """Get logger instance."""
         from src.observability.logger import get_logger
         return get_logger(f"flashscore.tertiary_tab_extractor.{self.__class__.__name__.lower()}")
+    
+    async def _resolve_element(self, selector_name: str, parent=None) -> Optional[Any]:
+        """Resolve a single element via YAML selector engine."""
+        if self._selector_engine:
+            try:
+                search_target = parent or self.page
+                return await self._selector_engine.find(search_target, selector_name)
+            except Exception as e:
+                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
+        return None
+    
+    async def _resolve_elements(self, selector_name: str, parent=None) -> List[Any]:
+        """Resolve multiple elements via YAML selector engine."""
+        if self._selector_engine:
+            try:
+                search_target = parent or self.page
+                elements = await self._selector_engine.find_all(search_target, selector_name)
+                if elements:
+                    return elements
+            except Exception as e:
+                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
+        return []
+    
+    async def _resolve_text(self, selector_name: str, parent=None) -> Optional[str]:
+        """Resolve element text via YAML selector engine."""
+        el = await self._resolve_element(selector_name, parent)
+        if el:
+            try:
+                text = await el.text_content()
+                return text.strip() if text else None
+            except Exception as e:
+                self.logger.debug(f"Text extraction for '{selector_name}' failed: {e}")
+        return None
     
     async def navigate_to_filter(self, filter_name: str) -> bool:
         """
@@ -37,28 +98,23 @@ class TertiaryTabExtractor(ABC):
             True if navigation successful, False otherwise
         """
         try:
-            # Try multiple selector patterns for filter navigation
-            filter_selectors = [
-                f'.statsFilter[data-filter="{filter_name}"]',
-                f'.filter__item[data-name="{filter_name}"]',
-                f'.stats__filter[href*="{filter_name}"]',
-                f'[data-stats-filter="{filter_name}"]'
-            ]
+            selector_name = _FILTER_BUTTON_SELECTORS.get(filter_name)
+            if not selector_name:
+                self.logger.warning(f"Unknown filter name: {filter_name}")
+                return False
             
-            for selector in filter_selectors:
-                filter_element = await self.page.query_selector(selector)
-                if filter_element:
-                    await filter_element.click()
-                    await self.page.wait_for_timeout(1000)
-                    
-                    # Verify filter is active
-                    is_active = await self._verify_filter_active(filter_name)
-                    if is_active:
-                        self.logger.info(f"Successfully navigated to {filter_name} filter")
-                        return True
-                    else:
-                        self.logger.warning(f"Filter clicked but not active: {filter_name}")
-                        continue
+            filter_element = await self._resolve_element(selector_name)
+            if filter_element:
+                await filter_element.click()
+                await self.page.wait_for_timeout(1000)
+                
+                # Verify filter is active
+                is_active = await self._verify_filter_active(filter_name)
+                if is_active:
+                    self.logger.info(f"Successfully navigated to {filter_name} filter")
+                    return True
+                else:
+                    self.logger.warning(f"Filter clicked but not active: {filter_name}")
             
             self.logger.warning(f"Could not find or navigate to {filter_name} filter")
             return False
@@ -70,29 +126,18 @@ class TertiaryTabExtractor(ABC):
     async def _verify_filter_active(self, filter_name: str) -> bool:
         """Verify that specified filter is currently active."""
         try:
-            active_selectors = [
-                f'.statsFilter[data-filter="{filter_name}"].active',
-                f'.filter__item[data-name="{filter_name}"].selected',
-                f'.stats__filter[href*="{filter_name}"].active',
-                f'[data-stats-filter="{filter_name}"].active'
-            ]
-            
-            for selector in active_selectors:
-                active_element = await self.page.query_selector(selector)
+            # Check active indicator via YAML selector
+            active_selector_name = _FILTER_ACTIVE_SELECTORS.get(filter_name)
+            if active_selector_name:
+                active_element = await self._resolve_element(active_selector_name)
                 if active_element:
                     return True
             
             # Fallback: check if filter content is visible
-            content_selectors = [
-                f'.statsContent[data-filter="{filter_name}"]',
-                f'.{filter_name}__content',
-                f'[data-content="{filter_name}"]'
-            ]
-            
-            for selector in content_selectors:
-                content_element = await self.page.query_selector(selector)
+            content_selector_name = _FILTER_CONTENT_SELECTORS.get(filter_name)
+            if content_selector_name:
+                content_element = await self._resolve_element(content_selector_name)
                 if content_element:
-                    # Check if element is visible
                     is_visible = await content_element.is_visible()
                     if is_visible:
                         return True
@@ -115,18 +160,22 @@ class TertiaryTabExtractor(ABC):
             True if content loaded, False otherwise
         """
         try:
-            content_selectors = [
-                f'.statsContent[data-filter="{filter_name}"]',
-                f'.{filter_name}__content',
-                f'[data-content="{filter_name}"]'
-            ]
+            content_selector_name = _FILTER_CONTENT_SELECTORS.get(filter_name)
+            if not content_selector_name:
+                self.logger.warning(f"Unknown filter name for content wait: {filter_name}")
+                return False
             
-            for selector in content_selectors:
+            # Try to resolve the content element via the selector engine
+            if self._selector_engine:
                 try:
-                    await self.page.wait_for_selector(selector, timeout=timeout)
+                    await self._selector_engine.find(
+                        self.page,
+                        content_selector_name,
+                        timeout=timeout
+                    )
                     return True
-                except:
-                    continue
+                except Exception:
+                    pass
             
             self.logger.warning(f"Filter content did not load for {filter_name}")
             return False
@@ -268,36 +317,16 @@ class TertiaryTabExtractor(ABC):
         try:
             available_filters = []
             
-            # Check for filter container
-            filter_container = await self.page.query_selector('.statsFilters, .filterContainer')
+            # Check for filter container via YAML selector
+            filter_container = await self._resolve_element('stats_filter_container')
             if not filter_container:
                 return available_filters
             
-            # Check for each filter type
-            filter_checks = [
-                ('inc_ot', [
-                    '.statsFilter[data-filter="inc_ot"]',
-                    '.filter__item[data-name="inc_ot"]',
-                    '[data-stats-filter="inc_ot"]'
-                ]),
-                ('ft', [
-                    '.statsFilter[data-filter="ft"]',
-                    '.filter__item[data-name="ft"]',
-                    '[data-stats-filter="ft"]'
-                ]),
-                ('q1', [
-                    '.statsFilter[data-filter="q1"]',
-                    '.filter__item[data-name="q1"]',
-                    '[data-stats-filter="q1"]'
-                ])
-            ]
-            
-            for filter_name, selectors in filter_checks:
-                for selector in selectors:
-                    element = await self.page.query_selector(selector)
-                    if element:
-                        available_filters.append(filter_name)
-                        break
+            # Check for each filter type via YAML selectors
+            for filter_name, selector_name in _FILTER_BUTTON_SELECTORS.items():
+                element = await self._resolve_element(selector_name)
+                if element:
+                    available_filters.append(filter_name)
             
             self.logger.info(f"Available tertiary filters: {available_filters}")
             return available_filters

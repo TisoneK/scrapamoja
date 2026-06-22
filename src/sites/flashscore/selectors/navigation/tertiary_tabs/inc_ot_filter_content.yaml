@@ -1,0 +1,34 @@
+id: inc_ot_filter_content
+name: Inc OT Filter Content
+selector_type: css
+description: "Content container for Inc OT statistical filter data"
+confidence_threshold: 0.8
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: '.statsContent[data-filter="inc_ot"]'
+    weight: 1.0
+  - type: "css"
+    selector: '.inc_ot__content'
+    weight: 0.9
+  - type: "css"
+    selector: '[data-content="inc_ot"]'
+    weight: 0.85
+  - type: "css"
+    selector: "[data-subtab-content='inc-ot']"
+    weight: 0.75
+  - type: "xpath"
+    selector: "//div[@data-content='inc_ot' or @data-filter='inc_ot']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "inc_ot"
+  volatile_selectors:
+    - '.inc_ot__content'
+  stable_selectors:
+    - '.statsContent[data-filter="inc_ot"]'
+    - '[data-content="inc_ot"]'

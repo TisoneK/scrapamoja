@@ -1,0 +1,34 @@
+id: q1_filter_content
+name: Q1 Filter Content
+selector_type: css
+description: "Content container for Q1 (First Quarter) statistical filter data"
+confidence_threshold: 0.8
+timeout: 3.0
+retry_count: 2
+
+strategies:
+  - type: "css"
+    selector: '.statsContent[data-filter="q1"]'
+    weight: 1.0
+  - type: "css"
+    selector: '.q1__content'
+    weight: 0.9
+  - type: "css"
+    selector: '[data-content="q1"]'
+    weight: 0.85
+  - type: "css"
+    selector: "[data-subtab-content='q1']"
+    weight: 0.75
+  - type: "xpath"
+    selector: "//div[@data-content='q1' or @data-filter='q1']"
+    weight: 0.6
+
+metadata:
+  wait_for_element: true
+  tab_context: "stats"
+  tertiary_context: "q1"
+  volatile_selectors:
+    - '.q1__content'
+  stable_selectors:
+    - '.statsContent[data-filter="q1"]'
+    - '[data-content="q1"]'
