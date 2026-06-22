@@ -28,8 +28,12 @@ from src.selectors.hooks.registration import create_registration_hook
 from src.selectors.engine import SelectorEngine
 
 
-class FlashscoreScraper(InterruptAwareScraper):
-    """Flashscore scraper implementation with interrupt handling support."""
+class FlashscoreScraper(BaseSiteScraper, InterruptAwareScraper):
+    """Flashscore scraper implementation with interrupt handling support.
+    
+    Inherits from BaseSiteScraper for registry compatibility and
+    InterruptAwareScraper for interrupt-safe operation.
+    """
     
     site_id = SITE_CONFIG["id"]
     site_name = SITE_CONFIG["name"]

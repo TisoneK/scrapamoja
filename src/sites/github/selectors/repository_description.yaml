@@ -1,3 +1,4 @@
+id: repository_description
 name: repository_description
 description: "Repository description text"
 selector_type: hybrid
@@ -21,3 +22,6 @@ validation_rules:
   - type: min_length
     min_length: 10
     required: false
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["p[data-testid='repository-description']", ".repository-description"]

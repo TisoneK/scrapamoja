@@ -1,3 +1,4 @@
+id: issue_list_item
 name: issue_list_item
 description: "Individual issue item in issues list"
 selector_type: hybrid
@@ -25,3 +26,6 @@ validation_rules:
     pattern: ".*issue_.*"
     attribute: "id"
     required: false
+metadata:
+  volatile_selectors: []
+  stable_selectors: [".js-issue-row", ".issue-item"]

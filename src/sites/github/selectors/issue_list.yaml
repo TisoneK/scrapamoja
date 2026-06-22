@@ -1,3 +1,4 @@
+id: issue_list
 name: issue_list
 description: "GitHub issues list container"
 selector_type: hybrid
@@ -21,3 +22,6 @@ validation_rules:
   - type: child_elements
     min_children: 1
     required: true
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["[data-testid='issue-list']", ".issue-list"]

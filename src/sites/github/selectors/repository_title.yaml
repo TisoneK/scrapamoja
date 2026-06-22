@@ -1,3 +1,4 @@
+id: repository_title
 name: repository_title
 description: "Repository title/name on repository page"
 selector_type: hybrid
@@ -21,3 +22,6 @@ validation_rules:
   - type: text_pattern
     pattern: "[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+"
     required: true
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["h1[data-testid='repository-title']", ".repository-title"]

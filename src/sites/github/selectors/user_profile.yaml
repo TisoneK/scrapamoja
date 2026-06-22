@@ -1,3 +1,4 @@
+id: user_profile
 name: user_profile
 description: "User profile information container"
 selector_type: hybrid
@@ -21,3 +22,6 @@ validation_rules:
   - type: child_elements
     min_children: 2
     required: true
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["[data-testid='profile-header']", ".profile-header"]

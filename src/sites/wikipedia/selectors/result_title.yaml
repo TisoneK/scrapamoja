@@ -1,3 +1,6 @@
+id: result_title
+name: Result Title
+selector_type: hybrid
 description: "Search result title link"
 confidence_threshold: 0.8
 timeout: 3.0
@@ -12,3 +15,6 @@ strategies:
   - type: "xpath"
     selector: ".//a[contains(@class, 'mw-search-result-heading')]"
     weight: 0.8
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["a.mw-search-result-heading", ".searchresult .mw-search-result-heading a"]

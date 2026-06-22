@@ -1,3 +1,4 @@
+id: repository_list_item
 name: repository_list_item
 description: "Individual repository item within a repository list"
 selector_type: hybrid
@@ -24,3 +25,6 @@ validation_rules:
   - type: text_pattern
     pattern: "[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+"
     required: true
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["h2 a[href*='/']", ".v-align-middle"]

@@ -24,9 +24,12 @@ from .extraction.rules import GitHubExtractionRules
 logger = logging.getLogger(__name__)
 
 
-class GitHubScraper(BaseSiteTemplate):
+class GitHubScraper(BaseSiteScraper, BaseSiteTemplate):
     """
     GitHub scraper implementation using the template framework.
+    
+    Inherits from BaseSiteScraper for registry compatibility and
+    BaseSiteTemplate for template framework functionality.
     
     This scraper demonstrates the template pattern by:
     - Extending BaseSiteTemplate for standardized functionality

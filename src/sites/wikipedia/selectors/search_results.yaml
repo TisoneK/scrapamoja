@@ -1,3 +1,6 @@
+id: search_results
+name: Search Results
+selector_type: hybrid
 description: "Wikipedia search results list"
 confidence_threshold: 0.7
 timeout: 5.0
@@ -12,3 +15,6 @@ strategies:
   - type: "xpath"
     selector: "//ul[contains(@class, 'mw-search-results')]/li"
     weight: 0.8
+metadata:
+  volatile_selectors: []
+  stable_selectors: [".mw-search-results li", ".searchresults li"]

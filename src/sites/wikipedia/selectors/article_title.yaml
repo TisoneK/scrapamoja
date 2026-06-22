@@ -1,3 +1,6 @@
+id: article_title
+name: Article Title
+selector_type: hybrid
 description: "Wikipedia article title"
 confidence_threshold: 0.9
 timeout: 5.0
@@ -16,3 +19,6 @@ strategies:
     selector: "Edit source"
     context: "parent"
     weight: 0.6
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["#firstHeading", ".mw-first-heading"]

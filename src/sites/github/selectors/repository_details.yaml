@@ -1,3 +1,4 @@
+id: repository_details
 name: repository_details
 description: "Repository details on repository page including title, description, and stats"
 selector_type: hybrid
@@ -21,3 +22,6 @@ validation_rules:
   - type: child_elements
     min_children: 3
     required: true
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["main", "[data-testid='repository-details']"]

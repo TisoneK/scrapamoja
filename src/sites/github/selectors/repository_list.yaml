@@ -1,3 +1,4 @@
+id: repository_list
 name: repository_list
 description: "Repository list items in search results or repository listings"
 selector_type: hybrid
@@ -21,3 +22,6 @@ validation_rules:
   - type: text_pattern
     pattern: ".*[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+.*"
     required: false
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["[data-testid='results-list'] > div", ".repo-list-item"]

@@ -1,3 +1,4 @@
+id: search_input
 name: search_input
 description: "GitHub search input field"
 selector_type: hybrid
@@ -24,3 +25,6 @@ validation_rules:
   - type: attribute_exists
     attribute: "placeholder"
     required: true
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["input[data-testid='search-input']", "input[name='q']", ".header-search-input"]
