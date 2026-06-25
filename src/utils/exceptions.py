@@ -359,6 +359,22 @@ class TabContextError(SelectorEngineError):
         self.details = details or {}
 
 
+class SelectorResolutionError(SelectorEngineError):
+    """Raised when selector resolution fails within a specific context (e.g., tab scope)."""
+    
+    def __init__(self, selector_name: str, context_name: str = "", 
+                 reason: str = "", context: Optional[Dict[str, Any]] = None):
+        self.selector_name = selector_name
+        self.context_name = context_name
+        self.reason = reason
+        message = f"Failed to resolve selector '{selector_name}'"
+        if context_name:
+            message += f" in context '{context_name}'"
+        if reason:
+            message += f": {reason}"
+        super().__init__(message, context)
+
+
 class BrowserError(Exception):
     """Base exception for browser-related errors."""
     

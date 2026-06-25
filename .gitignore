@@ -73,3 +73,4 @@ venv/
 data/
 .checkpoints/
 .venv/
+config_backups/

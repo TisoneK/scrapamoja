@@ -49,6 +49,7 @@ Severity = _models.Severity
 YAMLSelector = _models.YAMLSelector
 SelectorStrategy = _models.SelectorStrategy
 SelectorType = _models.SelectorType
+StrategyType = _models.StrategyType
 LoadResult = _models.LoadResult
 from .exceptions import (
     SelectorLoadingError, SelectorValidationError as SelectorValidationException,

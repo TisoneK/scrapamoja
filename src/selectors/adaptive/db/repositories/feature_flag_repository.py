@@ -169,8 +169,16 @@ class FeatureFlagRepository:
         """
         session = self.get_session()
         try:
-            # Find existing flag
-            feature_flag = self.get_feature_flag(sport, site)
+            # Find existing flag within the SAME session to avoid DetachedInstanceError
+            stmt = select(FeatureFlag).where(
+                FeatureFlag.sport == sport.lower().strip()
+            )
+            if site is None:
+                stmt = stmt.where(FeatureFlag.site.is_(None))
+            else:
+                stmt = stmt.where(FeatureFlag.site == site.lower().strip())
+            
+            feature_flag = session.execute(stmt).scalar_one_or_none()
             if feature_flag is None:
                 return None
             
@@ -202,7 +210,16 @@ class FeatureFlagRepository:
         """
         session = self.get_session()
         try:
-            feature_flag = self.get_feature_flag(sport, site)
+            # Query within the SAME session to avoid DetachedInstanceError
+            stmt = select(FeatureFlag).where(
+                FeatureFlag.sport == sport.lower().strip()
+            )
+            if site is None:
+                stmt = stmt.where(FeatureFlag.site.is_(None))
+            else:
+                stmt = stmt.where(FeatureFlag.site == site.lower().strip())
+            
+            feature_flag = session.execute(stmt).scalar_one_or_none()
             if feature_flag is None:
                 return False
             

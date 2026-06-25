@@ -27,7 +27,7 @@ from src.sites.base.config_validator import (
     ConfigValidator, ValidationResult, validate_config, add_validation_rule
 )
 from src.sites.base.feature_flags import (
-    FeatureFlagManager, FeatureFlag, FlagType, is_enabled, get_flag_value
+    FeatureFlagManager, FeatureFlag, FlagType, is_enabled, get_value as get_flag_value
 )
 from src.sites.base.config_hot_reload import (
     ConfigHotReloadManager, ReloadEvent, start_watching, stop_watching

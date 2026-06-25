@@ -4,6 +4,7 @@ Pytest configuration and fixtures for Selector Engine tests.
 
 import asyncio
 import pytest
+import pytest_asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
@@ -20,7 +21,7 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session")
 async def browser():
     """Launch Playwright browser for testing."""
     async with async_playwright() as p:
@@ -29,7 +30,7 @@ async def browser():
         await browser.close()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def page(browser: Browser):
     """Create a new Playwright page for each test."""
     context = await browser.new_context()

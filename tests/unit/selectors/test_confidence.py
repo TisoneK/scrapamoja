@@ -13,7 +13,7 @@ from src.models.selector_models import (
     SelectorResult, ElementInfo, ValidationResult, ValidationType,
     StrategyPattern, StrategyType
 )
-from src.selectors import ConfidenceScorer
+from src.selectors.confidence import ConfidenceScorer
 from src.utils.exceptions import ValidationError
 
 

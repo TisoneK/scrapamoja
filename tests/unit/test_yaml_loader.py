@@ -11,9 +11,12 @@ import yaml
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from src.selectors.models import (
+from src.selectors.yaml_loader import (
     YAMLSelector, SelectorStrategy, SelectorType, StrategyType,
-    SelectorValidationError, ValidationResult, LoadResult
+    LoadResult, ValidationResult
+)
+from src.selectors.exceptions import (
+    SelectorValidationError,
 )
 from src.selectors.exceptions import (
     SelectorLoadingError, SelectorValidationError as SelectorValidationException,
