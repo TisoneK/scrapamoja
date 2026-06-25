@@ -27,10 +27,10 @@ def configure_telemetry_logging(
         correlation_id_enabled: Whether correlation IDs are enabled
     """
     
-    # Configure standard logging
+    # Configure standard logging — send to stderr so stdout stays clean for JSON output
     logging.basicConfig(
         format="%(message)s",
-        stream=sys.stdout,
+        stream=sys.stderr,
         level=getattr(logging, level.upper())
     )
     
