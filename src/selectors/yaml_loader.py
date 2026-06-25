@@ -416,7 +416,10 @@ class YAMLSelectorLoader:
         }
     
     def _find_yaml_files(self, directory_path: str, recursive: bool = False) -> List[str]:
-        """Find all YAML files in directory."""
+        """Find all YAML files in directory.
+        
+        Skips config files (prefixed with '_') and non-selector YAML files.
+        """
         try:
             path = Path(directory_path)
             if not path.exists() or not path.is_dir():
@@ -433,6 +436,12 @@ class YAMLSelectorLoader:
             # Also check for .yml extension
             pattern_yml = "**/*.yml" if recursive else "*.yml"
             yaml_files.extend(list(path.glob(pattern_yml)))
+            
+            # Filter out config/prefixed files (e.g. _selector_config.yaml)
+            yaml_files = [
+                f for f in yaml_files
+                if not f.name.startswith('_')
+            ]
             
             # Convert to strings and remove duplicates
             file_paths = list(set(str(f) for f in yaml_files))
@@ -473,7 +482,7 @@ class YAMLSelectorLoader:
                 name=yaml_data['name'],
                 description=yaml_data.get('description'),
                 selector_type=SelectorType(yaml_data['selector_type']),
-                pattern=yaml_data['pattern'],
+                pattern=yaml_data.get('pattern'),  # Optional — derived from first strategy if missing
                 strategies=strategies,
                 validation_rules=yaml_data.get('validation_rules'),
                 metadata=yaml_data.get('metadata'),

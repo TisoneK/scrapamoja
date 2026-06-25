@@ -132,9 +132,9 @@ class YAMLSelector:
     id: str
     name: str
     selector_type: SelectorType
-    pattern: str
     strategies: List[SelectorStrategy]
     file_path: str
+    pattern: Optional[str] = None  # Optional: derived from first strategy if not provided
     description: Optional[str] = None
     validation_rules: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -148,8 +148,18 @@ class YAMLSelector:
             raise ValueError("Selector ID cannot be empty")
         if not self.name or not self.name.strip():
             raise ValueError("Selector name cannot be empty")
-        if not self.pattern or not self.pattern.strip():
-            raise ValueError("Selector pattern cannot be empty")
+        
+        # Derive pattern from first strategy if not explicitly provided
+        if not self.pattern:
+            if self.strategies:
+                first = self.strategies[0]
+                # Strategy stores selector in config dict
+                self.pattern = first.config.get('selector', '') if isinstance(first.config, dict) else str(first.config)
+                if not self.pattern:
+                    raise ValueError("Cannot derive pattern: first strategy has no selector in config")
+            else:
+                raise ValueError("Selector must have either a pattern or at least one strategy")
+        
         if not self.strategies:
             raise ValueError("Selector must have at least one strategy")
         

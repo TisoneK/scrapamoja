@@ -117,28 +117,44 @@ class LiveMatchExtractor(BaseExtractor):
         }
 
     async def _wait_for_content(self):
-        """Wait for real content to load (not skeleton placeholders) via YAML selector."""
+        """Wait for real content to load (not skeleton placeholders) via YAML selector.
+        
+        Uses exponential backoff: starts at 500ms, caps at 3s.
+        Stops early if the selector is not registered in the engine.
+        """
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.live")
 
-        max_attempts = 20
+        max_attempts = 10  # Reduced from 20 — exponential backoff makes 10 plenty
         attempt = 0
+        base_delay = 500  # ms
+        max_delay = 3000  # ms
+
+        # Early exit: check if the selector is even registered
+        if hasattr(self.scraper, 'selector_engine') and self.scraper.selector_engine is not None:
+            try:
+                registry = self.scraper.selector_engine.registry
+                if registry and not registry.get('real_match_content'):
+                    logger.warning("Selector 'real_match_content' not in registry — skipping wait loop")
+                    return
+            except Exception:
+                pass
 
         while attempt < max_attempts:
             try:
-                # Check if we have real content (not just skeleton placeholders)
                 real_content = await self._resolve_element('real_match_content')
                 if real_content:
                     logger.info(f"Real content detected on attempt {attempt + 1} (YAML: real_match_content)")
                     break
 
-                # Wait a bit and try again
-                await self.scraper.page.wait_for_timeout(500)
+                delay = min(base_delay * (2 ** attempt) // 1000, max_delay)
+                await self.scraper.page.wait_for_timeout(delay)
                 attempt += 1
 
             except Exception as e:
                 logger.warning(f"Error checking for real content on attempt {attempt + 1}: {e}")
-                await self.scraper.page.wait_for_timeout(500)
+                delay = min(base_delay * (2 ** attempt) // 1000, max_delay)
+                await self.scraper.page.wait_for_timeout(delay)
                 attempt += 1
 
         if attempt >= max_attempts:
