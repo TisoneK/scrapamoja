@@ -133,7 +133,9 @@ class ScheduledMatchExtractor(BaseExtractor):
 
         Uses exponential backoff: starts at 500ms, caps at 3s.
         Stops early if the selector is not registered in the engine.
+        Each resolve attempt is capped at 8s to prevent hanging.
         """
+        import asyncio
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.scheduled")
 
@@ -141,6 +143,7 @@ class ScheduledMatchExtractor(BaseExtractor):
         attempt = 0
         base_delay = 500  # ms
         max_delay = 3000  # ms
+        resolve_timeout = 8.0  # seconds — cap per resolve call
 
         # Diagnostic: what page are we actually on?
         try:
@@ -162,7 +165,10 @@ class ScheduledMatchExtractor(BaseExtractor):
 
         while attempt < max_attempts:
             try:
-                content_loaded = await self._resolve_element('match_rows')
+                content_loaded = await asyncio.wait_for(
+                    self._resolve_element('match_rows'),
+                    timeout=resolve_timeout,
+                )
                 if content_loaded:
                     logger.info(f"Loaded content detected on attempt {attempt + 1} (YAML: match_rows)")
                     break
@@ -172,6 +178,11 @@ class ScheduledMatchExtractor(BaseExtractor):
                 await self.scraper.page.wait_for_timeout(delay)
                 attempt += 1
 
+            except asyncio.TimeoutError:
+                logger.warning(f"Resolve timed out after {resolve_timeout}s on attempt {attempt + 1}")
+                delay = min(base_delay * (2 ** attempt) // 1000, max_delay)
+                await self.scraper.page.wait_for_timeout(delay)
+                attempt += 1
             except Exception as e:
                 logger.warning(f"Error checking for loaded content on attempt {attempt + 1}: {e}")
                 delay = min(base_delay * (2 ** attempt) // 1000, max_delay)

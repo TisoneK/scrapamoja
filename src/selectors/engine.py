@@ -902,7 +902,10 @@ class SelectorEngine(ISelectorEngine):
             
             # Capture DOM snapshot for failure analysis
             try:
-                snapshot_id = await self._capture_failure_snapshot(selector, context)
+                snapshot_id = await asyncio.wait_for(
+                    self._capture_failure_snapshot(selector, context),
+                    timeout=5.0,
+                )
                 attempt.failure_reason = f"All {len(strategies)} strategies failed"
             except Exception as e:
                 self._logger.warning(

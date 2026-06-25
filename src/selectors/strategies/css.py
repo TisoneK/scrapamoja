@@ -87,8 +87,8 @@ class CSSStrategy(BaseStrategyPattern):
             # First, wait for the element to appear (with short timeout)
             # Then query all matching elements
             try:
-                # Wait for at least one element to appear (5 second timeout)
-                wait_timeout = 5.0
+                # Wait for at least one element to appear (2 second timeout)
+                wait_timeout = 2.0
                 try:
                     await asyncio.wait_for(
                         page.wait_for_selector(css_selector, state="attached", timeout=wait_timeout * 1000),
