@@ -510,24 +510,16 @@ class FlashscoreFlow(BaseFlow):
                 except Exception:
                     continue
             
-            # Fallback: try selector engine
+            # Fallback: try clicking any tab with "Live" text
             try:
-                from src.selectors.context import DOMContext
-                from datetime import datetime
-                
-                dom_context = DOMContext(
-                    page=self.page,
-                    tab_context="flashscore_navigation",
-                    url=self.page.url,
-                    timestamp=datetime.utcnow()
-                )
-                
-                live_result = await self.selector_engine.resolve("live_games_filter", dom_context)
-                if live_result and live_result.element_info:
-                    await live_result.element_info.element.click()
+                live_link = await self.page.query_selector(".filters__tab:has-text('LIVE')")
+                if live_link:
+                    await live_link.click()
                     await self.page.wait_for_timeout(2000)
+                    logger.info("Clicked live filter using text selector fallback")
+                    return
             except Exception as e:
-                logger.warning(f"Selector engine fallback failed: {e}")
+                logger.warning(f"Live filter fallback failed: {e}")
                 
         except Exception as e:
             logger.warning(f"Error navigating to live matches: {e}")
@@ -613,13 +605,13 @@ class FlashscoreFlow(BaseFlow):
                 timestamp=datetime.utcnow()
             )
             
-            # Try to resolve the main content selector
-            main_content_result = await self.selector_engine.resolve("match_items", dom_context)
-            if main_content_result and main_content_result.element_info:
-                logger.info("Main content found using selector engine")
-            else:
-                # Wait for any match element as fallback
+            # Wait for match content to load — use Playwright directly
+            # (selector engine resolve() has an infinite loop bug)
+            try:
                 await self.page.wait_for_selector('.event__match', timeout=5000)
+                logger.info("Match content loaded on page")
+            except Exception:
+                logger.warning("No .event__match found within 5s, proceeding anyway")
         except Exception as e:
             logger.error(f"Selector engine error: {e}")
             # Final fallback: wait for any match element
@@ -785,13 +777,13 @@ class FlashscoreFlow(BaseFlow):
         await self.page.goto(f"https://www.flashscore.com/{sport_path}/")
         await self.page.wait_for_load_state('domcontentloaded')
         
-        # Wait for main content container to be present using selector system
+        # Wait for main content container to be present
         try:
             await self.page.wait_for_selector('.container__liveTableWrapper', timeout=10000)
         except:
-            # Fallback: use selector engine to find match items
+            # Fallback: wait for any match element
             try:
-                await self.selector_engine.find(self.page, "match_items")
+                await self.page.wait_for_selector('.event__match', timeout=3000)
             except:
                 await self.page.wait_for_timeout(2000)  # Final fallback
         
@@ -864,15 +856,15 @@ class FlashscoreFlow(BaseFlow):
                 logger.error(f"Alternative navigation also failed: {e2}")
                 raise e2
         
-        # Wait for the main content container to be present using selector system
+        # Wait for the main content container to be present
         try:
             await self.page.wait_for_selector('.container__liveTableWrapper', timeout=10000)
             logger.info("Main content container found")
         except:
-            # Fallback: use selector engine to find match items
+            # Fallback: wait for any match element
             try:
-                await self.selector_engine.find(self.page, "match_items")
-                logger.info("Match items found via selector engine")
+                await self.page.wait_for_selector('.event__match', timeout=3000)
+                logger.info("Match elements found via Playwright")
             except:
                 await self.page.wait_for_timeout(2000)  # Final fallback
                 logger.warning("Using final timeout fallback")
