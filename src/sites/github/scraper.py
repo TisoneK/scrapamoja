@@ -47,7 +47,10 @@ class GitHubScraper(BaseSiteScraper, BaseSiteTemplate):
             page: Playwright page instance
             selector_engine: Framework selector engine instance
         """
-        super().__init__(
+        # Initialize both parent classes explicitly
+        BaseSiteScraper.__init__(self, page, selector_engine)
+        BaseSiteTemplate.__init__(
+            self,
             name="github",
             version="1.0.0",
             description="GitHub repository and user data scraper",

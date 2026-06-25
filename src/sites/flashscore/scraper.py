@@ -40,7 +40,12 @@ class FlashscoreScraper(BaseSiteScraper, InterruptAwareScraper):
     base_url = SITE_CONFIG["base_url"]
 
     def __init__(self, page, selector_engine: SelectorEngine):
-        super().__init__(page, selector_engine)
+        # Initialize both parent classes explicitly
+        # BaseSiteScraper (for registry compatibility)
+        BaseSiteScraper.__init__(self, page, selector_engine)
+        # InterruptAwareScraper (for interrupt handling)
+        InterruptAwareScraper.__init__(self, page, selector_engine)
+        
         self.flow = FlashscoreFlow(self.page, self.selector_engine)
         self.logger = get_logger("flashscore.scraper")
         
