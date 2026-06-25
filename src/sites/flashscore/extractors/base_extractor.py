@@ -233,98 +233,101 @@ class BaseExtractor(ABC):
             return None
 
     async def _extract_match_id(self, element: ElementHandle) -> Optional[str]:
-        """Extract match ID using two methods: URL parameter (primary) and aria-describedby (fallback)."""
+        """Extract match ID from a match element using Playwright queries."""
         try:
-            # Method 1: Extract from URL parameter ?mid=CSXgyReU (primary)
-            link_element = await self._resolve_element('event_row_link', parent=element)
-            if link_element:
-                href = await link_element.get_attribute('href')
+            # Method 1: Find link element and extract mid= from href
+            link = await element.query_selector('a[href*="mid="]')
+            if link:
+                href = await link.get_attribute('href')
                 if href:
                     import re
                     mid_match = re.search(r'[?&]mid=([^&]+)', href)
                     if mid_match:
                         return mid_match.group(1)
-        except:
+        except Exception:
             pass
 
-        # Method 2: Extract from aria-describedby="g_3_CSXgyReU" (fallback)
+        # Method 2: Extract from aria-describedby attribute
         try:
-            link_element = await self._resolve_element('event_row_link', parent=element)
-            if link_element:
-                aria_describedby = await link_element.get_attribute('aria-describedby')
-                if aria_describedby:
+            link = await element.query_selector('a[aria-describedby]')
+            if link:
+                aria = await link.get_attribute('aria-describedby')
+                if aria:
                     import re
-                    id_match = re.search(r'g_\d+_(.+)', aria_describedby)
+                    id_match = re.search(r'g_\d+_(.+)', aria)
                     if id_match:
                         return id_match.group(1)
-        except:
+        except Exception:
+            pass
+
+        # Method 3: Extract from the element's own id attribute
+        try:
+            el_id = await element.get_attribute('id')
+            if el_id:
+                return el_id
+        except Exception:
             pass
 
         return None
 
     async def _extract_teams(self, element: ElementHandle) -> tuple[Optional[str], Optional[str]]:
-        """Extract home and away team names via YAML selectors."""
+        """Extract home and away team names using Playwright queries."""
+        home_team = None
+        away_team = None
+
         # Extract home team
         try:
-            home_team = await self._resolve_text('home_team', parent=element)
-            if home_team:
-                self.logger.info("Home team element found")
-            else:
-                self.logger.warning("Home team element not found")
+            home_el = await element.query_selector('.event__participant--home, .participant__home')
+            if home_el:
+                text = await home_el.text_content()
+                home_team = text.strip() if text else None
         except Exception as e:
-            self.logger.error(f"Error extracting home team: {e}")
-            home_team = None
+            self.logger.debug(f"Home team extraction failed: {e}")
 
         # Extract away team
         try:
-            away_team = await self._resolve_text('away_team', parent=element)
-            if away_team:
-                self.logger.info("Away team element found")
-            else:
-                self.logger.warning("Away team element not found")
+            away_el = await element.query_selector('.event__participant--away, .participant__away')
+            if away_el:
+                text = await away_el.text_content()
+                away_team = text.strip() if text else None
         except Exception as e:
-            self.logger.error(f"Error extracting away team: {e}")
-            away_team = None
+            self.logger.debug(f"Away team extraction failed: {e}")
 
         return home_team, away_team
 
     async def _extract_scores(self, element: ElementHandle) -> tuple[Optional[str], Optional[str]]:
-        """Extract home and away scores via YAML selectors."""
+        """Extract home and away scores using Playwright queries."""
         try:
-            score_elements = await self._resolve_elements('match_scores', parent=element)
-            if len(score_elements) >= 2:
-                home_score = await score_elements[0].text_content()
-                away_score = await score_elements[1].text_content()
-                return home_score.strip() if home_score else None, away_score.strip() if away_score else None
+            score_els = await element.query_selector_all('.event__score')
+            if len(score_els) >= 2:
+                home = await score_els[0].text_content()
+                away = await score_els[1].text_content()
+                return (home.strip() if home else None), (away.strip() if away else None)
         except Exception as e:
-            self.logger.error(f"Error extracting scores: {e}")
-
+            self.logger.debug(f"Score extraction failed: {e}")
         return None, None
 
     async def _extract_url(self, element: ElementHandle) -> Optional[str]:
-        """Extract match URL via YAML selector."""
+        """Extract match URL using Playwright query."""
         try:
-            link_element = await self._resolve_element('event_row_link', parent=element)
-            if link_element:
-                match_url = await link_element.get_attribute('href')
+            link = await element.query_selector('a[href]')
+            if link:
+                match_url = await link.get_attribute('href')
                 if match_url and not match_url.startswith('http'):
                     match_url = f"https://www.flashscore.com{match_url}"
                 return match_url
         except Exception as e:
-            self.logger.error(f"Error extracting URL: {e}")
-
+            self.logger.debug(f"URL extraction failed: {e}")
         return None
 
     async def _extract_time_info(self, element: ElementHandle, expected_status: str) -> Optional[str]:
-        """Extract time information based on match status via YAML selector."""
-        # For scheduled matches, extract time directly from the match element
+        """Extract time information based on match status using Playwright query."""
         if expected_status in ['scheduled', 'finished']:
             try:
-                time_text = await self._resolve_text('match_time', parent=element)
-                if time_text:
-                    self.logger.info(f"Extracted time: '{time_text}' from element")
-                    return time_text
+                time_el = await element.query_selector('.event__time')
+                if time_el:
+                    text = await time_el.text_content()
+                    return text.strip() if text else None
             except Exception as e:
-                self.logger.error(f"Error extracting time from element: {e}")
-
+                self.logger.debug(f"Time extraction failed: {e}")
         return None
