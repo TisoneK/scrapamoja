@@ -43,7 +43,7 @@ class FlashscoreOrchestrator:
         if not isinstance(scraper, InterruptAwareScraper):
             raise TypeError("Scraper must inherit from InterruptAwareScraper for interrupt handling support")
     
-    async def execute_basketball_workflow(self, limit: Optional[int] = None, status: str = 'scheduled') -> List[StructuredMatch]:
+    async def execute_basketball_workflow(self, limit: Optional[int] = None, status: str = 'scheduled') -> dict:
         """
         Execute the complete basketball workflow with match detail extraction.
         
@@ -52,12 +52,13 @@ class FlashscoreOrchestrator:
             status: Match status to extract (live, finished, scheduled)
             
         Returns:
-            List of StructuredMatch objects with complete match data
+            Dict with 'matches' (list of StructuredMatch), 'status' ('ok'|'error'),
+            and 'error' (str, present only on failure).
         """
-        # Check feature flag
-        if not self._is_full_workflow_enabled():
-            self.scraper.logger.warning("Full workflow is disabled, falling back to legacy mode")
-            return await self._execute_legacy_workflow(limit)
+        # NOTE: The full-workflow gate now lives exclusively in scrape_data(),
+        # which checks both the CLI flag and the env var. This method is only
+        # called when that gate has already passed, so there is no redundant
+        # feature-flag check here.
         
         # Enforce processing limit (50 matches max per run)
         max_matches = min(limit or 50, 50)
@@ -69,7 +70,7 @@ class FlashscoreOrchestrator:
             navigation_state = await self.flow.navigate_to_basketball()
             if not navigation_state or not hasattr(navigation_state, 'verified') or not navigation_state.verified:
                 self.scraper.logger.error("Failed to navigate to basketball section")
-                return []
+                return {'matches': [], 'status': 'error', 'error': 'navigation_failed: basketball section unreachable'}
             
             # Step 2: Extract match listings using the correct extractor for the status
             extractor = self.extractors.get(status, self.extractors['scheduled'])
@@ -80,7 +81,7 @@ class FlashscoreOrchestrator:
             
             if not listing_result or 'matches' not in listing_result:
                 self.scraper.logger.error("Failed to extract match listings")
-                return []
+                return {'matches': [], 'status': 'error', 'error': 'extraction_failed: no match listings returned'}
             
             match_listings = listing_result['matches']
             self.scraper.logger.info(f"Found {len(match_listings)} matches to process")
@@ -106,11 +107,11 @@ class FlashscoreOrchestrator:
                 optimized_matches = structured_matches
             
             self.scraper.logger.info(f"Basketball workflow completed: {len(optimized_matches)} successful extractions")
-            return optimized_matches
+            return {'matches': optimized_matches, 'status': 'ok'}
             
         except Exception as e:
             self.scraper.logger.error(f"Error in basketball workflow: {e}")
-            return []
+            return {'matches': [], 'status': 'error', 'error': str(e)}
     
     async def _process_matches_with_retry(self, match_listings: List[MatchListing], max_matches: int) -> List[StructuredMatch]:
         """Process matches with retry logic and concurrent execution."""
@@ -273,16 +274,24 @@ class FlashscoreOrchestrator:
             if full_workflow:
                 # Execute new basketball workflow
                 self.scraper.logger.info(f"Starting basketball workflow with max {args.limit or 50} matches")
-                structured_matches = await self.execute_basketball_workflow(args.limit, status=args.status)
-                return {
+                workflow_result = await self.execute_basketball_workflow(args.limit, status=args.status)
+                structured_matches = workflow_result.get('matches', [])
+                result = {
                     'matches': [self._structured_match_to_dict(match) for match in structured_matches],
                     'workflow_type': 'full_basketball_workflow',
-                    'total_matches': len(structured_matches)
+                    'total_matches': len(structured_matches),
+                    'extraction_status': workflow_result.get('status', 'ok'),
                 }
+                if 'error' in workflow_result:
+                    result['error'] = workflow_result['error']
+                return result
             else:
                 # Execute legacy workflow
-                self.scraper.logger.warning("Full workflow is disabled, falling back to legacy mode")
-                return await self._legacy_scrape_data(args)
+                self.scraper.logger.info("Full workflow not enabled, using listing-only extraction")
+                result = await self._legacy_scrape_data(args)
+                result.setdefault('extraction_status', 'ok')
+                result.setdefault('workflow_type', 'legacy_listing_only')
+                return result
             
         except Exception as e:
             self.scraper.logger.error(f"Error during orchestrated scraping: {e}")
