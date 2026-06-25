@@ -403,26 +403,28 @@ class SelectorEngine(ISelectorEngine):
     async def _try_fallback_resolution(self, selector_name: str, context: DOMContext) -> Optional[SelectorResult]:
         """Try to resolve selector using fallback CSS selectors."""
         try:
-            # Define fallback CSS selectors based on common patterns
+            # Last-resort CSS fallbacks — only used when YAML selectors fail entirely.
+            # These mirror the primary CSS strategies in the YAML files.
             fallback_selectors = {
-                # Match items
+                # Match rows (all statuses)
                 'match_items': '.event__match',
-                'extraction.match_list.basketball.match_items': '.event__match',
-                
-                # Live games filter
+                'match_rows': '.event__match:not([class*="skeleton"])',
+
+                # Status-specific match classes
+                'scheduled_match_class': '.event__match--scheduled',
+                'live_match_class': '.event__match--live',
+                'finished_match_class': '.event__match--finished',
+
+                # Navigation
                 'live_games_filter': '.filters__tab.selected, [data-analytics-element="SCN_TAB"][data-analytics-alias="live"]',
-                
+
                 # Team names
                 'home_team': '.event__participant--home, .participant__home',
                 'away_team': '.event__participant--away, .participant__away',
-                
+
                 # Time and stage
                 'match_time': '.event__time',
                 'match_stage': '.event__stage',
-                
-                # Score
-                'extraction.match_summary.basketball.score': '.event__score--home, .event__score--away',
-                'extraction.match_list.basketball.live_indicator': '.event__score--home, .event__score--away',
             }
             
             # Get fallback CSS selector

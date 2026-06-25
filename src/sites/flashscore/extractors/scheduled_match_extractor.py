@@ -129,35 +129,42 @@ class ScheduledMatchExtractor(BaseExtractor):
         }
 
     async def _wait_for_content(self):
-        """Wait for real content to load (not skeleton placeholders) via YAML selector.
-        
+        """Wait for loaded (non-skeleton) match row elements to appear on the page.
+
         Uses exponential backoff: starts at 500ms, caps at 3s.
         Stops early if the selector is not registered in the engine.
         """
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.scheduled")
 
-        max_attempts = 10  # Reduced from 20 — exponential backoff makes 10 plenty
+        max_attempts = 10
         attempt = 0
         base_delay = 500  # ms
         max_delay = 3000  # ms
+
+        # Diagnostic: what page are we actually on?
+        try:
+            current_url = self.scraper.page.url
+            title = await self.scraper.page.title()
+            logger.info(f"_wait_for_content starting — url={current_url}, title={title}")
+        except Exception as e:
+            logger.warning(f"Could not read page URL: {e}")
 
         # Early exit: check if the selector is even registered
         if hasattr(self.scraper, 'selector_engine') and self.scraper.selector_engine is not None:
             try:
                 registry = self.scraper.selector_engine.registry
-                if registry and not registry.get('real_match_content'):
-                    logger.warning("Selector 'real_match_content' not in registry — skipping wait loop")
+                if registry and not registry.get('match_rows'):
+                    logger.warning("Selector 'match_rows' not in registry — skipping wait loop")
                     return
             except Exception:
                 pass  # Registry may not support .get()
 
         while attempt < max_attempts:
             try:
-                # Check if we have real content (not just skeleton placeholders)
-                real_content = await self._resolve_element('real_match_content')
-                if real_content:
-                    logger.info(f"Real content detected on attempt {attempt + 1} (YAML: real_match_content)")
+                content_loaded = await self._resolve_element('match_rows')
+                if content_loaded:
+                    logger.info(f"Loaded content detected on attempt {attempt + 1} (YAML: match_rows)")
                     break
 
                 # Exponential backoff: 500ms → 1000ms → 2000ms → 3000ms cap
@@ -166,79 +173,49 @@ class ScheduledMatchExtractor(BaseExtractor):
                 attempt += 1
 
             except Exception as e:
-                logger.warning(f"Error checking for real content on attempt {attempt + 1}: {e}")
+                logger.warning(f"Error checking for loaded content on attempt {attempt + 1}: {e}")
                 delay = min(base_delay * (2 ** attempt) // 1000, max_delay)
                 await self.scraper.page.wait_for_timeout(delay)
                 attempt += 1
 
         if attempt >= max_attempts:
-            logger.warning("No real content detected after maximum attempts, proceeding anyway")
+            logger.warning("No loaded content detected after maximum attempts, proceeding anyway")
 
     async def _get_match_elements(self):
-        """Get scheduled match elements using YAML-driven selectors."""
+        """Get scheduled match elements using YAML-driven selectors.
+
+        Resolution order:
+        1. ``scheduled_match_class`` — targets .event__match--scheduled (status-specific)
+        2. ``match_items`` — targets .event__match (all matches), filtered by is_match_status()
+        """
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.scheduled")
 
-        # Primary: Use YAML selector engine to find scheduled matches
+        # Primary: Find matches with the scheduled status class
         try:
             scheduled_elements = await self._resolve_elements('scheduled_match_class')
             if scheduled_elements:
-                logger.info(f"Found {len(scheduled_elements)} scheduled match elements via YAML selector (primary: scheduled_match_class)")
+                logger.info(f"Found {len(scheduled_elements)} scheduled match elements via YAML selector (scheduled_match_class)")
                 return scheduled_elements
             else:
-                logger.warning("No scheduled matches found with YAML selector")
+                logger.warning("No scheduled matches found with scheduled_match_class selector")
         except Exception as e:
-            logger.error(f"Error with YAML selector: {e}")
+            logger.error(f"Error with scheduled_match_class selector: {e}")
 
-        # Fallback: Use semantic selector path via selector engine resolve()
+        # Fallback: Get all match elements and filter by status
         try:
-            from src.selectors.context import DOMContext
-            from datetime import datetime
-
-            # Create DOM context
-            context = DOMContext(
-                page=self.scraper.page,
-                tab_context="scheduled",
-                url=self.scraper.page.url,
-                timestamp=datetime.utcnow()
-            )
-
-            # Check if selector engine exists and is properly initialized
-            if not hasattr(self.scraper, 'selector_engine') or self.scraper.selector_engine is None:
-                logger.warning("Selector engine not available")
-                return []
-
-            # Use semantic selector as fallback
-            # Try the fully-qualified path first, then fall back to the short ID
-            # that the YAML loader registers selectors with
-            selector_paths = [
-                'extraction.match_list.basketball.scheduled_indicators',
-                'scheduled_indicators',  # YAML-registered short ID
-            ]
-            result = None
-            for selector_path in selector_paths:
-                try:
-                    result = await self.scraper.selector_engine.resolve(selector_path, context)
-                    if result and result.element_info:
-                        break
-                except Exception:
-                    continue
-            if result and result.element_info:
-                # Check if elements are stored in metadata (for multi-element results)
-                if hasattr(result.element_info, 'metadata') and result.element_info.metadata.get('all_elements'):
-                    elements = result.element_info.metadata.get('all_elements')
-                    logger.info(f"Found {len(elements)} scheduled match elements via semantic selector (fallback)")
-                    return elements
-                # Fallback to old way for single element results
-                elif hasattr(result.element_info, 'element') and result.element_info.element:
-                    elements = [result.element_info.element]
-                    logger.info(f"Found {len(elements)} scheduled match elements via semantic selector (single element fallback)")
-                    return elements
+            all_matches = await self._resolve_elements('match_items')
+            if all_matches:
+                scheduled = []
+                for el in all_matches:
+                    if await self.is_match_status(el):
+                        scheduled.append(el)
+                if scheduled:
+                    logger.info(f"Found {len(scheduled)} scheduled matches from {len(all_matches)} total (filtered via match_items)")
+                    return scheduled
                 else:
-                    logger.warning("Semantic selector returned success but no elements")
-            else:
-                logger.warning("Semantic selector failed to resolve")
+                    logger.warning(f"No scheduled matches among {len(all_matches)} total match elements")
         except Exception as e:
-            logger.error(f"Error using semantic selector: {e}")
+            logger.error(f"Error with match_items fallback: {e}")
 
         return []

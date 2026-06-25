@@ -1,7 +1,7 @@
-id: real_match_content
-name: Real Match Content
+id: match_rows
+name: Match Rows (Loaded Content)
 selector_type: css
-description: "Non-skeleton match elements indicating real content has loaded"
+description: "Non-skeleton match row elements — used to wait for content to finish loading. Skeleton placeholders are excluded so we can tell the page has real data."
 confidence_threshold: 0.8
 timeout: 10.0
 retry_count: 3
@@ -22,7 +22,3 @@ metadata:
   wait_for_element: true
   volatile_selectors: [".event__match:not([class*='skeleton'])"]
   stable_selectors: []
-  dom_state_indicators:
-    live: ["event__match"]
-    scheduled: ["event__match"]
-    finished: ["event__match"]
