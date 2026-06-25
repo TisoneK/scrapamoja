@@ -114,51 +114,43 @@ class XPathStrategy(BaseStrategyPattern):
                     failure_reason=f"No elements found for XPath: {xpath_expression}"
                 )
             
-            # Create element info for first element (or all if needed)
-            element_infos = []
-            for element in elements:
-                try:
-                    # Get element properties
-                    text = await element.text_content()
-                    tag_name = await element.evaluate('el => el.tagName.toLowerCase()')
-                    
-                    element_info = ElementInfo(
-                        element_id=f"xpath_{hash(xpath_expression)}_{len(element_infos)}",
-                        tag_name=tag_name,
-                        text_content=text or "",
-                        attributes={},
-                        xpath=xpath_expression,
-                        css_selector=None,
-                        confidence=1.0,  # XPath expressions are precise
-                        metadata={
-                            'strategy': 'xpath',
-                            'xpath': xpath_expression,
-                            'elements_found': len(elements)
-                        }
-                    )
-                    element_infos.append(element_info)
-                except Exception as e:
-                    # Continue with other elements if one fails
-                    continue
+            # Create element info for first element
+            first_pw_element = elements[0]
+            try:
+                text = await first_pw_element.text_content()
+                tag_name = await first_pw_element.evaluate('el => el.tagName.toLowerCase()')
+                css_classes_str = await first_pw_element.get_attribute("class") or ""
+                css_classes = css_classes_str.split() if css_classes_str else []
+                attrs = {}
+                for attr_name in ["class", "id", "data-testid", "href"]:
+                    val = await first_pw_element.get_attribute(attr_name)
+                    if val is not None:
+                        attrs[attr_name] = val
+                visibility = await first_pw_element.is_visible()
+            except Exception:
+                text = ""
+                tag_name = "unknown"
+                css_classes = []
+                attrs = {}
+                visibility = True
             
-            if not element_infos:
-                return SelectorResult(
-                    selector_name=selector.name,
-                    strategy_used=self.id,
-                    element_info=None,
-                    confidence_score=0.0,
-                    resolution_time=(datetime.utcnow() - start_time).total_seconds(),
-                    validation_results=[],
-                    success=False,
-                    failure_reason="Failed to extract element information"
-                )
+            first_element = ElementInfo(
+                tag_name=tag_name,
+                text_content=text or "",
+                attributes=attrs,
+                css_classes=css_classes,
+                dom_path=f"xpath:{xpath_expression}",
+                visibility=visibility,
+                interactable=visibility,
+                element=first_pw_element,  # Store Playwright handle for find()
+            )
             
             # Return successful result with first element
             return SelectorResult(
                 selector_name=selector.name,
                 strategy_used=self.id,
-                element_info=element_infos[0],
-                confidence_score=element_infos[0].confidence,
+                element_info=first_element,
+                confidence_score=1.0,  # XPath expressions are precise
                 resolution_time=(datetime.utcnow() - start_time).total_seconds(),
                 validation_results=[],
                 success=True

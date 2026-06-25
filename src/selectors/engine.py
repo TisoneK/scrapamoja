@@ -434,14 +434,27 @@ class SelectorEngine(ISelectorEngine):
             element = await context.page.query_selector(css_selector)
             if element:
                 from src.models.selector_models import ElementInfo
+                try:
+                    text = await element.text_content()
+                    tag = await element.evaluate('el => el.tagName.toLowerCase()')
+                    classes_str = await element.get_attribute("class") or ""
+                    classes = classes_str.split() if classes_str else []
+                    visible = await element.is_visible()
+                except Exception:
+                    text = ""
+                    tag = "unknown"
+                    classes = []
+                    visible = True
+                
                 element_info = ElementInfo(
-                    element=element,
-                    css_selector=css_selector,
-                    xpath_selector=None,
-                    text_content=await element.text_content(),
+                    tag_name=tag,
+                    text_content=text or "",
                     attributes={},
-                    confidence=0.8,  # Medium confidence for fallbacks
-                    resolution_strategy="css_fallback"
+                    css_classes=classes,
+                    dom_path=css_selector,
+                    visibility=visible,
+                    interactable=visible,
+                    element=element,
                 )
                 
                 return SelectorResult(
@@ -643,14 +656,15 @@ class SelectorEngine(ISelectorEngine):
             
             if result.success and result.element_info:
                 # For find_all, we need to query multiple elements
-                # This is a simplified implementation - in practice, you might want to
-                # query all elements matching the resolved CSS selector
-                css_selector = result.element_info.css_selector
-                if css_selector:
+                # The CSS selector is stored in dom_path by CSS/XPath strategies
+                css_selector = result.element_info.dom_path
+                if css_selector and not css_selector.startswith("xpath:"):
                     elements = await page_or_element.query_selector_all(css_selector)
                     return elements
-                else:
+                elif result.element_info.element:
                     return [result.element_info.element]
+                else:
+                    return []
             else:
                 return []
                 
@@ -808,11 +822,33 @@ class SelectorEngine(ISelectorEngine):
         for strategy in strategies:
             strategy_instance = self._strategies.get(strategy.id)
             if not strategy_instance:
-                self._logger.warning(
-                    "strategy_not_found",
-                    strategy_id=strategy.id
-                )
-                continue
+                # Try to create strategy on-the-fly from config via StrategyFactory
+                # This handles YAML-loaded CSS/XPath strategies that aren't pre-registered
+                try:
+                    strategy_config = {
+                        "type": strategy.type.value if hasattr(strategy.type, 'value') else str(strategy.type),
+                        "id": strategy.id,
+                        "priority": strategy.priority,
+                    }
+                    # Merge in any extra config from the strategy pattern
+                    if hasattr(strategy, 'config') and strategy.config:
+                        strategy_config.update(strategy.config)
+                    
+                    strategy_instance = self._strategy_factory.create_strategy(strategy_config)
+                    # Cache it for future use
+                    self._strategies[strategy.id] = strategy_instance
+                    self._logger.debug(
+                        "strategy_created_on_demand",
+                        strategy_id=strategy.id,
+                        strategy_type=strategy_config.get("type")
+                    )
+                except Exception as e:
+                    self._logger.warning(
+                        "strategy_not_found_and_creation_failed",
+                        strategy_id=strategy.id,
+                        error=str(e)
+                    )
+                    continue
             
             attempt.strategy_id = strategy.id
             attempt.start_time = datetime.utcnow()

@@ -129,6 +129,7 @@ class ElementInfo:
     dom_path: str
     visibility: bool
     interactable: bool
+    element: Any = None  # Playwright ElementHandle (optional, for direct access)
     
     def get_text_clean(self) -> str:
         """Get cleaned text content."""

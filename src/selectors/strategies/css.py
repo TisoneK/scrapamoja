@@ -137,36 +137,15 @@ class CSSStrategy(BaseStrategyPattern):
                 )
             
             # Create element info for first element and store all elements in metadata
-            element_infos = []
             playwright_elements = []  # Store actual Playwright element handles
             
             for element in elements:
                 try:
-                    # Get element properties
-                    text = await element.text_content()
-                    tag_name = await element.evaluate('el => el.tagName.toLowerCase()')
-                    
-                    element_info = ElementInfo(
-                        element_id=f"css_{hash(css_selector)}_{len(element_infos)}",
-                        tag_name=tag_name,
-                        text_content=text or "",
-                        attributes={},
-                        xpath=f"css:{css_selector}",
-                        css_selector=css_selector,
-                        confidence=1.0,  # CSS selectors are precise
-                        metadata={
-                            'strategy': 'css',
-                            'selector': css_selector,
-                            'elements_found': len(elements)
-                        }
-                    )
-                    element_infos.append(element_info)
-                    playwright_elements.append(element)  # Store actual element
-                except Exception as e:
-                    # Continue with other elements if one fails
+                    playwright_elements.append(element)
+                except Exception:
                     continue
             
-            if not element_infos:
+            if not playwright_elements:
                 return SelectorResult(
                     selector_name=selector.name,
                     strategy_used=self.id,
@@ -178,17 +157,45 @@ class CSSStrategy(BaseStrategyPattern):
                     failure_reason="Failed to extract element information"
                 )
             
-            # Store all elements in the first element's metadata for access by extractors
-            first_element = element_infos[0]
-            first_element.metadata['all_elements'] = playwright_elements
-            first_element.metadata['element_count'] = len(playwright_elements)
+            # Build ElementInfo for the first element using correct dataclass fields
+            first_pw_element = playwright_elements[0]
+            try:
+                text = await first_pw_element.text_content()
+                tag_name = await first_pw_element.evaluate('el => el.tagName.toLowerCase()')
+                css_classes_str = await first_pw_element.get_attribute("class") or ""
+                css_classes = css_classes_str.split() if css_classes_str else []
+                # Get a few attributes for the attributes dict
+                attrs = {}
+                for attr_name in ["class", "id", "data-testid", "href"]:
+                    val = await first_pw_element.get_attribute(attr_name)
+                    if val is not None:
+                        attrs[attr_name] = val
+                
+                visibility = await first_pw_element.is_visible()
+            except Exception:
+                text = ""
+                tag_name = "unknown"
+                css_classes = []
+                attrs = {}
+                visibility = True
             
-            # Return successful result with first element (containing all elements in metadata)
+            first_element = ElementInfo(
+                tag_name=tag_name,
+                text_content=text or "",
+                attributes=attrs,
+                css_classes=css_classes,
+                dom_path=css_selector,
+                visibility=visibility,
+                interactable=visibility,
+                element=first_pw_element,  # Store Playwright handle for find()
+            )
+            
+            # Return successful result with first element
             return SelectorResult(
                 selector_name=selector.name,
                 strategy_used=self.id,
                 element_info=first_element,
-                confidence_score=first_element.confidence,
+                confidence_score=1.0,  # CSS selectors are precise
                 resolution_time=(datetime.utcnow() - start_time).total_seconds(),
                 validation_results=[],
                 success=True
