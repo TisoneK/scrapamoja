@@ -9,10 +9,16 @@ This implements Story 7.2 (Technical and Non-Technical Views) requirements:
 import base64
 import io
 from typing import Optional, Dict, Any, Tuple
-from PIL import Image, ImageDraw, ImageFont
 import logging
 
 from src.observability.logger import get_logger
+
+# Lazy import — Pillow is optional, only needed for visual preview generation
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    _PIL_AVAILABLE = True
+except ImportError:
+    _PIL_AVAILABLE = False
 
 
 class VisualPreviewService:
@@ -49,6 +55,12 @@ class VisualPreviewService:
         Returns:
             Base64 encoded PNG image
         """
+        if not _PIL_AVAILABLE:
+            self._logger.warning(
+                "Pillow not installed — visual preview disabled. "
+                "Install with: pip install Pillow"
+            )
+            return ""
         try:
             # Create a mock preview image
             image = self._create_mock_selector_preview(
