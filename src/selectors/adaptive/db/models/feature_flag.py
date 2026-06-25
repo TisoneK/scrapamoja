@@ -52,6 +52,20 @@ class FeatureFlag(Base):
         site_suffix = f"@{self.site}" if self.site else ""
         return f"<FeatureFlag(sport={self.sport!r}{site_suffix}, enabled={self.enabled})>"
     
+    def __eq__(self, other: object) -> bool:
+        """Compare FeatureFlag instances by value, not identity.
+        
+        Without this, SQLAlchemy models use default identity comparison,
+        so two instances with identical fields return False for ==.
+        """
+        if not isinstance(other, FeatureFlag):
+            return NotImplemented
+        return self.sport == other.sport and self.site == other.site and self.enabled == other.enabled
+    
+    def __hash__(self) -> int:
+        """Hash based on value fields so FeatureFlag can be used in sets/dicts."""
+        return hash((self.sport, self.site, self.enabled))
+    
     def to_dict(self) -> dict[str, object]:
         """Convert feature flag to dictionary representation."""
         return {

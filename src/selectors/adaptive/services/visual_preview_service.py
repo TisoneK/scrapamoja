@@ -91,7 +91,7 @@ class VisualPreviewService:
         highlight_color: str,
         width: int,
         height: int
-    ) -> Image.Image:
+    ) -> "Image.Image":
         """
         Create a mock preview image showing the selector context.
         
@@ -138,7 +138,7 @@ class VisualPreviewService:
     
     def _draw_mock_page_structure(
         self,
-        draw: ImageDraw.Draw,
+        draw: Any,
         font: Any,
         width: int,
         height: int
@@ -168,7 +168,7 @@ class VisualPreviewService:
     
     def _highlight_selector_area(
         self,
-        draw: ImageDraw.Draw,
+        draw: Any,
         selector: str,
         highlight_color: str,
         width: int,
@@ -293,7 +293,7 @@ class VisualPreviewService:
         width: int,
         height: int,
         color: str
-    ) -> Image.Image:
+    ) -> "Image.Image":
         """Create a small preview for comparison."""
         image = Image.new('RGB', (width, height), color='white')
         draw = ImageDraw.Draw(image)
