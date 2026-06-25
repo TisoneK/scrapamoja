@@ -602,11 +602,15 @@ class SelectorEngine(ISelectorEngine):
                     url=page_or_element.url,
                     timestamp=datetime.utcnow()
                 )
-            else:  # It's an ElementHandle - use its page
-                page = page_or_element.page
+            else:  # It's an ElementHandle — get page via owner_frame
+                frame = await page_or_element.owner_frame()
+                page = frame.page if frame else None
+                if not page:
+                    self._logger.warning(f"Cannot get page from element for selector '{selector_name}'")
+                    return None
                 dom_context = DOMContext(
                     page=page,
-                    tab_context=context or "default", 
+                    tab_context=context or "default",
                     url=page.url,
                     timestamp=datetime.utcnow()
                 )
@@ -644,8 +648,12 @@ class SelectorEngine(ISelectorEngine):
                     url=page_or_element.url,
                     timestamp=datetime.utcnow()
                 )
-            else:  # It's an ElementHandle - use its page
-                page = page_or_element.page
+            else:  # It's an ElementHandle — get page via owner_frame
+                frame = await page_or_element.owner_frame()
+                page = frame.page if frame else None
+                if not page:
+                    self._logger.warning(f"Cannot get page from element for selector '{selector_name}'")
+                    return []
                 dom_context = DOMContext(
                     page=page,
                     tab_context=context or "default",
