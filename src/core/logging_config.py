@@ -26,7 +26,7 @@ class JsonLoggingConfigurator:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-        handler = logging.StreamHandler(sys.stdout)
+        handler = logging.StreamHandler(sys.stderr)
         handler.setLevel(level)
 
         formatter = jsonlogger.JsonFormatter(

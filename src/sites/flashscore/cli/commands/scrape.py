@@ -29,6 +29,11 @@ sports = {
 }
 
 
+def _progress(msg: str):
+    """Print a progress message to stderr (doesn't mix with JSON output on stdout)."""
+    print(f"  {msg}", file=sys.stderr)
+
+
 class ScrapeCommand:
     """Command for scraping Flashscore data."""
     
@@ -85,16 +90,20 @@ class ScrapeCommand:
     async def execute(self, args: argparse.Namespace) -> int:
         """Run scrape command with interrupt handling support."""
         session = None
+        sport_name = sports[args.sport]['name']
+        
+        _progress(f"Sport: {sport_name} | Status: {args.status}" + (f" | Limit: {args.limit}" if args.limit else ""))
         
         try:
             # Initialize browser manager
             from src.browser.manager import BrowserManager
-            browser_manager = BrowserManager(site_id='flashscore')  # Pass site ID for hierarchical storage
+            browser_manager = BrowserManager(site_id='flashscore')
             
             # Initialize scraper with interrupt handling
             from src.browser.config import BrowserConfiguration
             browser_config = BrowserConfiguration(headless=not args.no_headless)
             
+            _progress("Launching browser...")
             session = await browser_manager.create_session(browser_config)
             
             # Register session with shutdown coordinator if available
@@ -112,27 +121,34 @@ class ScrapeCommand:
             
             # Initialize selectors asynchronously
             await scraper.initialize_selectors()
+            _progress("Selectors loaded")
             
             # Initialize orchestrator
             from src.sites.flashscore.orchestrator import FlashscoreOrchestrator
             orchestrator = FlashscoreOrchestrator(scraper)
             
             # Scrape data using interrupt-aware scraper
+            _progress(f"Navigating to {args.sport}/{args.status}...")
             result = await scraper.scrape_with_interrupt_handling(
                 orchestrator.scrape_data, args
             )
             
-            # Output results
+            match_count = result.get('total', 0)
+            _progress(f"Extracted {match_count} {args.status} match{'es' if match_count != 1 else ''}")
+            
+            # Output results as beautified JSON on stdout (logs go to stderr)
+            beautified = _beautify_result(result)
+            
             if args.output:
-                await self._write_to_file(json.dumps(result, indent=2), args.output)
-                print(f"Results saved to {args.output}")
+                await self._write_to_file(beautified, args.output)
+                _progress(f"Results saved to {args.output}")
             else:
-                print(json.dumps(result, indent=2))
+                print(beautified)
             
             return 0
             
         except Exception as e:
-            print(f"Scraping failed: {e}", file=sys.stderr)
+            print(json.dumps({"error": str(e)}, indent=2))
             return 1
         
         finally:
@@ -193,3 +209,8 @@ class ScrapeCommand:
         
         with open(path, 'w', encoding='utf-8') as f:
             f.write(content)
+
+
+def _beautify_result(result: dict) -> str:
+    """Beautify scrape result for display — clean, readable JSON."""
+    return json.dumps(result, indent=2, ensure_ascii=False)
