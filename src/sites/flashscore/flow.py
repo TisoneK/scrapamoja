@@ -421,11 +421,17 @@ class FlashscoreFlow(BaseFlow):
                 logger.info("Basketball navigation completed successfully")
             else:
                 logger.warning("Basketball navigation completed with verification issues")
+                await self._capture_debug_snapshot("navigate_to_basketball_unverified", {
+                    "url_verified": url_verified,
+                    "elements_present": elements_present,
+                    "url": current_url,
+                })
             
             return navigation_state
             
         except Exception as e:
             logger.error(f"Error in navigate_to_basketball: {e}")
+            await self._capture_debug_snapshot("navigate_to_basketball_error", {"error": str(e)})
             # Return failed state
             return NavigationState(
                 url=self.page.url,
@@ -846,6 +852,7 @@ class FlashscoreFlow(BaseFlow):
             logger.info(f"Successfully navigated to {sport_path} page")
         except Exception as e:
             logger.error(f"Failed to navigate to {sport_path} page: {e}")
+            await self._capture_debug_snapshot(f"navigation_failed_{sport_path}", {"error": str(e)})
             # Try alternative approach - navigate to home first, then to sport
             try:
                 await self.page.goto("https://www.flashscore.com", wait_until="domcontentloaded", timeout=20000)
@@ -854,6 +861,7 @@ class FlashscoreFlow(BaseFlow):
                 logger.info(f"Successfully navigated to {sport_path} page via home page")
             except Exception as e2:
                 logger.error(f"Alternative navigation also failed: {e2}")
+                await self._capture_debug_snapshot(f"navigation_failed_alternative_{sport_path}", {"error": str(e2)})
                 raise e2
         
         # Wait for the main content container to be present
@@ -868,6 +876,7 @@ class FlashscoreFlow(BaseFlow):
             except:
                 await self.page.wait_for_timeout(2000)  # Final fallback
                 logger.warning("Using final timeout fallback")
+                await self._capture_debug_snapshot(f"content_container_missing_{sport_path}", {"url": self.page.url})
         
         # Skip scheduled filter click - page already shows scheduled matches by default
         # The scheduled filter selector was failing, but scheduled matches are found without it

@@ -106,6 +106,7 @@ class ScheduledMatchExtractor(BaseExtractor):
                 logger.info(f"Added scheduled match: {match_data.teams['home']} vs {match_data.teams['away']}")
             else:
                 logger.debug("Skipped scheduled match - no data extracted")
+                await self._capture_failure_snapshot('match_data_empty', {'match_index': i})
 
         if limit and len(match_elements) > limit:
             logger.info(f"Extracted {len(matches)} scheduled match{'es' if len(matches) != 1 else ''} (limit: {limit}, available: {len(match_elements)})")
@@ -166,6 +167,7 @@ class ScheduledMatchExtractor(BaseExtractor):
 
         if attempt >= max_attempts:
             logger.warning("No loaded content detected after maximum attempts, proceeding anyway")
+            await self._capture_failure_snapshot('content_wait_timeout', {'attempts': max_attempts})
 
     async def _get_match_elements(self):
         """Get scheduled match elements using YAML-driven selectors.
@@ -185,8 +187,10 @@ class ScheduledMatchExtractor(BaseExtractor):
                 return scheduled_elements
             else:
                 logger.warning("No .event__match--scheduled elements found")
+                await self._capture_failure_snapshot('no_scheduled_class_elements')
         except Exception as e:
             logger.error(f"Error querying .event__match--scheduled: {e}")
+            await self._capture_failure_snapshot('scheduled_query_error', {'error': str(e)})
 
         # Fallback: Get all match elements and filter by status
         try:
@@ -206,5 +210,7 @@ class ScheduledMatchExtractor(BaseExtractor):
                     return all_matches
         except Exception as e:
             logger.error(f"Error with match_items fallback: {e}")
+            await self._capture_failure_snapshot('match_items_fallback_error', {'error': str(e)})
 
+        await self._capture_failure_snapshot('no_match_elements_found')
         return []

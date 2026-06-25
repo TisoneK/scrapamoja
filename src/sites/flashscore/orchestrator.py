@@ -70,6 +70,10 @@ class FlashscoreOrchestrator:
             navigation_state = await self.flow.navigate_to_basketball()
             if not navigation_state or not hasattr(navigation_state, 'verified') or not navigation_state.verified:
                 self.scraper.logger.error("Failed to navigate to basketball section")
+                await self.scraper.capture_operation_snapshot(
+                    "navigation_failed_basketball",
+                    {"error": "basketball section unreachable", "verified": False}
+                )
                 return {'matches': [], 'status': 'error', 'error': 'navigation_failed: basketball section unreachable'}
             
             # Step 2: Extract match listings using the correct extractor for the status
@@ -81,6 +85,10 @@ class FlashscoreOrchestrator:
             
             if not listing_result or 'matches' not in listing_result:
                 self.scraper.logger.error("Failed to extract match listings")
+                await self.scraper.capture_operation_snapshot(
+                    "extraction_failed_no_listings",
+                    {"sport": "basketball", "status": status}
+                )
                 return {'matches': [], 'status': 'error', 'error': 'extraction_failed: no match listings returned'}
             
             match_listings = listing_result['matches']
@@ -111,6 +119,10 @@ class FlashscoreOrchestrator:
             
         except Exception as e:
             self.scraper.logger.error(f"Error in basketball workflow: {e}")
+            await self.scraper.capture_operation_snapshot(
+                "workflow_error",
+                {"error": str(e), "limit": limit, "status": status}
+            )
             return {'matches': [], 'status': 'error', 'error': str(e)}
     
     async def _process_matches_with_retry(self, match_listings: List[MatchListing], max_matches: int) -> List[StructuredMatch]:

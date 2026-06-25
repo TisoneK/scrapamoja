@@ -34,6 +34,27 @@ class BaseExtractor(ABC):
         return get_logger(f"flashscore.extractor.{self.__class__.__name__.lower()}")
 
     # ------------------------------------------------------------------
+    # Snapshot capture for debugging
+    # ------------------------------------------------------------------
+
+    async def _capture_failure_snapshot(self, reason: str, metadata: dict = None):
+        """Capture a snapshot when extraction fails.
+
+        Delegates to the scraper's capture_operation_snapshot so that
+        every failure point automatically produces HTML + screenshot
+        evidence for post-mortem debugging.
+        """
+        try:
+            full_meta = {'reason': reason, 'extractor': self.__class__.__name__}
+            if metadata:
+                full_meta.update(metadata)
+            await self.scraper.capture_operation_snapshot(
+                f"extraction_failure_{reason}", full_meta
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to capture failure snapshot: {e}")
+
+    # ------------------------------------------------------------------
     # YAML-driven selector resolution helpers
     # ------------------------------------------------------------------
 
@@ -201,12 +222,14 @@ class BaseExtractor(ABC):
             match_id = await self._extract_match_id(element)
             if not match_id:
                 self.logger.warning(f"Could not extract match ID from element")
+                await self._capture_failure_snapshot('match_id_missing')
                 return None
 
             # Extract team names
             home_team, away_team = await self._extract_teams(element)
             if not home_team or not away_team:
                 self.logger.warning(f"Could not extract team names: home={home_team}, away={away_team}")
+                await self._capture_failure_snapshot('teams_missing', {'home': home_team, 'away': away_team})
                 return None
 
             # Extract scores
@@ -230,6 +253,7 @@ class BaseExtractor(ABC):
 
         except Exception as e:
             self.logger.error(f"Error extracting match data: {e}")
+            await self._capture_failure_snapshot('match_data_error', {'error': str(e)})
             return None
 
     async def _extract_match_id(self, element: ElementHandle) -> Optional[str]:

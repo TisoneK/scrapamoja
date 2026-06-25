@@ -82,6 +82,7 @@ class LiveMatchExtractor(BaseExtractor):
                 logger.info(f"Added live match: {match_data.teams.get('home', 'Unknown')} vs {match_data.teams.get('away', 'Unknown')}")
             else:
                 logger.debug("Skipped live match - no data extracted")
+                await self._capture_failure_snapshot('match_data_empty', {'match_index': i})
 
         if limit and len(match_elements) > limit:
             logger.info(f"Extracted {len(matches)} live match{'es' if len(matches) != 1 else ''} (limit: {limit}, available: {len(match_elements)})")
@@ -131,6 +132,7 @@ class LiveMatchExtractor(BaseExtractor):
 
         if attempt >= max_attempts:
             logger.warning("No loaded content detected after maximum attempts, proceeding anyway")
+            await self._capture_failure_snapshot('content_wait_timeout', {'attempts': max_attempts})
 
     async def _get_match_elements(self):
         """Get live match elements using Playwright queries.
@@ -166,5 +168,7 @@ class LiveMatchExtractor(BaseExtractor):
                     logger.warning(f"No live matches among {len(all_matches)} total match elements")
         except Exception as e:
             logger.error(f"Error with match fallback: {e}")
+            await self._capture_failure_snapshot('match_fallback_error', {'error': str(e)})
 
+        await self._capture_failure_snapshot('no_match_elements_found')
         return []
