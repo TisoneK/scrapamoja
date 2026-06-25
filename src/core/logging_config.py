@@ -4,6 +4,21 @@ from typing import Optional
 from pythonjsonlogger import jsonlogger
 
 
+class _FlushingStreamHandler(logging.StreamHandler):
+    """
+    StreamHandler that flushes after every emit().
+    
+    Standard StreamHandler does NOT flush after each log record. When stderr
+    is piped (e.g. `2>&1 | head`), Python uses full buffering, causing all
+    logs to appear at once when the program exits instead of streaming in
+    real-time. This handler forces a flush after every record.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        super().emit(record)
+        self.flush()
+
+
 class JsonLoggingConfigurator:
     """
     Centralized logging configuration.
@@ -26,7 +41,7 @@ class JsonLoggingConfigurator:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-        handler = logging.StreamHandler(sys.stderr)
+        handler = _FlushingStreamHandler(sys.stderr)
         handler.setLevel(level)
 
         formatter = jsonlogger.JsonFormatter(

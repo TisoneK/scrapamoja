@@ -49,6 +49,11 @@ if sys.platform == "win32":
     
     builtins.print = suppressed_print
 
+# Ensure stderr is never fully buffered (critical for real-time log output
+# when piped, e.g. `2>&1 | head`). Python defaults to full buffering when
+# stderr is not a TTY, which causes all logs to appear at once on exit.
+sys.stderr.reconfigure(line_buffering=True)
+
 # Import logging configuration first
 from src.core.logging_config import JsonLoggingConfigurator
 
