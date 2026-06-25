@@ -148,42 +148,41 @@ class FinishedMatchExtractor(BaseExtractor):
             logger.warning("No loaded content detected after maximum attempts, proceeding anyway")
 
     async def _get_match_elements(self):
-        """Get finished match elements using YAML-driven selectors.
+        """Get finished match elements using Playwright queries.
 
         Resolution order:
-        1. ``finished_match_class`` — targets .event__match--finished (status-specific)
-        2. ``match_items`` — targets .event__match (all matches), filtered by is_match_status()
+        1. Playwright direct query for .event__match--finished (fast, reliable)
+        2. All .event__match elements filtered by is_match_status() (fallback)
         """
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.finished")
 
         # Primary: Find matches with the finished status class
         try:
-            finished_elements = await self._resolve_elements('finished_match_class')
+            finished_elements = await self.scraper.page.query_selector_all('.event__match--finished')
             if finished_elements:
-                logger.info(f"Found {len(finished_elements)} finished match elements via YAML selector (finished_match_class)")
+                logger.info(f"Found {len(finished_elements)} finished match elements via .event__match--finished")
                 return finished_elements
         except Exception as e:
-            logger.error(f"Error with finished_match_class selector: {e}")
+            logger.error(f"Error querying .event__match--finished: {e}")
 
         # Fallback: Get all match elements and filter by status
-        # When navigating to the finished tab, all visible matches should be finished,
-        # but we still filter to be safe.
+        # When navigating to the finished tab, all visible matches should be finished
         try:
-            all_matches = await self._resolve_elements('match_items')
+            all_matches = await self.scraper.page.query_selector_all('.event__match')
             if all_matches:
                 finished = []
                 for el in all_matches:
                     if await self.is_match_status(el):
                         finished.append(el)
                 if finished:
-                    logger.info(f"Found {len(finished)} finished matches from {len(all_matches)} total (filtered via match_items)")
+                    logger.info(f"Found {len(finished)} finished matches from {len(all_matches)} total (filtered by is_match_status)")
                     return finished
                 else:
                     # On the finished tab, all non-skeleton matches are likely finished
                     logger.info(f"No finished matches identified by is_match_status, returning all {len(all_matches)} match elements (on finished tab)")
                     return all_matches
         except Exception as e:
-            logger.error(f"Error with match_items fallback: {e}")
+            logger.error(f"Error with match fallback: {e}")
 
         return []

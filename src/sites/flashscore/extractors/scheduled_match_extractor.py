@@ -180,36 +180,39 @@ class ScheduledMatchExtractor(BaseExtractor):
         """Get scheduled match elements using YAML-driven selectors.
 
         Resolution order:
-        1. ``scheduled_match_class`` — targets .event__match--scheduled (status-specific)
-        2. ``match_items`` — targets .event__match (all matches), filtered by is_match_status()
+        1. Playwright direct query for .event__match--scheduled (fast, reliable)
+        2. All .event__match elements filtered by is_match_status() (fallback)
         """
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.scheduled")
 
         # Primary: Find matches with the scheduled status class
         try:
-            scheduled_elements = await self._resolve_elements('scheduled_match_class')
+            scheduled_elements = await self.scraper.page.query_selector_all('.event__match--scheduled')
             if scheduled_elements:
-                logger.info(f"Found {len(scheduled_elements)} scheduled match elements via YAML selector (scheduled_match_class)")
+                logger.info(f"Found {len(scheduled_elements)} scheduled match elements via .event__match--scheduled")
                 return scheduled_elements
             else:
-                logger.warning("No scheduled matches found with scheduled_match_class selector")
+                logger.warning("No .event__match--scheduled elements found")
         except Exception as e:
-            logger.error(f"Error with scheduled_match_class selector: {e}")
+            logger.error(f"Error querying .event__match--scheduled: {e}")
 
         # Fallback: Get all match elements and filter by status
         try:
-            all_matches = await self._resolve_elements('match_items')
+            all_matches = await self.scraper.page.query_selector_all('.event__match')
             if all_matches:
                 scheduled = []
                 for el in all_matches:
                     if await self.is_match_status(el):
                         scheduled.append(el)
                 if scheduled:
-                    logger.info(f"Found {len(scheduled)} scheduled matches from {len(all_matches)} total (filtered via match_items)")
+                    logger.info(f"Found {len(scheduled)} scheduled matches from {len(all_matches)} total (filtered by is_match_status)")
                     return scheduled
                 else:
                     logger.warning(f"No scheduled matches among {len(all_matches)} total match elements")
+                    # On the scheduled tab, all matches are scheduled — return them all
+                    logger.info(f"Returning all {len(all_matches)} match elements (on scheduled tab)")
+                    return all_matches
         except Exception as e:
             logger.error(f"Error with match_items fallback: {e}")
 

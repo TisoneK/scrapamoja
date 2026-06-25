@@ -154,38 +154,38 @@ class LiveMatchExtractor(BaseExtractor):
             logger.warning("No loaded content detected after maximum attempts, proceeding anyway")
 
     async def _get_match_elements(self):
-        """Get live match elements using YAML-driven selectors.
+        """Get live match elements using Playwright queries.
 
         Resolution order:
-        1. ``live_match_class`` — targets .event__match--live (status-specific)
-        2. ``match_items`` — targets .event__match (all matches), filtered by is_match_status()
+        1. Playwright direct query for .event__match--live (fast, reliable)
+        2. All .event__match elements filtered by is_match_status() (fallback)
         """
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.live")
 
         # Primary: Find matches with the live status class
         try:
-            live_elements = await self._resolve_elements('live_match_class')
+            live_elements = await self.scraper.page.query_selector_all('.event__match--live')
             if live_elements:
-                logger.info(f"Found {len(live_elements)} live match elements via YAML selector (live_match_class)")
+                logger.info(f"Found {len(live_elements)} live match elements via .event__match--live")
                 return live_elements
         except Exception as e:
-            logger.error(f"Error with live_match_class selector: {e}")
+            logger.error(f"Error querying .event__match--live: {e}")
 
         # Fallback: Get all match elements and filter by status
         try:
-            all_matches = await self._resolve_elements('match_items')
+            all_matches = await self.scraper.page.query_selector_all('.event__match')
             if all_matches:
                 live = []
                 for el in all_matches:
                     if await self.is_match_status(el):
                         live.append(el)
                 if live:
-                    logger.info(f"Found {len(live)} live matches from {len(all_matches)} total (filtered via match_items)")
+                    logger.info(f"Found {len(live)} live matches from {len(all_matches)} total (filtered by is_match_status)")
                     return live
                 else:
                     logger.warning(f"No live matches among {len(all_matches)} total match elements")
         except Exception as e:
-            logger.error(f"Error with match_items fallback: {e}")
+            logger.error(f"Error with match fallback: {e}")
 
         return []
