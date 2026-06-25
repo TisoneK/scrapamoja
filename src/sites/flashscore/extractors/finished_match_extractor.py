@@ -18,50 +18,48 @@ class FinishedMatchExtractor(BaseExtractor):
     """Extractor for finished matches — 100% YAML-driven selectors."""
 
     async def is_match_status(self, element: ElementHandle) -> bool:
-        """Check if a match element is actually finished using multiple reliable indicators."""
+        """Check if a match element is actually finished using Playwright queries."""
         try:
-            # Method 1: Check for finished score state indicators (most reliable)
-            finished_scores = await self._resolve_elements('final_score', parent=element)
-            if finished_scores:
-                self.logger.debug(f"Finished match detected via {len(finished_scores)} final score elements (YAML: final_score)")
+            # Method 1: Check for finished CSS class on the element itself
+            class_attr = await element.get_attribute('class')
+            if class_attr and 'event__match--finished' in class_attr:
+                self.logger.debug("Finished match detected via .event__match--finished class")
                 return True
 
-            # Method 2: Check for finished score CSS classes
-            finished_score_classes = await self._resolve_elements('final_class', parent=element)
-            if finished_score_classes:
-                self.logger.debug(f"Finished match detected via {len(finished_score_classes)} final score CSS classes (YAML: final_class)")
-                return True
-
-            # Method 3: Check for explicit finished CSS class
-            if await self._element_matches(element, 'finished_match_class'):
-                self.logger.debug("Finished match detected via CSS class (YAML: finished_match_class)")
-                return True
-
-            # Method 4: Check for finished stage text
+            # Method 2: Check for final score state indicators
             try:
-                stage_text = await self._resolve_text('match_stage', parent=element)
-                if stage_text and ('finished' in stage_text.lower() or 'after' in stage_text.lower() or 'ft' in stage_text.lower()):
-                    self.logger.debug(f"Finished match detected via stage text: {stage_text} (YAML: match_stage)")
+                final_scores = await element.query_selector_all('.event__score[data-state="final"]')
+                if final_scores:
+                    self.logger.debug(f"Finished match detected via {len(final_scores)} final score elements")
                     return True
-            except Exception as e:
-                self.logger.debug(f"Stage check failed: {e}")
+            except Exception:
+                pass
 
-            # Method 5: Check for actual finished scores (not "-" and not live)
+            # Method 3: Check for finished stage text
             try:
-                score_elements = await self._resolve_elements('match_score', parent=element)
-                if len(score_elements) >= 2:
-                    home_score = await score_elements[0].text_content()
-                    away_score = await score_elements[1].text_content()
-                    if home_score and away_score and home_score != '-' and away_score != '-':
-                        # Additional check: verify these are actually finished scores
-                        score_state = await score_elements[0].get_attribute('data-state')
-                        if score_state == 'final':
-                            self.logger.debug(f"Finished match detected via actual final scores: {home_score}-{away_score} (YAML: match_score)")
-                            return True
-            except Exception as e:
-                self.logger.debug(f"Score check failed: {e}")
+                stage_el = await element.query_selector('.event__stage, .event__stage--block')
+                if stage_el:
+                    stage_text = await stage_el.text_content()
+                    if stage_text and ('finished' in stage_text.lower() or 'after' in stage_text.lower() or 'ft' in stage_text.lower()):
+                        self.logger.debug(f"Finished match detected via stage text: {stage_text}")
+                        return True
+            except Exception:
+                pass
 
-            # If none of the finished indicators are found, it's not a finished match
+            # Method 4: Check for actual numeric scores (not "-" placeholders)
+            try:
+                score_els = await element.query_selector_all('.event__score')
+                if len(score_els) >= 2:
+                    home = (await score_els[0].text_content() or '').strip()
+                    away = (await score_els[1].text_content() or '').strip()
+                    if home and away and home != '-' and away != '-':
+                        score_state = await score_els[0].get_attribute('data-state')
+                        if score_state == 'final':
+                            self.logger.debug(f"Finished match detected via final scores: {home}-{away}")
+                            return True
+            except Exception:
+                pass
+
             self.logger.debug("No finished indicators found - match is not finished")
             return False
 

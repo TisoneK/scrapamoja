@@ -18,54 +18,33 @@ class LiveMatchExtractor(BaseExtractor):
     """Extractor for live matches — 100% YAML-driven selectors."""
 
     async def is_match_status(self, element: ElementHandle) -> bool:
-        """Check if a match element is actually live using multiple reliable indicators."""
+        """Check if a match element is actually live using Playwright queries."""
         try:
-            # Method 1: Check for explicit live CSS class (most reliable)
-            if await self._element_matches(element, 'live_match_class'):
-                self.logger.debug("Live match detected via CSS class (YAML: live_match_class)")
+            # Method 1: Check for live CSS class on the element itself
+            class_attr = await element.get_attribute('class')
+            if class_attr and 'event__match--live' in class_attr:
+                self.logger.debug("Live match detected via .event__match--live class")
                 return True
 
-            # Method 2: Check for live score state indicators
+            # Method 2: Check for live score state
             try:
-                live_scores = await self._resolve_elements('live_score', parent=element)
+                live_scores = await element.query_selector_all('.event__score[data-state="live"]')
                 if live_scores:
-                    self.logger.debug(f"Live match detected via {len(live_scores)} live score elements (YAML: live_score)")
+                    self.logger.debug(f"Live match detected via {len(live_scores)} live score elements")
                     return True
-            except Exception as e:
-                self.logger.debug(f"Live score check failed: {e}")
+            except Exception:
+                pass
 
-            # Method 3: Check for live score CSS classes
+            # Method 3: Check for live stage text
             try:
-                live_score_classes = await self._resolve_elements('live_class', parent=element)
-                if live_score_classes:
-                    self.logger.debug(f"Live match detected via {len(live_score_classes)} live score CSS classes (YAML: live_class)")
-                    return True
-            except Exception as e:
-                self.logger.debug(f"Live score class check failed: {e}")
-
-            # Method 4: Check for actual live scores (not "-" placeholders)
-            try:
-                score_elements = await self._resolve_elements('match_score', parent=element)
-                if len(score_elements) >= 2:
-                    home_score = await score_elements[0].text_content()
-                    away_score = await score_elements[1].text_content()
-                    if home_score and away_score and home_score != '-' and away_score != '-':
-                        # Additional check: verify these are actually live scores, not finished scores
-                        score_state = await score_elements[0].get_attribute('data-state')
-                        if score_state == 'live':
-                            self.logger.debug(f"Live match detected via actual live scores: {home_score}-{away_score} (YAML: match_score)")
-                            return True
-            except Exception as e:
-                self.logger.debug(f"Score check failed: {e}")
-
-            # Method 5: Check for live time indicators (quarter/period info)
-            try:
-                stage_text = await self._resolve_text('match_stage', parent=element)
-                if stage_text and ('quarter' in stage_text.lower() or 'min' in stage_text.lower() or 'half' in stage_text.lower()):
-                    self.logger.debug(f"Live match detected via stage text: {stage_text} (YAML: match_stage)")
-                    return True
-            except Exception as e:
-                self.logger.debug(f"Stage check failed: {e}")
+                stage_el = await element.query_selector('.event__stage, .event__stage--block')
+                if stage_el:
+                    stage_text = await stage_el.text_content()
+                    if stage_text and ('quarter' in stage_text.lower() or 'min' in stage_text.lower() or 'half' in stage_text.lower()):
+                        self.logger.debug(f"Live match detected via stage text: {stage_text}")
+                        return True
+            except Exception:
+                pass
 
             # If none of the live indicators are found, it's not a live match
             self.logger.debug("No live indicators found - match is not live")

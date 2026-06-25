@@ -19,67 +19,58 @@ class ScheduledMatchExtractor(BaseExtractor):
     """Extractor for scheduled matches — 100% YAML-driven selectors."""
 
     async def is_match_status(self, element: ElementHandle) -> bool:
-        """Check if a match element is actually scheduled using multiple reliable indicators."""
+        """Check if a match element is actually scheduled using Playwright queries."""
         try:
-            # Method 1: Check for explicit scheduled CSS class (most reliable)
-            if await self._element_matches(element, 'scheduled_match_class'):
-                self.logger.debug("Scheduled match detected via CSS class (YAML: scheduled_match_class)")
+            # Method 1: Check for scheduled CSS class on the element itself
+            class_attr = await element.get_attribute('class')
+            if class_attr and 'event__match--scheduled' in class_attr:
+                self.logger.debug("Scheduled match detected via .event__match--scheduled class")
                 return True
 
-            # Method 2: Check for scheduled score state indicators
-            scheduled_scores = await self._resolve_elements('prematch_score', parent=element)
-            if scheduled_scores:
-                self.logger.debug(f"Scheduled match detected via {len(scheduled_scores)} pre-match score elements (YAML: prematch_score)")
-                return True
-
-            # Method 3: Check for scheduled score CSS classes
-            scheduled_score_classes = await self._resolve_elements('prematch_class', parent=element)
-            if scheduled_score_classes:
-                self.logger.debug(f"Scheduled match detected via {len(scheduled_score_classes)} pre-match score CSS classes (YAML: prematch_class)")
-                return True
-
-            # Method 4: Check for time elements (scheduled matches have time, not stage)
+            # Method 2: Check for time element (scheduled matches show time, not stage)
             try:
-                time_text = await self._resolve_text('match_time', parent=element)
-                if time_text and ':' in time_text:
-                    self.logger.debug(f"Scheduled match detected via time text: {time_text} (YAML: match_time)")
-                    return True
-            except Exception as e:
-                self.logger.debug(f"Time check failed: {e}")
+                time_el = await element.query_selector('.event__time')
+                if time_el:
+                    time_text = await time_el.text_content()
+                    if time_text and ':' in time_text:
+                        self.logger.debug(f"Scheduled match detected via time text: {time_text}")
+                        return True
+            except Exception:
+                pass
 
-            # Method 5: Check for dash scores (scheduled matches have "-" scores)
+            # Method 3: Check for dash scores (scheduled matches have "-" scores)
             try:
-                score_elements = await self._resolve_elements('match_score', parent=element)
-                if len(score_elements) >= 2:
-                    home_score = await score_elements[0].text_content()
-                    away_score = await score_elements[1].text_content()
-                    if home_score == '-' and away_score == '-':
-                        # Additional check: verify these are actually pre-match scores
-                        score_state = await score_elements[0].get_attribute('data-state')
+                score_els = await element.query_selector_all('.event__score')
+                if len(score_els) >= 2:
+                    home = (await score_els[0].text_content() or '').strip()
+                    away = (await score_els[1].text_content() or '').strip()
+                    if home == '-' and away == '-':
+                        score_state = await score_els[0].get_attribute('data-state')
                         if score_state == 'pre-match':
-                            self.logger.debug("Scheduled match detected via dash scores (YAML: match_score)")
+                            self.logger.debug("Scheduled match detected via dash scores with pre-match state")
                             return True
-            except Exception as e:
-                self.logger.debug(f"Score check failed: {e}")
+            except Exception:
+                pass
 
-            # Method 6: Exclude if it has live or finished indicators
-            # If it has live or finished indicators, it's not scheduled
-            live_indicators = await self._resolve_elements('live_score', parent=element)
-            finished_indicators = await self._resolve_elements('final_score', parent=element)
-            if live_indicators or finished_indicators:
-                self.logger.debug("Match has live or finished indicators - not scheduled (YAML: live_score/final_score)")
-                return False
+            # Method 4: Exclude if it has live or finished indicators
+            try:
+                class_attr = await element.get_attribute('class') or ''
+                if 'event__match--live' in class_attr or 'event__match--finished' in class_attr:
+                    self.logger.debug("Match has live/finished class - not scheduled")
+                    return False
+            except Exception:
+                pass
 
-            # Method 7: Default to scheduled if no live/finished indicators and has time
-            # This is a fallback for edge cases
-            stage_element = await self._resolve_element('match_stage', parent=element)
-            if not stage_element:
-                time_element = await self._resolve_element('match_time', parent=element)
-                if time_element:
-                    self.logger.debug("No stage element but has time - assuming scheduled (YAML: match_time)")
+            # Method 5: If no stage element and has time, assume scheduled
+            try:
+                stage_el = await element.query_selector('.event__stage')
+                time_el = await element.query_selector('.event__time')
+                if not stage_el and time_el:
+                    self.logger.debug("No stage but has time - assuming scheduled")
                     return True
+            except Exception:
+                pass
 
-            # If none of the scheduled indicators are found, it's not a scheduled match
             self.logger.debug("No scheduled indicators found - match is not scheduled")
             return False
 
