@@ -132,13 +132,13 @@ class FinishedMatchExtractor(BaseExtractor):
                     logger.info(f"Loaded content detected on attempt {attempt + 1}: {len(elements)} match elements on page")
                     break
 
-                delay = min(base_delay * (2 ** attempt) // 1000, max_delay)
+                delay = min(base_delay * (2 ** attempt), max_delay)
                 await self.scraper.page.wait_for_timeout(delay)
                 attempt += 1
 
             except Exception as e:
                 logger.warning(f"Error checking for loaded content on attempt {attempt + 1}: {e}")
-                delay = min(base_delay * (2 ** attempt) // 1000, max_delay)
+                delay = min(base_delay * (2 ** attempt), max_delay)
                 await self.scraper.page.wait_for_timeout(delay)
                 attempt += 1
 
