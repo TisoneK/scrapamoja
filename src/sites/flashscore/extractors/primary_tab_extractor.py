@@ -96,18 +96,19 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
             tab_name_lower = tab_name.lower()
             
             # Map tab names to FlashScore button display text
+            # Note: FlashScore uses "Standings" as a primary tab (not "Stats")
             tab_display_text = {
                 'summary': 'Summary',
                 'odds': 'Odds',
                 'h2h': 'H2H',
-                'stats': 'Stats',
+                'stats': 'Standings',
+                'standings': 'Standings',
                 'player-stats': 'Player stats',
                 'player-statistics': 'Player stats',
                 'match-stats': 'Stats',
                 'match-statistics': 'Stats',
                 'lineups': 'Lineups',
                 'match-history': 'Match History',
-                'standings': 'Standings',
             }
             
             display_text = tab_display_text.get(tab_name_lower, tab_name)
@@ -298,6 +299,7 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
                 'Summary': 'summary', 'Stats': 'stats', 'Odds': 'odds',
                 'H2H': 'h2h', 'Match': 'match', 'Player stats': 'player-stats',
                 'Lineups': 'lineups', 'Match History': 'match-history',
+                'Standings': 'stats',  # FlashScore uses "Standings" primary tab for stats
             }
             
             # Strategy 1: Playwright direct — check active tab buttons

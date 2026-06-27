@@ -51,9 +51,9 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             
             # Playwright direct queries — reliable, no infinite loops
             
-            # Home team
-            for sel in ['.event__participant--home', '.participant__home',
-                        '.duelParticipant__home .participant__playerName',
+            # Home team — .duelParticipant__home works on match detail page
+            for sel in ['.duelParticipant__home', '.event__participant--home',
+                        '.participant__home',
                         '[data-testid="home-team"]']:
                 try:
                     el = await self.page.query_selector(sel)
@@ -65,9 +65,9 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                 except Exception:
                     continue
             
-            # Away team
-            for sel in ['.event__participant--away', '.participant__away',
-                        '.duelParticipant__away .participant__playerName',
+            # Away team — .duelParticipant__away works on match detail page
+            for sel in ['.duelParticipant__away', '.event__participant--away',
+                        '.participant__away',
                         '[data-testid="away-team"]']:
                 try:
                     el = await self.page.query_selector(sel)
@@ -79,17 +79,48 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                 except Exception:
                     continue
             
-            # Scores
-            for sel in ['.event__score', '.detailScore__matchDetail']:
+            # Scores — FlashScore match detail page uses .detailScore__wrapper
+            # which contains <span>106</span><span class="detailScore__divider">-</span><span>91</span>
+            # The .detailScore__matchInfo also has "106-91Finished" text
+            try:
+                score_wrapper = await self.page.query_selector('.detailScore__wrapper')
+                if score_wrapper:
+                    score_spans = await score_wrapper.query_selector_all('span:not([class*="divider"])')
+                    valid_scores = []
+                    for sp in score_spans:
+                        txt = (await sp.text_content()).strip()
+                        if txt and txt.isdigit():
+                            valid_scores.append(txt)
+                    if len(valid_scores) >= 2:
+                        current_score = f"{valid_scores[0]}-{valid_scores[1]}"
+            except Exception:
+                pass
+            
+            # Fallback: .detailScore__matchInfo contains "106-91Finished"
+            if not current_score:
                 try:
-                    score_els = await self.page.query_selector_all(sel)
-                    if len(score_els) >= 2:
-                        home = (await score_els[0].text_content()).strip()
-                        away = (await score_els[1].text_content()).strip()
-                        current_score = f"{home}-{away}"
-                        break
+                    match_info_el = await self.page.query_selector('.detailScore__matchInfo')
+                    if match_info_el:
+                        info_text = (await match_info_el.text_content()).strip()
+                        import re
+                        score_match = re.match(r'(\d+)-(\d+)', info_text)
+                        if score_match:
+                            current_score = f"{score_match.group(1)}-{score_match.group(2)}"
                 except Exception:
-                    continue
+                    pass
+            
+            # Fallback: .event__score for listing-style pages
+            if not current_score:
+                for sel in ['.event__score', '.detailScore__matchDetail']:
+                    try:
+                        score_els = await self.page.query_selector_all(sel)
+                        if len(score_els) >= 2:
+                            home = (await score_els[0].text_content()).strip()
+                            away = (await score_els[1].text_content()).strip()
+                            current_score = f"{home}-{away}"
+                            break
+                    except Exception:
+                        continue
             
             # Match time
             for sel in ['.duelParticipant__startTime', '.event__time',
@@ -117,18 +148,33 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                 except Exception:
                     continue
             
-            # Competition / league name
-            for sel in ['.tournamentHeader__content', '.event__tournament',
-                        '[data-testid="tournament-name"]']:
-                try:
-                    el = await self.page.query_selector(sel)
-                    if el:
-                        text = (await el.text_content()).strip()
-                        if text and len(text) < 100:
+            # Competition / league name — FlashScore uses breadcrumb navigation
+            # on match detail pages: Basketball > Australia > NBL1 North
+            try:
+                breadcrumbs = await self.page.query_selector_all('[class*="breadcrumbItem"]')
+                if breadcrumbs:
+                    # Last breadcrumb is usually the competition name
+                    for bc in reversed(breadcrumbs):
+                        text = (await bc.text_content()).strip()
+                        if text and len(text) > 2 and len(text) < 60:
                             competition = text
                             break
-                except Exception:
-                    continue
+            except Exception:
+                pass
+            
+            # Fallback: traditional selectors
+            if not competition:
+                for sel in ['.tournamentHeader__content', '.event__tournament',
+                            '[data-testid="tournament-name"]']:
+                    try:
+                        el = await self.page.query_selector(sel)
+                        if el:
+                            text = (await el.text_content()).strip()
+                            if text and len(text) < 100:
+                                competition = text
+                                break
+                    except Exception:
+                        continue
             
             # JavaScript fallback for any missing fields
             try:
@@ -136,7 +182,7 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                     () => {
                         const data = {};
                         // Try to find team names from the page
-                        const participants = document.querySelectorAll('[class*="participant"], [class*="team"]');
+                        const participants = document.querySelectorAll('[class*="duelParticipant"], [class*="participant__"], [class*="team"]');
                         participants.forEach(p => {
                             const text = p.textContent.trim();
                             if (text && text.length < 50 && text.length > 1) {
@@ -145,10 +191,25 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                                 if (cls.includes('away') && !data.away_team) data.away_team = text;
                             }
                         });
-                        // Try tournament header
-                        const tournament = document.querySelector('[class*="tournament"], [class*="header"]');
-                        if (tournament && tournament.textContent.trim().length < 100) {
-                            data.competition = tournament.textContent.trim();
+                        // Try breadcrumb for competition
+                        const crumbs = document.querySelectorAll('[class*="breadcrumbItem"]');
+                        if (crumbs.length > 0) {
+                            const last = crumbs[crumbs.length - 1];
+                            const text = last.textContent.trim();
+                            if (text && text.length < 60) data.competition = text;
+                        }
+                        // Fallback: tournament header
+                        if (!data.competition) {
+                            const tournament = document.querySelector('[class*="tournament"], [class*="header"]');
+                            if (tournament && tournament.textContent.trim().length < 100) {
+                                data.competition = tournament.textContent.trim();
+                            }
+                        }
+                        // Score from detailScore__matchInfo
+                        const scoreInfo = document.querySelector('.detailScore__matchInfo');
+                        if (scoreInfo) {
+                            const m = scoreInfo.textContent.match(/(\\d+)-(\\d+)/);
+                            if (m) data.score = m[1] + '-' + m[2];
                         }
                         return data;
                     }
@@ -160,6 +221,8 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                         away_team = js_result['away_team']
                     if not competition and js_result.get('competition'):
                         competition = js_result['competition']
+                    if not current_score and js_result.get('score'):
+                        current_score = js_result['score']
             except Exception:
                 pass
             
@@ -665,54 +728,64 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     # ─────────────────────────────────────────────────────────
     
     async def _extract_odds_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from ODDS tab — Playwright direct first, YAML engine fallback."""
+        """Extract data from ODDS tab — uses live-site-verified selectors.
+        
+        FlashScore odds layout (confirmed via live inspection):
+        - .oddsTab__tableWrapper contains the odds table
+        - .ui-table__row for each bookmaker row
+        - a[title] for bookmaker name (e.g. title="1xBet")
+        - a.oddsCell__odd for odds values (e.g. text "1.28", "3.35")
+        """
         try:
             betting_odds = {}
             odds_history = []
             bookmaker_data = {}
             
-            # ── Playwright direct queries ──
+            # ── Playwright direct queries using live-site selectors ──
             try:
-                # FlashScore odds tables use rows with bookmaker data
-                odds_rows = await self.page.query_selector_all(
-                    '.oddsRow, [class*="odds__row"], [class*="oddsRow"], [data-testid="odds-row"]'
-                )
+                # Primary: .ui-table__row inside oddsTab__tableWrapper
+                odds_rows = await self.page.query_selector_all('.ui-table__row')
+                
                 if not odds_rows:
-                    # Try the main odds container and find rows inside
-                    odds_table = await self.page.query_selector(
-                        '.oddsTable, [class*="odds__table"], [class*="oddsComparison"], [data-testid="odds-table"]'
+                    # Fallback: try old selectors
+                    odds_rows = await self.page.query_selector_all(
+                        '.oddsRow, [class*="odds__row"], [class*="oddsRow"]'
                     )
-                    if odds_table:
-                        odds_rows = await odds_table.query_selector_all('tr, [class*="row"]')
                 
                 self.logger.info(f"Found {len(odds_rows)} odds rows via Playwright direct")
                 
                 for row in odds_rows:
                     try:
-                        # Try to get bookmaker name
+                        # Get bookmaker name from a[title] (FlashScore uses title attr on logo links)
                         bookmaker_name = ""
-                        name_el = await row.query_selector(
-                            'a[title], [class*="bookmaker"] a, [class*="logo"] img'
-                        )
+                        name_el = await row.query_selector('a[title]')
                         if name_el:
                             bookmaker_name = await name_el.get_attribute('title') or ""
-                            if not bookmaker_name:
+                        if not bookmaker_name:
+                            name_el = await row.query_selector('img[alt]')
+                            if name_el:
                                 bookmaker_name = await name_el.get_attribute('alt') or ""
-                            if not bookmaker_name:
-                                bookmaker_name = (await name_el.text_content()).strip()
                         
                         if not bookmaker_name:
                             continue
                         
-                        # Extract odds cells
-                        cells = await row.query_selector_all(
-                            'td[class*="odds"], [class*="oddsCell"], [class*="cell"]'
-                        )
+                        # Extract odds values from a.oddsCell__odd links
+                        odds_cells = await row.query_selector_all('a.oddsCell__odd')
                         odds_values = []
-                        for cell in cells:
+                        for cell in odds_cells:
                             text = (await cell.text_content()).strip()
                             if text:
                                 odds_values.append(text)
+                        
+                        # Fallback: try generic odds cell selectors
+                        if not odds_values:
+                            cells = await row.query_selector_all(
+                                'td[class*="odds"], [class*="oddsCell"], [class*="cell"]'
+                            )
+                            for cell in cells:
+                                text = (await cell.text_content()).strip()
+                                if text:
+                                    odds_values.append(text)
                         
                         if odds_values:
                             odds_entry = {'market_type': 'moneyline'}
@@ -728,6 +801,33 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                         
             except Exception as e:
                 self.logger.debug(f"Playwright direct odds extraction failed: {e}")
+            
+            # JavaScript fallback — extract odds via DOM traversal
+            if not betting_odds:
+                try:
+                    js_odds = await self.page.evaluate("""
+                        () => {
+                            const odds = {};
+                            const rows = document.querySelectorAll('.ui-table__row');
+                            rows.forEach(row => {
+                                const nameEl = row.querySelector('a[title]');
+                                if (!nameEl) return;
+                                const name = nameEl.getAttribute('title');
+                                const cells = row.querySelectorAll('a.oddsCell__odd');
+                                const vals = Array.from(cells).map(c => c.textContent.trim()).filter(t => t);
+                                if (name && vals.length >= 2) {
+                                    odds[name] = {home: vals[0], away: vals[vals.length-1], market_type: 'moneyline'};
+                                }
+                            });
+                            return Object.keys(odds).length > 0 ? odds : null;
+                        }
+                    """)
+                    if js_odds:
+                        betting_odds = js_odds
+                        for name in js_odds:
+                            bookmaker_data[name] = {'market_type': 'moneyline'}
+                except Exception:
+                    pass
             
             self.logger.info(f"Extracted odds for {len(betting_odds)} bookmakers")
             
@@ -804,6 +904,72 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                             continue
             except Exception as e:
                 self.logger.debug(f"Playwright direct stats extraction failed: {e}")
+            
+            # ── If no stat comparison found, try extracting standings table ──
+            # FlashScore uses "Standings" tab instead of "Stats" for many sports
+            if not detailed_statistics:
+                try:
+                    standings_rows = await self.page.query_selector_all(
+                        '.tabContent__stats-detail .ui-table__row'
+                    )
+                    if standings_rows:
+                        self.logger.info(f"Found {len(standings_rows)} standings rows")
+                        standings_data = []
+                        for row in standings_rows:
+                            text = (await row.text_content()).strip()
+                            if text:
+                                import re
+                                # Parse standings: "1.Cairns Marlins121201258:10001.000?WWWWW"
+                                # Team name and numbers are concatenated — use JS for reliable parsing
+                                match = re.match(
+                                    r'(\d+)\.\s*(.+)',
+                                    text
+                                )
+                                if match:
+                                    pos = int(match.group(1))
+                                    remainder = match.group(2)
+                                    # Extract form (W/L/D sequence at end)
+                                    form_match = re.search(r'([WLD]+)$', remainder)
+                                    form = form_match.group(1) if form_match else ''
+                                    if form:
+                                        remainder = remainder[:-len(form)]
+                                    # Extract win percentage (decimal near end)
+                                    pct_match = re.search(r'([\d.]+)\??$', remainder)
+                                    win_pct = pct_match.group(1) if pct_match else ''
+                                    if pct_match:
+                                        remainder = remainder[:pct_match.start()]
+                                    # Extract points ratio (contains colon, e.g. "258:1000")
+                                    pts_match = re.search(r'(\d+:\d+)$', remainder)
+                                    points_ratio = pts_match.group(1) if pts_match else ''
+                                    if pts_match:
+                                        remainder = remainder[:pts_match.start()]
+                                    # Remaining is team name + numeric stats concatenated
+                                    # Extract trailing digits as stats (played, W, L, D)
+                                    nums = re.findall(r'\d+', remainder)
+                                    # Team name is everything before the first long digit sequence
+                                    team_part = re.sub(r'\d+$', '', remainder).strip()
+                                    
+                                    entry = {
+                                        'position': pos,
+                                        'team': team_part,
+                                        'played': int(nums[0]) if len(nums) > 0 else 0,
+                                        'wins': int(nums[1]) if len(nums) > 1 else 0,
+                                        'losses': int(nums[2]) if len(nums) > 2 else 0,
+                                        'draws_or_other': int(nums[3]) if len(nums) > 3 else 0,
+                                        'points_ratio': points_ratio,
+                                        'win_pct': win_pct,
+                                        'form': form,
+                                    }
+                                    standings_data.append(entry)
+                        
+                        if standings_data:
+                            detailed_statistics['standings'] = {
+                                entry['team']: entry for entry in standings_data
+                            }
+                            team_performance = standings_data
+                            self.logger.info(f"Extracted {len(standings_data)} standings entries")
+                except Exception as e:
+                    self.logger.debug(f"Standings table extraction failed: {e}")
             
             self.logger.info(f"Extracted stats in {len(detailed_statistics)} categories")
             
