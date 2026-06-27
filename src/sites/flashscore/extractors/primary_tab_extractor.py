@@ -78,6 +78,80 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
     MATCH_SUB_TABS = {'summary', 'stats', 'player-stats', 'player-statistics', 
                       'match-stats', 'match-statistics', 'lineups', 'match-history'}
     
+    async def tab_available(self, tab_name: str) -> bool:
+        """Check if a tab is present on the current page without clicking it.
+        
+        Not all matches have all tabs — lower-league matches may lack
+        "Stats", "Player stats", and "Lineups" sub-tabs. This method
+        checks whether the tab button exists before attempting navigation.
+        
+        For sub-tabs under "Match", first clicks the Match primary tab
+        to reveal them, then checks.
+        
+        Args:
+            tab_name: Tab identifier (e.g. 'match-stats', 'h2h', 'odds')
+            
+        Returns:
+            True if the tab button is present on the page
+        """
+        tab_name_lower = tab_name.lower()
+        tab_display_text = {
+            'summary': 'Summary',
+            'odds': 'Odds',
+            'h2h': 'H2H',
+            'stats': 'Standings',
+            'standings': 'Standings',
+            'player-stats': 'Player stats',
+            'player-statistics': 'Player stats',
+            'match-stats': 'Stats',
+            'match-statistics': 'Stats',
+            'lineups': 'Lineups',
+            'match-history': 'Match History',
+        }
+        display_text = tab_display_text.get(tab_name_lower, tab_name)
+        
+        # For sub-tabs, first click "Match" primary tab to reveal them
+        if tab_name_lower in self.MATCH_SUB_TABS:
+            # Check if Match primary tab is already active
+            match_active = await self.page.evaluate("""
+                () => {
+                    const buttons = document.querySelectorAll('button[data-testid="wcl-tab"]');
+                    for (const btn of buttons) {
+                        if (btn.textContent.trim() === 'Match') {
+                            return btn.getAttribute('aria-selected') === 'true' 
+                                || btn.classList.contains('wcl-tabActive')
+                                || btn.getAttribute('data-active') === 'true';
+                        }
+                    }
+                    return false;
+                }
+            """)
+            if not match_active:
+                # Click Match tab to reveal sub-tabs
+                await self._click_tab_by_text('Match')
+                await self.page.wait_for_timeout(1000)
+        
+        try:
+            found = await self.page.evaluate(f"""
+                () => {{
+                    const buttons = document.querySelectorAll(
+                        'button[data-testid="wcl-tab"], [role="tab"], a[role="tab"]'
+                    );
+                    for (const btn of buttons) {{
+                        if (btn.textContent.trim() === '{display_text.replace("'", "\\'")}') {{
+                            return true;
+                        }}
+                    }}
+                    return false;
+                }}
+            """)
+            if not found:
+                self.logger.info(f"Tab '{display_text}' not available on this page")
+            return found
+        except Exception as e:
+            self.logger.debug(f"Error checking tab availability: {e}")
+            return False
+    
     async def navigate_to_tab(self, tab_name: str) -> bool:
         """
         Navigate to a specific tab by clicking the button with matching text.

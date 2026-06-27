@@ -313,9 +313,19 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return None
     
     async def _extract_stats_tab(self, page_state: PageState) -> Optional[StatsData]:
-        """Extract data from STATS tab."""
+        """Extract data from STATS tab.
+        
+        Not all matches have a Stats sub-tab — lower-league matches
+        (e.g. NBL1 East) only have Summary and Match History under the
+        Match primary tab.  We check availability first to avoid wasting
+        20+ seconds trying to click a nonexistent tab button.
+        """
         try:
-            # Use 'match-stats' which maps to display text "Stats" on basketball pages
+            # Check if the Stats sub-tab exists before navigating
+            if not await self.primary_extractor.tab_available('match-stats'):
+                self.logger.info("Stats sub-tab not available on this match — skipping stats extraction")
+                return None
+            
             stats_data = await self.primary_extractor.extract_tab_data('match-stats')
             if not stats_data:
                 return None
@@ -354,6 +364,11 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             quarter_scores = self._quarter_scores
 
             # Step 2: Navigate to the Stats sub-tab
+            # Check availability first — lower-league matches may not have Stats
+            if not await self.primary_extractor.tab_available('match-stats'):
+                self.logger.info("Stats sub-tab not available — skipping tertiary extraction")
+                return TertiaryData(quarter_scores=quarter_scores)
+            
             # Use 'match-stats' which maps to display text "Stats" (not 'stats' which maps to "Standings")
             if not await self.primary_extractor.navigate_to_tab('match-stats'):
                 self.logger.warning("Could not navigate to Stats tab; skipping tertiary extraction")
