@@ -32,23 +32,49 @@ class PrimaryTabExtractor(ABC):
         return get_logger(f"flashscore.primary_tab_extractor.{self.__class__.__name__.lower()}")
     
     async def _resolve_element(self, selector_name: str, parent=None) -> Optional[Any]:
-        """Resolve a single element via YAML selector engine."""
+        """Resolve a single element via YAML selector engine with timeout protection."""
         if self._selector_engine:
             try:
                 search_target = parent or self.page
-                return await self._selector_engine.find(search_target, selector_name)
+                # Use a separate task so we can force-cancel if the selector engine
+                # enters an infinite retry loop (it catches CancelledError internally)
+                task = asyncio.create_task(
+                    self._selector_engine.find(search_target, selector_name)
+                )
+                try:
+                    return await asyncio.wait_for(task, timeout=8.0)
+                except asyncio.TimeoutError:
+                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
+                    task.cancel()
+                    try:
+                        await task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                    return None
             except Exception as e:
                 self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
         return None
     
     async def _resolve_elements(self, selector_name: str, parent=None) -> List[Any]:
-        """Resolve multiple elements via YAML selector engine."""
+        """Resolve multiple elements via YAML selector engine with timeout protection."""
         if self._selector_engine:
             try:
                 search_target = parent or self.page
-                elements = await self._selector_engine.find_all(search_target, selector_name)
-                if elements:
-                    return elements
+                task = asyncio.create_task(
+                    self._selector_engine.find_all(search_target, selector_name)
+                )
+                try:
+                    elements = await asyncio.wait_for(task, timeout=8.0)
+                    if elements:
+                        return elements
+                except asyncio.TimeoutError:
+                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
+                    task.cancel()
+                    try:
+                        await task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                    return []
             except Exception as e:
                 self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
         return []
