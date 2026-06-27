@@ -31,9 +31,30 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
     def __init__(self, scraper: FlashscoreScraper):
         super().__init__(scraper)
         self.primary_extractor = BasketballPrimaryTabExtractor(scraper)
+        # Pre-extracted data — populated at the start of extract() before any tab navigation
+        self._quarter_scores: Optional[Dict[str, Any]] = None
     
     # YAML selector engine methods inherited from SelectorEngineMixin via MatchDetailExtractor
     # (_resolve_element, _resolve_elements, _resolve_text)
+    
+    async def extract(self, page_state: PageState, timeout: int = 10000) -> Optional[Any]:
+        """Override extract() to pre-extract quarter scores BEFORE any tab navigation.
+
+        Quarter scores (smh__part elements) are only reliably present in the
+        match header on the initial page load.  After navigating to other
+        primary tabs (H2H, Odds, etc.) the smh container may be re-rendered
+        or hidden, making Q1-Q4 values unavailable.  Extracting them first
+        ensures both the summary and tertiary tabs can use the same data.
+        """
+        # Extract quarter scores while we're still on the default match detail view
+        self._quarter_scores = await self._extract_quarter_scores()
+        if self._quarter_scores:
+            self.logger.info(f"Pre-extracted quarter scores: {self._quarter_scores}")
+        else:
+            self.logger.warning("Quarter scores not found on initial page load")
+        
+        # Delegate to the parent extract() pipeline
+        return await super().extract(page_state, timeout)
     
     async def _extract_basic_info(self, page_state: PageState) -> Optional[BasicMatchInfo]:
         """Extract basic match info — Playwright direct only.
@@ -309,8 +330,8 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             Match | 1st Quarter | 2nd Quarter | 3rd Quarter | 4th Quarter
 
         Strategy:
-          1. Extract quarter scores from the match header (smh__part elements)
-             BEFORE navigating away — these elements disappear after tab switch.
+          1. Use pre-extracted quarter scores from self._quarter_scores
+             (populated at the start of extract() before any tab navigation).
           2. Navigate to the Stats sub-tab.
           3. For each period filter (Match, 1st-4th Quarter), click it and
              extract the stat comparison rows using data-testid="wcl-statistics".
@@ -322,10 +343,8 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             q3_stats = None
             q4_stats = None
 
-            # Step 1: Extract quarter scores BEFORE navigating — the smh__part
-            # elements are only present in the initial match detail header and
-            # disappear from the DOM after clicking a sub-tab.
-            quarter_scores = await self._extract_quarter_scores()
+            # Step 1: Use pre-extracted quarter scores (populated by extract() override)
+            quarter_scores = self._quarter_scores
 
             # Step 2: Navigate to the Stats sub-tab
             # Use 'match-stats' which maps to display text "Stats" (not 'stats' which maps to "Standings")
@@ -375,17 +394,36 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
         """Extract quarter-by-quarter scores from the match header.
 
         FlashScore renders quarter scores in the duel participant header using
-        smh__part elements:
+        smh__part elements inside .smh__template container:
+          - smh__part smh__score smh__home smh__part--current  → home total
           - smh__part smh__home smh__part--1  → home Q1 score
           - smh__part smh__home smh__part--2  → home Q2 score
           ... (same pattern for smh__away)
+        Each smh__part may contain a <sup> child (empty for finished matches).
+
+        IMPORTANT: Must run BEFORE any tab navigation, as the smh container
+        may disappear from the DOM after switching tabs.  Also, scroll to the
+        top of the page first to ensure the header is loaded and visible.
         """
         try:
+            # Scroll to top so the match header (with smh elements) is in view
+            await self.page.evaluate('window.scrollTo(0, 0)')
+            await self.page.wait_for_timeout(500)
+
+            # Wait for the smh container to appear
+            try:
+                await self.page.wait_for_selector(
+                    '[class*="smh__template"]', timeout=5000
+                )
+            except Exception:
+                self.logger.debug("smh__template container not found; trying without wait")
+
             scores = await self.page.evaluate("""
                 () => {
                     const result = { home: {}, away: {} };
 
                     // Home quarter scores: smh__part smh__home smh__part--N
+                    // Use direct child text of smh__part, ignoring <sup> elements
                     const homeParts = document.querySelectorAll(
                         '[class*="smh__home"][class*="smh__part--"]'
                     );
@@ -394,8 +432,18 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                         const m = cls.match(/smh__part--(\\d+)/);
                         if (m) {
                             const qNum = parseInt(m[1]);
-                            const val = el.textContent.trim();
-                            if (val) result.home['Q' + qNum] = val;
+                            // Get direct text node, skip <sup> children
+                            let val = '';
+                            for (const node of el.childNodes) {
+                                if (node.nodeType === Node.TEXT_NODE) {
+                                    val += node.textContent.trim();
+                                }
+                            }
+                            // Fallback: use full textContent if direct text is empty
+                            if (!val) val = el.textContent.trim();
+                            // Only keep the numeric part
+                            const numMatch = val.match(/^(\\d+)/);
+                            if (numMatch) result.home['Q' + qNum] = numMatch[1];
                         }
                     });
 
@@ -408,20 +456,50 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                         const m = cls.match(/smh__part--(\\d+)/);
                         if (m) {
                             const qNum = parseInt(m[1]);
-                            const val = el.textContent.trim();
-                            if (val) result.away['Q' + qNum] = val;
+                            let val = '';
+                            for (const node of el.childNodes) {
+                                if (node.nodeType === Node.TEXT_NODE) {
+                                    val += node.textContent.trim();
+                                }
+                            }
+                            if (!val) val = el.textContent.trim();
+                            const numMatch = val.match(/^(\\d+)/);
+                            if (numMatch) result.away['Q' + qNum] = numMatch[1];
                         }
                     });
 
-                    // Total scores from smh__score elements
+                    // Total scores from smh__part--current (has smh__score class)
                     const homeTotal = document.querySelector(
                         '[class*="smh__score"][class*="smh__home"]'
                     );
                     const awayTotal = document.querySelector(
                         '[class*="smh__score"][class*="smh__away"]'
                     );
-                    if (homeTotal) result.home['total'] = homeTotal.textContent.trim();
-                    if (awayTotal) result.away['total'] = awayTotal.textContent.trim();
+                    if (homeTotal) {
+                        const v = homeTotal.textContent.trim();
+                        const m = v.match(/^(\\d+)/);
+                        if (m) result.home['total'] = m[1];
+                    }
+                    if (awayTotal) {
+                        const v = awayTotal.textContent.trim();
+                        const m = v.match(/^(\\d+)/);
+                        if (m) result.away['total'] = m[1];
+                    }
+
+                    // Fallback: extract total from detailScore__wrapper
+                    if (!result.home.total || !result.away.total) {
+                        const wrapper = document.querySelector('.detailScore__wrapper');
+                        if (wrapper) {
+                            const spans = wrapper.querySelectorAll('span:not([class*="divider"])');
+                            const nums = Array.from(spans)
+                                .map(s => s.textContent.trim())
+                                .filter(t => /^\\d+$/.test(t));
+                            if (nums.length >= 2) {
+                                if (!result.home.total) result.home.total = nums[0];
+                                if (!result.away.total) result.away.total = nums[1];
+                            }
+                        }
+                    }
 
                     const hasData = Object.keys(result.home).length > 0
                                  || Object.keys(result.away).length > 0;
@@ -430,6 +508,8 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             """)
             if scores:
                 self.logger.info(f"Extracted quarter scores: {scores}")
+            else:
+                self.logger.warning("Quarter scores not found in DOM — smh elements may not be present")
             return scores
         except Exception as e:
             self.logger.debug(f"Error extracting quarter scores: {e}")
@@ -659,63 +739,230 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     # ─────────────────────────────────────────────────────────
     
     async def _extract_summary_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from SUMMARY tab — Playwright direct first, YAML engine fallback."""
+        """Extract data from SUMMARY tab — Playwright direct with JavaScript enrichment.
+
+        The Summary sub-tab (default under Match primary tab) contains:
+          - Match overview: competition, date, status, venue, series info
+          - Score breakdown with quarter-by-quarter scores
+          - Key match events (incidents, highlights)
+          - Stats preview (top stats)
+          - Player Stats - Top 3
+
+        Live-site verified selectors:
+          - Breadcrumbs: .detail__breadcrumbs or [class*="breadcrumbItem"]
+          - Venue: inside [class*="wclDetailSection"] with "Venue:" prefix
+          - Series info: .infoBox__info inside .infoBox__wrapper
+          - Winner: .duelParticipant--winner class on team name
+        """
         try:
             overview = {}
             team_statistics = {}
             match_events = []
-            
-            # ── Playwright direct queries (fast, reliable) ──
-            
-            # Competition name
-            for sel in ['.tournamentHeader__content', '[data-testid="tournament-name"]', '.event__tournament']:
-                try:
-                    el = await self.page.query_selector(sel)
-                    if el:
-                        text = (await el.text_content()).strip()
-                        if text and len(text) < 100:
-                            overview['competition'] = text
-                            break
-                except Exception:
-                    continue
-            
-            # Match start time
-            for sel in ['.duelParticipant__startTime', '.event__time', '[data-testid="match-time"]']:
-                try:
-                    el = await self.page.query_selector(sel)
-                    if el:
-                        text = (await el.text_content()).strip()
-                        if text:
-                            overview['date'] = text
-                            break
-                except Exception:
-                    continue
-            
-            # Match status
-            for sel in ['.detailScore__status', '[data-testid="match-status"]', '.event__status']:
-                try:
-                    el = await self.page.query_selector(sel)
-                    if el:
-                        text = (await el.text_content()).strip()
-                        if text:
-                            overview['status'] = text
-                            break
-                except Exception:
-                    continue
-            
-            # Quarter scores — look for score cells in the summary table
-            try:
-                # FlashScore summary often shows quarter-by-quarter scores in a specific table
-                score_sections = await self.page.query_selector_all('.detailScore__matchDetail, .matchInfo, [data-testid="score-breakdown"]')
-                for section in score_sections:
-                    text = (await section.text_content()).strip()
-                    if text and ('Q1' in text or 'Quarter' in text or '1st' in text):
-                        # Parse quarter scores from text
-                        match_events.append({'type': 'quarter_scores_text', 'content': text})
-                        break
-            except Exception:
-                pass
-            
+
+            # ── JavaScript extraction — single round-trip, comprehensive ──
+            summary_data = await self.page.evaluate("""
+                () => {
+                    const data = { overview: {}, match_events: [] };
+
+                    // Competition from breadcrumbs — deduplicate adjacent identical entries
+                    const crumbs = document.querySelectorAll('[class*="breadcrumbItem"]');
+                    if (crumbs.length > 0) {
+                        const texts = Array.from(crumbs).map(c => c.textContent.trim()).filter(t => t);
+                        // Deduplicate: remove consecutive duplicates (FlashScore renders each
+                        // breadcrumb twice — once as icon, once as text link)
+                        const deduped = texts.filter((t, i) => i === 0 || t !== texts[i - 1]);
+                        if (deduped.length > 0) data.overview.competition = deduped[deduped.length - 1];
+                        if (deduped.length > 1) data.overview.breadcrumb_path = deduped.join(' > ');
+                    }
+                    // Fallback: tournament header
+                    if (!data.overview.competition) {
+                        const tHeader = document.querySelector('.tournamentHeader__content');
+                        if (tHeader) data.overview.competition = tHeader.textContent.trim();
+                    }
+
+                    // Match start time
+                    const timeEl = document.querySelector('.duelParticipant__startTime');
+                    if (timeEl) data.overview.date = timeEl.textContent.trim();
+
+                    // Match status
+                    const statusEl = document.querySelector('.detailScore__status');
+                    if (statusEl) data.overview.status = statusEl.textContent.trim();
+
+                    // Winner detection — .duelParticipant--winner is on the parent container
+                    const winnerContainer = document.querySelector('.duelParticipant--winner');
+                    if (winnerContainer) {
+                        // The container's textContent is just the team name (e.g. "Gigantes San Francisco")
+                        // But first try the specific participant name link
+                        const nameLink = winnerContainer.querySelector('[class*="participantName"] a, a[class*="participantName"]');
+                        if (nameLink && nameLink.textContent.trim()) {
+                            data.overview.winner = nameLink.textContent.trim();
+                        } else {
+                            // Fallback: use the container's direct text (excludes icon SVGs)
+                            const text = winnerContainer.textContent.trim();
+                            if (text && text.length < 80) {
+                                data.overview.winner = text;
+                            }
+                        }
+                    }
+
+                    // Venue — search for elements containing "Venue:" using XPath (efficient)
+                    const venueResult = document.evaluate(
+                        '//*[contains(text(), "Venue:")]|//*[starts-with(text(), "Venue:")]',
+                        document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+                    );
+                    if (venueResult.singleNodeValue) {
+                        const text = venueResult.singleNodeValue.textContent.trim();
+                        if (text.startsWith('Venue:')) {
+                            data.overview.venue = text.substring(6).trim();
+                        }
+                    }
+                    // Fallback: search inside detail/summary widgets
+                    if (!data.overview.venue) {
+                        const widgets = document.querySelectorAll(
+                            '[class*="wclDetailSection"], [class*="summaryWidget"], [class*="detailSection"]'
+                        );
+                        for (const w of widgets) {
+                            const text = w.textContent.trim();
+                            const idx = text.indexOf('Venue:');
+                            if (idx >= 0) {
+                                const after = text.substring(idx + 6).trim();
+                                // Take first line only
+                                const nlIdx = after.indexOf('\\n');
+                                data.overview.venue = nlIdx >= 0 ? after.substring(0, nlIdx).trim() : after;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Referee — similar XPath approach
+                    const refResult = document.evaluate(
+                        '//*[starts-with(text(), "Referee:") or starts-with(text(), "Referees:")]',
+                        document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+                    );
+                    if (refResult.singleNodeValue) {
+                        const text = refResult.singleNodeValue.textContent.trim();
+                        const colonIdx = text.indexOf(':');
+                        if (colonIdx >= 0) {
+                            data.overview.referee = text.substring(colonIdx + 1).trim();
+                        }
+                    }
+
+                    // Series / leg info from infoBox
+                    const infoBox = document.querySelector('.infoBox__info');
+                    if (infoBox) {
+                        const text = infoBox.textContent.trim();
+                        if (text) data.overview.series_info = text;
+                    }
+
+                    // Score breakdown — extract from smh__part elements
+                    const smhContainer = document.querySelector('[class*="smh__template"]');
+                    if (smhContainer) {
+                        const homeQ = {}, awayQ = {};
+                        smhContainer.querySelectorAll('[class*="smh__home"][class*="smh__part--"]').forEach(el => {
+                            const m = el.className.match(/smh__part--(\\d+)/);
+                            if (m) {
+                                const val = el.textContent.trim().replace(/\\D/g, '');
+                                if (val) homeQ['Q' + m[1]] = val;
+                            }
+                        });
+                        smhContainer.querySelectorAll('[class*="smh__away"][class*="smh__part--"]').forEach(el => {
+                            const m = el.className.match(/smh__part--(\\d+)/);
+                            if (m) {
+                                const val = el.textContent.trim().replace(/\\D/g, '');
+                                if (val) awayQ['Q' + m[1]] = val;
+                            }
+                        });
+                        // Total scores
+                        const homeScore = smhContainer.querySelector('[class*="smh__score"][class*="smh__home"]');
+                        const awayScore = smhContainer.querySelector('[class*="smh__score"][class*="smh__away"]');
+                        if (homeScore) homeQ['total'] = homeScore.textContent.trim();
+                        if (awayScore) awayQ['total'] = awayScore.textContent.trim();
+
+                        if (Object.keys(homeQ).length > 0 || Object.keys(awayQ).length > 0) {
+                            data.overview.quarter_scores = { home: homeQ, away: awayQ };
+                        }
+                    }
+
+                    // Key match events (incidents like technical fouls, ejections, etc.)
+                    const incidentEls = document.querySelectorAll(
+                        '[class*="incident"], [class*="moment"], [class*="eventRow"]'
+                    );
+                    incidentEls.forEach(el => {
+                        const text = el.textContent.trim();
+                        if (text && text.length > 3 && text.length < 200) {
+                            data.match_events.push({ type: 'incident', content: text });
+                        }
+                    });
+
+                    // Stats preview rows (if visible on Summary tab)
+                    const statPreviewRows = document.querySelectorAll(
+                        '[data-testid="wcl-statistics"]'
+                    );
+                    statPreviewRows.forEach(row => {
+                        const cat = row.querySelector('[data-testid="wcl-statistics-category"]');
+                        const vals = row.querySelectorAll('[data-testid="wcl-statistics-value"]');
+                        if (cat && vals.length >= 2) {
+                            const catName = cat.textContent.trim();
+                            if (!data.stats_preview) data.stats_preview = {};
+                            data.stats_preview[catName] = {
+                                home: vals[0].textContent.trim(),
+                                away: vals[1].textContent.trim()
+                            };
+                        }
+                    });
+
+                    return data;
+                }
+            """)
+
+            if summary_data:
+                overview = summary_data.get('overview', {})
+                match_events = summary_data.get('match_events', [])
+                if summary_data.get('stats_preview'):
+                    team_statistics = summary_data['stats_preview']
+
+            # ── Playwright direct fallbacks for any missing fields ──
+
+            # Competition fallback
+            if 'competition' not in overview:
+                for sel in ['.tournamentHeader__content', '[data-testid="tournament-name"]', '.event__tournament']:
+                    try:
+                        el = await self.page.query_selector(sel)
+                        if el:
+                            text = (await el.text_content()).strip()
+                            if text and len(text) < 100:
+                                overview['competition'] = text
+                                break
+                    except Exception:
+                        continue
+
+            # Date fallback
+            if 'date' not in overview:
+                for sel in ['.duelParticipant__startTime', '.event__time', '[data-testid="match-time"]']:
+                    try:
+                        el = await self.page.query_selector(sel)
+                        if el:
+                            text = (await el.text_content()).strip()
+                            if text:
+                                overview['date'] = text
+                                break
+                    except Exception:
+                        continue
+
+            # Status fallback
+            if 'status' not in overview:
+                for sel in ['.detailScore__status', '[data-testid="match-status"]', '.event__status']:
+                    try:
+                        el = await self.page.query_selector(sel)
+                        if el:
+                            text = (await el.text_content()).strip()
+                            if text:
+                                overview['status'] = text
+                                break
+                    except Exception:
+                        continue
+
+            self.logger.info(f"Summary overview: {list(overview.keys())} ({len(match_events)} events)")
             return {
                 'overview': overview,
                 'team_statistics': team_statistics,

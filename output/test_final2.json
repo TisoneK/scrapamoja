@@ -1,0 +1,490 @@
+{
+  "matches": [
+    {
+      "match_id": "4fQXa6JH",
+      "metadata": {
+        "extraction_time": "2026-06-27T07:22:24.590997",
+        "source_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=4fQXa6JH",
+        "sport": "basketball",
+        "completeness_score": 0.8
+      },
+      "basic_info": {
+        "home_team": "Taranaki Airs",
+        "away_team": "Otago Nuggets",
+        "current_score": "77-90",
+        "match_time": "27.06.2026 00:30",
+        "status": "Finished",
+        "competition": "NBL",
+        "league": "NBL"
+      },
+      "summary_tab": {
+        "overview": {
+          "date": "27.06.2026 00:30",
+          "status": "Finished"
+        },
+        "team_statistics": {},
+        "match_events": []
+      },
+      "h2h_tab": {
+        "previous_matches": [
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=4fQXa6JH",
+            "date": "27.06.26",
+            "home_team": "Taranaki Airs",
+            "away_team": "Otago Nuggets",
+            "home_score": "77",
+            "away_score": "90"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=SE2ojYHd",
+            "date": "20.06.26",
+            "home_team": "Otago Nuggets",
+            "away_team": "Taranaki Airs",
+            "home_score": "91",
+            "away_score": "87"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/southland-sharks-Akd76qyi/taranaki-airs-E7KpSFxm/?mid=d4slBlCC",
+            "date": "18.06.26",
+            "home_team": "Southland Sharks",
+            "away_team": "Taranaki Airs",
+            "home_score": "84",
+            "away_score": "93"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/taranaki-airs-E7KpSFxm/tauranga-whai-dSkIZqYq/?mid=Mgawd3lI",
+            "date": "12.06.26",
+            "home_team": "Taranaki Airs",
+            "away_team": "Tauranga Whai",
+            "home_score": "85",
+            "away_score": "73"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/auckland-tuatara-EDGhRApF/taranaki-airs-E7KpSFxm/?mid=nH4E17Kt",
+            "date": "06.06.26",
+            "home_team": "Taranaki Airs",
+            "away_team": "Auckland Tuatara",
+            "home_score": "69",
+            "away_score": "90"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=4fQXa6JH",
+            "date": "27.06.26",
+            "home_team": "Taranaki Airs",
+            "away_team": "Otago Nuggets",
+            "home_score": "77",
+            "away_score": "90"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/manawatu-jets-nLIhQg7a/otago-nuggets-Wbc37PLp/?mid=2opwdO5F",
+            "date": "25.06.26",
+            "home_team": "Manawatu Jets",
+            "away_team": "Otago Nuggets",
+            "home_score": "104",
+            "away_score": "97"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=SE2ojYHd",
+            "date": "20.06.26",
+            "home_team": "Otago Nuggets",
+            "away_team": "Taranaki Airs",
+            "home_score": "91",
+            "away_score": "87"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/canterbury-rams-nat5vdK3/otago-nuggets-Wbc37PLp/?mid=0xluDAs0",
+            "date": "13.06.26",
+            "home_team": "Otago Nuggets",
+            "away_team": "Canterbury Rams",
+            "home_score": "58",
+            "away_score": "93"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/wellington-saints-4to5PDM5/?mid=hE7Maokg",
+            "date": "06.06.26",
+            "home_team": "Wellington Saints",
+            "away_team": "Otago Nuggets",
+            "home_score": "96",
+            "away_score": "90"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=4fQXa6JH",
+            "date": "27.06.26",
+            "home_team": "Taranaki Airs",
+            "away_team": "Otago Nuggets",
+            "home_score": "77",
+            "away_score": "90"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=SE2ojYHd",
+            "date": "20.06.26",
+            "home_team": "Otago Nuggets",
+            "away_team": "Taranaki Airs",
+            "home_score": "91",
+            "away_score": "87"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=UNG6dxge",
+            "date": "04.07.25",
+            "home_team": "Taranaki Airs",
+            "away_team": "Otago Nuggets",
+            "home_score": "93",
+            "away_score": "83"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=vysDXz3S",
+            "date": "07.06.25",
+            "home_team": "Otago Nuggets",
+            "away_team": "Taranaki Airs",
+            "home_score": "78",
+            "away_score": "92"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/otago-nuggets-Wbc37PLp/taranaki-airs-E7KpSFxm/?mid=YXGX2Lia",
+            "date": "12.06.24",
+            "home_team": "Otago Nuggets",
+            "away_team": "Taranaki Airs",
+            "home_score": "88",
+            "away_score": "101"
+          }
+        ],
+        "historical_statistics": {},
+        "win_loss_record": {
+          "home_wins": 7,
+          "away_wins": 8,
+          "draws": 0,
+          "total": 15
+        }
+      },
+      "odds_tab": {
+        "betting_odds": {
+          "1xBet": {
+            "market_type": "moneyline",
+            "home": "1.64",
+            "away": "2.14"
+          },
+          "bet365": {
+            "market_type": "moneyline",
+            "home": "-",
+            "away": "-"
+          },
+          "Unibet": {
+            "market_type": "moneyline",
+            "home": "1.71",
+            "away": "2.02"
+          },
+          "Betfair": {
+            "market_type": "moneyline",
+            "home": "1.57",
+            "away": "2.25"
+          },
+          "bwin": {
+            "market_type": "moneyline",
+            "home": "1.60",
+            "away": "2.20"
+          },
+          "William Hill": {
+            "market_type": "moneyline",
+            "home": "1.62",
+            "away": "2.20"
+          }
+        },
+        "odds_history": [],
+        "bookmaker_data": {
+          "1xBet": {
+            "market_type": "moneyline"
+          },
+          "bet365": {
+            "market_type": "moneyline"
+          },
+          "Unibet": {
+            "market_type": "moneyline"
+          },
+          "Betfair": {
+            "market_type": "moneyline"
+          },
+          "bwin": {
+            "market_type": "moneyline"
+          },
+          "William Hill": {
+            "market_type": "moneyline"
+          }
+        }
+      },
+      "stats_tab": {
+        "detailed_statistics": {
+          "standings": {
+            "Southland Sharks": {
+              "position": 1,
+              "team": "Southland Sharks",
+              "played": 161331,
+              "wins": 5,
+              "losses": 4,
+              "draws_or_other": 4,
+              "points_ratio": ":14182",
+              "win_pct": "6",
+              "form": "WWLWW"
+            },
+            "Auckland Tuatara": {
+              "position": 2,
+              "team": "Auckland Tuatara",
+              "played": 141221,
+              "wins": 3,
+              "losses": 4,
+              "draws_or_other": 6,
+              "points_ratio": ":11792",
+              "win_pct": "4",
+              "form": "WWWWW"
+            },
+            "Canterbury Rams": {
+              "position": 3,
+              "team": "Canterbury Rams",
+              "played": 131031,
+              "wins": 2,
+              "losses": 7,
+              "draws_or_other": 7,
+              "points_ratio": ":11062",
+              "win_pct": "0",
+              "form": "WWLWW"
+            },
+            "Wellington Saints": {
+              "position": 4,
+              "team": "Wellington Saints",
+              "played": 141041,
+              "wins": 3,
+              "losses": 8,
+              "draws_or_other": 7,
+              "points_ratio": ":12482",
+              "win_pct": "0",
+              "form": "WWLWW"
+            },
+            "Otago Nuggets": {
+              "position": 5,
+              "team": "Otago Nuggets",
+              "played": 15781,
+              "wins": 2,
+              "losses": 9,
+              "draws_or_other": 4,
+              "points_ratio": ":13111",
+              "win_pct": "4",
+              "form": "WLWLL"
+            },
+            "Manawatu Jets": {
+              "position": 6,
+              "team": "Manawatu Jets",
+              "played": 155101,
+              "wins": 3,
+              "losses": 8,
+              "draws_or_other": 1,
+              "points_ratio": ":14961",
+              "win_pct": "0",
+              "form": "WLLLW"
+            },
+            "Taranaki Airs": {
+              "position": 7,
+              "team": "Taranaki Airs",
+              "played": 155101,
+              "wins": 2,
+              "losses": 3,
+              "draws_or_other": 9,
+              "points_ratio": ":13571",
+              "win_pct": "0",
+              "form": "LLWWL"
+            },
+            "Tauranga Whai": {
+              "position": 8,
+              "team": "Tauranga Whai",
+              "played": 14591,
+              "wins": 1,
+              "losses": 8,
+              "draws_or_other": 5,
+              "points_ratio": ":12811",
+              "win_pct": "0",
+              "form": "LLWLW"
+            },
+            "Franklin Bulls": {
+              "position": 9,
+              "team": "Franklin Bulls",
+              "played": 14591,
+              "wins": 2,
+              "losses": 6,
+              "draws_or_other": 6,
+              "points_ratio": ":13481",
+              "win_pct": "0",
+              "form": "LLLWL"
+            },
+            "Nelson Giants": {
+              "position": 10,
+              "team": "Nelson Giants",
+              "played": 144101,
+              "wins": 2,
+              "losses": 0,
+              "draws_or_other": 7,
+              "points_ratio": ":1276",
+              "win_pct": "8",
+              "form": "LWLLW"
+            },
+            "Bay Hawks": {
+              "position": 11,
+              "team": "Bay Hawks",
+              "played": 143111,
+              "wins": 2,
+              "losses": 6,
+              "draws_or_other": 1,
+              "points_ratio": ":1367",
+              "win_pct": "6",
+              "form": "LLWLL"
+            }
+          }
+        },
+        "player_performance": [],
+        "team_performance": [
+          {
+            "position": 1,
+            "team": "Southland Sharks",
+            "played": 161331,
+            "wins": 5,
+            "losses": 4,
+            "draws_or_other": 4,
+            "points_ratio": ":14182",
+            "win_pct": "6",
+            "form": "WWLWW"
+          },
+          {
+            "position": 2,
+            "team": "Auckland Tuatara",
+            "played": 141221,
+            "wins": 3,
+            "losses": 4,
+            "draws_or_other": 6,
+            "points_ratio": ":11792",
+            "win_pct": "4",
+            "form": "WWWWW"
+          },
+          {
+            "position": 3,
+            "team": "Canterbury Rams",
+            "played": 131031,
+            "wins": 2,
+            "losses": 7,
+            "draws_or_other": 7,
+            "points_ratio": ":11062",
+            "win_pct": "0",
+            "form": "WWLWW"
+          },
+          {
+            "position": 4,
+            "team": "Wellington Saints",
+            "played": 141041,
+            "wins": 3,
+            "losses": 8,
+            "draws_or_other": 7,
+            "points_ratio": ":12482",
+            "win_pct": "0",
+            "form": "WWLWW"
+          },
+          {
+            "position": 5,
+            "team": "Otago Nuggets",
+            "played": 15781,
+            "wins": 2,
+            "losses": 9,
+            "draws_or_other": 4,
+            "points_ratio": ":13111",
+            "win_pct": "4",
+            "form": "WLWLL"
+          },
+          {
+            "position": 6,
+            "team": "Manawatu Jets",
+            "played": 155101,
+            "wins": 3,
+            "losses": 8,
+            "draws_or_other": 1,
+            "points_ratio": ":14961",
+            "win_pct": "0",
+            "form": "WLLLW"
+          },
+          {
+            "position": 7,
+            "team": "Taranaki Airs",
+            "played": 155101,
+            "wins": 2,
+            "losses": 3,
+            "draws_or_other": 9,
+            "points_ratio": ":13571",
+            "win_pct": "0",
+            "form": "LLWWL"
+          },
+          {
+            "position": 8,
+            "team": "Tauranga Whai",
+            "played": 14591,
+            "wins": 1,
+            "losses": 8,
+            "draws_or_other": 5,
+            "points_ratio": ":12811",
+            "win_pct": "0",
+            "form": "LLWLW"
+          },
+          {
+            "position": 9,
+            "team": "Franklin Bulls",
+            "played": 14591,
+            "wins": 2,
+            "losses": 6,
+            "draws_or_other": 6,
+            "points_ratio": ":13481",
+            "win_pct": "0",
+            "form": "LLLWL"
+          },
+          {
+            "position": 10,
+            "team": "Nelson Giants",
+            "played": 144101,
+            "wins": 2,
+            "losses": 0,
+            "draws_or_other": 7,
+            "points_ratio": ":1276",
+            "win_pct": "8",
+            "form": "LWLLW"
+          },
+          {
+            "position": 11,
+            "team": "Bay Hawks",
+            "played": 143111,
+            "wins": 2,
+            "losses": 6,
+            "draws_or_other": 1,
+            "points_ratio": ":1367",
+            "win_pct": "6",
+            "form": "LLWLL"
+          }
+        ]
+      },
+      "tertiary_tabs": {
+        "inc_ot": null,
+        "ft": null,
+        "q1": null
+      },
+      "lineups_tab": null,
+      "standings_tab": null,
+      "extraction_metadata": {
+        "tabs_extracted": [
+          "summary",
+          "h2h",
+          "odds",
+          "stats"
+        ],
+        "failed_tabs": [
+          "tertiary"
+        ],
+        "extraction_duration_ms": 23566,
+        "retry_count": 0
+      }
+    }
+  ],
+  "workflow_type": "full_basketball_workflow",
+  "total_matches": 1,
+  "extraction_status": "ok"
+}

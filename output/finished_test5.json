@@ -1,0 +1,194 @@
+{
+  "matches": [
+    {
+      "match_id": "6FIpqC6T",
+      "metadata": {
+        "extraction_time": "2026-06-27T06:06:19.771066",
+        "source_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/ipswich-force-4lpoDWjo/?mid=6FIpqC6T",
+        "sport": "basketball",
+        "completeness_score": 0.8
+      },
+      "basic_info": {
+        "home_team": "Cairns Marlins",
+        "away_team": "Ipswich Force",
+        "current_score": null,
+        "match_time": "26.06.2026 06:00",
+        "status": "Finished",
+        "competition": null,
+        "league": null
+      },
+      "summary_tab": {
+        "overview": {
+          "date": "26.06.2026 06:00",
+          "status": "Finished"
+        },
+        "team_statistics": {},
+        "match_events": []
+      },
+      "h2h_tab": {
+        "previous_matches": [
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/ipswich-force-4lpoDWjo/?mid=6FIpqC6T",
+            "date": "26.06.26",
+            "home_team": "Cairns Marlins",
+            "away_team": "Ipswich Force",
+            "home_score": "106",
+            "away_score": "91"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/mackay-meteors-0zQNzGTo/?mid=t8XKlGxh",
+            "date": "20.06.26",
+            "home_team": "Mackay Meteors",
+            "away_team": "Cairns Marlins",
+            "home_score": "91",
+            "away_score": "111"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/townsville-heat-tCRnop86/?mid=0zcnzHNb",
+            "date": "19.06.26",
+            "home_team": "Townsville Heat",
+            "away_team": "Cairns Marlins",
+            "home_score": "86",
+            "away_score": "96"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/brisbane-capitals-rulI0P7g/cairns-marlins-lxVfqOxJ/?mid=MqxDLH85",
+            "date": "13.06.26",
+            "home_team": "Brisbane Capitals",
+            "away_team": "Cairns Marlins",
+            "home_score": "89",
+            "away_score": "114"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/rockhampton-rockets-2NlxrH7r/?mid=fHI3Pa9t",
+            "date": "12.06.26",
+            "home_team": "Rockhampton Rockets",
+            "away_team": "Cairns Marlins",
+            "home_score": "85",
+            "away_score": "118"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/ipswich-force-4lpoDWjo/?mid=6FIpqC6T",
+            "date": "26.06.26",
+            "home_team": "Cairns Marlins",
+            "away_team": "Ipswich Force",
+            "home_score": "106",
+            "away_score": "91"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/ipswich-force-4lpoDWjo/southern-district-spartans-IR8gPF6H/?mid=4Sg3WYMN",
+            "date": "20.06.26",
+            "home_team": "Southern District",
+            "away_team": "Ipswich Force",
+            "home_score": "102",
+            "away_score": "79"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/ipswich-force-4lpoDWjo/northside-wizards-vRORZZrh/?mid=SMbvxwgn",
+            "date": "14.06.26",
+            "home_team": "Ipswich Force",
+            "away_team": "Northside Wizards",
+            "home_score": "121",
+            "away_score": "81"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/ipswich-force-4lpoDWjo/rockhampton-rockets-2NlxrH7r/?mid=zDow9vPa",
+            "date": "07.06.26",
+            "home_team": "Ipswich Force",
+            "away_team": "Rockhampton Rockets",
+            "home_score": "112",
+            "away_score": "106"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/ipswich-force-4lpoDWjo/north-gold-coast-seahawks-44TTJFWm/?mid=OGGcT8AE",
+            "date": "06.06.26",
+            "home_team": "North Gold Coast Seahawks",
+            "away_team": "Ipswich Force",
+            "home_score": "74",
+            "away_score": "86"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/ipswich-force-4lpoDWjo/?mid=6FIpqC6T",
+            "date": "26.06.26",
+            "home_team": "Cairns Marlins",
+            "away_team": "Ipswich Force",
+            "home_score": "106",
+            "away_score": "91"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/ipswich-force-4lpoDWjo/?mid=6Li3hu0J",
+            "date": "13.07.25",
+            "home_team": "Ipswich Force",
+            "away_team": "Cairns Marlins",
+            "home_score": "110",
+            "away_score": "96"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/ipswich-force-4lpoDWjo/?mid=nFecE7UG",
+            "date": "12.07.24",
+            "home_team": "Cairns Marlins",
+            "away_team": "Ipswich Force",
+            "home_score": "95",
+            "away_score": "87"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/ipswich-force-4lpoDWjo/?mid=vZgBNlDl",
+            "date": "22.07.23",
+            "home_team": "Ipswich ForceAdvancing to next round: Ipswich Force",
+            "away_team": "Cairns Marlins",
+            "home_score": "99",
+            "away_score": "92"
+          },
+          {
+            "match_url": "https://www.flashscore.com/match/basketball/cairns-marlins-lxVfqOxJ/ipswich-force-4lpoDWjo/?mid=zDgHadmC",
+            "date": "18.06.23",
+            "home_team": "Ipswich Force",
+            "away_team": "Cairns Marlins",
+            "home_score": "98",
+            "away_score": "111"
+          }
+        ],
+        "historical_statistics": {},
+        "win_loss_record": {
+          "home_wins": 9,
+          "away_wins": 6,
+          "draws": 0,
+          "total": 15
+        }
+      },
+      "odds_tab": {
+        "betting_odds": {},
+        "odds_history": [],
+        "bookmaker_data": {}
+      },
+      "stats_tab": {
+        "detailed_statistics": {},
+        "player_performance": [],
+        "team_performance": {}
+      },
+      "tertiary_tabs": {
+        "inc_ot": null,
+        "ft": null,
+        "q1": null
+      },
+      "lineups_tab": null,
+      "standings_tab": null,
+      "extraction_metadata": {
+        "tabs_extracted": [
+          "summary",
+          "h2h",
+          "odds",
+          "stats"
+        ],
+        "failed_tabs": [
+          "tertiary"
+        ],
+        "extraction_duration_ms": 27020,
+        "retry_count": 0
+      }
+    }
+  ],
+  "workflow_type": "full_basketball_workflow",
+  "total_matches": 1,
+  "extraction_status": "ok"
+}
