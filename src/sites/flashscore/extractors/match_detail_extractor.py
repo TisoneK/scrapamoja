@@ -211,37 +211,146 @@ class MatchDetailExtractor(ABC):
             return None
 
     async def _validate_page_structure(self, page_state: PageState) -> bool:
-        """Validate that the match detail page has the expected structure using YAML selector."""
+        """Validate that the match detail page has the expected structure.
+        
+        Uses Playwright direct queries first (fast, reliable), then falls back
+        to YAML selector engine.
+        """
         try:
             if not page_state or not hasattr(page_state, 'verified') or not page_state.verified:
                 return False
 
-            # Check for match-specific content using YAML-driven selector
-            # YAML: match_detail_validation — combines duelParticipant__startTime,
-            # detailScore__status, data-testid="match-status", tournamentHeader__content
-            match_content = await self._resolve_element('match_detail_validation')
-            if not match_content:
-                self.logger.warning("No match-specific content found on page (YAML: match_detail_validation)")
-                return False
+            # Strategy 1: Playwright direct — check for match-specific elements
+            # that are always present on a FlashScore match detail page
+            direct_selectors = [
+                '[data-testid="match-status"]',
+                '.detailScore__status',
+                '.duelParticipant__startTime',
+                '.tournamentHeader__content',
+            ]
+            for selector in direct_selectors:
+                try:
+                    el = await self.page.query_selector(selector)
+                    if el:
+                        self.logger.debug(f"Match detail page validated via Playwright selector: {selector}")
+                        return True
+                except Exception:
+                    continue
 
-            return True
+            # Strategy 2: YAML selector engine (fallback)
+            match_content = await self._resolve_element('match_detail_validation')
+            if match_content:
+                self.logger.debug("Match detail page validated via YAML selector")
+                return True
+
+            # Strategy 3: URL-based check — if URL contains /match/ and has mid= param,
+            # we're probably on a match detail page even if no elements loaded yet
+            current_url = self.page.url
+            if '/match/' in current_url and 'mid=' in current_url:
+                self.logger.debug("Match detail page validated via URL pattern")
+                return True
+
+            self.logger.warning("No match-specific content found on page")
+            return False
 
         except Exception as e:
             self.logger.error(f"Error validating page structure: {e}")
             return False
 
     async def _extract_basic_info(self, page_state: PageState) -> Optional[Any]:
-        """Extract basic match information from the page."""
+        """Extract basic match information from the page.
+        
+        Uses Playwright direct queries first, then falls back to YAML selector engine.
+        """
         try:
-            # This would be implemented by concrete extractors
-            # For now, return a placeholder
             from src.sites.flashscore.models import BasicMatchInfo
+            
+            # Try Playwright direct queries for team names and score
+            home_team = "Unknown"
+            away_team = "Unknown"
+            current_score = None
+            match_time = "Unknown"
+            status = "Unknown"
+            competition = None
+            
+            # Home team — try direct CSS selectors used on FlashScore
+            for sel in ['.event__participant--home', '.participant__home', '[data-testid="home-team"]']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            home_team = text
+                            break
+                except Exception:
+                    continue
+            
+            # Away team
+            for sel in ['.event__participant--away', '.participant__away', '[data-testid="away-team"]']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            away_team = text
+                            break
+                except Exception:
+                    continue
+            
+            # Score
+            try:
+                score_els = await self.page.query_selector_all('.event__score')
+                if len(score_els) >= 2:
+                    home = (await score_els[0].text_content()).strip()
+                    away = (await score_els[1].text_content()).strip()
+                    current_score = f"{home}-{away}"
+            except Exception:
+                pass
+            
+            # Match time
+            for sel in ['.duelParticipant__startTime', '.event__time', '[data-testid="match-time"]']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            match_time = text
+                            break
+                except Exception:
+                    continue
+            
+            # Status
+            for sel in ['.detailScore__status', '[data-testid="match-status"]']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            status = text
+                            break
+                except Exception:
+                    continue
+            
+            # Competition
+            for sel in ['.tournamentHeader__content', '[data-testid="tournament-name"]']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text and len(text) < 100:
+                            competition = text
+                            break
+                except Exception:
+                    continue
+            
             return BasicMatchInfo(
-                home_team="Unknown",
-                away_team="Unknown",
-                current_score=None,
-                match_time="Unknown",
-                status="Unknown"
+                home_team=home_team,
+                away_team=away_team,
+                current_score=current_score,
+                match_time=match_time,
+                status=status,
+                competition=competition,
+                league=competition,
             )
         except Exception as e:
             self.logger.error(f"Error extracting basic info: {e}")

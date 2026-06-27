@@ -100,10 +100,10 @@ class PrimaryTabExtractor(ABC):
         - Under "Match" sub-tabs: Summary, Player stats, Stats, Lineups, Match History
         - Under "Odds" sub-tabs: Home/Away, 1X2, Over/Under, etc.
         
-        Navigation strategy:
-        - For sub-tabs under "Match": first click "Match" primary tab, then the sub-tab
-        - For primary tabs (Odds, H2H): click directly
-        - For "Stats": click "Match" → "Stats" sub-tab
+        Navigation strategy (in order):
+        1. Playwright direct query — bypasses the selector engine entirely
+        2. YAML selector engine (fallback for complex selectors)
+        3. URL-based navigation as last resort (preserves page context)
         """
         try:
             tab_name_lower = tab_name.lower()
@@ -128,8 +128,7 @@ class PrimaryTabExtractor(ABC):
             # For sub-tabs under "Match", first ensure "Match" primary tab is active
             if tab_name_lower in self.MATCH_SUB_TABS:
                 # Click "Match" primary tab first to reveal sub-tabs
-                match_clicked = await self._click_tab_by_text('Match')
-                if match_clicked:
+                if await self._click_tab_by_text('Match'):
                     await self.page.wait_for_timeout(1500)
                     self.logger.info(f"Clicked 'Match' primary tab for sub-tab access")
                 
@@ -139,41 +138,15 @@ class PrimaryTabExtractor(ABC):
                     self.logger.info(f"Successfully navigated to {tab_name} sub-tab")
                     return True
             
-            # For primary tabs (Odds, H2H, Draw, Video), click directly
+            # For primary tabs (Odds, H2H, Standings), click directly
             if await self._click_tab_by_text(display_text):
                 await self.page.wait_for_timeout(3000)
                 self.logger.info(f"Successfully navigated to {tab_name} tab via button click")
                 return True
             
-            # Strategy 2: Find anchor link by data-analytics-alias (YAML: analytics_link)
-            analytics_alias = self.TAB_ANALYTICS_ALIAS.get(tab_name_lower, tab_name_lower)
-            try:
-                # Find all analytics links via YAML selector, then match by alias
-                all_links = await self._resolve_elements('analytics_link')
-                link = None
-                for l in all_links:
-                    alias = await l.get_attribute('data-analytics-alias')
-                    if alias == analytics_alias:
-                        link = l
-                        break
-                if link:
-                    href = await link.get_attribute('href')
-                    if href:
-                        if not href.startswith('http'):
-                            href = f"https://www.flashscore.com{href}"
-                        await self.page.goto(href, wait_until='domcontentloaded')
-                        await self.page.wait_for_timeout(3000)
-                        self.logger.info(f"Successfully navigated to {tab_name} tab via URL")
-                        return True
-                    else:
-                        await link.click()
-                        await self.page.wait_for_timeout(3000)
-                        self.logger.info(f"Successfully navigated to {tab_name} tab via link click")
-                        return True
-            except Exception as e:
-                self.logger.debug(f"Analytics alias search failed: {e}")
-            
-            # Strategy 3: URL-based navigation for known tab URL patterns
+            # Strategy 2: URL-based navigation (last resort)
+            # Instead of page.goto() which can close the context, we click the
+            # navigation link directly using Playwright.
             tab_url_suffix = self.TAB_URL_SUFFIX.get(tab_name_lower)
             if tab_url_suffix is not None:
                 current_url = self.page.url
@@ -192,10 +165,44 @@ class PrimaryTabExtractor(ABC):
                 if query:
                     target_url += '?' + query
                 
-                self.logger.info(f"Trying URL navigation to: {target_url}")
-                await self.page.goto(target_url, wait_until='domcontentloaded')
-                await self.page.wait_for_timeout(3000)
-                return True
+                # Try to find and click a link matching the target URL
+                # This is safer than page.goto() because it keeps the page context
+                try:
+                    # Look for anchor elements that link to this tab
+                    # FlashScore uses <a> tags with href attributes for tab navigation
+                    link_selectors = [
+                        f'a[href*="/{tab_url_suffix}/"]' if tab_url_suffix else 'a[href*="?mid="]',
+                        f'a[href*="/{tab_url_suffix}"]' if tab_url_suffix else None,
+                    ]
+                    for sel in link_selectors:
+                        if sel is None:
+                            continue
+                        try:
+                            link = await self.page.query_selector(sel)
+                            if link:
+                                await link.click()
+                                await self.page.wait_for_timeout(3000)
+                                self.logger.info(f"Navigated to {tab_name} tab via link click (Playwright)")
+                                return True
+                        except Exception:
+                            continue
+                except Exception as e:
+                    self.logger.debug(f"Link-click navigation failed: {e}")
+                
+                # Final fallback: page.goto() with error recovery
+                # This can close the browser context, but we have no other option
+                try:
+                    self.logger.info(f"Trying URL navigation to: {target_url}")
+                    await self.page.goto(target_url, wait_until='domcontentloaded', timeout=15000)
+                    await self.page.wait_for_timeout(2000)
+                    # Verify page is still alive
+                    _ = self.page.url
+                    self.logger.info(f"Successfully navigated to {tab_name} tab via URL")
+                    return True
+                except Exception as goto_err:
+                    self.logger.error(f"URL navigation failed for {tab_name} tab: {goto_err}")
+                    # Page context may be destroyed — try to recover
+                    return False
             
             self.logger.warning(f"Could not find or navigate to {tab_name} tab")
             return False
@@ -205,18 +212,65 @@ class PrimaryTabExtractor(ABC):
             return False
     
     async def _click_tab_by_text(self, display_text: str) -> bool:
-        """Click a tab button matching the given display text — YAML selector: tab_button."""
+        """Click a tab button matching the given display text.
+        
+        Strategy 1 (primary): Playwright direct query — fast, reliable,
+        does not depend on the selector engine. FlashScore tab buttons use
+        data-testid="wcl-tab" attributes and are always in the DOM.
+        
+        Strategy 2 (fallback): YAML selector engine via tab_button.
+        """
+        # Strategy 1: Playwright direct — bypass selector engine
+        try:
+            # FlashScore uses button[data-testid="wcl-tab"] for all tab buttons
+            tab_buttons = await self.page.query_selector_all('button[data-testid="wcl-tab"]')
+            for btn in tab_buttons:
+                try:
+                    text = (await btn.text_content()).strip()
+                    if text == display_text:
+                        await btn.click()
+                        self.logger.debug(f"Clicked '{display_text}' tab via Playwright direct query")
+                        return True
+                except Exception:
+                    continue
+            
+            # Also try anchor-based tab navigation (primary tabs sometimes use <a> not <button>)
+            tab_links = await self.page.query_selector_all('a[data-analytics-element="SCN_TAB"]')
+            for link in tab_links:
+                try:
+                    # Check the button inside the link
+                    btn = await link.query_selector('button')
+                    if btn:
+                        text = (await btn.text_content()).strip()
+                        if text == display_text:
+                            await link.click()
+                            self.logger.debug(f"Clicked '{display_text}' tab link via Playwright direct query")
+                            return True
+                    else:
+                        # The link itself might contain the text
+                        text = (await link.text_content()).strip()
+                        if text == display_text:
+                            await link.click()
+                            self.logger.debug(f"Clicked '{display_text}' tab link directly via Playwright")
+                            return True
+                except Exception:
+                    continue
+        except Exception as e:
+            self.logger.debug(f"Playwright direct tab query failed: {e}")
+        
+        # Strategy 2: YAML selector engine (fallback)
         try:
             tab_buttons = await self._resolve_elements('tab_button')
             for btn in tab_buttons:
                 text = (await btn.text_content()).strip()
                 if text == display_text:
                     await btn.click()
+                    self.logger.debug(f"Clicked '{display_text}' tab via YAML selector engine")
                     return True
-            return False
         except Exception as e:
-            self.logger.debug(f"Error clicking tab by text '{display_text}': {e}")
-            return False
+            self.logger.debug(f"YAML selector tab query failed: {e}")
+        
+        return False
     
     async def _wait_for_tab_content_load(self, tab_name: str, timeout: int = 10000) -> bool:
         """Wait for tab content to load after navigation."""

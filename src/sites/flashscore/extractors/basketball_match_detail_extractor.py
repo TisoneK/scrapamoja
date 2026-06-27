@@ -12,6 +12,7 @@ When FlashScore rotates CSS hashes, only the YAML entries need updating.
 No Python code changes required.
 """
 
+import asyncio
 from typing import Dict, Any, Optional, List
 from playwright.async_api import ElementHandle, Page
 
@@ -67,29 +68,158 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
         return None
     
     async def _extract_basic_info(self, page_state: PageState) -> Optional[BasicMatchInfo]:
-        """Extract basic match info — all selectors via YAML engine."""
+        """Extract basic match info — Playwright direct first, YAML selector engine fallback."""
         try:
-            # Team names
-            home_team = await self._resolve_text('home_team_detail') or "Unknown"
-            away_team = await self._resolve_text('away_team_detail') or "Unknown"
+            home_team = "Unknown"
+            away_team = "Unknown"
+            current_score = None
+            match_time = "Unknown"
+            status = "Unknown"
+            competition = None
+            
+            # ── Playwright direct queries (fast, reliable) ──
+            
+            # Home team
+            for sel in ['.event__participant--home', '.participant__home',
+                        '.duelParticipant__home .participant__playerName']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            home_team = text
+                            break
+                except Exception:
+                    continue
+            
+            # Away team
+            for sel in ['.event__participant--away', '.participant__away',
+                        '.duelParticipant__away .participant__playerName']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            away_team = text
+                            break
+                except Exception:
+                    continue
             
             # Scores
-            home_score = await self._resolve_text('home_score')
-            away_score = await self._resolve_text('away_score')
-            current_score = f"{home_score}-{away_score}" if home_score and away_score else None
+            try:
+                score_els = await self.page.query_selector_all('.event__score')
+                if len(score_els) >= 2:
+                    home = (await score_els[0].text_content()).strip()
+                    away = (await score_els[1].text_content()).strip()
+                    current_score = f"{home}-{away}"
+            except Exception:
+                pass
             
-            # Match time and status
-            match_time = await self._resolve_text('match_info') or "Unknown"
-            status = await self._resolve_text('match_status') or "Unknown"
+            # Match time
+            for sel in ['.duelParticipant__startTime', '.event__time']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            match_time = text
+                            break
+                except Exception:
+                    continue
+            
+            # Status
+            for sel in ['.detailScore__status', '[data-testid="match-status"]']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            status = text
+                            break
+                except Exception:
+                    continue
             
             # Competition / league name
-            competition = None
-            competition_els = await self._resolve_elements('competition')
-            for el in competition_els:
-                text = (await el.text_content()).strip()
-                if text and len(text) < 100:
-                    competition = text
-                    break
+            for sel in ['.tournamentHeader__content', '.event__tournament']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text and len(text) < 100:
+                            competition = text
+                            break
+                except Exception:
+                    continue
+            
+            # ── YAML selector engine fallback (only for truly missing fields, with timeout) ──
+            # NOTE: The selector engine can enter infinite retry loops on match detail pages.
+            # Only use it as a last resort for fields Playwright direct couldn't find.
+            
+            if home_team == "Unknown":
+                try:
+                    result = await asyncio.wait_for(
+                        self._resolve_text('home_team_detail'), timeout=5.0
+                    )
+                    if result:
+                        home_team = result
+                except (asyncio.TimeoutError, Exception):
+                    self.logger.debug("YAML fallback for home_team_detail timed out or failed")
+            
+            if away_team == "Unknown":
+                try:
+                    result = await asyncio.wait_for(
+                        self._resolve_text('away_team_detail'), timeout=5.0
+                    )
+                    if result:
+                        away_team = result
+                except (asyncio.TimeoutError, Exception):
+                    self.logger.debug("YAML fallback for away_team_detail timed out or failed")
+            
+            if not current_score:
+                try:
+                    home_score = await asyncio.wait_for(
+                        self._resolve_text('home_score'), timeout=5.0
+                    )
+                    away_score = await asyncio.wait_for(
+                        self._resolve_text('away_score'), timeout=5.0
+                    )
+                    if home_score and away_score:
+                        current_score = f"{home_score}-{away_score}"
+                except (asyncio.TimeoutError, Exception):
+                    self.logger.debug("YAML fallback for scores timed out or failed")
+            
+            if match_time == "Unknown":
+                try:
+                    result = await asyncio.wait_for(
+                        self._resolve_text('match_info'), timeout=5.0
+                    )
+                    if result:
+                        match_time = result
+                except (asyncio.TimeoutError, Exception):
+                    self.logger.debug("YAML fallback for match_info timed out or failed")
+            
+            if status == "Unknown":
+                try:
+                    result = await asyncio.wait_for(
+                        self._resolve_text('match_status'), timeout=5.0
+                    )
+                    if result:
+                        status = result
+                except (asyncio.TimeoutError, Exception):
+                    self.logger.debug("YAML fallback for match_status timed out or failed")
+            
+            if not competition:
+                try:
+                    competition_els = await asyncio.wait_for(
+                        self._resolve_elements('competition'), timeout=5.0
+                    )
+                    for el in competition_els:
+                        text = (await el.text_content()).strip()
+                        if text and len(text) < 100:
+                            competition = text
+                            break
+                except (asyncio.TimeoutError, Exception):
+                    self.logger.debug("YAML fallback for competition timed out or failed")
             
             return BasicMatchInfo(
                 home_team=home_team,
@@ -309,45 +439,112 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     # ─────────────────────────────────────────────────────────
     
     async def _extract_summary_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from SUMMARY tab — all selectors via YAML engine."""
+        """Extract data from SUMMARY tab — Playwright direct first, YAML engine fallback."""
         try:
             overview = {}
             team_statistics = {}
             match_events = []
             
+            # ── Playwright direct queries (fast, reliable) ──
+            
             # Competition name
-            competition_els = await self._resolve_elements('competition')
-            for el in competition_els:
-                text = (await el.text_content()).strip()
-                if text and len(text) < 100:
-                    if 'competition' not in overview:
-                        overview['competition'] = text
+            for sel in ['.tournamentHeader__content', '[data-testid="tournament-name"]', '.event__tournament']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text and len(text) < 100:
+                            overview['competition'] = text
+                            break
+                except Exception:
+                    continue
             
             # Match start time
-            date_text = await self._resolve_text('match_info')
-            if date_text:
-                overview['date'] = date_text
+            for sel in ['.duelParticipant__startTime', '.event__time', '[data-testid="match-time"]']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            overview['date'] = text
+                            break
+                except Exception:
+                    continue
             
             # Match status
-            status_text = await self._resolve_text('match_status')
-            if status_text:
-                overview['status'] = status_text
+            for sel in ['.detailScore__status', '[data-testid="match-status"]', '.event__status']:
+                try:
+                    el = await self.page.query_selector(sel)
+                    if el:
+                        text = (await el.text_content()).strip()
+                        if text:
+                            overview['status'] = text
+                            break
+                except Exception:
+                    continue
             
-            # Quarter scores (home + away)
+            # Quarter scores — look for score cells in the summary table
+            try:
+                # FlashScore summary often shows quarter-by-quarter scores in a specific table
+                score_sections = await self.page.query_selector_all('.detailScore__matchDetail, .matchInfo, [data-testid="score-breakdown"]')
+                for section in score_sections:
+                    text = (await section.text_content()).strip()
+                    if text and ('Q1' in text or 'Quarter' in text or '1st' in text):
+                        # Parse quarter scores from text
+                        match_events.append({'type': 'quarter_scores_text', 'content': text})
+                        break
+            except Exception:
+                pass
+            
+            # ── YAML selector engine fallback (with timeout) for missing fields ──
+            
+            if 'competition' not in overview:
+                try:
+                    competition_els = await asyncio.wait_for(self._resolve_elements('competition'), timeout=5.0)
+                    for el in competition_els:
+                        text = (await el.text_content()).strip()
+                        if text and len(text) < 100:
+                            overview['competition'] = text
+                            break
+                except (asyncio.TimeoutError, Exception):
+                    self.logger.debug("YAML fallback for competition timed out")
+            
+            if 'date' not in overview:
+                try:
+                    date_text = await asyncio.wait_for(self._resolve_text('match_info'), timeout=5.0)
+                    if date_text:
+                        overview['date'] = date_text
+                except (asyncio.TimeoutError, Exception):
+                    self.logger.debug("YAML fallback for match_info timed out")
+            
+            if 'status' not in overview:
+                try:
+                    status_text = await asyncio.wait_for(self._resolve_text('match_status'), timeout=5.0)
+                    if status_text:
+                        overview['status'] = status_text
+                except (asyncio.TimeoutError, Exception):
+                    self.logger.debug("YAML fallback for match_status timed out")
+            
+            # Quarter scores via YAML
             home_quarter_scores = []
             away_quarter_scores = []
+            try:
+                home_parts = await asyncio.wait_for(self._resolve_elements('quarter_scores'), timeout=5.0)
+                for part in home_parts:
+                    text = (await part.text_content()).strip()
+                    if text:
+                        home_quarter_scores.append(text)
+            except (asyncio.TimeoutError, Exception):
+                self.logger.debug("YAML fallback for quarter_scores timed out")
             
-            home_parts = await self._resolve_elements('quarter_scores')
-            for part in home_parts:
-                text = (await part.text_content()).strip()
-                if text:
-                    home_quarter_scores.append(text)
-            
-            away_parts = await self._resolve_elements('away_quarter_scores')
-            for part in away_parts:
-                text = (await part.text_content()).strip()
-                if text:
-                    away_quarter_scores.append(text)
+            try:
+                away_parts = await asyncio.wait_for(self._resolve_elements('away_quarter_scores'), timeout=5.0)
+                for part in away_parts:
+                    text = (await part.text_content()).strip()
+                    if text:
+                        away_quarter_scores.append(text)
+            except (asyncio.TimeoutError, Exception):
+                self.logger.debug("YAML fallback for away_quarter_scores timed out")
             
             if home_quarter_scores or away_quarter_scores:
                 team_statistics['quarter_scores'] = {
@@ -369,85 +566,136 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     # ─────────────────────────────────────────────────────────
     
     async def _extract_h2h_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from H2H tab — all selectors via YAML engine."""
+        """Extract data from H2H tab — Playwright direct first, YAML engine fallback."""
         try:
             previous_matches = []
             historical_statistics = {}
             win_loss_record = {}
             
-            # Section headers
-            section_headers = await self._resolve_elements('h2h_section_header')
-            sections = []
-            for header in section_headers:
-                text = (await header.text_content()).strip()
-                if text:
-                    sections.append(text)
+            # ── Playwright direct queries ──
+            # H2H tab shows previous matches between the two teams.
+            # FlashScore uses rows inside a container for each H2H match.
+            try:
+                # Look for H2H match rows using common FlashScore classes
+                h2h_containers = await self.page.query_selector_all(
+                    '.h2h__row, .h2h-match, [data-testid="h2h-match"]'
+                )
+                if not h2h_containers:
+                    # Try broader selectors for the H2H content area
+                    h2h_section = await self.page.query_selector('.h2h, [data-testid="h2h-content"]')
+                    if h2h_section:
+                        h2h_containers = await h2h_section.query_selector_all('a, .row')
+                
+                for row in h2h_containers:
+                    match_data = {}
+                    try:
+                        # Try to extract basic match info from each row
+                        text = (await row.text_content()).strip()
+                        if not text or len(text) < 5:
+                            continue
+                        
+                        # Get the link href if it's an anchor
+                        href = await row.get_attribute('href')
+                        if href:
+                            match_data['match_url'] = href
+                        
+                        # Try to find date, teams, and score within the row
+                        date_els = await row.query_selector_all('.event__time, [class*="date"], [class*="time"]')
+                        for el in date_els:
+                            t = (await el.text_content()).strip()
+                            if t:
+                                match_data['date'] = t
+                                break
+                        
+                        # Home/Away participants
+                        home_el = await row.query_selector('.event__participant--home, [class*="home"]')
+                        away_el = await row.query_selector('.event__participant--away, [class*="away"]')
+                        if home_el:
+                            t = (await home_el.text_content()).strip()
+                            if t:
+                                match_data['home_team'] = t
+                        if away_el:
+                            t = (await away_el.text_content()).strip()
+                            if t:
+                                match_data['away_team'] = t
+                        
+                        # Scores
+                        score_els = await row.query_selector_all('.event__score, [class*="score"]')
+                        if len(score_els) >= 2:
+                            match_data['home_score'] = (await score_els[0].text_content()).strip()
+                            match_data['away_score'] = (await score_els[1].text_content()).strip()
+                        
+                        if 'home_team' in match_data or 'away_team' in match_data:
+                            previous_matches.append(match_data)
+                    except Exception:
+                        continue
+                    
+            except Exception as e:
+                self.logger.debug(f"Playwright direct H2H extraction failed: {e}")
             
-            # H2H rows
-            h2h_rows = await self._resolve_elements('previous_matches')
-            self.logger.info(f"Found {len(h2h_rows)} H2H rows")
-            
-            for row in h2h_rows:
-                match_data = {}
-                
-                # Date
-                date_el = await self._resolve_element('h2h_match_date', row)
-                if date_el:
-                    match_data['date'] = (await date_el.text_content()).strip()
-                
-                # Competition (title attr for full name, text for short)
-                event_el = await self._resolve_element('h2h_event', row)
-                if event_el:
-                    event_title = await event_el.get_attribute('title')
-                    event_text = (await event_el.text_content()).strip()
-                    match_data['competition'] = event_title or event_text
-                    match_data['competition_short'] = event_text
-                
-                # Home team
-                home_participant = await self._resolve_element('h2h_home_participant', row)
-                if home_participant:
-                    home_name_el = await self._resolve_element('h2h_home_team', home_participant)
-                    if home_name_el:
-                        match_data['home_team'] = (await home_name_el.text_content()).strip()
-                
-                # Away team
-                away_participant = await self._resolve_element('h2h_away_participant', row)
-                if away_participant:
-                    away_name_el = await self._resolve_element('h2h_away_team', away_participant)
-                    if away_name_el:
-                        match_data['away_team'] = (await away_name_el.text_content()).strip()
-                
-                # Final scores
-                final_result = await self._resolve_element('h2h_final_result', row)
-                if final_result:
-                    score_spans = await self._resolve_elements('h2h_score_element', final_result)
-                    if len(score_spans) >= 2:
-                        match_data['home_score'] = (await score_spans[0].text_content()).strip()
-                        match_data['away_score'] = (await score_spans[1].text_content()).strip()
-                
-                # Full-time scores (for OT games)
-                ft_result = await self._resolve_element('h2h_ft_result', row)
-                if ft_result:
-                    ft_spans = await self._resolve_elements('h2h_score_element', ft_result)
-                    if len(ft_spans) >= 2:
-                        ft_home = (await ft_spans[0].text_content()).strip()
-                        ft_away = (await ft_spans[1].text_content()).strip()
-                        if ft_home and ft_away:
-                            match_data['ft_home_score'] = ft_home
-                            match_data['ft_away_score'] = ft_away
-                
-                # Win/loss indicator
-                icon_el = await self._resolve_element('h2h_result_indicator', row)
-                if icon_el:
-                    match_data['result_indicator'] = (await icon_el.text_content()).strip()
-                
-                # Match URL from anchor href
-                href = await row.get_attribute('href')
-                if href:
-                    match_data['match_url'] = href
-                
-                if 'home_team' in match_data or 'away_team' in match_data:
-                    previous_matches.append(match_data)
+            # ── YAML selector engine fallback (with timeout) ──
+            if not previous_matches:
+                try:
+                    h2h_rows = await asyncio.wait_for(self._resolve_elements('previous_matches'), timeout=8.0)
+                    self.logger.info(f"Found {len(h2h_rows)} H2H rows via YAML")
+                    
+                    for row in h2h_rows:
+                        match_data = {}
+                        try:
+                            date_el = await self._resolve_element('h2h_match_date', row)
+                            if date_el:
+                                match_data['date'] = (await date_el.text_content()).strip()
+                            
+                            event_el = await self._resolve_element('h2h_event', row)
+                            if event_el:
+                                event_title = await event_el.get_attribute('title')
+                                event_text = (await event_el.text_content()).strip()
+                                match_data['competition'] = event_title or event_text
+                                match_data['competition_short'] = event_text
+                            
+                            home_participant = await self._resolve_element('h2h_home_participant', row)
+                            if home_participant:
+                                home_name_el = await self._resolve_element('h2h_home_team', home_participant)
+                                if home_name_el:
+                                    match_data['home_team'] = (await home_name_el.text_content()).strip()
+                            
+                            away_participant = await self._resolve_element('h2h_away_participant', row)
+                            if away_participant:
+                                away_name_el = await self._resolve_element('h2h_away_team', away_participant)
+                                if away_name_el:
+                                    match_data['away_team'] = (await away_name_el.text_content()).strip()
+                            
+                            final_result = await self._resolve_element('h2h_final_result', row)
+                            if final_result:
+                                score_spans = await self._resolve_elements('h2h_score_element', final_result)
+                                if len(score_spans) >= 2:
+                                    match_data['home_score'] = (await score_spans[0].text_content()).strip()
+                                    match_data['away_score'] = (await score_spans[1].text_content()).strip()
+                            
+                            ft_result = await self._resolve_element('h2h_ft_result', row)
+                            if ft_result:
+                                ft_spans = await self._resolve_elements('h2h_score_element', ft_result)
+                                if len(ft_spans) >= 2:
+                                    ft_home = (await ft_spans[0].text_content()).strip()
+                                    ft_away = (await ft_spans[1].text_content()).strip()
+                                    if ft_home and ft_away:
+                                        match_data['ft_home_score'] = ft_home
+                                        match_data['ft_away_score'] = ft_away
+                            
+                            icon_el = await self._resolve_element('h2h_result_indicator', row)
+                            if icon_el:
+                                match_data['result_indicator'] = (await icon_el.text_content()).strip()
+                            
+                            href = await row.get_attribute('href')
+                            if href:
+                                match_data['match_url'] = href
+                            
+                            if 'home_team' in match_data or 'away_team' in match_data:
+                                previous_matches.append(match_data)
+                        except Exception:
+                            continue
+                except (asyncio.TimeoutError, Exception) as e:
+                    self.logger.debug(f"YAML H2H extraction timed out or failed: {e}")
             
             self.logger.info(f"Extracted {len(previous_matches)} H2H matches")
             
@@ -477,70 +725,131 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     # ─────────────────────────────────────────────────────────
     
     async def _extract_odds_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from ODDS tab — all selectors via YAML engine."""
+        """Extract data from ODDS tab — Playwright direct first, YAML engine fallback."""
         try:
             betting_odds = {}
             odds_history = []
             bookmaker_data = {}
             
-            odds_rows = await self._resolve_elements('betting_odds')
-            self.logger.info(f"Found {len(odds_rows)} odds rows")
+            # ── Playwright direct queries ──
+            try:
+                # FlashScore odds tables use rows with bookmaker data
+                odds_rows = await self.page.query_selector_all(
+                    '.oddsRow, [class*="odds__row"], [class*="oddsRow"], [data-testid="odds-row"]'
+                )
+                if not odds_rows:
+                    # Try the main odds container and find rows inside
+                    odds_table = await self.page.query_selector(
+                        '.oddsTable, [class*="odds__table"], [class*="oddsComparison"], [data-testid="odds-table"]'
+                    )
+                    if odds_table:
+                        odds_rows = await odds_table.query_selector_all('tr, [class*="row"]')
+                
+                self.logger.info(f"Found {len(odds_rows)} odds rows via Playwright direct")
+                
+                for row in odds_rows:
+                    try:
+                        # Try to get bookmaker name
+                        bookmaker_name = ""
+                        name_el = await row.query_selector(
+                            'a[title], [class*="bookmaker"] a, [class*="logo"] img'
+                        )
+                        if name_el:
+                            bookmaker_name = await name_el.get_attribute('title') or ""
+                            if not bookmaker_name:
+                                bookmaker_name = await name_el.get_attribute('alt') or ""
+                            if not bookmaker_name:
+                                bookmaker_name = (await name_el.text_content()).strip()
+                        
+                        if not bookmaker_name:
+                            continue
+                        
+                        # Extract odds cells
+                        cells = await row.query_selector_all(
+                            'td[class*="odds"], [class*="oddsCell"], [class*="cell"]'
+                        )
+                        odds_values = []
+                        for cell in cells:
+                            text = (await cell.text_content()).strip()
+                            if text:
+                                odds_values.append(text)
+                        
+                        if odds_values:
+                            odds_entry = {'market_type': 'moneyline'}
+                            if len(odds_values) >= 2:
+                                odds_entry['home'] = odds_values[0]
+                                odds_entry['away'] = odds_values[-1]
+                            if len(odds_values) >= 3:
+                                odds_entry['draw'] = odds_values[1]
+                            betting_odds[bookmaker_name] = odds_entry
+                            bookmaker_data[bookmaker_name] = {'market_type': 'moneyline'}
+                    except Exception:
+                        continue
+                        
+            except Exception as e:
+                self.logger.debug(f"Playwright direct odds extraction failed: {e}")
             
-            for row in odds_rows:
-                # Bookmaker name from logo link title attribute
-                bookmaker_link = await self._resolve_element('odds_bookmaker_name', row)
-                bookmaker_name = ""
-                if bookmaker_link:
-                    bookmaker_name = await bookmaker_link.get_attribute('title') or ""
-                if not bookmaker_name:
-                    logo_img = await self._resolve_element('odds_bookmaker_logo', row)
-                    if logo_img:
-                        bookmaker_name = await logo_img.get_attribute('alt') or ""
-                
-                if not bookmaker_name:
-                    continue
-                
-                # Odds cells
-                odds_cells = await self._resolve_elements('odds_cell', row)
-                odds_values = []
-                opening_values = []
-                
-                for cell in odds_cells:
-                    current_text = (await cell.text_content()).strip()
-                    title_attr = await cell.get_attribute('title') or ""
+            # ── YAML selector engine fallback (with timeout) ──
+            if not betting_odds:
+                try:
+                    odds_rows = await asyncio.wait_for(self._resolve_elements('betting_odds'), timeout=8.0)
+                    self.logger.info(f"Found {len(odds_rows)} odds rows via YAML")
                     
-                    opening_val = None
-                    if ' » ' in title_attr:
-                        parts = title_attr.split(' » ')
-                        if len(parts) == 2:
-                            opening_val = parts[0].strip()
-                    
-                    odds_values.append(current_text)
-                    if opening_val:
-                        opening_values.append(opening_val)
-                
-                # Determine market type
-                market_type = 'moneyline'
-                if odds_cells:
-                    analytics_label = await odds_cells[0].get_attribute('data-analytics-label') or ''
-                    if '1x2' in analytics_label.lower():
-                        market_type = '1x2'
-                    elif 'moneyline' in analytics_label.lower():
-                        market_type = 'moneyline'
-                    elif 'over' in analytics_label.lower():
-                        market_type = 'over_under'
-                
-                odds_entry = {'market_type': market_type}
-                if len(odds_values) >= 2:
-                    odds_entry['home'] = odds_values[0]
-                    odds_entry['away'] = odds_values[-1]
-                if len(odds_values) >= 3:
-                    odds_entry['draw'] = odds_values[1]
-                if opening_values and len(opening_values) >= 2:
-                    odds_entry['opening'] = {'home': opening_values[0], 'away': opening_values[-1]}
-                
-                betting_odds[bookmaker_name] = odds_entry
-                bookmaker_data[bookmaker_name] = {'market_type': market_type, 'cell_count': len(odds_values)}
+                    for row in odds_rows:
+                        try:
+                            bookmaker_link = await self._resolve_element('odds_bookmaker_name', row)
+                            bookmaker_name = ""
+                            if bookmaker_link:
+                                bookmaker_name = await bookmaker_link.get_attribute('title') or ""
+                            if not bookmaker_name:
+                                logo_img = await self._resolve_element('odds_bookmaker_logo', row)
+                                if logo_img:
+                                    bookmaker_name = await logo_img.get_attribute('alt') or ""
+                            
+                            if not bookmaker_name:
+                                continue
+                            
+                            odds_cells = await self._resolve_elements('odds_cell', row)
+                            odds_values = []
+                            opening_values = []
+                            
+                            for cell in odds_cells:
+                                current_text = (await cell.text_content()).strip()
+                                title_attr = await cell.get_attribute('title') or ""
+                                
+                                opening_val = None
+                                if ' » ' in title_attr:
+                                    parts = title_attr.split(' » ')
+                                    if len(parts) == 2:
+                                        opening_val = parts[0].strip()
+                                
+                                odds_values.append(current_text)
+                                if opening_val:
+                                    opening_values.append(opening_val)
+                            
+                            market_type = 'moneyline'
+                            if odds_cells:
+                                analytics_label = await odds_cells[0].get_attribute('data-analytics-label') or ''
+                                if '1x2' in analytics_label.lower():
+                                    market_type = '1x2'
+                                elif 'over' in analytics_label.lower():
+                                    market_type = 'over_under'
+                            
+                            odds_entry = {'market_type': market_type}
+                            if len(odds_values) >= 2:
+                                odds_entry['home'] = odds_values[0]
+                                odds_entry['away'] = odds_values[-1]
+                            if len(odds_values) >= 3:
+                                odds_entry['draw'] = odds_values[1]
+                            if opening_values and len(opening_values) >= 2:
+                                odds_entry['opening'] = {'home': opening_values[0], 'away': opening_values[-1]}
+                            
+                            betting_odds[bookmaker_name] = odds_entry
+                            bookmaker_data[bookmaker_name] = {'market_type': market_type, 'cell_count': len(odds_values)}
+                        except Exception:
+                            continue
+                except (asyncio.TimeoutError, Exception) as e:
+                    self.logger.debug(f"YAML odds extraction timed out or failed: {e}")
             
             self.logger.info(f"Extracted odds for {len(betting_odds)} bookmakers")
             
@@ -558,54 +867,104 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     # ─────────────────────────────────────────────────────────
     
     async def _extract_stats_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from STATS tab — all selectors via YAML engine."""
+        """Extract data from STATS tab — Playwright direct first, YAML engine fallback."""
         try:
             detailed_statistics = {}
             player_performance = []
             team_performance = {}
-            
             current_category = "General"
             
-            # Get stat rows and section headers via YAML selectors
-            stat_rows = await self._resolve_elements('full_time_stats')
-            stat_headers = await self._resolve_elements('stat_section_header')
+            # ── Playwright direct queries ──
+            # FlashScore stats tab has stat rows with category, home value, away value
+            try:
+                stat_rows = await self.page.query_selector_all(
+                    '.stat__row, [class*="statRow"], [class*="stats__row"], [data-testid="stat-row"]'
+                )
+                stat_headers = await self.page.query_selector_all(
+                    '.stat__header, [class*="sectionHeader"], [class*="statHeader"], [data-testid="stat-header"]'
+                )
+                
+                if stat_rows or stat_headers:
+                    self.logger.info(f"Found {len(stat_rows)} stat rows, {len(stat_headers)} headers via Playwright")
+                    
+                    all_elements = stat_rows + stat_headers
+                    for element in all_elements:
+                        try:
+                            cls = await element.get_attribute('class') or ''
+                            
+                            # Section header?
+                            if 'header' in cls.lower() or 'section' in cls.lower():
+                                text = (await element.text_content()).strip()
+                                if text:
+                                    current_category = text
+                                    if current_category not in detailed_statistics:
+                                        detailed_statistics[current_category] = {}
+                                continue
+                            
+                            # Stat row — try to extract category name, home value, away value
+                            # FlashScore stats rows typically have: home_val | category | away_val
+                            cells = await element.query_selector_all('span, div, td')
+                            if len(cells) >= 3:
+                                texts = []
+                                for cell in cells:
+                                    t = (await cell.text_content()).strip()
+                                    if t:
+                                        texts.append(t)
+                                
+                                if len(texts) >= 3:
+                                    # Pattern: home_val, category_name, away_val
+                                    home_val = texts[0]
+                                    name = texts[len(texts) // 2]  # Middle element is usually the category
+                                    away_val = texts[-1]
+                                    if current_category not in detailed_statistics:
+                                        detailed_statistics[current_category] = {}
+                                    detailed_statistics[current_category][name] = {
+                                        'home': home_val,
+                                        'away': away_val
+                                    }
+                        except Exception:
+                            continue
+            except Exception as e:
+                self.logger.debug(f"Playwright direct stats extraction failed: {e}")
             
-            if not stat_rows and not stat_headers:
-                self.logger.warning("No stat elements found via YAML selectors")
-                return {
-                    'detailed_statistics': detailed_statistics,
-                    'player_performance': player_performance,
-                    'team_performance': team_performance
-                }
-            
-            all_elements = stat_rows + stat_headers
-            for element in all_elements:
-                cls = await element.get_attribute('class') or ''
-                
-                # Section header?
-                if 'stat__header' in cls or 'sectionHeader' in cls:
-                    text = (await element.text_content()).strip()
-                    if text:
-                        current_category = text
-                        if current_category not in detailed_statistics:
-                            detailed_statistics[current_category] = {}
-                    continue
-                
-                # Stat row — extract via YAML sub-selectors
-                category_el = await self._resolve_element('stat_category_name', element)
-                home_el = await self._resolve_element('stat_home_value', element)
-                away_el = await self._resolve_element('stat_away_value', element)
-                
-                if category_el and home_el and away_el:
-                    name = (await category_el.text_content()).strip()
-                    home_val = (await home_el.text_content()).strip()
-                    away_val = (await away_el.text_content()).strip()
-                    if current_category not in detailed_statistics:
-                        detailed_statistics[current_category] = {}
-                    detailed_statistics[current_category][name] = {
-                        'home': home_val,
-                        'away': away_val
-                    }
+            # ── YAML selector engine fallback (with timeout) ──
+            if not detailed_statistics or all(len(v) == 0 for v in detailed_statistics.values()):
+                try:
+                    stat_rows = await asyncio.wait_for(self._resolve_elements('full_time_stats'), timeout=8.0)
+                    stat_headers = await asyncio.wait_for(self._resolve_elements('stat_section_header'), timeout=5.0)
+                    
+                    if stat_rows or stat_headers:
+                        all_elements = (stat_rows or []) + (stat_headers or [])
+                        for element in all_elements:
+                            try:
+                                cls = await element.get_attribute('class') or ''
+                                
+                                if 'stat__header' in cls or 'sectionHeader' in cls:
+                                    text = (await element.text_content()).strip()
+                                    if text:
+                                        current_category = text
+                                        if current_category not in detailed_statistics:
+                                            detailed_statistics[current_category] = {}
+                                    continue
+                                
+                                category_el = await self._resolve_element('stat_category_name', element)
+                                home_el = await self._resolve_element('stat_home_value', element)
+                                away_el = await self._resolve_element('stat_away_value', element)
+                                
+                                if category_el and home_el and away_el:
+                                    name = (await category_el.text_content()).strip()
+                                    home_val = (await home_el.text_content()).strip()
+                                    away_val = (await away_el.text_content()).strip()
+                                    if current_category not in detailed_statistics:
+                                        detailed_statistics[current_category] = {}
+                                    detailed_statistics[current_category][name] = {
+                                        'home': home_val,
+                                        'away': away_val
+                                    }
+                            except Exception:
+                                continue
+                except (asyncio.TimeoutError, Exception) as e:
+                    self.logger.debug(f"YAML stats extraction timed out or failed: {e}")
             
             self.logger.info(f"Extracted stats in {len(detailed_statistics)} categories")
             
