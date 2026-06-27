@@ -4,6 +4,7 @@ Primary tab extractor for Flashscore match detail pages.
 Handles extraction from primary tabs: SUMMARY, H2H, ODDS, STATS.
 """
 
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from playwright.async_api import ElementHandle, Page
@@ -299,41 +300,46 @@ class PrimaryTabExtractor(ABC):
             return True  # Continue anyway
     
     async def _verify_tab_active(self, tab_name: str) -> bool:
-        """Verify that the specified tab is currently active."""
+        """Verify that the specified tab is currently active.
+        
+        Playwright direct first, URL-based fallback.
+        YAML selector engine NOT used (infinite retry loop risk).
+        """
         try:
-            analytics_alias = self.TAB_ANALYTICS_ALIAS.get(tab_name, tab_name)
+            text_to_tab = {
+                'Summary': 'summary', 'Stats': 'stats', 'Odds': 'odds',
+                'H2H': 'h2h', 'Match': 'match', 'Player stats': 'player-stats',
+                'Lineups': 'lineups', 'Match History': 'match-history',
+            }
             
-            # Flashscore uses data-selected="true" on button tabs
-            # and data-analytics-alias for navigation links
-            # Use YAML-driven tab_selected selector to check active state
-            selected_tabs = await self._resolve_elements('tab_selected')
-            for tab in selected_tabs:
-                text = (await tab.text_content()).strip()
-                text_to_tab = {
-                    'Summary': 'summary', 'Stats': 'stats', 'Odds': 'odds',
-                    'H2H': 'h2h', 'Match': 'match', 'Player stats': 'player-stats',
-                    'Lineups': 'lineups', 'Match History': 'match-history',
-                }
-                if text_to_tab.get(text) == tab_name:
-                    return True
+            # Strategy 1: Playwright direct — check active tab buttons
+            active_selectors = [
+                'button[data-testid="wcl-tab"][aria-selected="true"]',
+                'button[data-testid="wcl-tab"].wcl-tabSelected',
+                'button[data-testid="wcl-tab"][class*="Selected"]',
+                'button[data-testid="wcl-tab"][class*="selected"]',
+            ]
+            for sel in active_selectors:
+                try:
+                    active_btns = await self.page.query_selector_all(sel)
+                    for btn in active_btns:
+                        text = (await btn.text_content()).strip()
+                        if text_to_tab.get(text) == tab_name:
+                            return True
+                except Exception:
+                    continue
             
-            # Fallback: check URL path contains tab indicator
+            # Strategy 2: URL-based fallback
             current_url = self.page.url
-            if tab_name == 'summary' and '/odds/' not in current_url and '/h2h/' not in current_url and '/standings/' not in current_url:
+            url_checks = {
+                'summary': '/odds/' not in current_url and '/h2h/' not in current_url and '/standings/' not in current_url,
+                'odds': '/odds/' in current_url,
+                'h2h': '/h2h/' in current_url,
+                'stats': '/summary/stats' in current_url or '/standings/' in current_url,
+                'standings': '/standings/' in current_url,
+            }
+            if url_checks.get(tab_name, False):
                 return True
-            if tab_name == 'odds' and '/odds/' in current_url:
-                return True
-            if tab_name == 'h2h' and '/h2h/' in current_url:
-                return True
-            if tab_name in ('stats', 'standings') and '/standings/' in current_url:
-                return True
-            
-            # Fallback: check if tab content is visible via YAML selector
-            content_element = await self._resolve_element('tab_content')
-            if content_element:
-                is_visible = await content_element.is_visible()
-                if is_visible:
-                    return True
             
             return False
             
@@ -442,14 +448,11 @@ class PrimaryTabExtractor(ABC):
     async def _get_current_active_tab(self) -> Optional[str]:
         """Get the currently active tab name.
         
-        FlashScore uses .wcl-tabSelected class on active tab buttons.
-        We check both primary tabs (Match, Odds, H2H) and sub-tabs (Summary, Stats, etc.)
+        Playwright direct queries first (fast, no infinite loops),
+        then URL-based fallback. YAML selector engine is NOT used here
+        because tab_selected enters an infinite retry loop.
         """
         try:
-            # Find all selected tab buttons - FlashScore uses wcl-tabSelected class
-            selected_tabs = await self._resolve_elements('tab_selected')
-            
-            # Map button text to internal tab names
             text_to_tab = {
                 'Summary': 'summary',
                 'Stats': 'stats',
@@ -461,38 +464,56 @@ class PrimaryTabExtractor(ABC):
                 'Match': 'match',
             }
             
-            active_primary = None
-            active_sub = None
+            # Strategy 1: Playwright direct — find active tab buttons
+            # FlashScore marks active tabs with specific attributes/classes
+            active_selectors = [
+                'button[data-testid="wcl-tab"][aria-selected="true"]',
+                'button[data-testid="wcl-tab"].wcl-tabSelected',
+                'button[data-testid="wcl-tab"][class*="Selected"]',
+                'button[data-testid="wcl-tab"][class*="selected"]',
+                'a[data-analytics-element="SCN_TAB"] button[class*="Selected"]',
+                'a[data-analytics-element="SCN_TAB"] button[class*="selected"]',
+            ]
+            for sel in active_selectors:
+                try:
+                    active_btns = await self.page.query_selector_all(sel)
+                    for btn in active_btns:
+                        text = (await btn.text_content()).strip()
+                        tab_name = text_to_tab.get(text)
+                        if tab_name:
+                            self.logger.debug(f"Active tab detected via Playwright: {tab_name}")
+                            return tab_name
+                except Exception:
+                    continue
             
-            for tab in selected_tabs:
-                text = (await tab.text_content()).strip()
-                tab_name = text_to_tab.get(text, text.lower())
-                
-                # Determine if this is a primary or sub-tab by checking parent
-                cls = await tab.get_attribute('class') or ''
-                if 'tabsPrimary' in cls or 'tabsPrimary' in (await tab.evaluate('el => el.closest("[class*=tabsPrimary]")?.className || ""')):
-                    active_primary = tab_name
-                else:
-                    active_sub = tab_name
+            # Strategy 2: Check all tab buttons and find one with active class indicator
+            try:
+                all_btns = await self.page.query_selector_all('button[data-testid="wcl-tab"]')
+                for btn in all_btns:
+                    cls = await btn.get_attribute('class') or ''
+                    if 'selected' in cls.lower() or 'active' in cls.lower():
+                        text = (await btn.text_content()).strip()
+                        tab_name = text_to_tab.get(text)
+                        if tab_name:
+                            self.logger.debug(f"Active tab detected via class scan: {tab_name}")
+                            return tab_name
+            except Exception:
+                pass
             
-            # If a sub-tab is selected under "Match", return the sub-tab name
-            if active_sub and active_sub not in ('match',):
-                return active_sub
-            
-            # If primary tab is selected (Odds, H2H), return that
-            if active_primary and active_primary != 'match':
-                return active_primary
-            
-            # Fallback: check URL
+            # Strategy 3: URL-based fallback (fast, reliable)
             current_url = self.page.url
             if '/odds/' in current_url:
                 return 'odds'
             elif '/h2h/' in current_url:
                 return 'h2h'
-            elif '/summary/stats' in current_url:
+            elif '/summary/stats' in current_url or '/summary/point-by-point' in current_url:
                 return 'stats'
-            elif '/summary/' in current_url:
-                return 'summary'
+            elif '/summary/lineups' in current_url:
+                return 'lineups'
+            elif '/summary/player-stats' in current_url:
+                return 'player-stats'
+            elif '/standings/' in current_url:
+                return 'standings'
             else:
                 return 'summary'  # Default to summary
             
