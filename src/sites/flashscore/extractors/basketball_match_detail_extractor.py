@@ -315,45 +315,90 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return TertiaryData(inc_ot=None, ft=None, q1=None)
     
     async def _extract_stats_rows(self) -> Optional[Dict[str, Any]]:
-        """Extract stats from currently visible content — all selectors via YAML engine."""
+        """Extract stats from currently visible content — Playwright direct first, YAML timeout fallback."""
         try:
             statistics = {}
             current_section = "General"
             
-            # Get stat rows and section headers via YAML selectors
-            stat_rows = await self._resolve_elements('full_time_stats')
-            stat_headers = await self._resolve_elements('stat_section_header')
-            
-            if not stat_rows and not stat_headers:
-                self.logger.warning("No stat elements found via YAML selectors")
-                return None
-            
-            # Combine and iterate — headers set section context, rows extract data
-            all_elements = stat_rows + stat_headers
-            for element in all_elements:
-                cls = await element.get_attribute('class') or ''
-                
-                # Section header?
-                if 'stat__header' in cls or 'sectionHeader' in cls:
-                    text = (await element.text_content()).strip()
-                    if text:
-                        current_section = text
-                        if current_section not in statistics:
-                            statistics[current_section] = {}
+            # Strategy 1: Playwright direct — find stat rows and headers
+            stat_rows = []
+            stat_headers = []
+            for sel in ['.stat__row', '[class*="statRow"]', '[class*="stats__row"]', '[data-testid="stat-row"]']:
+                try:
+                    found = await self.page.query_selector_all(sel)
+                    stat_rows.extend(found)
+                except Exception:
                     continue
-                
-                # Stat row — extract category name, home value, away value via YAML sub-selectors
-                category_el = await self._resolve_element('stat_category_name', element)
-                home_el = await self._resolve_element('stat_home_value', element)
-                away_el = await self._resolve_element('stat_away_value', element)
-                
-                if category_el and home_el and away_el:
-                    name = (await category_el.text_content()).strip()
-                    home_val = (await home_el.text_content()).strip()
-                    away_val = (await away_el.text_content()).strip()
-                    if current_section not in statistics:
-                        statistics[current_section] = {}
-                    statistics[current_section][name] = {'home': home_val, 'away': away_val}
+            for sel in ['.stat__header', '[class*="sectionHeader"]', '[class*="statHeader"]', '[data-testid="stat-header"]']:
+                try:
+                    found = await self.page.query_selector_all(sel)
+                    stat_headers.extend(found)
+                except Exception:
+                    continue
+            
+            if stat_rows or stat_headers:
+                all_elements = stat_rows + stat_headers
+                for element in all_elements:
+                    try:
+                        cls = await element.get_attribute('class') or ''
+                        if 'header' in cls.lower() or 'section' in cls.lower():
+                            text = (await element.text_content()).strip()
+                            if text:
+                                current_section = text
+                                if current_section not in statistics:
+                                    statistics[current_section] = {}
+                            continue
+                        
+                        cells = await element.query_selector_all('span, div, td')
+                        if len(cells) >= 3:
+                            texts = [(await c.text_content()).strip() for c in cells]
+                            texts = [t for t in texts if t]
+                            if len(texts) >= 3:
+                                home_val = texts[0]
+                                name = texts[len(texts) // 2]
+                                away_val = texts[-1]
+                                if current_section not in statistics:
+                                    statistics[current_section] = {}
+                                statistics[current_section][name] = {'home': home_val, 'away': away_val}
+                    except Exception:
+                        continue
+            
+            # Strategy 2: YAML fallback (with timeout) only if Playwright direct found nothing
+            if not statistics:
+                try:
+                    stat_rows = await asyncio.wait_for(self._resolve_elements('full_time_stats'), timeout=5.0)
+                    stat_headers = await asyncio.wait_for(self._resolve_elements('stat_section_header'), timeout=5.0)
+                    
+                    if stat_rows or stat_headers:
+                        all_elements = (stat_rows or []) + (stat_headers or [])
+                        for element in all_elements:
+                            try:
+                                cls = await element.get_attribute('class') or ''
+                                if 'stat__header' in cls or 'sectionHeader' in cls:
+                                    text = (await element.text_content()).strip()
+                                    if text:
+                                        current_section = text
+                                        if current_section not in statistics:
+                                            statistics[current_section] = {}
+                                    continue
+                                
+                                category_el = await asyncio.wait_for(self._resolve_element('stat_category_name', element), timeout=3.0)
+                                home_el = await asyncio.wait_for(self._resolve_element('stat_home_value', element), timeout=3.0)
+                                away_el = await asyncio.wait_for(self._resolve_element('stat_away_value', element), timeout=3.0)
+                                
+                                if category_el and home_el and away_el:
+                                    name = (await category_el.text_content()).strip()
+                                    home_val = (await home_el.text_content()).strip()
+                                    away_val = (await away_el.text_content()).strip()
+                                    if current_section not in statistics:
+                                        statistics[current_section] = {}
+                                    statistics[current_section][name] = {'home': home_val, 'away': away_val}
+                            except (asyncio.TimeoutError, Exception):
+                                continue
+                except asyncio.TimeoutError:
+                    self.logger.debug("YAML stats fallback timed out")
+                except Exception as e:
+                    self.logger.debug(f"YAML stats fallback failed: {e}")
             
             return statistics if statistics else None
         except Exception as e:
@@ -372,21 +417,59 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return None
     
     async def _click_period_filter(self, period_name: str) -> bool:
-        """Click a period filter tab by matching its button text — via YAML tab_button selector."""
+        """Click a period filter tab — Playwright direct first, YAML timeout fallback."""
+        # Strategy 1: Playwright direct — find all tab-like buttons
+        for sel in ['button[data-testid="wcl-tab"]', 'button[class*="tab"]', '[role="tab"]']:
+            try:
+                buttons = await self.page.query_selector_all(sel)
+                for btn in buttons:
+                    text = (await btn.text_content()).strip()
+                    if text == period_name:
+                        await btn.click()
+                        await self.page.wait_for_timeout(1500)
+                        self.logger.info(f"Clicked period filter: {period_name}")
+                        return True
+            except Exception:
+                continue
+        
+        # Strategy 2: JavaScript text search
         try:
-            tab_buttons = await self._resolve_elements('tab_button')
+            clicked = await self.page.evaluate(f"""
+                () => {{
+                    const buttons = document.querySelectorAll('button, [role="tab"]');
+                    for (const btn of buttons) {{
+                        if (btn.textContent.trim() === '{period_name}') {{
+                            btn.click();
+                            return true;
+                        }}
+                    }}
+                    return false;
+                }}
+            """)
+            if clicked:
+                await self.page.wait_for_timeout(1500)
+                self.logger.info(f"Clicked period filter via JS: {period_name}")
+                return True
+        except Exception:
+            pass
+        
+        # Strategy 3: YAML fallback with timeout
+        try:
+            tab_buttons = await asyncio.wait_for(self._resolve_elements('tab_button'), timeout=5.0)
             for btn in tab_buttons:
                 text = (await btn.text_content()).strip()
                 if text == period_name:
                     await btn.click()
                     await self.page.wait_for_timeout(1500)
-                    self.logger.info(f"Clicked period filter: {period_name}")
+                    self.logger.info(f"Clicked period filter via YAML: {period_name}")
                     return True
-            self.logger.debug(f"Period filter not found: {period_name}")
-            return False
+        except asyncio.TimeoutError:
+            self.logger.debug(f"YAML period filter timed out for {period_name}")
         except Exception as e:
-            self.logger.error(f"Error clicking period filter {period_name}: {e}")
-            return False
+            self.logger.debug(f"YAML period filter failed: {e}")
+        
+        self.logger.debug(f"Period filter not found: {period_name}")
+        return False
 
 
 class BasketballPrimaryTabExtractor(PrimaryTabExtractor):

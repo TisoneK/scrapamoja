@@ -215,62 +215,82 @@ class PrimaryTabExtractor(ABC):
     async def _click_tab_by_text(self, display_text: str) -> bool:
         """Click a tab button matching the given display text.
         
-        Strategy 1 (primary): Playwright direct query — fast, reliable,
-        does not depend on the selector engine. FlashScore tab buttons use
-        data-testid="wcl-tab" attributes and are always in the DOM.
+        Strategy 1 (primary): Playwright direct query — tries multiple
+        CSS selectors that FlashScore uses for tab buttons.
         
-        Strategy 2 (fallback): YAML selector engine via tab_button.
+        Strategy 2 (fallback): Playwright text-based button search.
+        
+        Strategy 3 (last resort): YAML selector engine with timeout.
         """
-        # Strategy 1: Playwright direct — bypass selector engine
+        # Strategy 1: Playwright direct — try all known FlashScore tab selectors
+        tab_selectors = [
+            'button[data-testid="wcl-tab"]',                  # Modern FlashScore tabs
+            'a[data-analytics-element="SCN_TAB"]',            # Primary tab links
+            'button[class*="tab"]',                            # Generic tab buttons
+            '[role="tab"]',                                    # ARIA tabs
+            'a[class*="tab"]',                                 # Tab links
+            '.tabsPrimary a',                                  # Primary tab links (old)
+            '.tabsSecondary a',                                # Sub-tab links (old)
+            'button[class*="wcl-tab"]',                        # wcl-tab class pattern
+        ]
+        
+        for selector in tab_selectors:
+            try:
+                elements = await self.page.query_selector_all(selector)
+                for el in elements:
+                    try:
+                        text = (await el.text_content()).strip()
+                        # Match exact text or text within the element
+                        if text == display_text or display_text in text:
+                            await el.click()
+                            self.logger.info(f"Clicked '{display_text}' tab via selector: {selector}")
+                            return True
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+        
+        # Strategy 2: Playwright text-based search — find any clickable element with matching text
         try:
-            # FlashScore uses button[data-testid="wcl-tab"] for all tab buttons
-            tab_buttons = await self.page.query_selector_all('button[data-testid="wcl-tab"]')
+            # Use page.get_by_text or evaluate to find elements by text content
+            matching = await self.page.evaluate(f"""
+                () => {{
+                    const buttons = document.querySelectorAll('button, a[role="tab"], [role="tab"]');
+                    for (const btn of buttons) {{
+                        if (btn.textContent.trim() === '{display_text}') {{
+                            btn.click();
+                            return true;
+                        }}
+                    }}
+                    return false;
+                }}
+            """)
+            if matching:
+                self.logger.info(f"Clicked '{display_text}' tab via JavaScript text search")
+                return True
+        except Exception as e:
+            self.logger.debug(f"JavaScript text search failed: {e}")
+        
+        # Strategy 3: YAML selector engine (timeout-wrapped to prevent infinite loops)
+        try:
+            tab_buttons = await asyncio.wait_for(
+                self._resolve_elements('tab_button'), timeout=5.0
+            )
             for btn in tab_buttons:
                 try:
                     text = (await btn.text_content()).strip()
                     if text == display_text:
                         await btn.click()
-                        self.logger.debug(f"Clicked '{display_text}' tab via Playwright direct query")
+                        self.logger.info(f"Clicked '{display_text}' tab via YAML selector engine")
                         return True
                 except Exception:
                     continue
-            
-            # Also try anchor-based tab navigation (primary tabs sometimes use <a> not <button>)
-            tab_links = await self.page.query_selector_all('a[data-analytics-element="SCN_TAB"]')
-            for link in tab_links:
-                try:
-                    # Check the button inside the link
-                    btn = await link.query_selector('button')
-                    if btn:
-                        text = (await btn.text_content()).strip()
-                        if text == display_text:
-                            await link.click()
-                            self.logger.debug(f"Clicked '{display_text}' tab link via Playwright direct query")
-                            return True
-                    else:
-                        # The link itself might contain the text
-                        text = (await link.text_content()).strip()
-                        if text == display_text:
-                            await link.click()
-                            self.logger.debug(f"Clicked '{display_text}' tab link directly via Playwright")
-                            return True
-                except Exception:
-                    continue
-        except Exception as e:
-            self.logger.debug(f"Playwright direct tab query failed: {e}")
-        
-        # Strategy 2: YAML selector engine (fallback)
-        try:
-            tab_buttons = await self._resolve_elements('tab_button')
-            for btn in tab_buttons:
-                text = (await btn.text_content()).strip()
-                if text == display_text:
-                    await btn.click()
-                    self.logger.debug(f"Clicked '{display_text}' tab via YAML selector engine")
-                    return True
+        except asyncio.TimeoutError:
+            self.logger.debug(f"YAML selector tab_button timed out after 5s for '{display_text}'")
         except Exception as e:
             self.logger.debug(f"YAML selector tab query failed: {e}")
         
+        self.logger.warning(f"Could not find tab button for '{display_text}'")
         return False
     
     async def _wait_for_tab_content_load(self, tab_name: str, timeout: int = 10000) -> bool:
