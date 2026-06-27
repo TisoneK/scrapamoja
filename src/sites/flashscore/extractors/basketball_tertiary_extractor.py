@@ -1,15 +1,15 @@
 """
 Basketball tertiary tab extractor implementing statistical filter extraction.
 
-Extends the base TertiaryTabExtractor with basketball-specific implementations
-for tertiary filters: Inc OT, FT, Q1.
+DEPRECATED: This YAML-only extractor has been superseded by the Playwright-direct
+implementation in BasketballMatchDetailExtractor._extract_tertiary_tabs().
 
-ALL selectors are YAML-driven via the selector engine. Zero hardcoded CSS strings.
-Each selector lives in its own YAML file under src/sites/flashscore/selectors/extraction/match_stats/
-with ordered fallback chains: data-testid → obfuscated class → partial class → xpath.
+The new implementation uses live-site-verified selectors:
+  - Period filter tabs: button[data-testid="wcl-tab"] inside [data-type="tertiary"]
+  - Stat rows: [data-testid="wcl-statistics"] with category/value test IDs
+  - Quarter scores: smh__part elements in the match header
 
-When FlashScore rotates CSS hashes, only the YAML entries need updating.
-No Python code changes required.
+This module is kept for backward compatibility and potential YAML-only use cases.
 """
 
 from typing import Dict, Any, Optional, List
@@ -22,7 +22,11 @@ from datetime import datetime
 
 
 class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
-    """Basketball-specific tertiary tab extractor — 100% YAML-driven selectors."""
+    """Basketball-specific tertiary tab extractor — 100% YAML-driven selectors.
+    
+    DEPRECATED: Use BasketballMatchDetailExtractor._extract_tertiary_tabs() instead,
+    which uses Playwright-direct selectors verified against the live FlashScore site.
+    """
     
     async def _extract_inc_ot_data(self) -> Optional[Dict[str, Any]]:
         """Extract data from Inc OT (Including Overtime) filter."""
@@ -30,9 +34,7 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             overtime_stats = {}
             including_ot_totals = {}
             
-            # Extract overtime-specific statistics
             try:
-                # Look for overtime period statistics via YAML selector
                 ot_elements = await self._resolve_elements('ot_stat_row')
                 for ot_element in ot_elements:
                     stat_name = await self._resolve_text('tertiary_stat_name', parent=ot_element)
@@ -47,7 +49,6 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             except Exception as e:
                 self.logger.warning(f"Error extracting OT stat rows: {e}")
             
-            # Extract including overtime totals
             try:
                 total_elements = await self._resolve_elements('total_stat_inc_ot')
                 for total_element in total_elements:
@@ -59,7 +60,6 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             except Exception as e:
                 self.logger.warning(f"Error extracting inc-ot total stats: {e}")
             
-            # Extract overtime period breakdown
             try:
                 period_breakdown = []
                 period_elements = await self._resolve_elements('period_stat_ot')
@@ -93,7 +93,6 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             full_time_stats = {}
             match_totals = {}
             
-            # Extract full-time statistics
             try:
                 ft_elements = await self._resolve_elements('ft_stat_row')
                 for ft_element in ft_elements:
@@ -109,7 +108,6 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             except Exception as e:
                 self.logger.warning(f"Error extracting FT stat rows: {e}")
             
-            # Extract match totals
             try:
                 total_elements = await self._resolve_elements('total_stat_ft')
                 for total_element in total_elements:
@@ -121,7 +119,6 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             except Exception as e:
                 self.logger.warning(f"Error extracting FT total stats: {e}")
             
-            # Extract scoring progression
             try:
                 scoring_progression = []
                 progression_elements = await self._resolve_elements('scoring_progression')
@@ -155,7 +152,6 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             first_quarter_stats = {}
             q1_breakdown = {}
             
-            # Extract first quarter specific statistics
             try:
                 q1_elements = await self._resolve_elements('q1_stat_row')
                 for q1_element in q1_elements:
@@ -171,7 +167,6 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             except Exception as e:
                 self.logger.warning(f"Error extracting Q1 stat rows: {e}")
             
-            # Extract quarter breakdown
             try:
                 quarter_elements = await self._resolve_elements('quarter_breakdown')
                 for quarter_element in quarter_elements:
@@ -183,7 +178,6 @@ class BasketballTertiaryTabExtractor(TertiaryTabExtractor):
             except Exception as e:
                 self.logger.warning(f"Error extracting quarter breakdown: {e}")
             
-            # Extract first quarter scoring timeline
             try:
                 scoring_timeline = []
                 timeline_elements = await self._resolve_elements('q1_scoring_event')

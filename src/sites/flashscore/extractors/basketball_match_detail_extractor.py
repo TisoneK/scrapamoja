@@ -287,7 +287,8 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
     async def _extract_stats_tab(self, page_state: PageState) -> Optional[StatsData]:
         """Extract data from STATS tab."""
         try:
-            stats_data = await self.primary_extractor.extract_tab_data('stats')
+            # Use 'match-stats' which maps to display text "Stats" on basketball pages
+            stats_data = await self.primary_extractor.extract_tab_data('match-stats')
             if not stats_data:
                 return None
             return StatsData(
@@ -300,52 +301,241 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return None
     
     async def _extract_tertiary_tabs(self, page_state: PageState) -> Optional[TertiaryData]:
-        """Extract data from tertiary tabs (quarter-by-quarter stats)."""
+        """Extract data from tertiary tabs (quarter-by-quarter stats).
+
+        FlashScore basketball layout (confirmed via live inspection):
+          Primary tabs: Match, Odds, H2H, Draw, Summary, Player Stats, Stats, ...
+          Under Summary → Stats sub-tab, tertiary period filters appear:
+            Match | 1st Quarter | 2nd Quarter | 3rd Quarter | 4th Quarter
+
+        Strategy:
+          1. Extract quarter scores from the match header (smh__part elements)
+             BEFORE navigating away — these elements disappear after tab switch.
+          2. Navigate to the Stats sub-tab.
+          3. For each period filter (Match, 1st-4th Quarter), click it and
+             extract the stat comparison rows using data-testid="wcl-statistics".
+        """
         try:
-            ft_stats = None
+            match_stats = None
             q1_stats = None
-            inc_ot_stats = None
-            
-            if await self.primary_extractor.navigate_to_tab('stats'):
-                await self.page.wait_for_timeout(2000)
-                ft_stats = await self._extract_stats_rows()
+            q2_stats = None
+            q3_stats = None
+            q4_stats = None
+
+            # Step 1: Extract quarter scores BEFORE navigating — the smh__part
+            # elements are only present in the initial match detail header and
+            # disappear from the DOM after clicking a sub-tab.
+            quarter_scores = await self._extract_quarter_scores()
+
+            # Step 2: Navigate to the Stats sub-tab
+            # Use 'match-stats' which maps to display text "Stats" (not 'stats' which maps to "Standings")
+            if not await self.primary_extractor.navigate_to_tab('match-stats'):
+                self.logger.warning("Could not navigate to Stats tab; skipping tertiary extraction")
+                # Return quarter scores even if stats extraction fails
+                return TertiaryData(quarter_scores=quarter_scores)
+
+            await self.page.wait_for_timeout(2000)
+
+            # Step 3: Detect available period filters
+            available_periods = await self._detect_period_filters()
+            self.logger.info(f"Available period filters: {available_periods}")
+
+            # Step 4: Extract stats for each period
+            # Always start with "Match" (full game) — it may already be active
+            if 'match' in available_periods or not available_periods:
+                match_stats = await self._extract_period_stats('Match')
+            else:
+                # If "Match" is not found as a filter, just extract whatever is showing
+                match_stats = await self._extract_stats_rows()
+
+            if '1st quarter' in available_periods:
                 q1_stats = await self._extract_period_stats('1st Quarter')
-                await self._click_period_filter('Match')
-                await self.page.wait_for_timeout(1000)
-                inc_ot_stats = ft_stats
-            
-            return TertiaryData(inc_ot=inc_ot_stats, ft=ft_stats, q1=q1_stats)
+            if '2nd quarter' in available_periods:
+                q2_stats = await self._extract_period_stats('2nd Quarter')
+            if '3rd quarter' in available_periods:
+                q3_stats = await self._extract_period_stats('3rd Quarter')
+            if '4th quarter' in available_periods:
+                q4_stats = await self._extract_period_stats('4th Quarter')
+
+            return TertiaryData(
+                match=match_stats,
+                q1=q1_stats,
+                q2=q2_stats,
+                q3=q3_stats,
+                q4=q4_stats,
+                quarter_scores=quarter_scores,
+                inc_ot=match_stats,   # backward compat
+                ft=match_stats,       # backward compat
+            )
         except Exception as e:
             self.logger.error(f"Error extracting tertiary tabs: {e}")
-            return TertiaryData(inc_ot=None, ft=None, q1=None)
+            return TertiaryData()
+
+    async def _extract_quarter_scores(self) -> Optional[Dict[str, Any]]:
+        """Extract quarter-by-quarter scores from the match header.
+
+        FlashScore renders quarter scores in the duel participant header using
+        smh__part elements:
+          - smh__part smh__home smh__part--1  → home Q1 score
+          - smh__part smh__home smh__part--2  → home Q2 score
+          ... (same pattern for smh__away)
+        """
+        try:
+            scores = await self.page.evaluate("""
+                () => {
+                    const result = { home: {}, away: {} };
+
+                    // Home quarter scores: smh__part smh__home smh__part--N
+                    const homeParts = document.querySelectorAll(
+                        '[class*="smh__home"][class*="smh__part--"]'
+                    );
+                    homeParts.forEach(el => {
+                        const cls = el.className || '';
+                        const m = cls.match(/smh__part--(\\d+)/);
+                        if (m) {
+                            const qNum = parseInt(m[1]);
+                            const val = el.textContent.trim();
+                            if (val) result.home['Q' + qNum] = val;
+                        }
+                    });
+
+                    // Away quarter scores: smh__part smh__away smh__part--N
+                    const awayParts = document.querySelectorAll(
+                        '[class*="smh__away"][class*="smh__part--"]'
+                    );
+                    awayParts.forEach(el => {
+                        const cls = el.className || '';
+                        const m = cls.match(/smh__part--(\\d+)/);
+                        if (m) {
+                            const qNum = parseInt(m[1]);
+                            const val = el.textContent.trim();
+                            if (val) result.away['Q' + qNum] = val;
+                        }
+                    });
+
+                    // Total scores from smh__score elements
+                    const homeTotal = document.querySelector(
+                        '[class*="smh__score"][class*="smh__home"]'
+                    );
+                    const awayTotal = document.querySelector(
+                        '[class*="smh__score"][class*="smh__away"]'
+                    );
+                    if (homeTotal) result.home['total'] = homeTotal.textContent.trim();
+                    if (awayTotal) result.away['total'] = awayTotal.textContent.trim();
+
+                    const hasData = Object.keys(result.home).length > 0
+                                 || Object.keys(result.away).length > 0;
+                    return hasData ? result : null;
+                }
+            """)
+            if scores:
+                self.logger.info(f"Extracted quarter scores: {scores}")
+            return scores
+        except Exception as e:
+            self.logger.debug(f"Error extracting quarter scores: {e}")
+            return None
+
+    async def _detect_period_filters(self) -> List[str]:
+        """Detect which period filter tabs are available under the Stats sub-tab.
+
+        Period filters are tertiary tabs rendered as button[data-testid="wcl-tab"]
+        inside a container with data-type="tertiary".
+        """
+        try:
+            filters = await self.page.evaluate("""
+                () => {
+                    const tertiary = document.querySelector('[data-type="tertiary"]');
+                    if (!tertiary) return [];
+                    const btns = tertiary.querySelectorAll('button[data-testid="wcl-tab"]');
+                    return Array.from(btns).map(b => b.textContent.trim().toLowerCase());
+                }
+            """)
+            return filters if filters else []
+        except Exception as e:
+            self.logger.debug(f"Error detecting period filters: {e}")
+            return []
     
     async def _extract_stats_rows(self) -> Optional[Dict[str, Any]]:
         """Extract stats from currently visible content — Playwright direct only.
-        
-        YAML selector engine NOT used (CancelledError-swallowing infinite loop).
+
+        FlashScore stats layout (confirmed via live inspection):
+          - Section headers: .stat__header (e.g. "Scoring", "Rebounds", "Other")
+          - Stat rows: [data-testid="wcl-statistics"]
+            Each row contains:
+              [data-testid="wcl-statistics-value"] (home)  →  first match
+              [data-testid="wcl-statistics-category"]      →  stat name
+              [data-testid="wcl-statistics-value"] (away)  →  second match
         """
         try:
+            # Strategy 1: JavaScript extraction using data-testid selectors (fastest, most reliable)
+            statistics = await self.page.evaluate("""
+                () => {
+                    const stats = {};
+                    let currentSection = 'General';
+
+                    // Get section headers
+                    const headers = document.querySelectorAll('.stat__header');
+                    // Get stat rows
+                    const rows = document.querySelectorAll('[data-testid="wcl-statistics"]');
+
+                    if (rows.length === 0) return null;
+
+                    // Build a map from element position to section header
+                    // Headers and rows are siblings in DOM order
+                    const allElements = document.querySelectorAll('.stat__header, [data-testid="wcl-statistics"]');
+                    allElements.forEach(el => {
+                        if (el.classList.contains('stat__header') || el.className.includes('sectionHeader')) {
+                            const text = el.textContent.trim();
+                            if (text) {
+                                currentSection = text;
+                                if (!(currentSection in stats)) stats[currentSection] = {};
+                            }
+                            return;
+                        }
+
+                        // It's a stat row
+                        const category = el.querySelector('[data-testid="wcl-statistics-category"]');
+                        const values = el.querySelectorAll('[data-testid="wcl-statistics-value"]');
+                        if (category && values.length >= 2) {
+                            const catName = category.textContent.trim();
+                            const homeVal = values[0].textContent.trim();
+                            const awayVal = values[1].textContent.trim();
+                            if (catName) {
+                                if (!(currentSection in stats)) stats[currentSection] = {};
+                                stats[currentSection][catName] = { home: homeVal, away: awayVal };
+                            }
+                        }
+                    });
+
+                    return Object.keys(stats).length > 0 ? stats : null;
+                }
+            """)
+
+            if statistics:
+                self.logger.info(f"Extracted stats in {len(statistics)} sections via data-testid")
+                return statistics
+
+            # Strategy 2: Fallback — Playwright direct with older CSS class patterns
             statistics = {}
             current_section = "General"
-            
-            # Playwright direct — find stat rows and headers
+
             stat_rows = []
             stat_headers = []
-            for sel in ['.stat__row', '[class*="statRow"]', '[class*="stats__row"]', '[data-testid="stat-row"]']:
+            for sel in ['.stat__row', '[class*="statRow"]', '[class*="stats__row"]']:
                 try:
                     found = await self.page.query_selector_all(sel)
                     stat_rows.extend(found)
                 except Exception:
                     continue
-            for sel in ['.stat__header', '[class*="sectionHeader"]', '[class*="statHeader"]', '[data-testid="stat-header"]']:
+            for sel in ['.stat__header', '[class*="sectionHeader"]', '[class*="statHeader"]']:
                 try:
                     found = await self.page.query_selector_all(sel)
                     stat_headers.extend(found)
                 except Exception:
                     continue
-            
+
             if stat_rows or stat_headers:
-                all_elements = stat_rows + stat_headers
+                all_elements = stat_headers + stat_rows
                 for element in all_elements:
                     try:
                         cls = await element.get_attribute('class') or ''
@@ -356,7 +546,7 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                                 if current_section not in statistics:
                                     statistics[current_section] = {}
                             continue
-                        
+
                         cells = await element.query_selector_all('span, div, td')
                         if len(cells) >= 3:
                             texts = [(await c.text_content()).strip() for c in cells]
@@ -370,39 +560,7 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                                 statistics[current_section][name] = {'home': home_val, 'away': away_val}
                     except Exception:
                         continue
-            
-            # JavaScript fallback — extract stats using DOM traversal
-            if not statistics:
-                try:
-                    js_stats = await self.page.evaluate("""
-                        () => {
-                            const stats = {};
-                            let section = 'General';
-                            // Look for stat comparison rows
-                            const rows = document.querySelectorAll('[class*="stat"], [class*="comparison"]');
-                            rows.forEach(row => {
-                                const cls = row.className || '';
-                                if (cls.includes('header') || cls.includes('section')) {
-                                    section = row.textContent.trim();
-                                    if (!(section in stats)) stats[section] = {};
-                                    return;
-                                }
-                                const cells = row.querySelectorAll('span, div, td');
-                                const texts = Array.from(cells).map(c => c.textContent.trim()).filter(t => t);
-                                if (texts.length >= 3) {
-                                    stats[section][texts[Math.floor(texts.length/2)]] = {
-                                        home: texts[0], away: texts[texts.length-1]
-                                    };
-                                }
-                            });
-                            return Object.keys(stats).length > 0 ? stats : null;
-                        }
-                    """)
-                    if js_stats:
-                        statistics = js_stats
-                except Exception:
-                    pass
-            
+
             return statistics if statistics else None
         except Exception as e:
             self.logger.error(f"Error extracting stats rows: {e}")
@@ -420,31 +578,23 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return None
     
     async def _click_period_filter(self, period_name: str) -> bool:
-        """Click a period filter tab — Playwright direct + JavaScript only.
-        
-        YAML selector engine NOT used (CancelledError-swallowing infinite loop).
+        """Click a period filter tab inside the tertiary tabs container.
+
+        Period filters live inside [data-type="tertiary"] and are rendered as
+        button[data-testid="wcl-tab"].  We must scope our search to the tertiary
+        container so we don't accidentally click a primary tab with the same text.
+
+        Playwright direct + JavaScript only — YAML selector engine NOT used.
         """
-        # Strategy 1: Playwright direct — find all tab-like buttons
-        for sel in ['button[data-testid="wcl-tab"]', 'button[class*="tab"]', '[role="tab"]']:
-            try:
-                buttons = await self.page.query_selector_all(sel)
-                for btn in buttons:
-                    text = (await btn.text_content()).strip()
-                    if text == period_name:
-                        await btn.click()
-                        await self.page.wait_for_timeout(1500)
-                        self.logger.info(f"Clicked period filter: {period_name}")
-                        return True
-            except Exception:
-                continue
-        
-        # Strategy 2: JavaScript text search
+        # Strategy 1: JavaScript — click the button inside the tertiary container
         try:
             safe_name = period_name.replace("'", "\\'")
             clicked = await self.page.evaluate(f"""
                 () => {{
-                    const buttons = document.querySelectorAll('button, [role="tab"]');
-                    for (const btn of buttons) {{
+                    const tertiary = document.querySelector('[data-type="tertiary"]');
+                    if (!tertiary) return false;
+                    const btns = tertiary.querySelectorAll('button[data-testid="wcl-tab"]');
+                    for (const btn of btns) {{
                         if (btn.textContent.trim() === '{safe_name}') {{
                             btn.click();
                             return true;
@@ -454,12 +604,40 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                 }}
             """)
             if clicked:
-                await self.page.wait_for_timeout(1500)
+                await self.page.wait_for_timeout(2000)
                 self.logger.info(f"Clicked period filter via JS: {period_name}")
                 return True
         except Exception:
             pass
-        
+
+        # Strategy 2: Playwright direct — find the tertiary container then its buttons
+        try:
+            tertiary_container = await self.page.query_selector('[data-type="tertiary"]')
+            if tertiary_container:
+                buttons = await tertiary_container.query_selector_all('button[data-testid="wcl-tab"]')
+                for btn in buttons:
+                    text = (await btn.text_content()).strip()
+                    if text == period_name:
+                        await btn.click()
+                        await self.page.wait_for_timeout(2000)
+                        self.logger.info(f"Clicked period filter: {period_name}")
+                        return True
+        except Exception:
+            pass
+
+        # Strategy 3: Broader fallback — try all tab buttons (less precise)
+        try:
+            buttons = await self.page.query_selector_all('button[data-testid="wcl-tab"]')
+            for btn in buttons:
+                text = (await btn.text_content()).strip()
+                if text == period_name:
+                    await btn.click()
+                    await self.page.wait_for_timeout(2000)
+                    self.logger.info(f"Clicked period filter (broad search): {period_name}")
+                    return True
+        except Exception:
+            pass
+
         self.logger.debug(f"Period filter not found: {period_name}")
         return False
 
@@ -845,68 +1023,113 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     # ─────────────────────────────────────────────────────────
     
     async def _extract_stats_data(self) -> Optional[Dict[str, Any]]:
-        """Extract data from STATS tab — Playwright direct first, YAML engine fallback."""
+        """Extract data from STATS tab — Playwright direct first, YAML engine fallback.
+
+        FlashScore stats layout (confirmed via live inspection):
+          - Section headers: .stat__header (e.g. "Scoring", "Rebounds", "Other")
+          - Stat rows: [data-testid="wcl-statistics"]
+            Each row contains:
+              [data-testid="wcl-statistics-value"] (home)  →  first match
+              [data-testid="wcl-statistics-category"]      →  stat name
+              [data-testid="wcl-statistics-value"] (away)  →  second match
+        """
         try:
             detailed_statistics = {}
             player_performance = []
             team_performance = {}
-            current_category = "General"
-            
-            # ── Playwright direct queries ──
-            # FlashScore stats tab has stat rows with category, home value, away value
+
+            # Strategy 1: JavaScript extraction using data-testid selectors (most reliable)
             try:
-                stat_rows = await self.page.query_selector_all(
-                    '.stat__row, [class*="statRow"], [class*="stats__row"], [data-testid="stat-row"]'
-                )
-                stat_headers = await self.page.query_selector_all(
-                    '.stat__header, [class*="sectionHeader"], [class*="statHeader"], [data-testid="stat-header"]'
-                )
-                
-                if stat_rows or stat_headers:
-                    self.logger.info(f"Found {len(stat_rows)} stat rows, {len(stat_headers)} headers via Playwright")
-                    
-                    all_elements = stat_rows + stat_headers
-                    for element in all_elements:
-                        try:
-                            cls = await element.get_attribute('class') or ''
-                            
-                            # Section header?
-                            if 'header' in cls.lower() or 'section' in cls.lower():
-                                text = (await element.text_content()).strip()
-                                if text:
-                                    current_category = text
-                                    if current_category not in detailed_statistics:
-                                        detailed_statistics[current_category] = {}
-                                continue
-                            
-                            # Stat row — try to extract category name, home value, away value
-                            # FlashScore stats rows typically have: home_val | category | away_val
-                            cells = await element.query_selector_all('span, div, td')
-                            if len(cells) >= 3:
-                                texts = []
-                                for cell in cells:
-                                    t = (await cell.text_content()).strip()
-                                    if t:
-                                        texts.append(t)
-                                
-                                if len(texts) >= 3:
-                                    # Pattern: home_val, category_name, away_val
-                                    home_val = texts[0]
-                                    name = texts[len(texts) // 2]  # Middle element is usually the category
-                                    away_val = texts[-1]
-                                    if current_category not in detailed_statistics:
-                                        detailed_statistics[current_category] = {}
-                                    detailed_statistics[current_category][name] = {
-                                        'home': home_val,
-                                        'away': away_val
-                                    }
-                        except Exception:
-                            continue
+                js_stats = await self.page.evaluate("""
+                    () => {
+                        const stats = {};
+                        let currentSection = 'General';
+                        const allElements = document.querySelectorAll(
+                            '.stat__header, [data-testid="wcl-statistics"]'
+                        );
+                        allElements.forEach(el => {
+                            if (el.classList.contains('stat__header') || el.className.includes('sectionHeader')) {
+                                const text = el.textContent.trim();
+                                if (text) {
+                                    currentSection = text;
+                                    if (!(currentSection in stats)) stats[currentSection] = {};
+                                }
+                                return;
+                            }
+                            const category = el.querySelector('[data-testid="wcl-statistics-category"]');
+                            const values = el.querySelectorAll('[data-testid="wcl-statistics-value"]');
+                            if (category && values.length >= 2) {
+                                const catName = category.textContent.trim();
+                                const homeVal = values[0].textContent.trim();
+                                const awayVal = values[1].textContent.trim();
+                                if (catName) {
+                                    if (!(currentSection in stats)) stats[currentSection] = {};
+                                    stats[currentSection][catName] = { home: homeVal, away: awayVal };
+                                }
+                            }
+                        });
+                        return Object.keys(stats).length > 0 ? stats : null;
+                    }
+                """)
+                if js_stats:
+                    detailed_statistics = js_stats
+                    self.logger.info(f"Extracted stats in {len(detailed_statistics)} sections via data-testid")
             except Exception as e:
-                self.logger.debug(f"Playwright direct stats extraction failed: {e}")
-            
-            # ── If no stat comparison found, try extracting standings table ──
-            # FlashScore uses "Standings" tab instead of "Stats" for many sports
+                self.logger.debug(f"data-testid stats extraction failed: {e}")
+
+            # Strategy 2: Fallback — Playwright direct with CSS class patterns
+            if not detailed_statistics:
+                current_category = "General"
+                try:
+                    stat_rows = await self.page.query_selector_all(
+                        '.stat__row, [class*="statRow"], [class*="stats__row"]'
+                    )
+                    stat_headers = await self.page.query_selector_all(
+                        '.stat__header, [class*="sectionHeader"], [class*="statHeader"]'
+                    )
+
+                    if stat_rows or stat_headers:
+                        self.logger.info(f"Found {len(stat_rows)} stat rows, {len(stat_headers)} headers via CSS fallback")
+
+                        all_elements = stat_headers + stat_rows
+                        for element in all_elements:
+                            try:
+                                cls = await element.get_attribute('class') or ''
+
+                                # Section header?
+                                if 'header' in cls.lower() or 'section' in cls.lower():
+                                    text = (await element.text_content()).strip()
+                                    if text:
+                                        current_category = text
+                                        if current_category not in detailed_statistics:
+                                            detailed_statistics[current_category] = {}
+                                    continue
+
+                                # Stat row
+                                cells = await element.query_selector_all('span, div, td')
+                                if len(cells) >= 3:
+                                    texts = []
+                                    for cell in cells:
+                                        t = (await cell.text_content()).strip()
+                                        if t:
+                                            texts.append(t)
+
+                                    if len(texts) >= 3:
+                                        home_val = texts[0]
+                                        name = texts[len(texts) // 2]
+                                        away_val = texts[-1]
+                                        if current_category not in detailed_statistics:
+                                            detailed_statistics[current_category] = {}
+                                        detailed_statistics[current_category][name] = {
+                                            'home': home_val,
+                                            'away': away_val
+                                        }
+                            except Exception:
+                                continue
+                except Exception as e:
+                    self.logger.debug(f"CSS fallback stats extraction failed: {e}")
+
+            # Strategy 3: If no stat comparison found, try extracting standings table
             if not detailed_statistics:
                 try:
                     standings_rows = await self.page.query_selector_all(
@@ -919,36 +1142,25 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                             text = (await row.text_content()).strip()
                             if text:
                                 import re
-                                # Parse standings: "1.Cairns Marlins121201258:10001.000?WWWWW"
-                                # Team name and numbers are concatenated — use JS for reliable parsing
-                                match = re.match(
-                                    r'(\d+)\.\s*(.+)',
-                                    text
-                                )
+                                match = re.match(r'(\d+)\.\s*(.+)', text)
                                 if match:
                                     pos = int(match.group(1))
                                     remainder = match.group(2)
-                                    # Extract form (W/L/D sequence at end)
                                     form_match = re.search(r'([WLD]+)$', remainder)
                                     form = form_match.group(1) if form_match else ''
                                     if form:
                                         remainder = remainder[:-len(form)]
-                                    # Extract win percentage (decimal near end)
                                     pct_match = re.search(r'([\d.]+)\??$', remainder)
                                     win_pct = pct_match.group(1) if pct_match else ''
                                     if pct_match:
                                         remainder = remainder[:pct_match.start()]
-                                    # Extract points ratio (contains colon, e.g. "258:1000")
                                     pts_match = re.search(r'(\d+:\d+)$', remainder)
                                     points_ratio = pts_match.group(1) if pts_match else ''
                                     if pts_match:
                                         remainder = remainder[:pts_match.start()]
-                                    # Remaining is team name + numeric stats concatenated
-                                    # Extract trailing digits as stats (played, W, L, D)
                                     nums = re.findall(r'\d+', remainder)
-                                    # Team name is everything before the first long digit sequence
                                     team_part = re.sub(r'\d+$', '', remainder).strip()
-                                    
+
                                     entry = {
                                         'position': pos,
                                         'team': team_part,
@@ -961,7 +1173,7 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                                         'form': form,
                                     }
                                     standings_data.append(entry)
-                        
+
                         if standings_data:
                             detailed_statistics['standings'] = {
                                 entry['team']: entry for entry in standings_data
@@ -970,9 +1182,9 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                             self.logger.info(f"Extracted {len(standings_data)} standings entries")
                 except Exception as e:
                     self.logger.debug(f"Standings table extraction failed: {e}")
-            
+
             self.logger.info(f"Extracted stats in {len(detailed_statistics)} categories")
-            
+
             return {
                 'detailed_statistics': detailed_statistics,
                 'player_performance': player_performance,

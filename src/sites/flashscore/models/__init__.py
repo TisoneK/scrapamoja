@@ -81,10 +81,25 @@ class StatsData:
 
 @dataclass
 class TertiaryData:
-    """Data from tertiary statistical filters."""
-    inc_ot: Optional[Dict[str, Any]]  # Including overtime
-    ft: Optional[Dict[str, Any]]      # Full time
-    q1: Optional[Dict[str, Any]]     # First quarter
+    """Data from tertiary statistical filters (quarter-by-quarter stats).
+
+    Basketball matches on FlashScore have period filter tabs under the Stats
+    sub-tab: Match (full game), 1st Quarter, 2nd Quarter, 3rd Quarter,
+    4th Quarter.  Each filter shows the same stat categories broken down
+    for that period only.
+
+    Quarter scores (points per quarter) are extracted from the match header
+    smh__part elements and stored in quarter_scores.
+    """
+    match: Optional[Dict[str, Any]] = None   # Full match stats (was ft)
+    q1: Optional[Dict[str, Any]] = None      # 1st Quarter stats
+    q2: Optional[Dict[str, Any]] = None      # 2nd Quarter stats
+    q3: Optional[Dict[str, Any]] = None      # 3rd Quarter stats
+    q4: Optional[Dict[str, Any]] = None      # 4th Quarter stats
+    quarter_scores: Optional[Dict[str, Any]] = None  # Points per quarter from header
+    # Legacy fields kept for backward compatibility
+    inc_ot: Optional[Dict[str, Any]] = None  # Including overtime (alias for match)
+    ft: Optional[Dict[str, Any]] = None      # Full time (alias for match)
 
 
 @dataclass

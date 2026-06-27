@@ -527,7 +527,7 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
                 return await self._extract_h2h_data()
             elif tab_name == 'odds':
                 return await self._extract_odds_data()
-            elif tab_name == 'stats':
+            elif tab_name in ('stats', 'match-stats', 'match-statistics'):
                 return await self._extract_stats_data()
             else:
                 self.logger.warning(f"Unknown tab type: {tab_name}")
@@ -582,7 +582,7 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
             elif tab_name == 'odds':
                 required_fields = ['betting_odds']
                 return all(field in data for field in required_fields)
-            elif tab_name == 'stats':
+            elif tab_name in ('stats', 'match-stats', 'match-statistics'):
                 required_fields = ['detailed_statistics']
                 return all(field in data for field in required_fields)
             
