@@ -11,14 +11,21 @@ authors = [
 ]
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.11"
+# Python 3.12+ required: CancelledError is BaseException (not Exception) from
+# 3.9+, but 3.12 is the floor because the selector engine's timeout-protected
+# resolve pattern (selector_mixin.py) relies on 3.12's asyncio task lifecycle
+# and we test against 3.12 specifically.  Python 3.8's CancelledError inherited
+# from Exception, causing engine except-Exception handlers to swallow
+# cancellation — a bug we worked around by bypassing the engine for interactive
+# ops, but the workaround's correctness depends on 3.12+ behavior.
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
@@ -80,7 +87,7 @@ markers = [
 
 [tool.black]
 line-length = 88
-target-version = ['py311']
+target-version = ['py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -97,7 +104,7 @@ extend-exclude = '''
 '''
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 88
 select = [
     "E",  # pycodestyle errors
@@ -119,7 +126,7 @@ ignore = [
 "tests/*" = ["B011"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
