@@ -228,9 +228,17 @@ class InterruptAwareScraper:
             # Execute the scraping function
             result = await scrape_func(*args, **kwargs)
             
-            # Check for interrupt during execution
+            # If we got a result, always return it — the work is already done.
+            # Discarding a completed result just because an interrupt was signaled
+            # during execution wastes the work and causes NoneType errors downstream.
+            if result is not None:
+                if self.check_interrupt_status():
+                    self.logger.info("Scraping completed but interrupt detected — returning result anyway")
+                return result
+            
+            # Result is None — check if it was interrupted or genuinely empty
             if self.check_interrupt_status():
-                self.logger.info("Scraping interrupted, creating checkpoint")
+                self.logger.info("Scraping interrupted, returning None")
                 return None
             
             # Check for interrupt during critical operation

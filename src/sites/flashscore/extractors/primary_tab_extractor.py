@@ -341,6 +341,11 @@ class PrimaryTabExtractor(ABC):
             Extracted data dictionary or None if extraction fails
         """
         try:
+            # Check if the page is still alive before doing anything
+            if not await self._is_page_alive():
+                self.logger.error(f"Page is closed before extracting {tab_name} tab")
+                return None
+            
             # Check if we're already on the correct tab to avoid unnecessary navigation
             current_tab = await self._get_current_active_tab()
             if current_tab == tab_name:
@@ -351,6 +356,11 @@ class PrimaryTabExtractor(ABC):
             if not await self.navigate_to_tab(tab_name):
                 return None
             
+            # Verify page is still alive after navigation
+            if not await self._is_page_alive():
+                self.logger.error(f"Page closed after navigating to {tab_name} tab")
+                return None
+            
             # Wait for content to load
             if not await self.wait_for_tab_content(tab_name):
                 return None
@@ -359,8 +369,21 @@ class PrimaryTabExtractor(ABC):
             return await self._extract_current_tab_data(tab_name)
                 
         except Exception as e:
-            self.logger.error(f"Error extracting data from {tab_name} tab: {e}")
+            error_msg = str(e)
+            if "Target page, context or browser has been closed" in error_msg:
+                self.logger.error(f"Browser context closed while extracting {tab_name} tab — page likely navigated away or browser shut down")
+            else:
+                self.logger.error(f"Error extracting data from {tab_name} tab: {e}")
             return None
+    
+    async def _is_page_alive(self) -> bool:
+        """Check if the Playwright page is still accessible."""
+        try:
+            # Simple check: can we access the page URL?
+            _ = self.page.url
+            return True
+        except Exception:
+            return False
     
     async def _get_current_active_tab(self) -> Optional[str]:
         """Get the currently active tab name.

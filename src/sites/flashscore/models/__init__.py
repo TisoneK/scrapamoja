@@ -27,6 +27,8 @@ class BasicMatchInfo:
     current_score: Optional[str]
     match_time: str
     status: str
+    competition: Optional[str] = None
+    league: Optional[str] = None
 
 
 @dataclass
@@ -51,6 +53,22 @@ class OddsData:
     betting_odds: Dict[str, Any]
     odds_history: List[Dict[str, Any]]
     bookmaker_data: Dict[str, Any]
+
+
+@dataclass
+class LineupsData:
+    """Data from LINEUPS sub-tab under Match."""
+    home_lineup: List[Dict[str, Any]]
+    away_lineup: List[Dict[str, Any]]
+    home_starters: Optional[List[Dict[str, Any]]] = None
+    away_starters: Optional[List[Dict[str, Any]]] = None
+
+
+@dataclass
+class StandingsData:
+    """Data from STANDINGS primary tab."""
+    table: List[Dict[str, Any]]
+    group_name: Optional[str] = None
 
 
 @dataclass
@@ -90,6 +108,8 @@ class StructuredMatch:
     stats_tab: Optional[StatsData]
     tertiary_tabs: Optional[TertiaryData]
     extraction_metadata: ExtractionMetadata
+    lineups_tab: Optional[LineupsData] = None
+    standings_tab: Optional[StandingsData] = None
 
 
 @dataclass

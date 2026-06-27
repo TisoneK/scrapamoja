@@ -82,12 +82,23 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             match_time = await self._resolve_text('match_info') or "Unknown"
             status = await self._resolve_text('match_status') or "Unknown"
             
+            # Competition / league name
+            competition = None
+            competition_els = await self._resolve_elements('competition')
+            for el in competition_els:
+                text = (await el.text_content()).strip()
+                if text and len(text) < 100:
+                    competition = text
+                    break
+            
             return BasicMatchInfo(
                 home_team=home_team,
                 away_team=away_team,
                 current_score=current_score,
                 match_time=match_time,
-                status=status
+                status=status,
+                competition=competition,
+                league=competition,
             )
         except Exception as e:
             self.logger.error(f"Error extracting basic info: {e}")
