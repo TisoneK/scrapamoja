@@ -301,9 +301,11 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
             }
             
             # Strategy 1: Playwright direct — check active tab buttons
+            # Live site uses data-selected="true" and class wcl-tabSelected_*
+            # aria-selected is NOT set by FlashScore (confirmed via live inspection)
             active_selectors = [
-                'button[data-testid="wcl-tab"][aria-selected="true"]',
-                'button[data-testid="wcl-tab"].wcl-tabSelected',
+                'button[data-testid="wcl-tab"][data-selected="true"]',
+                'button[data-testid="wcl-tab"][class*="tabSelected"]',
                 'button[data-testid="wcl-tab"][class*="Selected"]',
                 'button[data-testid="wcl-tab"][class*="selected"]',
             ]
@@ -450,17 +452,21 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
                 'Odds': 'odds',
                 'H2H': 'h2h',
                 'Match': 'match',
+                'Standings': 'standings',
+                'Overall': 'overall',
+                'Form': 'form',
             }
             
             # Strategy 1: Playwright direct — find active tab buttons
-            # FlashScore marks active tabs with specific attributes/classes
+            # Live site uses data-selected="true" and class wcl-tabSelected_*
+            # aria-selected is NOT set by FlashScore (confirmed via live inspection)
             active_selectors = [
-                'button[data-testid="wcl-tab"][aria-selected="true"]',
-                'button[data-testid="wcl-tab"].wcl-tabSelected',
+                'button[data-testid="wcl-tab"][data-selected="true"]',
+                'button[data-testid="wcl-tab"][class*="tabSelected"]',
                 'button[data-testid="wcl-tab"][class*="Selected"]',
                 'button[data-testid="wcl-tab"][class*="selected"]',
+                'a[data-analytics-element="SCN_TAB"] button[class*="tabSelected"]',
                 'a[data-analytics-element="SCN_TAB"] button[class*="Selected"]',
-                'a[data-analytics-element="SCN_TAB"] button[class*="selected"]',
             ]
             for sel in active_selectors:
                 try:

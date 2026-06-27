@@ -66,8 +66,8 @@ class FlashscoreOrchestrator:
         self.scraper.logger.info(f"Starting basketball workflow with max {max_matches} matches")
         
         try:
-            # Step 1: Navigate to basketball section
-            navigation_state = await self.flow.navigate_to_basketball()
+            # Step 1: Navigate to basketball section with correct status filter
+            navigation_state = await self.flow.navigate_to_basketball(status=status)
             if not navigation_state or not hasattr(navigation_state, 'verified') or not navigation_state.verified:
                 self.scraper.logger.error("Failed to navigate to basketball section")
                 await self.scraper.capture_operation_snapshot(

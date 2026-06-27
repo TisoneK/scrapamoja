@@ -342,8 +342,12 @@ class FlashscoreFlow(BaseFlow):
         except Exception as e:
             logger.warning(f"Error in search_sport: {e}")
     
-    async def navigate_to_basketball(self) -> NavigationState:
-        """Navigate to basketball section using workflow-based navigation."""
+    async def navigate_to_basketball(self, status: str = 'scheduled') -> NavigationState:
+        """Navigate to basketball section using workflow-based navigation.
+        
+        Args:
+            status: Match status to filter for ('scheduled', 'finished', 'live').
+        """
         from src.observability.logger import get_logger
         from src.selectors.context import DOMContext
         from datetime import datetime
@@ -407,8 +411,8 @@ class FlashscoreFlow(BaseFlow):
                 except:
                     logger.warning("No match elements found")
             
-            # Step 5: Filter for scheduled matches
-            await self._filter_scheduled_matches()
+            # Step 5: Filter for the requested match status
+            await self._filter_by_status(status)
             
             navigation_state = NavigationState(
                 url=current_url,
@@ -440,34 +444,96 @@ class FlashscoreFlow(BaseFlow):
                 timestamp=datetime.utcnow()
             )
     
-    async def _filter_scheduled_matches(self):
-        """Filter for scheduled matches."""
+    async def _filter_by_status(self, status: str = 'scheduled'):
+        """Filter match listings by status (scheduled, finished, live).
+        
+        Clicks the corresponding filter tab on the FlashScore listing page.
+        For 'finished' status, if no matches are found on today's page,
+        automatically navigates to the previous day.
+        """
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.flow")
         
         try:
-            # Look for scheduled matches filter
-            scheduled_selectors = [
-                "navigation.event_filter.scheduled_games_filter",
-                "[data-analytics-element='SCN_TAB'][data-analytics-alias='scheduled']",
-                ".filters__tab:not(.selected)"
+            # Map status to FlashScore filter analytics alias
+            status_aliases = {
+                'scheduled': 'scheduled',
+                'finished': 'finished',
+                'live': 'live',
+            }
+            alias = status_aliases.get(status, 'scheduled')
+            
+            # Try multiple selectors for the status filter
+            filter_selectors = [
+                f".filters__tab[data-analytics-alias='{alias}']",
+                f"[data-analytics-alias='{alias}']",
+                f".filters__tab:has-text('{status.capitalize()}')",
             ]
             
-            for selector in scheduled_selectors:
+            filter_clicked = False
+            for selector in filter_selectors:
                 try:
-                    scheduled_link = await self.page.query_selector(selector)
-                    if scheduled_link:
-                        await scheduled_link.click()
-                        await self.page.wait_for_timeout(2000)
-                        logger.info("Successfully filtered for scheduled matches")
-                        return
-                except:
+                    filter_el = await self.page.query_selector(selector)
+                    if filter_el:
+                        await filter_el.click()
+                        await self.page.wait_for_timeout(3000)
+                        logger.info(f"Successfully filtered for {status} matches via selector: {selector}")
+                        filter_clicked = True
+                        break
+                except Exception:
                     continue
             
-            logger.info("No scheduled filter found, using current page state")
+            if not filter_clicked:
+                logger.info(f"No {status} filter found, using current page state")
+            
+            # For finished status, check if we have match content
+            # If not, navigate to previous day (today may not have finished games yet)
+            if status == 'finished':
+                await self.page.wait_for_timeout(2000)
+                match_elements = await self.page.query_selector_all('.event__match, a.eventRowLink')
+                if not match_elements:
+                    logger.info("No finished matches found on today's page, trying previous day")
+                    await self._navigate_to_previous_day()
             
         except Exception as e:
-            logger.warning(f"Error filtering scheduled matches: {e}")
+            logger.warning(f"Error filtering {status} matches: {e}")
+    
+    async def _navigate_to_previous_day(self):
+        """Navigate to the previous day's match listing."""
+        from src.observability.logger import get_logger
+        logger = get_logger("flashscore.flow")
+        
+        try:
+            # FlashScore has "Previous day" button in the date picker
+            prev_selectors = [
+                'button[aria-label="Previous day"]',
+                'button[title="Previous day"]',
+                'button[class*="arrow"]',
+                'button[class*="previousDay"]',
+                'button[class*="calendarNavigation--prev"]',
+            ]
+            for sel in prev_selectors:
+                try:
+                    btn = await self.page.query_selector(sel)
+                    if btn:
+                        await btn.click()
+                        await self.page.wait_for_timeout(3000)
+                        # Wait for content to load
+                        try:
+                            await self.page.wait_for_selector('.event__match', timeout=5000)
+                        except Exception:
+                            await self.page.wait_for_timeout(3000)
+                        logger.info("Successfully navigated to previous day")
+                        return
+                except Exception:
+                    continue
+            logger.warning("Could not find previous day button")
+        except Exception as e:
+            logger.warning(f"Error navigating to previous day: {e}")
+    
+    async def _filter_scheduled_matches(self):
+        """Filter for scheduled matches (backward compatibility)."""
+        await self._filter_by_status('scheduled')
 
     async def navigate_to_football(self):
         """Navigate to football section."""
@@ -817,29 +883,53 @@ class FlashscoreFlow(BaseFlow):
         
         if not filter_clicked:
             logger.warning("Could not find or click finished filter, proceeding with current page")
-            # Try alternative approach - look for calendar and select previous date
-            try:
-                # Look for date picker or calendar to select finished games
-                date_selectors = [
-                    ".calendar__navigation",
-                    ".calendar__day",
-                    "[data-date]"
+        
+        # Wait for content to reload after filter click
+        try:
+            await self.page.wait_for_selector('.event__match', timeout=5000)
+        except Exception:
+            # Content may not have loaded yet — try waiting longer
+            await self.page.wait_for_timeout(3000)
+        
+        # Check if there are finished matches; if not, click "Previous day"
+        # The "Finished" filter for today may show only odds (no finished games yet),
+        # but yesterday's page will have actual finished match results.
+        try:
+            match_elements = await self.page.query_selector_all('.event__match--finished, .event__match')
+            has_scores = False
+            for el in match_elements[:3]:
+                score_els = await el.query_selector_all('.event__score')
+                for s in score_els:
+                    txt = (await s.text_content()).strip()
+                    if txt and txt != '-' and txt.isdigit():
+                        has_scores = True
+                        break
+                if has_scores:
+                    break
+            
+            if not has_scores and match_elements:
+                # Try clicking "Previous day" button to get yesterday's finished matches
+                prev_day_selectors = [
+                    'button[title="Previous day"]',
+                    'button[class*="calendar__navigation--prev"]',
+                    '[class*="previousDay"]',
                 ]
-                for date_sel in date_selectors:
+                for sel in prev_day_selectors:
                     try:
-                        date_elements = await self.page.query_selector_all(date_sel)
-                        if date_elements:
-                            # Click on a past date to get finished games
-                            for date_elem in date_elements[:1]:  # Try first past date
-                                await date_elem.click()
-                                await self.page.wait_for_timeout(2000)
-                                logger.info("Clicked on past date for finished games")
-                                break
+                        prev_btn = await self.page.query_selector(sel)
+                        if prev_btn:
+                            await prev_btn.click()
+                            logger.info("Clicked 'Previous day' to find finished matches with scores")
+                            await self.page.wait_for_timeout(3000)
+                            try:
+                                await self.page.wait_for_selector('.event__match', timeout=5000)
+                            except Exception:
+                                pass
                             break
-                    except:
+                    except Exception:
                         continue
-            except Exception as e:
-                logger.warning(f"Alternative date selection failed: {e}")
+        except Exception as e:
+            logger.debug(f"Previous day navigation check failed: {e}")
     
     async def navigate_to_scheduled_games(self, sport_path: str):
         """Navigate to scheduled games for a specific sport."""

@@ -68,14 +68,15 @@ class FinishedMatchExtractor(BaseExtractor):
             return False
 
     async def extract_matches(self, sport_config: dict, limit: Optional[int] = None) -> Dict[str, Any]:
-        """Extract finished matches."""
+        """Extract finished matches.
+        
+        Note: The orchestrator already navigated to the basketball page with
+        the 'Finished' filter applied, so we don't re-navigate here.
+        """
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.finished")
 
-        # Navigate to finished games
-        await self.scraper.flow.navigate_to_finished_games(sport_config['path_segment'])
-
-        # Wait for real content to load
+        # Wait for real content to load (page already navigated by orchestrator)
         await self._wait_for_content()
 
         # Find match elements
@@ -112,7 +113,8 @@ class FinishedMatchExtractor(BaseExtractor):
     async def _wait_for_content(self):
         """Wait for loaded (non-skeleton) match row elements to appear on the page.
 
-        Uses a lightweight Playwright check. Exponential backoff between attempts.
+        Uses a lightweight Playwright check with exponential backoff.
+        Waits up to 20 seconds total.
         """
         from src.observability.logger import get_logger
         logger = get_logger("flashscore.extractor.finished")
@@ -124,10 +126,13 @@ class FinishedMatchExtractor(BaseExtractor):
 
         while attempt < max_attempts:
             try:
-                # Lightweight Playwright check — bypasses the heavy engine resolve
+                # Check for match elements (try multiple selectors)
                 elements = await self.scraper.page.query_selector_all('.event__match:not([class*="skeleton"])')
                 if not elements:
                     elements = await self.scraper.page.query_selector_all('.event__match')
+                if not elements:
+                    # Try eventRowLink as fallback (FlashScore uses these for match rows)
+                    elements = await self.scraper.page.query_selector_all('a.eventRowLink')
                 
                 if elements:
                     logger.info(f"Loaded content detected on attempt {attempt + 1}: {len(elements)} match elements on page")

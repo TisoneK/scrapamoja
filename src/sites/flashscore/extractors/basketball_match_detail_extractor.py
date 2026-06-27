@@ -553,23 +553,23 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                         if href:
                             match_data['match_url'] = href
                         
-                        # Try to find date within the row — use specific time/date selectors only
-                        date_els = await row.query_selector_all('.event__time, .event__stage--time')
-                        for el in date_els:
-                            t = (await el.text_content()).strip()
+                        # Date — use [data-testid="wcl-stageTime"] (confirmed on live site)
+                        # Also try .h2hH2h__date as fallback
+                        date_el = await row.query_selector(
+                            '[data-testid="wcl-stageTime"], .h2hH2h__date, .h2h__date'
+                        )
+                        if date_el:
+                            t = (await date_el.text_content()).strip()
                             if t:
                                 match_data['date'] = t
-                                break
                         
-                        # Home/Away participants — use specific participant selectors only
-                        # Avoid [class*="home"] which matches container elements
+                        # Home/Away participants — use specific H2H participant selectors
+                        # Live site uses .h2h__homeParticipant and .h2h__awayParticipant
                         home_el = await row.query_selector(
-                            '.event__participant--home, .participant__home, '
-                            '.duelParticipant__home .participant__playerName'
+                            '.h2h__homeParticipant, .event__participant--home, .participant__home'
                         )
                         away_el = await row.query_selector(
-                            '.event__participant--away, .participant__away, '
-                            '.duelParticipant__away .participant__playerName'
+                            '.h2h__awayParticipant, .event__participant--away, .participant__away'
                         )
                         if home_el:
                             t = self._clean_team_name((await home_el.text_content()).strip())
@@ -580,15 +580,37 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                             if t:
                                 match_data['away_team'] = t
                         
-                        # Scores — use precise score selectors only, validate each value
-                        # Avoid [class*="score"] which matches non-score elements
-                        score_els = await row.query_selector_all('.event__score')
-                        if len(score_els) >= 2:
-                            home_score = (await score_els[0].text_content()).strip()
-                            away_score = (await score_els[1].text_content()).strip()
-                            if self._is_valid_score(home_score) and self._is_valid_score(away_score):
-                                match_data['home_score'] = home_score
-                                match_data['away_score'] = away_score
+                        # Scores — use [class*="tableScore"] spans (confirmed on live site)
+                        # .event__score does NOT exist in H2H rows
+                        score_els = await row.query_selector_all('span[class*="tableScore"]')
+                        # Filter out empty score spans
+                        valid_scores = []
+                        for s_el in score_els:
+                            s_text = (await s_el.text_content()).strip()
+                            if s_text and self._is_valid_score(s_text):
+                                valid_scores.append(s_text)
+                        
+                        if len(valid_scores) >= 2:
+                            match_data['home_score'] = valid_scores[0]
+                            match_data['away_score'] = valid_scores[1]
+                        else:
+                            # Fallback: try .h2h__result element which has combined score like "10691"
+                            result_el = await row.query_selector('.h2h__result')
+                            if result_el:
+                                result_text = (await result_el.text_content()).strip()
+                                if result_text and len(result_text) >= 4:
+                                    # Split combined score: "10691" → "106", "91"
+                                    # Try to find a reasonable split point
+                                    import re
+                                    # Try 3-digit + 2-digit or 2-digit + 2-digit or 3-digit + 3-digit
+                                    for split_at in [3, 2, 4]:
+                                        if len(result_text) > split_at:
+                                            h = result_text[:split_at]
+                                            a = result_text[split_at:]
+                                            if h.isdigit() and a.isdigit() and int(h) < 300 and int(a) < 300:
+                                                match_data['home_score'] = h
+                                                match_data['away_score'] = a
+                                                break
                         
                         if 'home_team' in match_data or 'away_team' in match_data:
                             previous_matches.append(match_data)
