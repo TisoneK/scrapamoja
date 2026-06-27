@@ -4,12 +4,11 @@ Basketball match detail extractor implementing primary tab extraction.
 Extends the base MatchDetailExtractor with basketball-specific implementations
 for primary tabs: SUMMARY, H2H, ODDS, STATS.
 
-ALL selectors are YAML-driven via the selector engine. Zero hardcoded CSS strings.
-Each selector lives in its own YAML file under src/sites/flashscore/selectors/extraction/
-with ordered fallback chains: data-testid → obfuscated class → partial class → xpath.
-
-When FlashScore rotates CSS hashes, only the YAML entries need updating.
-No Python code changes required.
+Interactive operations (tab clicks, navigation, active tab detection) use
+Playwright direct CSS queries because the YAML selector engine has an
+internal retry loop that swallows CancelledError, making asyncio.wait_for
+timeouts ineffective. Non-interactive reads fall back to the YAML selector
+engine with 8-second timeout protection.
 """
 
 import asyncio
@@ -27,69 +26,14 @@ from datetime import datetime
 
 
 class BasketballMatchDetailExtractor(MatchDetailExtractor):
-    """Basketball-specific match detail extractor — 100% YAML-driven selectors."""
+    """Basketball-specific match detail extractor — Playwright-direct for interactive ops, YAML fallback for reads."""
     
     def __init__(self, scraper: FlashscoreScraper):
         super().__init__(scraper)
         self.primary_extractor = BasketballPrimaryTabExtractor(scraper)
-        self._selector_engine = getattr(scraper, 'selector_engine', None)
     
-    async def _resolve_element(self, selector_name: str, parent=None) -> Optional[Any]:
-        """Resolve a single element via YAML selector engine with timeout protection."""
-        if self._selector_engine:
-            try:
-                search_target = parent or self.page
-                task = asyncio.create_task(
-                    self._selector_engine.find(search_target, selector_name)
-                )
-                try:
-                    return await asyncio.wait_for(task, timeout=8.0)
-                except asyncio.TimeoutError:
-                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
-                    task.cancel()
-                    try:
-                        await task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    return None
-            except Exception as e:
-                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
-        return None
-    
-    async def _resolve_elements(self, selector_name: str, parent=None) -> List[Any]:
-        """Resolve multiple elements via YAML selector engine with timeout protection."""
-        if self._selector_engine:
-            try:
-                search_target = parent or self.page
-                task = asyncio.create_task(
-                    self._selector_engine.find_all(search_target, selector_name)
-                )
-                try:
-                    elements = await asyncio.wait_for(task, timeout=8.0)
-                    if elements:
-                        return elements
-                except asyncio.TimeoutError:
-                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
-                    task.cancel()
-                    try:
-                        await task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    return []
-            except Exception as e:
-                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
-        return []
-    
-    async def _resolve_text(self, selector_name: str, parent=None) -> Optional[str]:
-        """Resolve element text via YAML selector engine."""
-        el = await self._resolve_element(selector_name, parent)
-        if el:
-            try:
-                text = await el.text_content()
-                return text.strip() if text else None
-            except Exception as e:
-                self.logger.debug(f"Text extraction for '{selector_name}' failed: {e}")
-        return None
+    # YAML selector engine methods inherited from SelectorEngineMixin via MatchDetailExtractor
+    # (_resolve_element, _resolve_elements, _resolve_text)
     
     async def _extract_basic_info(self, page_state: PageState) -> Optional[BasicMatchInfo]:
         """Extract basic match info — Playwright direct only.
@@ -114,7 +58,7 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                 try:
                     el = await self.page.query_selector(sel)
                     if el:
-                        text = (await el.text_content()).strip()
+                        text = self._clean_team_name((await el.text_content()).strip())
                         if text:
                             home_team = text
                             break
@@ -128,7 +72,7 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                 try:
                     el = await self.page.query_selector(sel)
                     if el:
-                        text = (await el.text_content()).strip()
+                        text = self._clean_team_name((await el.text_content()).strip())
                         if text:
                             away_team = text
                             break
@@ -458,16 +402,16 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
 
 
 class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
-    """Basketball-specific primary tab extractor — 100% YAML-driven selectors.
+    """Basketball-specific primary tab extractor.
     
-    Every DOM interaction goes through the selector engine, which resolves
-    YAML selector IDs to real CSS/XPath selectors with multi-strategy fallback chains.
-    Zero hardcoded CSS strings in this file.
+    Interactive DOM operations (tab clicks, navigation) use Playwright direct
+    CSS queries. Non-interactive reads may fall back to the YAML selector engine
+    with 8-second timeout protection.
     """
     
     def __init__(self, scraper: FlashscoreScraper):
         super().__init__(scraper)
-        self._selector_engine = getattr(scraper, 'selector_engine', None)
+        # _selector_engine is set by PrimaryTabExtractor parent
     
     # ─────────────────────────────────────────────────────────
     # SUMMARY TAB
@@ -544,6 +488,37 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     # H2H TAB
     # ─────────────────────────────────────────────────────────
     
+    @staticmethod
+    def _clean_team_name(raw: str) -> str:
+        """Clean a team name by removing form strings, extra whitespace, and common FlashScore artifacts.
+        
+        FlashScore sometimes appends form indicators (W1, L2, D3 etc.),
+        ranking numbers, or child-element text that shouldn't be part of
+        the team name.
+        """
+        if not raw:
+            return raw
+        import re
+        # Remove trailing form strings like "W1", "L2", "D3", "W 1", "L 2"
+        cleaned = re.sub(r'\s+[WLD]\s*\d+\s*$', '', raw)
+        # Remove trailing parenthetical form like "(W1)"
+        cleaned = re.sub(r'\s*\([WLD]\d+\)\s*$', '', cleaned)
+        # Remove leading/trailing whitespace and newlines
+        cleaned = ' '.join(cleaned.split())
+        # Truncate if suspiciously long (likely picked up container text)
+        if len(cleaned) > 60:
+            cleaned = cleaned[:60].rsplit(' ', 1)[0]
+        return cleaned
+
+    @staticmethod
+    def _is_valid_score(text: str) -> bool:
+        """Check if a string looks like a valid sports score (digits, possibly with OT suffix)."""
+        if not text:
+            return False
+        import re
+        # Scores are digits, optionally followed by OT indicator like " (OT)" or "aet"
+        return bool(re.match(r'^\d+(?:\s*\(.*\))?$', text.strip()))
+
     async def _extract_h2h_data(self) -> Optional[Dict[str, Any]]:
         """Extract data from H2H tab — Playwright direct first, YAML engine fallback."""
         try:
@@ -578,31 +553,42 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                         if href:
                             match_data['match_url'] = href
                         
-                        # Try to find date, teams, and score within the row
-                        date_els = await row.query_selector_all('.event__time, [class*="date"], [class*="time"]')
+                        # Try to find date within the row — use specific time/date selectors only
+                        date_els = await row.query_selector_all('.event__time, .event__stage--time')
                         for el in date_els:
                             t = (await el.text_content()).strip()
                             if t:
                                 match_data['date'] = t
                                 break
                         
-                        # Home/Away participants
-                        home_el = await row.query_selector('.event__participant--home, [class*="home"]')
-                        away_el = await row.query_selector('.event__participant--away, [class*="away"]')
+                        # Home/Away participants — use specific participant selectors only
+                        # Avoid [class*="home"] which matches container elements
+                        home_el = await row.query_selector(
+                            '.event__participant--home, .participant__home, '
+                            '.duelParticipant__home .participant__playerName'
+                        )
+                        away_el = await row.query_selector(
+                            '.event__participant--away, .participant__away, '
+                            '.duelParticipant__away .participant__playerName'
+                        )
                         if home_el:
-                            t = (await home_el.text_content()).strip()
+                            t = self._clean_team_name((await home_el.text_content()).strip())
                             if t:
                                 match_data['home_team'] = t
                         if away_el:
-                            t = (await away_el.text_content()).strip()
+                            t = self._clean_team_name((await away_el.text_content()).strip())
                             if t:
                                 match_data['away_team'] = t
                         
-                        # Scores
-                        score_els = await row.query_selector_all('.event__score, [class*="score"]')
+                        # Scores — use precise score selectors only, validate each value
+                        # Avoid [class*="score"] which matches non-score elements
+                        score_els = await row.query_selector_all('.event__score')
                         if len(score_els) >= 2:
-                            match_data['home_score'] = (await score_els[0].text_content()).strip()
-                            match_data['away_score'] = (await score_els[1].text_content()).strip()
+                            home_score = (await score_els[0].text_content()).strip()
+                            away_score = (await score_els[1].text_content()).strip()
+                            if self._is_valid_score(home_score) and self._is_valid_score(away_score):
+                                match_data['home_score'] = home_score
+                                match_data['away_score'] = away_score
                         
                         if 'home_team' in match_data or 'away_team' in match_data:
                             previous_matches.append(match_data)
@@ -614,11 +600,28 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             
             self.logger.info(f"Extracted {len(previous_matches)} H2H matches")
             
-            # Calculate win/loss record
+            # Calculate win/loss record from actual scores
             if previous_matches:
-                home_wins = sum(1 for m in previous_matches if m.get('result_indicator') == 'W')
-                away_wins = sum(1 for m in previous_matches if m.get('result_indicator') == 'L')
-                draws = len(previous_matches) - home_wins - away_wins
+                home_wins = 0
+                away_wins = 0
+                draws = 0
+                for m in previous_matches:
+                    hs = m.get('home_score')
+                    as_ = m.get('away_score')
+                    if hs and as_:
+                        try:
+                            # Extract leading digits only (ignore OT suffixes)
+                            import re
+                            h = int(re.match(r'(\d+)', hs).group(1))
+                            a = int(re.match(r'(\d+)', as_).group(1))
+                            if h > a:
+                                home_wins += 1
+                            elif a > h:
+                                away_wins += 1
+                            else:
+                                draws += 1
+                        except (ValueError, AttributeError):
+                            pass
                 win_loss_record = {
                     'home_wins': home_wins,
                     'away_wins': away_wins,

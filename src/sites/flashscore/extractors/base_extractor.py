@@ -1,12 +1,10 @@
 """
 Base extractor interface for Flashscore match data extraction.
 
-ALL selectors are YAML-driven via the selector engine. Zero hardcoded CSS strings.
-Each selector lives in its own YAML file under src/sites/flashscore/selectors/extraction/
-with ordered fallback chains: data-testid → obfuscated class → partial class → xpath.
-
-When FlashScore rotates CSS hashes, only the YAML entries need updating.
-No Python code changes required.
+Interactive operations use Playwright direct CSS queries because the YAML
+selector engine has an internal retry loop that swallows CancelledError,
+making asyncio.wait_for timeouts ineffective. Non-interactive reads may
+still fall back to the YAML selector engine with 8-second timeout protection.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
@@ -21,7 +19,7 @@ _yaml_data_cache: Dict[str, Dict[str, Any]] = {}
 
 
 class BaseExtractor(ABC):
-    """Base class for all match extractors — 100% YAML-driven selectors."""
+    """Base class for all match extractors — Playwright-direct for interactive ops, YAML fallback for reads."""
 
     def __init__(self, scraper: FlashscoreScraper):
         self.scraper = scraper
@@ -59,7 +57,11 @@ class BaseExtractor(ABC):
     # ------------------------------------------------------------------
 
     async def _resolve_element(self, selector_name: str, parent=None) -> Optional[Any]:
-        """Resolve a single element via YAML selector engine.
+        """Resolve a single element via YAML selector engine with 8-second timeout protection.
+
+        Uses a separate asyncio.Task so that we can force-cancel if the
+        selector engine enters an infinite retry loop (it catches
+        CancelledError internally, making plain asyncio.wait_for ineffective).
 
         Args:
             selector_name: The ``id`` of a YAML selector definition.
@@ -69,16 +71,32 @@ class BaseExtractor(ABC):
         Returns:
             A Playwright ``ElementHandle`` or ``None``.
         """
+        import asyncio
         if self._selector_engine:
             try:
                 search_target = parent or self.scraper.page
-                return await self._selector_engine.find(search_target, selector_name)
+                task = asyncio.create_task(
+                    self._selector_engine.find(search_target, selector_name)
+                )
+                try:
+                    return await asyncio.wait_for(task, timeout=8.0)
+                except asyncio.TimeoutError:
+                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
+                    task.cancel()
+                    try:
+                        await task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                    return None
             except Exception as e:
                 self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
         return None
 
     async def _resolve_elements(self, selector_name: str, parent=None) -> List[Any]:
-        """Resolve multiple elements via YAML selector engine.
+        """Resolve multiple elements via YAML selector engine with 8-second timeout protection.
+
+        Uses a separate asyncio.Task so that we can force-cancel if the
+        selector engine enters an infinite retry loop.
 
         Args:
             selector_name: The ``id`` of a YAML selector definition.
@@ -87,12 +105,25 @@ class BaseExtractor(ABC):
         Returns:
             A list of Playwright ``ElementHandle`` objects (may be empty).
         """
+        import asyncio
         if self._selector_engine:
             try:
                 search_target = parent or self.scraper.page
-                elements = await self._selector_engine.find_all(search_target, selector_name)
-                if elements:
-                    return elements
+                task = asyncio.create_task(
+                    self._selector_engine.find_all(search_target, selector_name)
+                )
+                try:
+                    elements = await asyncio.wait_for(task, timeout=8.0)
+                    if elements:
+                        return elements
+                except asyncio.TimeoutError:
+                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
+                    task.cancel()
+                    try:
+                        await task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                    return []
             except Exception as e:
                 self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
         return []

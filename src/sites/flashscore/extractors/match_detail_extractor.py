@@ -4,12 +4,9 @@ Match detail extractor for Flashscore match pages.
 Handles extraction of detailed match data from individual match pages
 including primary and tertiary tab data.
 
-ALL selectors are YAML-driven via the selector engine. Zero hardcoded CSS strings.
-Each selector lives in its own YAML file under src/sites/flashscore/selectors/extraction/
-with ordered fallback chains: data-testid → obfuscated class → partial class → xpath.
-
-When FlashScore rotates CSS hashes, only the YAML entries need updating.
-No Python code changes required.
+Interactive operations (tab clicks, navigation, page validation) use
+Playwright direct CSS queries. Non-interactive reads may fall back
+to the YAML selector engine with 8-second timeout protection.
 """
 
 from abc import ABC, abstractmethod
@@ -18,12 +15,13 @@ from playwright.async_api import ElementHandle, Page
 
 from src.sites.flashscore.scraper import FlashscoreScraper
 from src.sites.flashscore.models import StructuredMatch, PageState, ExtractionMetadata
+from src.sites.flashscore.extractors.selector_mixin import SelectorEngineMixin
 from datetime import datetime
 import asyncio
 
 
-class MatchDetailExtractor(ABC):
-    """Base class for match detail extraction from individual match pages — 100% YAML-driven selectors."""
+class MatchDetailExtractor(SelectorEngineMixin, ABC):
+    """Base class for match detail extraction — Playwright-direct for interactive ops, YAML fallback for reads."""
 
     def __init__(self, scraper: FlashscoreScraper):
         self.scraper = scraper
@@ -40,62 +38,8 @@ class MatchDetailExtractor(ABC):
     # YAML-driven selector resolution helpers
     # ------------------------------------------------------------------
 
-    async def _resolve_element(self, selector_name: str, parent=None) -> Optional[Any]:
-        """Resolve a single element via YAML selector engine with timeout protection."""
-        if self._selector_engine:
-            try:
-                search_target = parent or self.page
-                task = asyncio.create_task(
-                    self._selector_engine.find(search_target, selector_name)
-                )
-                try:
-                    return await asyncio.wait_for(task, timeout=8.0)
-                except asyncio.TimeoutError:
-                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
-                    task.cancel()
-                    try:
-                        await task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    return None
-            except Exception as e:
-                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
-        return None
-
-    async def _resolve_elements(self, selector_name: str, parent=None) -> List[Any]:
-        """Resolve multiple elements via YAML selector engine with timeout protection."""
-        if self._selector_engine:
-            try:
-                search_target = parent or self.page
-                task = asyncio.create_task(
-                    self._selector_engine.find_all(search_target, selector_name)
-                )
-                try:
-                    elements = await asyncio.wait_for(task, timeout=8.0)
-                    if elements:
-                        return elements
-                except asyncio.TimeoutError:
-                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
-                    task.cancel()
-                    try:
-                        await task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    return []
-            except Exception as e:
-                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
-        return []
-
-    async def _resolve_text(self, selector_name: str, parent=None) -> Optional[str]:
-        """Resolve element text via YAML selector engine."""
-        el = await self._resolve_element(selector_name, parent)
-        if el:
-            try:
-                text = await el.text_content()
-                return text.strip() if text else None
-            except Exception as e:
-                self.logger.debug(f"Text extraction for '{selector_name}' failed: {e}")
-        return None
+    # YAML selector engine methods are provided by SelectorEngineMixin
+    # (_resolve_element, _resolve_elements, _resolve_text)
 
     async def _element_matches(self, element: ElementHandle, selector_name: str) -> bool:
         """Check if an element itself matches the CSS selector from a YAML definition.

@@ -11,13 +11,18 @@ from playwright.async_api import ElementHandle, Page
 
 from src.sites.flashscore.scraper import FlashscoreScraper
 from src.sites.flashscore.models import PageState, SummaryData, H2HData, OddsData, StatsData
+from src.sites.flashscore.extractors.selector_mixin import SelectorEngineMixin
 from datetime import datetime
 
 
-class PrimaryTabExtractor(ABC):
+class PrimaryTabExtractor(SelectorEngineMixin, ABC):
     """Base class for primary tab extraction from match detail pages.
     
-    All selectors are YAML-driven. Zero hardcoded CSS strings.
+    Navigation and interactive operations use Playwright direct CSS queries
+    (the YAML selector engine has an internal retry loop that swallows
+    CancelledError, making asyncio.wait_for timeouts ineffective).
+    Non-interactive reads may still fall back to the YAML selector engine
+    with 8-second timeout protection.
     """
     
     def __init__(self, scraper: FlashscoreScraper):
@@ -31,53 +36,8 @@ class PrimaryTabExtractor(ABC):
         from src.observability.logger import get_logger
         return get_logger(f"flashscore.primary_tab_extractor.{self.__class__.__name__.lower()}")
     
-    async def _resolve_element(self, selector_name: str, parent=None) -> Optional[Any]:
-        """Resolve a single element via YAML selector engine with timeout protection."""
-        if self._selector_engine:
-            try:
-                search_target = parent or self.page
-                # Use a separate task so we can force-cancel if the selector engine
-                # enters an infinite retry loop (it catches CancelledError internally)
-                task = asyncio.create_task(
-                    self._selector_engine.find(search_target, selector_name)
-                )
-                try:
-                    return await asyncio.wait_for(task, timeout=8.0)
-                except asyncio.TimeoutError:
-                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
-                    task.cancel()
-                    try:
-                        await task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    return None
-            except Exception as e:
-                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
-        return None
-    
-    async def _resolve_elements(self, selector_name: str, parent=None) -> List[Any]:
-        """Resolve multiple elements via YAML selector engine with timeout protection."""
-        if self._selector_engine:
-            try:
-                search_target = parent or self.page
-                task = asyncio.create_task(
-                    self._selector_engine.find_all(search_target, selector_name)
-                )
-                try:
-                    elements = await asyncio.wait_for(task, timeout=8.0)
-                    if elements:
-                        return elements
-                except asyncio.TimeoutError:
-                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
-                    task.cancel()
-                    try:
-                        await task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    return []
-            except Exception as e:
-                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
-        return []
+    # YAML selector engine methods are provided by SelectorEngineMixin
+    # (_resolve_element, _resolve_elements, _resolve_text)
     
     # Mapping of tab names to Flashscore data-analytics-alias values
     # Primary tabs: Match, Odds, H2H, Standings
@@ -316,7 +276,7 @@ class PrimaryTabExtractor(ABC):
                 try:
                     await self.page.wait_for_selector(selector, state="visible", timeout=timeout)
                     return True
-                except:
+                except Exception:
                     continue
             
             # Fallback: just wait for network to settle
@@ -402,13 +362,13 @@ class PrimaryTabExtractor(ABC):
                 try:
                     await self.page.wait_for_selector(selector, state="visible", timeout=timeout)
                     return True
-                except:
+                except Exception:
                     continue
             
             # Fallback: wait for network idle
             try:
                 await self.page.wait_for_load_state("networkidle", timeout=3000)
-            except:
+            except Exception:
                 pass
             
             self.logger.warning(f"Tab content did not load for {tab_name}")
@@ -606,7 +566,7 @@ class PrimaryTabExtractor(ABC):
             
             # Basic validation for each tab type
             if tab_name == 'summary':
-                required_fields = ['overview', 'teams']
+                required_fields = ['overview']
                 return all(field in data for field in required_fields)
             elif tab_name == 'h2h':
                 required_fields = ['previous_matches']
@@ -615,7 +575,7 @@ class PrimaryTabExtractor(ABC):
                 required_fields = ['betting_odds']
                 return all(field in data for field in required_fields)
             elif tab_name == 'stats':
-                required_fields = ['statistics']
+                required_fields = ['detailed_statistics']
                 return all(field in data for field in required_fields)
             
             return True
