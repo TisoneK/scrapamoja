@@ -241,12 +241,13 @@ class PrimaryTabExtractor(ABC):
     async def _click_tab_by_text(self, display_text: str) -> bool:
         """Click a tab button matching the given display text.
         
-        Strategy 1 (primary): Playwright direct query — tries multiple
-        CSS selectors that FlashScore uses for tab buttons.
+        Strategy 1: Playwright direct CSS query — tries multiple selectors.
+        Strategy 2: JavaScript text-based button search.
         
-        Strategy 2 (fallback): Playwright text-based button search.
-        
-        Strategy 3 (last resort): YAML selector engine with timeout.
+        NOTE: YAML selector engine is intentionally NOT used here because its
+        internal retry loop catches CancelledError, making asyncio.wait_for
+        timeouts ineffective. The engine will loop forever if the quality
+        gate keeps failing.
         """
         # Strategy 1: Playwright direct — try all known FlashScore tab selectors
         tab_selectors = [
@@ -266,7 +267,6 @@ class PrimaryTabExtractor(ABC):
                 for el in elements:
                     try:
                         text = (await el.text_content()).strip()
-                        # Match exact text or text within the element
                         if text == display_text or display_text in text:
                             await el.click()
                             self.logger.info(f"Clicked '{display_text}' tab via selector: {selector}")
@@ -276,14 +276,15 @@ class PrimaryTabExtractor(ABC):
             except Exception:
                 continue
         
-        # Strategy 2: Playwright text-based search — find any clickable element with matching text
+        # Strategy 2: JavaScript text search — find and click any button with matching text
         try:
-            # Use page.get_by_text or evaluate to find elements by text content
+            # Escape single quotes in display_text for JS
+            safe_text = display_text.replace("'", "\\'")
             matching = await self.page.evaluate(f"""
                 () => {{
-                    const buttons = document.querySelectorAll('button, a[role="tab"], [role="tab"]');
+                    const buttons = document.querySelectorAll('button, a[role="tab"], [role="tab"], a[href*="/match/"]');
                     for (const btn of buttons) {{
-                        if (btn.textContent.trim() === '{display_text}') {{
+                        if (btn.textContent.trim() === '{safe_text}') {{
                             btn.click();
                             return true;
                         }}
@@ -296,25 +297,6 @@ class PrimaryTabExtractor(ABC):
                 return True
         except Exception as e:
             self.logger.debug(f"JavaScript text search failed: {e}")
-        
-        # Strategy 3: YAML selector engine (timeout-wrapped to prevent infinite loops)
-        try:
-            tab_buttons = await asyncio.wait_for(
-                self._resolve_elements('tab_button'), timeout=5.0
-            )
-            for btn in tab_buttons:
-                try:
-                    text = (await btn.text_content()).strip()
-                    if text == display_text:
-                        await btn.click()
-                        self.logger.info(f"Clicked '{display_text}' tab via YAML selector engine")
-                        return True
-                except Exception:
-                    continue
-        except asyncio.TimeoutError:
-            self.logger.debug(f"YAML selector tab_button timed out after 5s for '{display_text}'")
-        except Exception as e:
-            self.logger.debug(f"YAML selector tab query failed: {e}")
         
         self.logger.warning(f"Could not find tab button for '{display_text}'")
         return False

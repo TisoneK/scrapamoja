@@ -92,7 +92,11 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
         return None
     
     async def _extract_basic_info(self, page_state: PageState) -> Optional[BasicMatchInfo]:
-        """Extract basic match info — Playwright direct first, YAML selector engine fallback."""
+        """Extract basic match info — Playwright direct only.
+        
+        YAML selector engine NOT used because its internal retry loop
+        catches CancelledError, making timeouts ineffective.
+        """
         try:
             home_team = "Unknown"
             away_team = "Unknown"
@@ -101,11 +105,12 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             status = "Unknown"
             competition = None
             
-            # ── Playwright direct queries (fast, reliable) ──
+            # Playwright direct queries — reliable, no infinite loops
             
             # Home team
             for sel in ['.event__participant--home', '.participant__home',
-                        '.duelParticipant__home .participant__playerName']:
+                        '.duelParticipant__home .participant__playerName',
+                        '[data-testid="home-team"]']:
                 try:
                     el = await self.page.query_selector(sel)
                     if el:
@@ -118,7 +123,8 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             
             # Away team
             for sel in ['.event__participant--away', '.participant__away',
-                        '.duelParticipant__away .participant__playerName']:
+                        '.duelParticipant__away .participant__playerName',
+                        '[data-testid="away-team"]']:
                 try:
                     el = await self.page.query_selector(sel)
                     if el:
@@ -130,17 +136,20 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                     continue
             
             # Scores
-            try:
-                score_els = await self.page.query_selector_all('.event__score')
-                if len(score_els) >= 2:
-                    home = (await score_els[0].text_content()).strip()
-                    away = (await score_els[1].text_content()).strip()
-                    current_score = f"{home}-{away}"
-            except Exception:
-                pass
+            for sel in ['.event__score', '.detailScore__matchDetail']:
+                try:
+                    score_els = await self.page.query_selector_all(sel)
+                    if len(score_els) >= 2:
+                        home = (await score_els[0].text_content()).strip()
+                        away = (await score_els[1].text_content()).strip()
+                        current_score = f"{home}-{away}"
+                        break
+                except Exception:
+                    continue
             
             # Match time
-            for sel in ['.duelParticipant__startTime', '.event__time']:
+            for sel in ['.duelParticipant__startTime', '.event__time',
+                        '[data-testid="match-time"]']:
                 try:
                     el = await self.page.query_selector(sel)
                     if el:
@@ -152,7 +161,8 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                     continue
             
             # Status
-            for sel in ['.detailScore__status', '[data-testid="match-status"]']:
+            for sel in ['.detailScore__status', '[data-testid="match-status"]',
+                        '.event__status']:
                 try:
                     el = await self.page.query_selector(sel)
                     if el:
@@ -164,7 +174,8 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                     continue
             
             # Competition / league name
-            for sel in ['.tournamentHeader__content', '.event__tournament']:
+            for sel in ['.tournamentHeader__content', '.event__tournament',
+                        '[data-testid="tournament-name"]']:
                 try:
                     el = await self.page.query_selector(sel)
                     if el:
@@ -175,75 +186,38 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                 except Exception:
                     continue
             
-            # ── YAML selector engine fallback (only for truly missing fields, with timeout) ──
-            # NOTE: The selector engine can enter infinite retry loops on match detail pages.
-            # Only use it as a last resort for fields Playwright direct couldn't find.
-            
-            if home_team == "Unknown":
-                try:
-                    result = await asyncio.wait_for(
-                        self._resolve_text('home_team_detail'), timeout=5.0
-                    )
-                    if result:
-                        home_team = result
-                except (asyncio.TimeoutError, Exception):
-                    self.logger.debug("YAML fallback for home_team_detail timed out or failed")
-            
-            if away_team == "Unknown":
-                try:
-                    result = await asyncio.wait_for(
-                        self._resolve_text('away_team_detail'), timeout=5.0
-                    )
-                    if result:
-                        away_team = result
-                except (asyncio.TimeoutError, Exception):
-                    self.logger.debug("YAML fallback for away_team_detail timed out or failed")
-            
-            if not current_score:
-                try:
-                    home_score = await asyncio.wait_for(
-                        self._resolve_text('home_score'), timeout=5.0
-                    )
-                    away_score = await asyncio.wait_for(
-                        self._resolve_text('away_score'), timeout=5.0
-                    )
-                    if home_score and away_score:
-                        current_score = f"{home_score}-{away_score}"
-                except (asyncio.TimeoutError, Exception):
-                    self.logger.debug("YAML fallback for scores timed out or failed")
-            
-            if match_time == "Unknown":
-                try:
-                    result = await asyncio.wait_for(
-                        self._resolve_text('match_info'), timeout=5.0
-                    )
-                    if result:
-                        match_time = result
-                except (asyncio.TimeoutError, Exception):
-                    self.logger.debug("YAML fallback for match_info timed out or failed")
-            
-            if status == "Unknown":
-                try:
-                    result = await asyncio.wait_for(
-                        self._resolve_text('match_status'), timeout=5.0
-                    )
-                    if result:
-                        status = result
-                except (asyncio.TimeoutError, Exception):
-                    self.logger.debug("YAML fallback for match_status timed out or failed")
-            
-            if not competition:
-                try:
-                    competition_els = await asyncio.wait_for(
-                        self._resolve_elements('competition'), timeout=5.0
-                    )
-                    for el in competition_els:
-                        text = (await el.text_content()).strip()
-                        if text and len(text) < 100:
-                            competition = text
-                            break
-                except (asyncio.TimeoutError, Exception):
-                    self.logger.debug("YAML fallback for competition timed out or failed")
+            # JavaScript fallback for any missing fields
+            try:
+                js_result = await self.page.evaluate("""
+                    () => {
+                        const data = {};
+                        // Try to find team names from the page
+                        const participants = document.querySelectorAll('[class*="participant"], [class*="team"]');
+                        participants.forEach(p => {
+                            const text = p.textContent.trim();
+                            if (text && text.length < 50 && text.length > 1) {
+                                const cls = p.className || '';
+                                if (cls.includes('home') && !data.home_team) data.home_team = text;
+                                if (cls.includes('away') && !data.away_team) data.away_team = text;
+                            }
+                        });
+                        // Try tournament header
+                        const tournament = document.querySelector('[class*="tournament"], [class*="header"]');
+                        if (tournament && tournament.textContent.trim().length < 100) {
+                            data.competition = tournament.textContent.trim();
+                        }
+                        return data;
+                    }
+                """)
+                if js_result:
+                    if home_team == "Unknown" and js_result.get('home_team'):
+                        home_team = js_result['home_team']
+                    if away_team == "Unknown" and js_result.get('away_team'):
+                        away_team = js_result['away_team']
+                    if not competition and js_result.get('competition'):
+                        competition = js_result['competition']
+            except Exception:
+                pass
             
             return BasicMatchInfo(
                 home_team=home_team,
@@ -339,12 +313,15 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return TertiaryData(inc_ot=None, ft=None, q1=None)
     
     async def _extract_stats_rows(self) -> Optional[Dict[str, Any]]:
-        """Extract stats from currently visible content — Playwright direct first, YAML timeout fallback."""
+        """Extract stats from currently visible content — Playwright direct only.
+        
+        YAML selector engine NOT used (CancelledError-swallowing infinite loop).
+        """
         try:
             statistics = {}
             current_section = "General"
             
-            # Strategy 1: Playwright direct — find stat rows and headers
+            # Playwright direct — find stat rows and headers
             stat_rows = []
             stat_headers = []
             for sel in ['.stat__row', '[class*="statRow"]', '[class*="stats__row"]', '[data-testid="stat-row"]']:
@@ -387,42 +364,37 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                     except Exception:
                         continue
             
-            # Strategy 2: YAML fallback (with timeout) only if Playwright direct found nothing
+            # JavaScript fallback — extract stats using DOM traversal
             if not statistics:
                 try:
-                    stat_rows = await asyncio.wait_for(self._resolve_elements('full_time_stats'), timeout=5.0)
-                    stat_headers = await asyncio.wait_for(self._resolve_elements('stat_section_header'), timeout=5.0)
-                    
-                    if stat_rows or stat_headers:
-                        all_elements = (stat_rows or []) + (stat_headers or [])
-                        for element in all_elements:
-                            try:
-                                cls = await element.get_attribute('class') or ''
-                                if 'stat__header' in cls or 'sectionHeader' in cls:
-                                    text = (await element.text_content()).strip()
-                                    if text:
-                                        current_section = text
-                                        if current_section not in statistics:
-                                            statistics[current_section] = {}
-                                    continue
-                                
-                                category_el = await asyncio.wait_for(self._resolve_element('stat_category_name', element), timeout=3.0)
-                                home_el = await asyncio.wait_for(self._resolve_element('stat_home_value', element), timeout=3.0)
-                                away_el = await asyncio.wait_for(self._resolve_element('stat_away_value', element), timeout=3.0)
-                                
-                                if category_el and home_el and away_el:
-                                    name = (await category_el.text_content()).strip()
-                                    home_val = (await home_el.text_content()).strip()
-                                    away_val = (await away_el.text_content()).strip()
-                                    if current_section not in statistics:
-                                        statistics[current_section] = {}
-                                    statistics[current_section][name] = {'home': home_val, 'away': away_val}
-                            except (asyncio.TimeoutError, Exception):
-                                continue
-                except asyncio.TimeoutError:
-                    self.logger.debug("YAML stats fallback timed out")
-                except Exception as e:
-                    self.logger.debug(f"YAML stats fallback failed: {e}")
+                    js_stats = await self.page.evaluate("""
+                        () => {
+                            const stats = {};
+                            let section = 'General';
+                            // Look for stat comparison rows
+                            const rows = document.querySelectorAll('[class*="stat"], [class*="comparison"]');
+                            rows.forEach(row => {
+                                const cls = row.className || '';
+                                if (cls.includes('header') || cls.includes('section')) {
+                                    section = row.textContent.trim();
+                                    if (!(section in stats)) stats[section] = {};
+                                    return;
+                                }
+                                const cells = row.querySelectorAll('span, div, td');
+                                const texts = Array.from(cells).map(c => c.textContent.trim()).filter(t => t);
+                                if (texts.length >= 3) {
+                                    stats[section][texts[Math.floor(texts.length/2)]] = {
+                                        home: texts[0], away: texts[texts.length-1]
+                                    };
+                                }
+                            });
+                            return Object.keys(stats).length > 0 ? stats : null;
+                        }
+                    """)
+                    if js_stats:
+                        statistics = js_stats
+                except Exception:
+                    pass
             
             return statistics if statistics else None
         except Exception as e:
@@ -441,7 +413,10 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return None
     
     async def _click_period_filter(self, period_name: str) -> bool:
-        """Click a period filter tab — Playwright direct first, YAML timeout fallback."""
+        """Click a period filter tab — Playwright direct + JavaScript only.
+        
+        YAML selector engine NOT used (CancelledError-swallowing infinite loop).
+        """
         # Strategy 1: Playwright direct — find all tab-like buttons
         for sel in ['button[data-testid="wcl-tab"]', 'button[class*="tab"]', '[role="tab"]']:
             try:
@@ -458,11 +433,12 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
         
         # Strategy 2: JavaScript text search
         try:
+            safe_name = period_name.replace("'", "\\'")
             clicked = await self.page.evaluate(f"""
                 () => {{
                     const buttons = document.querySelectorAll('button, [role="tab"]');
                     for (const btn of buttons) {{
-                        if (btn.textContent.trim() === '{period_name}') {{
+                        if (btn.textContent.trim() === '{safe_name}') {{
                             btn.click();
                             return true;
                         }}
@@ -476,21 +452,6 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
                 return True
         except Exception:
             pass
-        
-        # Strategy 3: YAML fallback with timeout
-        try:
-            tab_buttons = await asyncio.wait_for(self._resolve_elements('tab_button'), timeout=5.0)
-            for btn in tab_buttons:
-                text = (await btn.text_content()).strip()
-                if text == period_name:
-                    await btn.click()
-                    await self.page.wait_for_timeout(1500)
-                    self.logger.info(f"Clicked period filter via YAML: {period_name}")
-                    return True
-        except asyncio.TimeoutError:
-            self.logger.debug(f"YAML period filter timed out for {period_name}")
-        except Exception as e:
-            self.logger.debug(f"YAML period filter failed: {e}")
         
         self.logger.debug(f"Period filter not found: {period_name}")
         return False
@@ -507,63 +468,6 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
     def __init__(self, scraper: FlashscoreScraper):
         super().__init__(scraper)
         self._selector_engine = getattr(scraper, 'selector_engine', None)
-    
-    async def _resolve_element(self, selector_name: str, parent=None) -> Optional[Any]:
-        """Resolve a single element via YAML selector engine with timeout protection."""
-        if self._selector_engine:
-            try:
-                search_target = parent or self.page
-                task = asyncio.create_task(
-                    self._selector_engine.find(search_target, selector_name)
-                )
-                try:
-                    return await asyncio.wait_for(task, timeout=8.0)
-                except asyncio.TimeoutError:
-                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
-                    task.cancel()
-                    try:
-                        await task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    return None
-            except Exception as e:
-                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
-        return None
-    
-    async def _resolve_elements(self, selector_name: str, parent=None) -> List[Any]:
-        """Resolve multiple elements via YAML selector engine with timeout protection."""
-        if self._selector_engine:
-            try:
-                search_target = parent or self.page
-                task = asyncio.create_task(
-                    self._selector_engine.find_all(search_target, selector_name)
-                )
-                try:
-                    elements = await asyncio.wait_for(task, timeout=8.0)
-                    if elements:
-                        return elements
-                except asyncio.TimeoutError:
-                    self.logger.debug(f"YAML selector '{selector_name}' timed out after 8s — force cancelling")
-                    task.cancel()
-                    try:
-                        await task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    return []
-            except Exception as e:
-                self.logger.debug(f"YAML selector '{selector_name}' failed: {e}")
-        return []
-    
-    async def _resolve_text(self, selector_name: str, parent=None) -> Optional[str]:
-        """Resolve element text via YAML selector engine."""
-        el = await self._resolve_element(selector_name, parent)
-        if el:
-            try:
-                text = await el.text_content()
-                return text.strip() if text else None
-            except Exception as e:
-                self.logger.debug(f"Text extraction for '{selector_name}' failed: {e}")
-        return None
     
     # ─────────────────────────────────────────────────────────
     # SUMMARY TAB
@@ -626,62 +530,6 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                         break
             except Exception:
                 pass
-            
-            # ── YAML selector engine fallback (with timeout) for missing fields ──
-            
-            if 'competition' not in overview:
-                try:
-                    competition_els = await asyncio.wait_for(self._resolve_elements('competition'), timeout=5.0)
-                    for el in competition_els:
-                        text = (await el.text_content()).strip()
-                        if text and len(text) < 100:
-                            overview['competition'] = text
-                            break
-                except (asyncio.TimeoutError, Exception):
-                    self.logger.debug("YAML fallback for competition timed out")
-            
-            if 'date' not in overview:
-                try:
-                    date_text = await asyncio.wait_for(self._resolve_text('match_info'), timeout=5.0)
-                    if date_text:
-                        overview['date'] = date_text
-                except (asyncio.TimeoutError, Exception):
-                    self.logger.debug("YAML fallback for match_info timed out")
-            
-            if 'status' not in overview:
-                try:
-                    status_text = await asyncio.wait_for(self._resolve_text('match_status'), timeout=5.0)
-                    if status_text:
-                        overview['status'] = status_text
-                except (asyncio.TimeoutError, Exception):
-                    self.logger.debug("YAML fallback for match_status timed out")
-            
-            # Quarter scores via YAML
-            home_quarter_scores = []
-            away_quarter_scores = []
-            try:
-                home_parts = await asyncio.wait_for(self._resolve_elements('quarter_scores'), timeout=5.0)
-                for part in home_parts:
-                    text = (await part.text_content()).strip()
-                    if text:
-                        home_quarter_scores.append(text)
-            except (asyncio.TimeoutError, Exception):
-                self.logger.debug("YAML fallback for quarter_scores timed out")
-            
-            try:
-                away_parts = await asyncio.wait_for(self._resolve_elements('away_quarter_scores'), timeout=5.0)
-                for part in away_parts:
-                    text = (await part.text_content()).strip()
-                    if text:
-                        away_quarter_scores.append(text)
-            except (asyncio.TimeoutError, Exception):
-                self.logger.debug("YAML fallback for away_quarter_scores timed out")
-            
-            if home_quarter_scores or away_quarter_scores:
-                team_statistics['quarter_scores'] = {
-                    'home': home_quarter_scores,
-                    'away': away_quarter_scores
-                }
             
             return {
                 'overview': overview,
@@ -763,70 +611,6 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                     
             except Exception as e:
                 self.logger.debug(f"Playwright direct H2H extraction failed: {e}")
-            
-            # ── YAML selector engine fallback (with timeout) ──
-            if not previous_matches:
-                try:
-                    h2h_rows = await asyncio.wait_for(self._resolve_elements('previous_matches'), timeout=8.0)
-                    self.logger.info(f"Found {len(h2h_rows)} H2H rows via YAML")
-                    
-                    for row in h2h_rows:
-                        match_data = {}
-                        try:
-                            date_el = await self._resolve_element('h2h_match_date', row)
-                            if date_el:
-                                match_data['date'] = (await date_el.text_content()).strip()
-                            
-                            event_el = await self._resolve_element('h2h_event', row)
-                            if event_el:
-                                event_title = await event_el.get_attribute('title')
-                                event_text = (await event_el.text_content()).strip()
-                                match_data['competition'] = event_title or event_text
-                                match_data['competition_short'] = event_text
-                            
-                            home_participant = await self._resolve_element('h2h_home_participant', row)
-                            if home_participant:
-                                home_name_el = await self._resolve_element('h2h_home_team', home_participant)
-                                if home_name_el:
-                                    match_data['home_team'] = (await home_name_el.text_content()).strip()
-                            
-                            away_participant = await self._resolve_element('h2h_away_participant', row)
-                            if away_participant:
-                                away_name_el = await self._resolve_element('h2h_away_team', away_participant)
-                                if away_name_el:
-                                    match_data['away_team'] = (await away_name_el.text_content()).strip()
-                            
-                            final_result = await self._resolve_element('h2h_final_result', row)
-                            if final_result:
-                                score_spans = await self._resolve_elements('h2h_score_element', final_result)
-                                if len(score_spans) >= 2:
-                                    match_data['home_score'] = (await score_spans[0].text_content()).strip()
-                                    match_data['away_score'] = (await score_spans[1].text_content()).strip()
-                            
-                            ft_result = await self._resolve_element('h2h_ft_result', row)
-                            if ft_result:
-                                ft_spans = await self._resolve_elements('h2h_score_element', ft_result)
-                                if len(ft_spans) >= 2:
-                                    ft_home = (await ft_spans[0].text_content()).strip()
-                                    ft_away = (await ft_spans[1].text_content()).strip()
-                                    if ft_home and ft_away:
-                                        match_data['ft_home_score'] = ft_home
-                                        match_data['ft_away_score'] = ft_away
-                            
-                            icon_el = await self._resolve_element('h2h_result_indicator', row)
-                            if icon_el:
-                                match_data['result_indicator'] = (await icon_el.text_content()).strip()
-                            
-                            href = await row.get_attribute('href')
-                            if href:
-                                match_data['match_url'] = href
-                            
-                            if 'home_team' in match_data or 'away_team' in match_data:
-                                previous_matches.append(match_data)
-                        except Exception:
-                            continue
-                except (asyncio.TimeoutError, Exception) as e:
-                    self.logger.debug(f"YAML H2H extraction timed out or failed: {e}")
             
             self.logger.info(f"Extracted {len(previous_matches)} H2H matches")
             
@@ -920,68 +704,6 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
             except Exception as e:
                 self.logger.debug(f"Playwright direct odds extraction failed: {e}")
             
-            # ── YAML selector engine fallback (with timeout) ──
-            if not betting_odds:
-                try:
-                    odds_rows = await asyncio.wait_for(self._resolve_elements('betting_odds'), timeout=8.0)
-                    self.logger.info(f"Found {len(odds_rows)} odds rows via YAML")
-                    
-                    for row in odds_rows:
-                        try:
-                            bookmaker_link = await self._resolve_element('odds_bookmaker_name', row)
-                            bookmaker_name = ""
-                            if bookmaker_link:
-                                bookmaker_name = await bookmaker_link.get_attribute('title') or ""
-                            if not bookmaker_name:
-                                logo_img = await self._resolve_element('odds_bookmaker_logo', row)
-                                if logo_img:
-                                    bookmaker_name = await logo_img.get_attribute('alt') or ""
-                            
-                            if not bookmaker_name:
-                                continue
-                            
-                            odds_cells = await self._resolve_elements('odds_cell', row)
-                            odds_values = []
-                            opening_values = []
-                            
-                            for cell in odds_cells:
-                                current_text = (await cell.text_content()).strip()
-                                title_attr = await cell.get_attribute('title') or ""
-                                
-                                opening_val = None
-                                if ' » ' in title_attr:
-                                    parts = title_attr.split(' » ')
-                                    if len(parts) == 2:
-                                        opening_val = parts[0].strip()
-                                
-                                odds_values.append(current_text)
-                                if opening_val:
-                                    opening_values.append(opening_val)
-                            
-                            market_type = 'moneyline'
-                            if odds_cells:
-                                analytics_label = await odds_cells[0].get_attribute('data-analytics-label') or ''
-                                if '1x2' in analytics_label.lower():
-                                    market_type = '1x2'
-                                elif 'over' in analytics_label.lower():
-                                    market_type = 'over_under'
-                            
-                            odds_entry = {'market_type': market_type}
-                            if len(odds_values) >= 2:
-                                odds_entry['home'] = odds_values[0]
-                                odds_entry['away'] = odds_values[-1]
-                            if len(odds_values) >= 3:
-                                odds_entry['draw'] = odds_values[1]
-                            if opening_values and len(opening_values) >= 2:
-                                odds_entry['opening'] = {'home': opening_values[0], 'away': opening_values[-1]}
-                            
-                            betting_odds[bookmaker_name] = odds_entry
-                            bookmaker_data[bookmaker_name] = {'market_type': market_type, 'cell_count': len(odds_values)}
-                        except Exception:
-                            continue
-                except (asyncio.TimeoutError, Exception) as e:
-                    self.logger.debug(f"YAML odds extraction timed out or failed: {e}")
-            
             self.logger.info(f"Extracted odds for {len(betting_odds)} bookmakers")
             
             return {
@@ -1057,45 +779,6 @@ class BasketballPrimaryTabExtractor(PrimaryTabExtractor):
                             continue
             except Exception as e:
                 self.logger.debug(f"Playwright direct stats extraction failed: {e}")
-            
-            # ── YAML selector engine fallback (with timeout) ──
-            if not detailed_statistics or all(len(v) == 0 for v in detailed_statistics.values()):
-                try:
-                    stat_rows = await asyncio.wait_for(self._resolve_elements('full_time_stats'), timeout=8.0)
-                    stat_headers = await asyncio.wait_for(self._resolve_elements('stat_section_header'), timeout=5.0)
-                    
-                    if stat_rows or stat_headers:
-                        all_elements = (stat_rows or []) + (stat_headers or [])
-                        for element in all_elements:
-                            try:
-                                cls = await element.get_attribute('class') or ''
-                                
-                                if 'stat__header' in cls or 'sectionHeader' in cls:
-                                    text = (await element.text_content()).strip()
-                                    if text:
-                                        current_category = text
-                                        if current_category not in detailed_statistics:
-                                            detailed_statistics[current_category] = {}
-                                    continue
-                                
-                                category_el = await self._resolve_element('stat_category_name', element)
-                                home_el = await self._resolve_element('stat_home_value', element)
-                                away_el = await self._resolve_element('stat_away_value', element)
-                                
-                                if category_el and home_el and away_el:
-                                    name = (await category_el.text_content()).strip()
-                                    home_val = (await home_el.text_content()).strip()
-                                    away_val = (await away_el.text_content()).strip()
-                                    if current_category not in detailed_statistics:
-                                        detailed_statistics[current_category] = {}
-                                    detailed_statistics[current_category][name] = {
-                                        'home': home_val,
-                                        'away': away_val
-                                    }
-                            except Exception:
-                                continue
-                except (asyncio.TimeoutError, Exception) as e:
-                    self.logger.debug(f"YAML stats extraction timed out or failed: {e}")
             
             self.logger.info(f"Extracted stats in {len(detailed_statistics)} categories")
             
