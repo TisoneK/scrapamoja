@@ -1,9 +1,19 @@
 """
 Mixin providing timeout-protected YAML selector engine resolution.
 
-The YAML selector engine has an internal retry loop that catches CancelledError,
-making plain asyncio.wait_for timeouts ineffective. This mixin wraps calls in
-a separate asyncio.Task that can be force-cancelled after the timeout expires.
+The YAML selector engine can be slow (12-40s per resolve across multiple
+strategies) and has historically exhibited hang-like behavior.  On Python
+3.8, CancelledError inherited from Exception, so the engine's ``except
+Exception`` handlers would swallow cancellation, making
+``asyncio.wait_for`` timeouts ineffective.  On Python 3.12+,
+CancelledError is BaseException and propagates through those handlers, so
+plain ``asyncio.wait_for`` should work — but the engine's strategy
+iteration is still inherently slow, and Playwright CDP operations may not
+respond promptly to cancellation.
+
+This mixin wraps calls in a separate asyncio.Task that can be force-
+cancelled after the timeout expires, ensuring bounded execution time
+regardless of Python version.
 """
 
 import asyncio
@@ -23,8 +33,10 @@ class SelectorEngineMixin:
         """Resolve a single element via YAML selector engine with 8-second timeout protection.
 
         Uses a separate asyncio.Task so that we can force-cancel if the
-        selector engine enters an infinite retry loop (it catches
-        CancelledError internally, making plain asyncio.wait_for ineffective).
+        selector engine takes too long.  The engine's strategy iteration
+        (4+ strategies × 3-10s each) can take 12-40s, and on Python 3.8
+        its ``except Exception`` handlers would swallow CancelledError.
+        The force-cancel pattern ensures bounded execution on all versions.
 
         Args:
             selector_name: The ``id`` of a YAML selector definition.
@@ -59,7 +71,7 @@ class SelectorEngineMixin:
         """Resolve multiple elements via YAML selector engine with 8-second timeout protection.
 
         Uses a separate asyncio.Task so that we can force-cancel if the
-        selector engine enters an infinite retry loop.
+        selector engine takes too long (see _resolve_element for rationale).
 
         Args:
             selector_name: The ``id`` of a YAML selector definition.

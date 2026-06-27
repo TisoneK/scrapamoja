@@ -5,10 +5,17 @@ Extends the base MatchDetailExtractor with basketball-specific implementations
 for primary tabs: SUMMARY, H2H, ODDS, STATS.
 
 Interactive operations (tab clicks, navigation, active tab detection) use
-Playwright direct CSS queries because the YAML selector engine has an
-internal retry loop that swallows CancelledError, making asyncio.wait_for
-timeouts ineffective. Non-interactive reads fall back to the YAML selector
-engine with 8-second timeout protection.
+Playwright direct CSS queries because the YAML selector engine is inherently
+slow (12-40s per resolve across 4+ strategies) and its ``except Exception``
+handlers swallowed CancelledError on Python 3.8, making asyncio.wait_for
+timeouts ineffective.  On Python 3.12+, CancelledError is BaseException and
+propagates through those handlers, but the engine's strategy iteration is
+still too slow for interactive use (tab clicks need <3s response).  Direct
+Playwright queries resolve in <1s and bypass the engine entirely.
+
+Non-interactive reads (where 8s latency is acceptable) may fall back to the
+YAML selector engine with the SelectorEngineMixin's timeout-protected
+_resolve_element / _resolve_elements helpers.
 """
 
 import asyncio

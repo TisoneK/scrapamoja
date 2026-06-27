@@ -203,7 +203,10 @@ class FlashscoreFlow(BaseFlow):
                 )
                 
                 logger.info("cookie_consent_handling_started", method="selector_engine")
-                cookie_result = await self.selector_engine.resolve("cookie_consent", dom_context)
+                cookie_result = await asyncio.wait_for(
+                    self.selector_engine.resolve("cookie_consent", dom_context),
+                    timeout=10.0
+                )
                 if cookie_result and cookie_result.element_info:
                     logger.info("cookie_consent_dialog_found", method="selector_engine", selector_used=cookie_result.strategy_used)
                     await cookie_result.element_info.element.click()
@@ -218,7 +221,10 @@ class FlashscoreFlow(BaseFlow):
             # Second Fallback: Try authentication.cookie_consent selector
             try:
                 logger.info("cookie_consent_handling_started", method="authentication_selector")
-                auth_cookie_result = await self.selector_engine.resolve("authentication.cookie_consent", dom_context)
+                auth_cookie_result = await asyncio.wait_for(
+                    self.selector_engine.resolve("authentication.cookie_consent", dom_context),
+                    timeout=10.0
+                )
                 if auth_cookie_result and auth_cookie_result.element_info:
                     logger.info("cookie_consent_dialog_found", method="authentication_selector", selector_used=auth_cookie_result.strategy_used)
                     await auth_cookie_result.element_info.element.click()
@@ -325,9 +331,12 @@ class FlashscoreFlow(BaseFlow):
                 timestamp=datetime.utcnow()
             )
             
-            # Use selector engine to find search input
+            # Use selector engine to find search input (with timeout protection)
             try:
-                search_result = await self.selector_engine.resolve("search_input", dom_context)
+                search_result = await asyncio.wait_for(
+                    self.selector_engine.resolve("search_input", dom_context),
+                    timeout=10.0
+                )
                 if search_result and search_result.element_info:
                     search_input = search_result.element_info.element
                     await search_input.clear()
@@ -551,8 +560,11 @@ class FlashscoreFlow(BaseFlow):
                 timestamp=datetime.utcnow()
             )
             
-            # Try to find football link using selector engine
-            football_result = await self.selector_engine.resolve("football_link", dom_context)
+            # Try to find football link using selector engine (with timeout protection)
+            football_result = await asyncio.wait_for(
+                self.selector_engine.resolve("football_link", dom_context),
+                timeout=10.0
+            )
             if football_result and football_result.element_info:
                 await football_result.element_info.element.click()
                 await self.page.wait_for_timeout(self._get_timeout_ms("football_link", 2.0))
@@ -612,15 +624,21 @@ class FlashscoreFlow(BaseFlow):
                 timestamp=datetime.utcnow()
             )
             
-            # Use selector engine to find date picker
+            # Use selector engine to find date picker (with timeout protection)
             try:
-                date_result = await self.selector_engine.resolve("date_picker", dom_context)
+                date_result = await asyncio.wait_for(
+                    self.selector_engine.resolve("date_picker", dom_context),
+                    timeout=10.0
+                )
                 if date_result and date_result.element_info:
                     await date_result.element_info.element.click()
                     await self.page.wait_for_timeout(self._get_timeout_ms("date_picker", 1.0))
                     
-                    # Try to find and click specific date
-                    date_option_result = await self.selector_engine.resolve("date_option", dom_context)
+                    # Try to find and click specific date (with timeout protection)
+                    date_option_result = await asyncio.wait_for(
+                        self.selector_engine.resolve("date_option", dom_context),
+                        timeout=10.0
+                    )
                     if date_option_result and date_option_result.element_info:
                         await date_option_result.element_info.element.click()
                         await self.page.wait_for_timeout(self._get_timeout_ms("date_option", 2.0))
@@ -633,29 +651,56 @@ class FlashscoreFlow(BaseFlow):
     
     async def click_match(self, match_identifier: str):
         """Click on a specific match."""
-        match_element = await self.selector_engine.find(self.page, "match_item", match_identifier)
-        if match_element:
-            await match_element.click()
-            await self.page.wait_for_timeout(2000)
+        try:
+            match_element = await asyncio.wait_for(
+                self.selector_engine.find(self.page, "match_item", match_identifier),
+                timeout=10.0
+            )
+            if match_element:
+                await match_element.click()
+                await self.page.wait_for_timeout(2000)
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout finding match item '{match_identifier}'")
+        except Exception as e:
+            logger.warning(f"Error clicking match '{match_identifier}': {e}")
     
     async def scroll_to_matches(self):
         """Scroll to the matches section."""
-        matches_container = await self.selector_engine.find(self.page, "matches_container")
-        if matches_container:
-            await matches_container.scroll_into_view_if_needed()
-            await self.page.wait_for_timeout(1000)
+        try:
+            matches_container = await asyncio.wait_for(
+                self.selector_engine.find(self.page, "matches_container"),
+                timeout=10.0
+            )
+            if matches_container:
+                await matches_container.scroll_into_view_if_needed()
+                await self.page.wait_for_timeout(1000)
+        except asyncio.TimeoutError:
+            logger.warning("Timeout finding matches container")
+        except Exception as e:
+            logger.warning(f"Error scrolling to matches: {e}")
     
     async def filter_by_competition(self, competition_name: str):
         """Filter matches by competition."""
-        filter_button = await self.selector_engine.find(self.page, "competition_filter")
-        if filter_button:
-            await filter_button.click()
-            await self.page.wait_for_timeout(1000)
-            
-            competition_option = await self.selector_engine.find(self.page, "competition_option", competition_name)
-            if competition_option:
-                await competition_option.click()
-                await self.page.wait_for_timeout(2000)
+        try:
+            filter_button = await asyncio.wait_for(
+                self.selector_engine.find(self.page, "competition_filter"),
+                timeout=10.0
+            )
+            if filter_button:
+                await filter_button.click()
+                await self.page.wait_for_timeout(1000)
+                
+                competition_option = await asyncio.wait_for(
+                    self.selector_engine.find(self.page, "competition_option", competition_name),
+                    timeout=10.0
+                )
+                if competition_option:
+                    await competition_option.click()
+                    await self.page.wait_for_timeout(2000)
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout finding competition filter elements")
+        except Exception as e:
+            logger.warning(f"Error filtering by competition '{competition_name}': {e}")
     
     async def navigate_to_live_games(self, sport_path: str):
         """Navigate to live games for a specific sport."""
@@ -678,7 +723,9 @@ class FlashscoreFlow(BaseFlow):
             )
             
             # Wait for match content to load — use Playwright directly
-            # (selector engine resolve() has an infinite loop bug)
+            # (selector engine resolve() can be slow: 12-40s per resolve
+            # across multiple strategies, so direct Playwright is preferred
+            # for simple presence checks)
             try:
                 await self.page.wait_for_selector('.event__match', timeout=5000)
                 logger.info("Match content loaded on page")
