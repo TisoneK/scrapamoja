@@ -137,14 +137,28 @@ class MatchDetailExtractor(SelectorEngineMixin, ABC):
 
             # Extract tertiary tabs
             tertiary_data = await self._extract_tertiary_tabs(page_state)
-            if tertiary_data and (tertiary_data.inc_ot or tertiary_data.ft or tertiary_data.q1):
+            if tertiary_data and (tertiary_data.inc_ot or tertiary_data.ft or tertiary_data.q1
+                                  or tertiary_data.match):
                 extracted_tabs.append('tertiary')
             else:
                 failed_tabs.append('tertiary')
 
-            # Calculate completeness score
-            total_expected_tabs = len(['summary', 'h2h', 'odds', 'stats', 'tertiary'])
-            completeness_score = len(extracted_tabs) / total_expected_tabs
+            # Extract dynamically-discovered tabs (player stats, lineups, match history)
+            player_stats_data = await self._extract_player_stats_tab(page_state)
+            if player_stats_data:
+                extracted_tabs.append('player-stats')
+            else:
+                failed_tabs.append('player-stats')
+
+            match_history_data = await self._extract_match_history_tab(page_state)
+            if match_history_data:
+                extracted_tabs.append('match-history')
+            else:
+                failed_tabs.append('match-history')
+
+            # Calculate completeness score based on available tabs
+            available_count = self._count_available_tabs()
+            completeness_score = len(extracted_tabs) / max(available_count, 1)
 
             # Create extraction metadata
             extraction_duration = int((datetime.utcnow() - start_time).total_seconds() * 1000)
@@ -165,12 +179,14 @@ class MatchDetailExtractor(SelectorEngineMixin, ABC):
                 odds_tab=odds_data,
                 stats_tab=stats_data,
                 tertiary_tabs=tertiary_data,
-                extraction_metadata=extraction_metadata
+                extraction_metadata=extraction_metadata,
+                player_stats_tab=player_stats_data,
+                match_history_tab=match_history_data,
             )
 
             # Log performance metrics
             self.logger.info(f"Match {page_state.match_id} extraction completed in {extraction_duration}ms "
-                           f"({completeness_score:.1%} completeness, {len(extracted_tabs)}/{total_expected_tabs} tabs)")
+                           f"({completeness_score:.1%} completeness, {len(extracted_tabs)} tabs extracted)")
 
             return structured_match
 
@@ -348,6 +364,32 @@ class MatchDetailExtractor(SelectorEngineMixin, ABC):
     async def _extract_tertiary_tabs(self, page_state: PageState) -> Optional[Any]:
         """Extract data from tertiary tabs."""
         pass
+
+    async def _extract_player_stats_tab(self, page_state: PageState) -> Optional[Any]:
+        """Extract data from PLAYER STATS sub-tab. Override in subclasses."""
+        return None
+
+    async def _extract_match_history_tab(self, page_state: PageState) -> Optional[Any]:
+        """Extract data from MATCH HISTORY sub-tab. Override in subclasses."""
+        return None
+
+    def _count_available_tabs(self) -> int:
+        """Count how many tabs are actually available on this match.
+        
+        Uses the discovered tab map to determine which tabs exist.
+        Returns the denominator for completeness score calculation.
+        """
+        count = 3  # summary, h2h, odds (always present)
+        if hasattr(self, '_discovered_tabs') and self._discovered_tabs:
+            if 'Stats' in self._discovered_tabs.get('match_sub_tabs', []):
+                count += 2  # stats + tertiary
+            if 'Player stats' in self._discovered_tabs.get('match_sub_tabs', []):
+                count += 1
+            if 'Match History' in self._discovered_tabs.get('match_sub_tabs', []):
+                count += 1
+        else:
+            count = 7  # Backward compat: assume all tabs
+        return count
 
     def _create_match_metadata(self, page_state: PageState, completeness_score: float) -> Any:
         """Create match metadata object."""

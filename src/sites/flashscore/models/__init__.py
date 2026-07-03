@@ -72,6 +72,39 @@ class StandingsData:
 
 
 @dataclass
+class PlayerStatsData:
+    """Data from PLAYER STATS sub-tab under Match.
+    
+    Contains per-player statistics for both teams, including:
+    - Name, jersey number, team
+    - Minutes played
+    - Points, rebounds, assists, steals, blocks, turnovers, fouls
+    - Shooting breakdown (FG/2PT/3PT/FT made-attempted and percentages)
+    
+    Only available on top-league matches (LNB, NBA, Euroleague, etc.)
+    """
+    home_players: List[Dict[str, Any]]
+    away_players: List[Dict[str, Any]]
+    stat_columns: Optional[List[str]] = None
+
+
+@dataclass
+class MatchHistoryData:
+    """Data from MATCH HISTORY sub-tab under Match (point-by-point).
+    
+    Contains the complete scoring progression with:
+    - Running score after each scoring event
+    - Which team scored (home/away)
+    - Point advantage at each step
+    
+    Available on ALL match types (top and lower leagues).
+    """
+    progression: List[Dict[str, Any]]  # [{home_score, away_score, advantage, side}, ...]
+    home_final: Optional[str] = None
+    away_final: Optional[str] = None
+
+
+@dataclass
 class StatsData:
     """Data from STATS tab."""
     detailed_statistics: Dict[str, Any]
@@ -125,6 +158,9 @@ class StructuredMatch:
     extraction_metadata: ExtractionMetadata
     lineups_tab: Optional[LineupsData] = None
     standings_tab: Optional[StandingsData] = None
+    # Dynamically-discovered tabs (top-league only)
+    player_stats_tab: Optional[PlayerStatsData] = None
+    match_history_tab: Optional[MatchHistoryData] = None
 
 
 @dataclass

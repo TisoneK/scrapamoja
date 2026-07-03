@@ -40,18 +40,19 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
         self.primary_extractor = BasketballPrimaryTabExtractor(scraper)
         # Pre-extracted data — populated at the start of extract() before any tab navigation
         self._quarter_scores: Optional[Dict[str, Any]] = None
+        self._discovered_tabs: Optional[Dict[str, Any]] = None
     
     # YAML selector engine methods inherited from SelectorEngineMixin via MatchDetailExtractor
     # (_resolve_element, _resolve_elements, _resolve_text)
     
     async def extract(self, page_state: PageState, timeout: int = 10000) -> Optional[Any]:
-        """Override extract() to pre-extract quarter scores BEFORE any tab navigation.
+        """Override extract() to pre-extract data BEFORE any tab navigation.
 
-        Quarter scores (smh__part elements) are only reliably present in the
-        match header on the initial page load.  After navigating to other
-        primary tabs (H2H, Odds, etc.) the smh container may be re-rendered
-        or hidden, making Q1-Q4 values unavailable.  Extracting them first
-        ensures both the summary and tertiary tabs can use the same data.
+        Two things must happen before tab navigation:
+        1. Quarter scores (smh__part elements) — only present in the match
+           header on initial page load; disappear after tab switches.
+        2. Dynamic tab discovery — scan DOM once to determine which tabs
+           exist on this match (top-league vs lower-league differ).
         """
         # Extract quarter scores while we're still on the default match detail view
         self._quarter_scores = await self._extract_quarter_scores()
@@ -59,6 +60,11 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             self.logger.info(f"Pre-extracted quarter scores: {self._quarter_scores}")
         else:
             self.logger.warning("Quarter scores not found on initial page load")
+        
+        # Discover all available tabs upfront
+        self._discovered_tabs = await self.primary_extractor.discover_tabs()
+        self.logger.info(f"Dynamic tab discovery: primary={self._discovered_tabs.get('primary', [])}, "
+                        f"match_sub_tabs={self._discovered_tabs.get('match_sub_tabs', [])}")
         
         # Delegate to the parent extract() pipeline
         return await super().extract(page_state, timeout)
@@ -313,16 +319,9 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             return None
     
     async def _extract_stats_tab(self, page_state: PageState) -> Optional[StatsData]:
-        """Extract data from STATS tab.
-        
-        Not all matches have a Stats sub-tab — lower-league matches
-        (e.g. NBL1 East) only have Summary and Match History under the
-        Match primary tab.  We check availability first to avoid wasting
-        20+ seconds trying to click a nonexistent tab button.
-        """
+        """Extract data from STATS tab — dynamically checks availability first."""
         try:
-            # Check if the Stats sub-tab exists before navigating
-            if not await self.primary_extractor.tab_available('match-stats'):
+            if not await self.primary_extractor.tab_available('match-stats', self._discovered_tabs):
                 self.logger.info("Stats sub-tab not available on this match — skipping stats extraction")
                 return None
             
@@ -364,8 +363,8 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
             quarter_scores = self._quarter_scores
 
             # Step 2: Navigate to the Stats sub-tab
-            # Check availability first — lower-league matches may not have Stats
-            if not await self.primary_extractor.tab_available('match-stats'):
+            # Check availability first using discovered tabs
+            if not await self.primary_extractor.tab_available('match-stats', self._discovered_tabs):
                 self.logger.info("Stats sub-tab not available — skipping tertiary extraction")
                 return TertiaryData(quarter_scores=quarter_scores)
             
@@ -411,6 +410,253 @@ class BasketballMatchDetailExtractor(MatchDetailExtractor):
         except Exception as e:
             self.logger.error(f"Error extracting tertiary tabs: {e}")
             return TertiaryData()
+
+    # ─────────────────────────────────────────────────────────
+    # DYNAMICALLY-DISCOVERED TABS (Player Stats, Match History)
+    # These tabs only exist on top-league matches.  We check
+    # tab_available() before navigation to avoid wasted retries.
+    # ─────────────────────────────────────────────────────────
+
+    async def _extract_player_stats_tab(self, page_state: PageState) -> Optional[Any]:
+        """Extract data from PLAYER STATS sub-tab.
+
+        FlashScore Player Stats layout (confirmed via live inspection):
+          - Container: table.ui-table.playerStatsTable
+          - Rows: ui-table__body > ui-table__row.playerStatsTable__row
+          - Row format: Name + team tag (GIG/HER) + jersey # + MIN:SS + stat columns
+        """
+        try:
+            from src.sites.flashscore.models import PlayerStatsData
+
+            # Check availability first (uses pre-discovered tabs)
+            if not await self.primary_extractor.tab_available('player-stats', self._discovered_tabs):
+                self.logger.info("Player stats tab not available — skipping")
+                return None
+
+            # Navigate to Player stats sub-tab
+            if not await self.primary_extractor.navigate_to_tab('player-stats'):
+                self.logger.warning("Could not navigate to Player stats tab")
+                return None
+
+            await self.page.wait_for_timeout(2000)
+
+            # Extract player stats via JavaScript
+            stats_data = await self.page.evaluate("""
+                () => {
+                    const result = {
+                        stat_columns: [],
+                        all_players: [],
+                    };
+
+                    const table = document.querySelector(
+                        'table.playerStatsTable, .playerStatsTable, [class*="playerStatsTable"]'
+                    );
+                    if (!table) return null;
+
+                    // Column headers
+                    const headerCells = table.querySelectorAll(
+                        'thead th, .playerStatsTable__headerCell, .ui-table__headerCell'
+                    );
+                    headerCells.forEach(th => {
+                        const text = th.textContent.trim();
+                        if (text && text.length < 15) {
+                            result.stat_columns.push(text);
+                        }
+                    });
+
+                    // Player rows — FlashScore uses div-based rows
+                    const rows = table.querySelectorAll(
+                        '.playerStatsTable__row, .ui-table__row.playerStatsTable__row'
+                    );
+
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll(
+                            '.playerStatsTable__cell, td, .ui-table__cell'
+                        );
+                        if (cells.length < 3) return;
+
+                        // Player name is in playerStatsTable__participantNameCell
+                        const nameEl = row.querySelector('.playerStatsTable__participantNameCell');
+                        const playerName = nameEl ? nameEl.textContent.trim() : '';
+                        if (!playerName || playerName.length > 50) return;
+
+                        const cellTexts = Array.from(cells).map(c => c.textContent.trim());
+
+                        // Find team tag (2-5 char uppercase)
+                        let teamTag = '';
+                        for (const txt of cellTexts) {
+                            if (txt && txt.length >= 2 && txt.length <= 5 && txt === txt.toUpperCase() && /[A-Z]/.test(txt)) {
+                                teamTag = txt;
+                                break;
+                            }
+                        }
+
+                        // Jersey number (1-2 digits)
+                        let jersey = '';
+                        for (const txt of cellTexts) {
+                            if (/^\\d{1,2}$/.test(txt)) {
+                                jersey = txt;
+                                break;
+                            }
+                        }
+
+                        // Minutes (MM:SS)
+                        let minutes = '';
+                        for (const txt of cellTexts) {
+                            if (/^\\d+:\\d+$/.test(txt)) {
+                                minutes = txt;
+                                break;
+                            }
+                        }
+
+                        result.all_players.push({
+                            name: playerName,
+                            team_tag: teamTag,
+                            jersey: jersey,
+                            minutes: minutes,
+                            stats: cellTexts.slice(1),
+                        });
+                    });
+
+                    return result;
+                }
+            """)
+
+            if not stats_data:
+                self.logger.info("No player stats data found")
+                return None
+
+            # Group players by team tag
+            all_players = stats_data.get('all_players', [])
+            team_tags_seen = {}
+            for p in all_players:
+                tag = p.get('team_tag', '')
+                if tag not in team_tags_seen:
+                    team_tags_seen[tag] = []
+                team_tags_seen[tag].append(p)
+
+            tags = list(team_tags_seen.keys())
+            home_players = team_tags_seen.get(tags[0], []) if tags else []
+            away_players = team_tags_seen.get(tags[1], []) if len(tags) > 1 else []
+
+            self.logger.info(f"Extracted {len(home_players)} home + {len(away_players)} away player stats")
+
+            return PlayerStatsData(
+                home_players=home_players,
+                away_players=away_players,
+                stat_columns=stats_data.get('stat_columns', []),
+            )
+        except Exception as e:
+            self.logger.error(f"Error extracting Player stats tab: {e}")
+            return None
+
+    async def _extract_match_history_tab(self, page_state: PageState) -> Optional[Any]:
+        """Extract data from MATCH HISTORY sub-tab (point-by-point progression).
+
+        FlashScore Match History layout (confirmed via live inspection):
+          - Container: div.tabContent__match-history > div.matchHistoryRowWrapper
+          - Each row: div.matchHistoryRow with score + advantage elements
+          - Available on ALL match types (top and lower leagues)
+        """
+        try:
+            from src.sites.flashscore.models import MatchHistoryData
+
+            # Check availability first
+            if not await self.primary_extractor.tab_available('match-history', self._discovered_tabs):
+                self.logger.info("Match History tab not available — skipping")
+                return None
+
+            # Navigate to Match History sub-tab
+            if not await self.primary_extractor.navigate_to_tab('match-history'):
+                self.logger.warning("Could not navigate to Match History tab")
+                return None
+
+            await self.page.wait_for_timeout(2000)
+
+            # Extract point-by-point progression via JavaScript
+            history_data = await self.page.evaluate("""
+                () => {
+                    const result = {
+                        progression: [],
+                        home_final: null,
+                        away_final: null,
+                    };
+
+                    const container = document.querySelector(
+                        '.tabContent__match-history, .matchHistoryRowWrapper, [class*="matchHistory"]'
+                    );
+                    if (!container) return null;
+
+                    const rows = container.querySelectorAll(
+                        '.matchHistoryRow, [class*="matchHistoryRow"]'
+                    );
+
+                    rows.forEach(row => {
+                        const aheadEl = row.querySelector(
+                            '.matchHistoryRow__ahead, [class*="matchHistoryRow__ahead"]'
+                        );
+                        const scoreEl = row.querySelector(
+                            '.matchHistoryRow__scoreBox, [class*="matchHistoryRow__scoreBox"]'
+                        );
+
+                        if (!scoreEl) return;
+
+                        const scoreText = scoreEl.textContent.trim();
+                        if (!scoreText || scoreText === '-') return;
+
+                        const scoreMatch = scoreText.match(/(\\d+)\\s*-\\s*(\\d+)/);
+                        if (!scoreMatch) return;
+
+                        const homeScore = parseInt(scoreMatch[1]);
+                        const awayScore = parseInt(scoreMatch[2]);
+
+                        let side = 'home';
+                        let advantage = 0;
+                        if (aheadEl) {
+                            const aheadCls = aheadEl.className || '';
+                            if (aheadCls.includes('away')) {
+                                side = 'away';
+                            }
+                            const aheadText = aheadEl.textContent.trim();
+                            const advMatch = aheadText.match(/\\+?(\\d+)/);
+                            if (advMatch) {
+                                advantage = parseInt(advMatch[1]);
+                            }
+                        }
+
+                        result.progression.push({
+                            home_score: homeScore,
+                            away_score: awayScore,
+                            advantage: advantage,
+                            side: side,
+                            score_text: scoreText,
+                        });
+                    });
+
+                    if (result.progression.length > 0) {
+                        const last = result.progression[result.progression.length - 1];
+                        result.home_final = String(last.home_score);
+                        result.away_final = String(last.away_score);
+                    }
+
+                    return result;
+                }
+            """)
+
+            if not history_data:
+                self.logger.info("No match history data found")
+                return None
+
+            self.logger.info(f"Extracted {len(history_data['progression'])} match history entries")
+
+            return MatchHistoryData(
+                progression=history_data.get('progression', []),
+                home_final=history_data.get('home_final'),
+                away_final=history_data.get('away_final'),
+            )
+        except Exception as e:
+            self.logger.error(f"Error extracting Match History tab: {e}")
+            return None
 
     async def _extract_quarter_scores(self) -> Optional[Dict[str, Any]]:
         """Extract quarter-by-quarter scores from the match header.

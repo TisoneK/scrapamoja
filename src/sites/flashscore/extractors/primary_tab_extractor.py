@@ -78,18 +78,90 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
     MATCH_SUB_TABS = {'summary', 'stats', 'player-stats', 'player-statistics', 
                       'match-stats', 'match-statistics', 'lineups', 'match-history'}
     
-    async def tab_available(self, tab_name: str) -> bool:
+    async def discover_tabs(self) -> Dict[str, Any]:
+        """Dynamically discover all available tabs on the current match page.
+        
+        FlashScore matches vary in which tabs they expose:
+        - Top leagues (LNB, NBA, Euroleague): Match sub-tabs include
+          Summary, Player stats, Stats, Lineups, Match History
+        - Lower leagues (NBL1 East): Match sub-tabs are only Summary + Match History
+        - 4th primary tab varies: Draw (knockout) vs Standings (league table)
+        
+        Returns:
+            Dict with primary, match_sub_tabs, odds_sub_tabs, active_primary,
+            active_sub_tab
+        """
+        try:
+            tabs = await self.page.evaluate("""
+                () => {
+                    const result = {
+                        primary: [],
+                        match_sub_tabs: [],
+                        odds_sub_tabs: [],
+                        active_primary: null,
+                        active_sub_tab: null,
+                    };
+                    
+                    const tabLists = document.querySelectorAll(
+                        '[role="tablist"], [class*="tabs_"]'
+                    );
+                    
+                    tabLists.forEach(tl => {
+                        const cls = tl.className || '';
+                        if (cls.includes('ot-') || cls.includes('onetrust')) return;
+                        
+                        const tabs = Array.from(tl.querySelectorAll(
+                            'button[data-testid="wcl-tab"], [role="tab"], a[role="tab"]'
+                        )).map(t => ({
+                            text: t.textContent.trim(),
+                            active: (t.className || '').includes('wcl-tabSelected')
+                                || (t.parentElement && t.parentElement.classList.contains('selected')),
+                        })).filter(t => t.text && t.text.length < 50);
+                        
+                        if (tabs.length === 0) return;
+                        
+                        if (cls.includes('Primary') || cls.includes('primary')) {
+                            result.primary = tabs.map(t => t.text);
+                            const active = tabs.find(t => t.active);
+                            if (active) result.active_primary = active.text;
+                        } else if (cls.includes('Tertiary') || cls.includes('tertiary')) {
+                            // Skip tertiary tabs
+                        } else if (cls.includes('Secondary') || cls.includes('secondary')) {
+                            const texts = tabs.map(t => t.text);
+                            const hasSummary = texts.some(t => t === 'Summary');
+                            const hasHomeAway = texts.some(t => t === 'Home/Away');
+                            
+                            if (hasSummary) {
+                                result.match_sub_tabs = tabs.map(t => t.text);
+                                const active = tabs.find(t => t.active);
+                                if (active) result.active_sub_tab = active.text;
+                            } else if (hasHomeAway) {
+                                result.odds_sub_tabs = tabs.map(t => t.text);
+                            }
+                        }
+                    });
+                    
+                    return result;
+                }
+            """)
+            self.logger.info(f"Discovered tabs: primary={tabs['primary']}, "
+                           f"match_sub_tabs={tabs['match_sub_tabs']}")
+            return tabs
+        except Exception as e:
+            self.logger.error(f"Error discovering tabs: {e}")
+            return {'primary': [], 'match_sub_tabs': [], 'odds_sub_tabs': [],
+                    'active_primary': None, 'active_sub_tab': None}
+    
+    async def tab_available(self, tab_name: str, discovered_tabs: Optional[Dict] = None) -> bool:
         """Check if a tab is present on the current page without clicking it.
         
         Not all matches have all tabs — lower-league matches may lack
         "Stats", "Player stats", and "Lineups" sub-tabs. This method
         checks whether the tab button exists before attempting navigation.
         
-        For sub-tabs under "Match", first clicks the Match primary tab
-        to reveal them, then checks.
-        
         Args:
             tab_name: Tab identifier (e.g. 'match-stats', 'h2h', 'odds')
+            discovered_tabs: Optional pre-discovered tab map (avoids re-scanning)
             
         Returns:
             True if the tab button is present on the page
@@ -110,9 +182,27 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
         }
         display_text = tab_display_text.get(tab_name_lower, tab_name)
         
-        # For sub-tabs, first click "Match" primary tab to reveal them
+        # Fast path: use pre-discovered tabs if available
+        if discovered_tabs:
+            if tab_name_lower in ('odds', 'h2h'):
+                return display_text in discovered_tabs.get('primary', [])
+            if tab_name_lower in ('standings', 'stats', 'match-stats'):
+                if 'Stats' in discovered_tabs.get('match_sub_tabs', []):
+                    return True
+                if 'Standings' in discovered_tabs.get('primary', []):
+                    return True
+                return False
+            if tab_name_lower in ('player-stats', 'player-statistics'):
+                return 'Player stats' in discovered_tabs.get('match_sub_tabs', [])
+            if tab_name_lower == 'lineups':
+                return 'Lineups' in discovered_tabs.get('match_sub_tabs', [])
+            if tab_name_lower == 'match-history':
+                return 'Match History' in discovered_tabs.get('match_sub_tabs', [])
+            if tab_name_lower == 'summary':
+                return 'Summary' in discovered_tabs.get('match_sub_tabs', [])
+        
+        # Fallback: DOM-based check (for sub-tabs, first reveal by clicking Match)
         if tab_name_lower in self.MATCH_SUB_TABS:
-            # Check if Match primary tab is already active
             match_active = await self.page.evaluate("""
                 () => {
                     const buttons = document.querySelectorAll('button[data-testid="wcl-tab"]');
@@ -127,7 +217,6 @@ class PrimaryTabExtractor(SelectorEngineMixin, ABC):
                 }
             """)
             if not match_active:
-                # Click Match tab to reveal sub-tabs
                 await self._click_tab_by_text('Match')
                 await self.page.wait_for_timeout(1000)
         
