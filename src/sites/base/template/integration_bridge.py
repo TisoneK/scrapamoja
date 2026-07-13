@@ -505,7 +505,7 @@ class BaseIntegrationBridge(IIntegrationBridge):
             logger.debug(f"Error detecting resource monitoring: {e}")
             return {"available": False, "error": str(e)}
     
-    async def _detect_stealth_features(self) -> Dict[str, Any]:
+    def _detect_stealth_features(self) -> Dict[str, Any]:
         """Detect stealth and anti-bot detection features."""
         try:
             if not self.page:
