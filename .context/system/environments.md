@@ -28,8 +28,9 @@ block (and its "last verified" date) every time you run on it again.
   - `uv venv --python 3.12 .venv` — creates the venv (uv fetched CPython 3.12.13 standalone)
   - `uv pip install --python .venv/bin/python --only-binary :all: -e ".[dev]"` — **must pass `--only-binary :all:`**; without it uv tries to source-build `cryptography` and fails (no Rust/OpenSSL toolchain here)
   - `.venv/bin/python -c "import src.main"` — imports OK after the deps fix (`bb0e636`)
+  - `.venv/bin/python -m playwright install` — chromium/firefox/webkit/ffmpeg downloaded to `~/Library/Caches/ms-playwright`; chromium headless launch smoke-tested OK
   - `git` push/pull work with existing creds
-- **Not yet run this session:** `pytest` / `ruff` / `mypy` (installed, runnable) and `playwright install` (browser binaries NOT downloaded — browser-driven tests/scrapes will fail until then).
+- **Not yet run this session:** `pytest` / `ruff` / `mypy` (installed and runnable — baseline just hasn't been executed).
 - **Quirks / gotchas:**
   - `uv venv` does not install `pip` into the venv — use `uv pip ...` or `.venv/bin/python -m` for tools.
   - `--only-binary :all:` is required (see above). If a needed package has no wheel, that surfaces here as a hard error rather than a slow failing source build.
