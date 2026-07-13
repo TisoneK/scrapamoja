@@ -160,5 +160,17 @@ async def cli():
         return 1
 
 
-if __name__ == "__main__":
+def main():
+    """Synchronous entry point for the ``scorewise`` console script.
+
+    ``cli`` is a coroutine, so it cannot be used directly as a
+    ``[project.scripts]`` target — setuptools would call it and discard the
+    returned coroutine without ever awaiting it. This wrapper drives it with
+    ``asyncio.run`` so both ``python -m src.main`` and the installed
+    ``scorewise`` command behave identically.
+    """
     asyncio.run(cli())
+
+
+if __name__ == "__main__":
+    main()
