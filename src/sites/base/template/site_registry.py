@@ -6,6 +6,8 @@ site templates in a centralized registry.
 """
 
 import asyncio
+import importlib.util
+import inspect
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -54,6 +56,7 @@ class BaseSiteRegistry(IRegistryManager, ITemplateDiscovery, ITemplateStorage, I
         self.status = RegistryStatus.INITIALIZING
         self.registry_version = "1.0.0"
         self.last_updated = datetime.now()
+        self.last_discovery: Optional[datetime] = None
         
         # Template storage
         self.templates: Dict[str, Dict[str, Any]] = {}
