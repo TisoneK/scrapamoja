@@ -61,7 +61,8 @@ class BrowserLifecycleIntegration:
             "html_capture_on_error": True,
             "screenshot_format": "png",
             "screenshot_quality": 80,
-            "html_capture_clean": True
+            "html_capture_clean": True,
+            "capture_dir": "data/snapshots"
         }
         
         logger.info(f"BrowserLifecycleIntegration initialized for {self.template_name}")
@@ -327,7 +328,8 @@ class BrowserLifecycleIntegration:
             if not filename:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"{self.template_name}_{timestamp}.png"
-            
+            filename = str(self._resolve_capture_path(filename))
+
             # Set screenshot options
             options = {
                 "full_page": full_page,
@@ -405,7 +407,7 @@ class BrowserLifecycleIntegration:
                 html_content = await self._clean_html(html_content)
             
             # Write HTML to file
-            html_path = Path(filename)
+            html_path = self._resolve_capture_path(filename)
             html_path.write_text(html_content, encoding='utf-8')
             
             # Record HTML capture event
@@ -474,6 +476,19 @@ class BrowserLifecycleIntegration:
             logger.debug(f"Failed to clean HTML: {e}")
             return html_content
     
+    def _resolve_capture_path(self, filename: str) -> Path:
+        """
+        Resolve a capture filename against the configured capture directory.
+
+        Bare filenames land in config["capture_dir"] instead of the process
+        cwd; callers passing an explicit directory keep their path.
+        """
+        path = Path(filename)
+        if path.parent == Path("."):
+            path = Path(self.config.get("capture_dir", "data/snapshots")) / path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
     async def capture_error_screenshot(self, error_type: str) -> Optional[str]:
         """
         Capture a screenshot when an error occurs.

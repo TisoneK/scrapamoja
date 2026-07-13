@@ -57,8 +57,8 @@ class TemplateScaffolder:
         """
         self.config = config or {}
         
-        # Template templates directory
-        self.templates_dir = Path(__file__).parent.parent.parent / "templates"
+        # Jinja2 scaffolding templates ship alongside this module
+        self.templates_dir = Path(__file__).parent / "templates"
         self.templates_dir.mkdir(exist_ok=True)
         
         # Default template structure
@@ -404,7 +404,7 @@ class TemplateValidator:
         errors = []
         warnings = []
         
-        for yaml_file in template_path.rglob("*.yaml") + template_path.rglob("*.yml"):
+        for yaml_file in list(template_path.rglob("*.yaml")) + list(template_path.rglob("*.yml")):
             try:
                 with open(yaml_file, 'r') as f:
                     yaml.safe_load(f)
