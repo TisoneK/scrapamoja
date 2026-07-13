@@ -71,7 +71,7 @@ class LoggingFrameworkIntegration:
         self.performance_log = []
         self.error_log = []
         
-        logger.info(f"LoggingFrameworkIntegration initialized for {template_name}")
+        logger.info(f"LoggingFrameworkIntegration initialized for {self.template_name}")
     
     async def initialize_logging_integration(self) -> bool:
         """

@@ -64,7 +64,7 @@ class BrowserLifecycleIntegration:
             "html_capture_clean": True
         }
         
-        logger.info(f"BrowserLifecycleIntegration initialized for {template_name}")
+        logger.info(f"BrowserLifecycleIntegration initialized for {self.template_name}")
     
     async def initialize_browser_integration(self) -> bool:
         """

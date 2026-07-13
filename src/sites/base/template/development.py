@@ -6,6 +6,7 @@ This module provides development tools for creating, testing, and managing
 site templates including scaffolding, validation, and debugging utilities.
 """
 
+import importlib.util
 import os
 import shutil
 import json

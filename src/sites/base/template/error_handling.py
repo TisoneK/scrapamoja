@@ -6,6 +6,7 @@ This module provides centralized error handling, logging configuration, and
 exception classes for the template framework.
 """
 
+import asyncio
 import logging
 import traceback
 from datetime import datetime

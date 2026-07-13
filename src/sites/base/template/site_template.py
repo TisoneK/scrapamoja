@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 
 from .interfaces import ISiteTemplate, TemplateInfo
+from .integration_bridge import FullIntegrationBridge
 from ..site_scraper import BaseSiteScraper
 
 

@@ -7,6 +7,7 @@ the correct schema and contain all required fields for proper functionality.
 
 import asyncio
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Set, Tuple

@@ -68,7 +68,7 @@ class ResourceMonitoringIntegration:
         self.resource_history = []
         self.threshold_alerts = []
         
-        logger.info(f"ResourceMonitoringIntegration initialized for {template_name}")
+        logger.info(f"ResourceMonitoringIntegration initialized for {self.template_name}")
     
     async def initialize_resource_monitoring(self) -> bool:
         """
