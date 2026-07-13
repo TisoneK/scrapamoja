@@ -80,3 +80,38 @@ don't remove the line.
       in test_resource_monitoring; plus browser_lifecycle_test, test_template_framework,
       test_plugin_integration, test_tab_switching_integration, test_wikipedia_yaml_selectors
       (errors not captured — rerun collect to see). Fix underlying imports/signatures. High.
+      *(Progress 2026-07-12 session 4: test_template_framework collection fixed — `b237089`.
+      14 files remain.)*
+- [ ] **Align template test suites with the implemented interface API** (added 2026-07-12 by Claude Code, session 4) —
+      ~25 unit failures in `tests/sites/template/` + most of
+      `tests/end_to_end/test_template_framework.py` expect APIs that
+      `src/sites/base/template/interfaces.py` never declared: `health_check`,
+      `get_performance_metrics`, positional `scrape(action)`, `registry.initialize()`,
+      `loader.load_selectors()`/`get_selector()`, attribute-style validation results,
+      and module-level `psutil` patching (psutil is imported locally). The
+      implementations match the interface docstrings and the real GitHub consumer, so
+      rewrite the tests against `interfaces.py` as the contract (or extend the interface
+      deliberately — owner call). Medium. See finding 10 in 2026-07-12-review-2.md.
+- [ ] **Author the 6 missing .j2 scaffolding templates** (added 2026-07-12 by Claude Code, session 4) —
+      `development.py` `default_structure` promises 12 generated files but only 6 `.j2`
+      templates exist in `src/sites/base/template/templates/`; missing:
+      integration_bridge, selector_loader, flow_file, extraction_rules,
+      extraction_models, test templates — those files are scaffolded empty with a
+      warning. Medium. See finding 11 in 2026-07-12-review-2.md.
+- [ ] **ADR: pick one site-scraper hierarchy** (added 2026-07-12 by Claude Code, session 4) —
+      Two parallel "add a new site" systems exist: copy `src/sites/_template/`
+      (extends ModularSiteScraper; wikipedia/flashscore hierarchy) vs `template create`
+      CLI (generates BaseSiteTemplate subclasses; only github, which multiple-inherits
+      from BOTH). Contradicts the one-framework philosophy; new contributors can't tell
+      which path is canonical. Needs an owner decision + convergence of scaffold,
+      generator, and docs. Architectural — do not "fix" without approval. See finding 9
+      in 2026-07-12-review-2.md.
+- [ ] **Triage 46 GitHub Dependabot alerts** (added 2026-07-12 by Claude Code, session 4) —
+      Every push prints: 1 critical, 17 high, 23 moderate, 5 low at
+      https://github.com/TisoneK/scrapamoja/security/dependabot. Review and bump/pin
+      affected dependencies. High (security).
+- [ ] **Template CLI writes template_cli.log to the process cwd** (added 2026-07-12 by Claude Code, session 4) —
+      `TemplateFrameworkCLI.setup_logging()` attaches a
+      `FileHandler('template_cli.log')` unconditionally, so any CLI invocation litters
+      the caller's cwd (untracked file in the repo root when run from there). Route it
+      to the project's log/data dir or make it opt-in. Low.

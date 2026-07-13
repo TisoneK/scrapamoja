@@ -19,7 +19,7 @@ block (and its "last verified" date) every time you run on it again.
    preferences in `user/`; project-wide decisions in `plans/`.
 
 ---
-## Baos-Mac-mini (last verified 2026-07-12)
+## Baos-Mac-mini (last verified 2026-07-12, session 4)
 - **Identify by:** hostname `Baos-Mac-mini.local`, `$USER` = `bao`, workspace `/Users/bao/Code/scrapamoja`
 - **OS:** macOS 15.7.7 (build 24G720, Darwin 24.6.0), Intel **x86_64**
 - **Runtimes:** system python3 = 3.9.6 (too old); **project runtime = uv-managed CPython 3.12.13 in `.venv/`**; node v24.17.0
@@ -31,6 +31,8 @@ block (and its "last verified" date) every time you run on it again.
   - `.venv/bin/python -m playwright install` — chromium/firefox/webkit/ffmpeg downloaded to `~/Library/Caches/ms-playwright`; chromium headless launch smoke-tested OK
   - `git` push/pull work with existing creds
 - **Not yet run this session:** `pytest` / `ruff` / `mypy` (installed and runnable — baseline just hasn't been executed).
+  - `.venv/bin/python -m pytest tests/sites/template --no-cov -p no:cacheprovider --timeout=60 --timeout-method=signal -q` — verified (session 4); per-area runs finish in ~1.5s and dodge the suite-wide hangs. `pytest-timeout` is present in the venv (installed ad hoc session 3, still undeclared).
+  - `.venv/bin/ruff check <path> --select F821` — verified (session 4); note the repo's `pyproject.toml` uses deprecated top-level `select`/`ignore` keys (ruff warns; still works).
 - **Quirks / gotchas:**
   - `uv venv` does not install `pip` into the venv — use `uv pip ...` or `.venv/bin/python -m` for tools.
   - `--only-binary :all:` is required (see above). If a needed package has no wheel, that surfaces here as a hard error rather than a slow failing source build.

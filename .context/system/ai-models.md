@@ -9,7 +9,8 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Claude Code | claude-opus-4-8 | 2026-07-12 | 2026-07-12 | 1 |
+| Claude Code | claude-opus-4-8 | 2026-07-12 | 2026-07-12 | 3 |
+| Claude Code | claude-fable-5 | 2026-07-12 | 2026-07-12 | 1 |
 
 ## Observations
 
@@ -20,3 +21,5 @@ Update in place when a newer session contradicts an old observation.
 - **Claude Code / claude-opus-4-8:** Model id taken from the agent's own system prompt (stated fact, not a guess). (2026-07-12)
 - **Claude Code / claude-opus-4-8:** Bootstrapped `.context/` on this repo; initial session could not run the baseline (no Python 3.12+). (2026-07-12)
 - **Claude Code / claude-opus-4-8:** Stood up the toolchain with `uv` (user-space, no admin) — CPython 3.12.13 + `.venv`; found `pyproject.toml` omitted 10 runtime deps and fixed it (`bb0e636`); found 3 pre-existing import-time crashes via a dependency-driven import sweep. (2026-07-12)
+- **Claude Code / claude-fable-5:** Model id from the agent's own system prompt (stated fact, not a guess). Correction to the sessions table: the opus-4-8 row's session count was left at 1 after sessions 2–3; set to 3. (2026-07-12)
+- **Claude Code / claude-fable-5:** Ran the template-framework review (session 4): found the framework's create→validate→generate path had never worked (4 independent breaks), fixed via targeted `ruff --select F821` sweep + CLI smoke test rather than full-suite runs — the per-area test-run pattern (`pytest tests/sites/template --timeout=60 --timeout-method=signal --no-cov`) avoids the suite-wide hang problem. (2026-07-12)
