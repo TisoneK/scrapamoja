@@ -8,6 +8,7 @@ the correct schema and contain all required fields for proper functionality.
 import asyncio
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Set, Tuple
@@ -17,7 +18,6 @@ import jsonschema
 from jsonschema import validate, ValidationError, Draft7Validator
 
 from .interfaces import IValidationFramework
-from src.sites.base.validation import ValidationResult
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,16 @@ class ComplianceArea(Enum):
     DATA_INTEGRITY = "data_integrity"
     FAULT_TOLERANCE = "fault_tolerance"
     OBSERVABILITY = "observability"
+
+
+@dataclass
+class TemplateValidationResult:
+    """Result of a template validation run."""
+    is_valid: bool
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    compliance_score: float = 0.0
+    validation_details: Dict[str, Any] = field(default_factory=dict)
 
 
 class YAMLSelectorValidator:
@@ -847,7 +857,12 @@ class FrameworkComplianceValidator:
             "validate_selector_centric": self.config.get("validate_selector_centric", True),
             "validate_modularity": self.config.get("validate_modularity", True)
         }
-        
+
+        # Validation state
+        self.validation_level = ValidationLevel(self.config.get("validation_level", ValidationLevel.STRICT.value))
+        self.validation_cache: Dict[str, TemplateValidationResult] = {}
+        self.validation_times: Dict[str, float] = {}
+
         # Constitutional compliance areas
         self.compliance_areas = {
             ComplianceArea.SELECTOR_CENTRIC: {
@@ -1346,7 +1361,7 @@ class FrameworkComplianceValidator:
             }
         }
     
-    async def _validate_template_complete(self, template_path: str) -> ValidationResult:
+    async def _validate_template_complete(self, template_path: str) -> TemplateValidationResult:
         """Validate complete template."""
         errors = []
         warnings = []
@@ -1368,7 +1383,7 @@ class FrameworkComplianceValidator:
         # Calculate compliance score
         compliance_score = 1.0 - (len(errors) / max(len(errors) + len(warnings), 1))
         
-        return ValidationResult(
+        return TemplateValidationResult(
             is_valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,
@@ -1636,5 +1651,65 @@ class FrameworkComplianceValidator:
                         
         except Exception as e:
             violations.append(f"Error checking modularity compliance: {e}")
-        
+
         return violations
+
+
+class ValidationFramework(FrameworkComplianceValidator, IValidationFramework):
+    """
+    Concrete validation framework for the template framework.
+
+    Implements IValidationFramework on top of FrameworkComplianceValidator,
+    which already provides selector, extraction-rule, and constitutional
+    compliance validation.
+    """
+
+    async def validate_template(self, template_path: str) -> Dict[str, Any]:
+        """
+        Validate a complete template.
+
+        Args:
+            template_path: Path to template directory
+
+        Returns:
+            Dict[str, Any]: Validation results
+        """
+        return await self.validate_template_compliance(template_path)
+
+    async def validate_template_structure(self, template_path: str) -> TemplateValidationResult:
+        """
+        Validate only the directory structure of a template.
+
+        Args:
+            template_path: Path to template directory
+
+        Returns:
+            TemplateValidationResult: Structure validation result
+        """
+        structure_valid = await self._validate_template_structure(template_path)
+        errors = [] if structure_valid else [f"Invalid template structure: {template_path}"]
+        return TemplateValidationResult(
+            is_valid=structure_valid,
+            errors=errors,
+            compliance_score=1.0 if structure_valid else 0.0,
+            validation_details={"template_path": template_path, "structure_valid": structure_valid},
+        )
+
+    async def get_validation_summary(self, template_path: str) -> Dict[str, Any]:
+        """
+        Run template validation and compliance checks and summarize them.
+
+        Args:
+            template_path: Path to template directory
+
+        Returns:
+            Dict[str, Any]: Summary with overall validity and compliance score
+        """
+        template_result = await self.validate_template(template_path)
+        compliance_result = await self.check_framework_compliance(template_path)
+        return {
+            "overall_valid": template_result["is_valid"] and compliance_result["is_compliant"],
+            "compliance_score": compliance_result["compliance_score"],
+            "template_validation": template_result,
+            "framework_compliance": compliance_result,
+        }

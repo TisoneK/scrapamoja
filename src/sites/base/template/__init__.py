@@ -17,15 +17,18 @@ from .site_template import ISiteTemplate
 from .integration_bridge import IIntegrationBridge
 from .selector_loader import ISelectorLoader
 from .site_registry import ITemplateRegistry, ITemplateDiscovery, ITemplateLoader
-from .validation import IValidationFramework
+from .validation import IValidationFramework, ValidationFramework
+from .site_template import BaseSiteTemplate
 
 __version__ = "1.0.0"
 __all__ = [
     "ISiteTemplate",
-    "IIntegrationBridge", 
+    "BaseSiteTemplate",
+    "IIntegrationBridge",
     "ISelectorLoader",
     "ITemplateRegistry",
     "ITemplateDiscovery",
     "ITemplateLoader",
     "IValidationFramework",
+    "ValidationFramework",
 ]

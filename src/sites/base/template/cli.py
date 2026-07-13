@@ -22,7 +22,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.sites.base.template.site_registry import BaseSiteRegistry
-from src.sites.base.template.validation import IValidationFramework as ValidationFramework
+from src.sites.base.template.validation import ValidationFramework
 from src.sites.base.template.development import TemplateDeveloper, TemplateMetadata
 from src.sites.base.template.migration import TemplateUpgrader
 from src.sites.base.template.observability import ObservabilityManager
@@ -110,9 +110,9 @@ class TemplateFrameworkCLI:
             print(f"✅ Validating template: {args.template_path}")
             
             # Validate template
-            validation_result = self.validator.validate_template(args.template_path)
-            
-            if validation_result["valid"]:
+            validation_result = await self.validator.validate_template(args.template_path)
+
+            if validation_result["is_valid"]:
                 print("✅ Template validation PASSED")
                 
                 # Show validation details
