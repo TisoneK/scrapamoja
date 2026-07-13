@@ -18,4 +18,5 @@ in this repo's sessions, not marketing claims or self-assessment.
 Update in place when a newer session contradicts an old observation.
 
 - **Claude Code / claude-opus-4-8:** Model id taken from the agent's own system prompt (stated fact, not a guess). (2026-07-12)
-- **Claude Code / claude-opus-4-8:** Bootstrapped `.context/` on this repo; could not run the test/lint/typecheck baseline because the machine lacks a Python 3.12+ interpreter — did a static-only review instead. (2026-07-12)
+- **Claude Code / claude-opus-4-8:** Bootstrapped `.context/` on this repo; initial session could not run the baseline (no Python 3.12+). (2026-07-12)
+- **Claude Code / claude-opus-4-8:** Stood up the toolchain with `uv` (user-space, no admin) — CPython 3.12.13 + `.venv`; found `pyproject.toml` omitted 10 runtime deps and fixed it (`bb0e636`); found 3 pre-existing import-time crashes via a dependency-driven import sweep. (2026-07-12)

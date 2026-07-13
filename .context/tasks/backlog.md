@@ -11,12 +11,11 @@ don't remove the line.
 -->
 
 ---
-- [ ] **Install Python 3.12+ toolchain on Baos-Mac-mini** (added 2026-07-12 by Claude Code) —
-      This machine only has system Python 3.9.6; project requires >=3.12, so
-      pytest/ruff/mypy could not be run. Install `python@3.12` (e.g. Homebrew),
-      create `.venv`, `pip install -e ".[dev]"`, `playwright install`, then record
-      the verified commands in `.context/system/environments.md`. Blocks any
-      test-backed review. Infra/Low.
+- [x] **Install Python 3.12+ toolchain on Baos-Mac-mini** (added 2026-07-12 by Claude Code; done 2026-07-12, `bb0e636`) —
+      Installed `uv` (user-space) → uv-managed CPython 3.12.13 → `.venv/` → `uv pip
+      install --only-binary :all: -e ".[dev]"`. Verified commands in
+      `.context/system/environments.md`. Still TODO: `playwright install` (browsers)
+      and running the pytest/ruff/mypy baseline.
 - [ ] **Migrate `datetime.utcnow()` (1081 uses) to tz-aware `datetime.now(timezone.utc)`** (added 2026-07-12 by Claude Code) —
       Deprecated in Python 3.12 (the project's floor). NOT a blind sed: `utcnow()`
       is naive, `now(timezone.utc)` is aware — changes `.isoformat()` output
@@ -33,3 +32,20 @@ don't remove the line.
       `src/sites/base/plugin_lifecycle.py:876,885`). Event loop holds only weak refs,
       so tasks can be GC'd mid-flight and exceptions lost. Store handles / await where
       completion matters. Low–Medium. See F4 in review.
+- [ ] **Fix import-time crash: `analytics_engine` imports non-existent module** (added 2026-07-12 by Claude Code) —
+      `src/telemetry/reporting/analytics_engine.py` does `import src.telemetry.report_generator`
+      but no such module exists → `ModuleNotFoundError` on import. Find the real module
+      (renamed/moved?) or restore it. High (breaks the telemetry reporting subsystem).
+      Repro: `.venv/bin/python -c "import src.telemetry.reporting.analytics_engine"`.
+- [ ] **Fix import-time crash: dataclass arg order in `route_visualization`** (added 2026-07-12 by Claude Code) —
+      `src/navigation/route_visualization.py` raises `TypeError: non-default argument
+      'route_id' follows default argument` at import — a field/param with no default is
+      declared after one with a default. Reorder so non-default fields precede defaulted
+      ones (or give `route_id` a default). High (breaks navigation viz import).
+      Repro: `.venv/bin/python -c "import src.navigation.route_visualization"`.
+- [ ] **Fix FastAPI route with invalid response model in `rate_limiting`** (added 2026-07-12 by Claude Code) —
+      `src/selectors/adaptive/api/middleware/rate_limiting.py` fails to import under
+      fastapi 0.139: a route's return annotation (`FailureService`) isn't a valid Pydantic
+      response field. Add `response_model=None` to the decorator or fix the annotation.
+      Medium; may be version-sensitive (surfaced with newly-installed fastapi).
+      Repro: `.venv/bin/python -c "import src.selectors.adaptive.api.middleware.rate_limiting"`.

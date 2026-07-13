@@ -22,3 +22,12 @@ past entries — append corrections instead.
 - **Outcome:** partial — `.context/` bootstrapped; 1 High bug fixed (`c8a4179`); baseline (pytest/ruff/mypy) NOT run — machine lacks Python 3.12+, so review was static-only.
 - **Open items:** 4 in tasks/backlog.md (install Py3.12+ toolchain; datetime.utcnow migration; bare-except audit; fire-and-forget task audit).
 - **Report:** .context/reviews/2026-07-12-review.md
+
+---
+## 2026-07-12 — Session 2 (continuation)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS 15.7.7) | **Role:** engineer
+- **Task:** Install dependencies (user request) — unblock the Python 3.12 toolchain.
+- **Commits:** 1 (`bb0e636`) `fix(deps)` + `.context` updates.
+- **Outcome:** done — installed uv → CPython 3.12.13 → `.venv` → deps (with `--only-binary :all:`). Found `pyproject.toml` was missing 10 runtime deps (fastapi/numpy/scipy/aiohttp/requests/networkx/watchdog/jinja2/semantic-version/python-json-logger) that `src/` imports; declared them. Discovered 3 pre-existing import-time code bugs (see backlog).
+- **Open items:** `playwright install` + run pytest/ruff/mypy baseline; 3 new import-crash bugs in tasks/backlog.md.
+- **Report:** .context/reviews/2026-07-12-review.md (F1–F4); dep + toolchain work captured in this entry + system/environments.md.

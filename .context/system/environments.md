@@ -21,11 +21,16 @@ block (and its "last verified" date) every time you run on it again.
 ---
 ## Baos-Mac-mini (last verified 2026-07-12)
 - **Identify by:** hostname `Baos-Mac-mini.local`, `$USER` = `bao`, workspace `/Users/bao/Code/scrapamoja`
-- **OS:** macOS 15.7.7 (build 24G720, Darwin 24.6.0)
-- **Runtimes:** python3 = **3.9.6 (system)** — ⚠️ project requires >=3.12; python3.11/3.12/3.13 NOT installed; no Homebrew python; node v24.17.0
-- **Package manager:** pip (requirements.txt); no `uv`, no `poetry`, no venv present
-- **Verified commands:** `git` (identity + push work with existing creds); package repo cloned at `../.context`
-- **Quirks / blockers:**
-  - **No Python 3.12+ interpreter available** — cannot create a compatible venv, install deps (`pip install -e ".[dev]"`), or run `pytest` / `ruff` / `mypy` against the project's required runtime. Baseline test/lint/typecheck could NOT be run this session. Static (read-only) code review only until a 3.12+ interpreter is installed.
-  - No project virtualenv (`.venv/` / `venv/`) present.
-  - Installing to system Python 3.9 is disallowed by protocol and would fail the `>=3.12` requirement anyway.
+- **OS:** macOS 15.7.7 (build 24G720, Darwin 24.6.0), Intel **x86_64**
+- **Runtimes:** system python3 = 3.9.6 (too old); **project runtime = uv-managed CPython 3.12.13 in `.venv/`**; node v24.17.0
+- **Package manager:** **uv 0.11.28** at `~/.local/bin/uv` (installed 2026-07-12; not on default PATH — prefix commands with `export PATH="$HOME/.local/bin:$PATH"`). No Homebrew/pyenv/conda.
+- **Verified commands (all run from repo root):**
+  - `uv venv --python 3.12 .venv` — creates the venv (uv fetched CPython 3.12.13 standalone)
+  - `uv pip install --python .venv/bin/python --only-binary :all: -e ".[dev]"` — **must pass `--only-binary :all:`**; without it uv tries to source-build `cryptography` and fails (no Rust/OpenSSL toolchain here)
+  - `.venv/bin/python -c "import src.main"` — imports OK after the deps fix (`bb0e636`)
+  - `git` push/pull work with existing creds
+- **Not yet run this session:** `pytest` / `ruff` / `mypy` (installed, runnable) and `playwright install` (browser binaries NOT downloaded — browser-driven tests/scrapes will fail until then).
+- **Quirks / gotchas:**
+  - `uv venv` does not install `pip` into the venv — use `uv pip ...` or `.venv/bin/python -m` for tools.
+  - `--only-binary :all:` is required (see above). If a needed package has no wheel, that surfaces here as a hard error rather than a slow failing source build.
+  - Network/filesystem-writing uv commands were run with the sandbox disabled (they need internet + writes to `~/.cache/uv`, `~/.local`).
