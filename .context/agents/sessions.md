@@ -31,3 +31,12 @@ past entries — append corrections instead.
 - **Outcome:** done — installed uv → CPython 3.12.13 → `.venv` → deps (with `--only-binary :all:`). Found `pyproject.toml` was missing 10 runtime deps (fastapi/numpy/scipy/aiohttp/requests/networkx/watchdog/jinja2/semantic-version/python-json-logger) that `src/` imports; declared them. Discovered 3 pre-existing import-time code bugs (see backlog).
 - **Open items:** `playwright install` + run pytest/ruff/mypy baseline; 3 new import-crash bugs in tasks/backlog.md.
 - **Report:** .context/reviews/2026-07-12-review.md (F1–F4); dep + toolchain work captured in this entry + system/environments.md.
+
+---
+## 2026-07-12 — Session 3 (continuation)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS 15.7.7) | **Role:** engineer
+- **Task:** Run the full test suite (incl. real/integration tests).
+- **Commits:** 0 code (findings only) + `.context` updates.
+- **Outcome:** partial/blocked — suite could not complete. `pytest` collected 1864 tests, 15 files error at collection; run reached only ~67/1864 before manual stop because ~24% of tests hang to the 60s per-test timeout (deadlock-like fixture teardown / live I/O). First 67: ~54 passed, ~13 failed. Installed `pytest-timeout` into the venv (ad hoc, not declared). Note: `--timeout-method=thread` aborts the whole run on first hang — use `signal`.
+- **Open items:** 4 new backlog items (suite-can't-complete/hangs; `pytest.ini` `[tool:pytest]` header ignored; 15 collection errors; earlier 3 import-crash bugs).
+- **Report:** delivered in chat; findings in tasks/backlog.md. No coverage/artifacts left (ran `--no-cov -p no:cacheprovider`).

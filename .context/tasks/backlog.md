@@ -49,3 +49,34 @@ don't remove the line.
       response field. Add `response_model=None` to the decorator or fix the annotation.
       Medium; may be version-sensitive (surfaced with newly-installed fastapi).
       Repro: `.venv/bin/python -c "import src.selectors.adaptive.api.middleware.rate_limiting"`.
+- [ ] **Test suite cannot run to completion on this machine — ~24% of tests hang** (added 2026-07-12 by Claude Code) —
+      With a Python 3.12 venv + deps + playwright browsers installed, `pytest` collected
+      **1864 tests but only reached ~67 before manual stop**: 16 hung for the full 60s
+      timeout (blocked in lock/queue `wait()`/`acquire()` — deadlock-like async fixture
+      teardown, not clean network waits), ~13 failed, ~54 passed. At ~60s/hang the full
+      run would take hours. Root issues: (a) no per-test timeout configured in the project
+      (had to `pip install pytest-timeout` ad hoc; not declared), (b) no network/browser
+      skip markers, so live-I/O tests run by default and stall offline. Recommend: add
+      `pytest-timeout` to dev deps + a default `--timeout`, mark live/browser tests with
+      `@pytest.mark.integration`/`network` and deselect by default, and fix the fixture
+      teardown deadlocks. High (blocks any real baseline). Repro:
+      `.venv/bin/python -m pytest --no-cov --continue-on-collection-errors --timeout=60 --timeout-method=signal -q`.
+- [ ] **`pytest.ini` config is silently ignored (wrong section header)** (added 2026-07-12 by Claude Code) —
+      `pytest.ini` uses `[tool:pytest]` (the setup.cfg-style header) instead of `[pytest]`,
+      so pytest does not read it — markers, `addopts` (incl. `--cov=src` and
+      `--strict-markers`), `testpaths`, `asyncio_mode=auto`, and `filterwarnings` are all
+      dropped. Evidence: declared marks (`unit`, `integration`) warn as "unknown," and
+      coverage doesn't run despite the addopts. Fix: rename the section to `[pytest]` (or
+      move config into pyproject's `[tool.pytest.ini_options]`, which also exists — pick one
+      source). NOTE: fixing this activates `--strict-markers`, which will then ERROR on the
+      undeclared `quality_control` marker (10 tests) until it's registered. Medium.
+- [ ] **15 test files fail at collection** (added 2026-07-12 by Claude Code) —
+      `pytest --collect-only` reports 15 collection errors. Known causes: FastAPI
+      response-model (test_audit_api, test_audit_export_formats, test_audit_query_api,
+      test_feature_flag_api, test_site_api_endpoints — same root as rate_limiting item);
+      navigation dataclass TypeError (test_navigation_service/_performance/_resilience —
+      same root as route_visualization item); `NameError: name 'time'...` in
+      test_component_integration (missing `import time`); `TypeError: StealthSettings...`
+      in test_resource_monitoring; plus browser_lifecycle_test, test_template_framework,
+      test_plugin_integration, test_tab_switching_integration, test_wikipedia_yaml_selectors
+      (errors not captured — rerun collect to see). Fix underlying imports/signatures. High.
