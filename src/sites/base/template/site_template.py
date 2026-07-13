@@ -65,17 +65,9 @@ class BaseSiteTemplate(ISiteTemplate):
         self.created_at = datetime.now()
         self.updated_at = datetime.now()
         
-        # Template capabilities and dependencies
-        self.capabilities = [
-            "repository_search",
-            "repository_details", 
-            "user_profile",
-            "issue_tracking",
-            "pull_request_tracking",
-            "screenshot_capture",
-            "html_capture",
-            "resource_monitoring"
-        ]
+        # Template capabilities and dependencies — site templates declare
+        # their own capabilities (via subclass or configuration)
+        self.capabilities: List[str] = []
         self.dependencies: List[str] = []
         
         # Integration components
@@ -291,6 +283,9 @@ class BaseSiteTemplate(ISiteTemplate):
             "version": self.version,
             "description": self.description,
             "author": self.author,
+            "framework_version": self.framework_version,
+            "site_domain": self.site_domain,
+            "supported_domains": self.supported_domains,
             "capabilities": self.capabilities,
             "dependencies": self.dependencies,
             "configuration_schema": self.configuration_schema,
