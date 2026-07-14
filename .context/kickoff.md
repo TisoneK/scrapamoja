@@ -26,12 +26,12 @@ Generation rules for the bootstrapping agent:
    new default branch, live URL added), update it in place and note the
    change in your session entry.
 
-Regenerated 2026-07-14 by Super Z (cloud/sandbox agent) during a sync
-session — the package skeleton added this `kickoff.md` convention after
-this project's initial bootstrap, so the file was missing. Project Facts
-filled from this directory's own memory (`user/identity.md`,
-`workflows/active.md`) and on-disk verification (`git remote get-url
-origin`, default branch, observed clone behaviour for each repo).
+Regenerated 2026-07-14 (Session 6) — adopted updated template: canonical
+package clone path is now `../context` (legacy `../.context` still found
+by the local-agent find-loop); local-agent Step 0 now locates an existing
+package clone by REMOTE URL rather than directory name, with explicit
+"never clone when a clone exists" and "a failed pull is not a missing
+package" guards. Project Facts unchanged from Session 5's generation.
 -->
 
 > **This is the project's own kickoff file.** It was generated during the
@@ -93,18 +93,35 @@ Every session is a **sync** session.
 ### Step 0 — Get both repos on disk
 
 **Local agent** — the project repo is your cwd (never re-clone it). Get
-the package as a sibling:
+the package as a sibling. **Identify the package by its REMOTE URL,
+never by directory name** — local clones exist under different names
+(`../context` is canonical; legacy `../.context` occurs):
 
 ```bash
 git remote get-url origin        # confirm it matches the Project repository URL
-# Package repo — clone as a sibling, or freshen if already there:
-[ -d ../.context ] && git -C ../.context pull --ff-only \
-  || git clone https://github.com/TisoneK/.context.git ../.context
+
+# Find an existing package clone among the siblings:
+PKG=""
+for d in ../context ../.context; do
+  git -C "$d" remote get-url origin 2>/dev/null | grep -q "TisoneK/.context" \
+    && PKG="$d" && break
+done
+
+if [ -n "$PKG" ]; then
+  # Found — freshen it. A FAILED PULL IS NOT A MISSING PACKAGE:
+  # use the on-disk copy as-is and note the stale pull in your session log.
+  git -C "$PKG" pull --ff-only || echo "pull failed — continuing with on-disk copy at $PKG"
+else
+  git clone https://github.com/TisoneK/.context.git ../context && PKG=../context
+fi
+echo "package clone: $PKG"
 ```
 
-No PAT, ever — clones and pushes both use the user's existing
-credentials, whatever either repo's privacy mode. If one fails with an
-auth error, stop and tell the user.
+**Never clone when a package clone already exists** — cloning into an
+existing directory fails, and retrying that failure loops forever. One
+find → one decision → move on. No PAT, ever — clones and pushes both
+use the user's existing credentials, whatever either repo's privacy
+mode. If one fails with an auth error, stop and tell the user.
 
 **Cloud/sandbox agent** — clone both into the workspace. Each repo's
 clone follows **its own** privacy field in Project Facts above:
@@ -117,8 +134,8 @@ git config user.name "Tisone Kironget" && git config user.email "tisonkironget@g
 
 # Package repo (if private: same dance with ITS OWN PAT, then drop that token —
 # the package is read-only reference, never pushed to):
-git clone "https://x-access-token:${GIT_TOKEN}@github.com/TisoneK/.context.git" ../.context
-git -C ../.context remote set-url origin https://github.com/TisoneK/.context.git
+git clone "https://x-access-token:${GIT_TOKEN}@github.com/TisoneK/.context.git" ../context
+git -C ../context remote set-url origin https://github.com/TisoneK/.context.git
 ```
 
 Ask for PATs **up front, before any clone** — you need one for every
@@ -152,9 +169,10 @@ In order: `README.md` → `workflows/active.md` → `agents/sessions.md`
 ### Step 3 — Load the protocol
 
 Read the edition named in `workflows/active.md` from the package clone
-on disk — `../.context/ai-engineering-protocol-local.md` (local) or
-`../.context/ai-engineering-protocol.md` (cloud/sandbox) — plus any role
-overlay from `../.context/roles/`. Read it in full; it is the instruction
+found in Step 0 (`$PKG`, canonically `../context`) —
+`$PKG/ai-engineering-protocol-local.md` (local) or
+`$PKG/ai-engineering-protocol.md` (cloud/sandbox) — plus any role
+overlay from `$PKG/roles/`. Read it in full; it is the instruction
 set for this session.
 
 ### Step 4 — Follow the protocol
