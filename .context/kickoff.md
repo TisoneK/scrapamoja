@@ -132,10 +132,13 @@ git clone https://github.com/TisoneK/scrapamoja.git scrapamoja && cd scrapamoja
 git remote set-url origin https://github.com/TisoneK/scrapamoja.git
 git config user.name "Tisone Kironget" && git config user.email "tisonkironget@gmail.com"
 
-# Package repo (if private: same dance with ITS OWN PAT, then drop that token —
-# the package is read-only reference, never pushed to):
-git clone "https://x-access-token:${GIT_TOKEN}@github.com/TisoneK/.context.git" ../context
+# Package repo (private — its token slot is PKG_TOKEN; when one shared
+# fine-grained PAT covers both repos, set PKG_TOKEN="$GIT_TOKEN" first.
+# The package is read-only reference, never pushed to — drop its token
+# right after the clone):
+git clone "https://x-access-token:${PKG_TOKEN}@github.com/TisoneK/.context.git" ../context
 git -C ../context remote set-url origin https://github.com/TisoneK/.context.git
+unset PKG_TOKEN
 ```
 
 Ask for PATs **up front, before any clone** — you need one for every
