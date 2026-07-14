@@ -163,8 +163,8 @@ class BaseSelectorLoader(ISelectorLoader):
                 return False
             
             # Create SemanticSelector object from configuration
-            from src.models.selector_models import SemanticSelector
-            
+            from src.models.selector_models import SemanticSelector, StrategyPattern
+
             strategies = selector_config.get('strategies', [])
             if not strategies:
                 logger.error(f"No strategies found in selector configuration for {selector_name}",
@@ -186,7 +186,7 @@ class BaseSelectorLoader(ISelectorLoader):
                         continue
                     
                     # Validate strategy type is supported
-                    from src.selectors.models import StrategyType
+                    from src.models.selector_models import StrategyType
                     try:
                         StrategyType(strategy_type)
                         logger.debug(f"Strategy {i} type '{strategy_type}' validated for selector {selector_name}",
@@ -201,24 +201,21 @@ class BaseSelectorLoader(ISelectorLoader):
                                correlation_id=correlation_id, selector_name=selector_name, strategy_index=i)
                     continue
                 
-                # Convert weight to priority for SemanticSelector compatibility
-                weight = strategy.get('weight', 1.0)
-                priority = i + 1  # Use order as priority (lower = higher priority)
-                
-                processed_strategy = {
-                    'type': strategy_type,
-                    'selector': strategy.get('selector'),
-                    'priority': priority,
-                    'weight': weight,
-                    'config': {k: v for k, v in strategy.items() if k != 'type' and k != 'selector' and k != 'weight'}
-                }
-                processed_strategies.append(processed_strategy)
-            
+                # Strategy order in the YAML defines priority (lower = higher priority)
+                processed_strategies.append(StrategyPattern(
+                    id=f"{selector_name}_strategy_{i}",
+                    type=strategy_type,
+                    priority=i + 1,
+                    config=strategy
+                ))
+
             selector = SemanticSelector(
                 name=selector_name,
+                description=selector_config.get('description', f"{self.template_name} selector: {selector_name}"),
+                context=selector_config.get('context', f"{self.template_name}_extraction"),
                 strategies=processed_strategies,
-                confidence_threshold=selector_config.get('confidence_threshold', 0.7),
-                validation_rules=selector_config.get('validation_rules', [])
+                validation_rules=selector_config.get('validation_rules', []),
+                confidence_threshold=selector_config.get('confidence_threshold', 0.7)
             )
             
             logger.info(f"Created SemanticSelector for {selector_name} with {len(strategies)} strategies",
@@ -226,7 +223,12 @@ class BaseSelectorLoader(ISelectorLoader):
             
             # Register with selector engine
             try:
-                self.selector_engine.register_selector(selector_name, selector)
+                registered = await self.selector_engine.register_selector(selector)
+                if not registered:
+                    logger.error(f"Selector engine rejected selector {selector_name}",
+                               correlation_id=correlation_id, selector_name=selector_name)
+                    self.selector_status[selector_name] = SelectorLoadStatus.FAILED
+                    return False
                 logger.info(f"Successfully registered selector {selector_name} with engine",
                            correlation_id=correlation_id, selector_name=selector_name)
             except Exception as reg_error:
@@ -375,14 +377,12 @@ class BaseSelectorLoader(ISelectorLoader):
                 logger.error(f"Empty YAML file: {yaml_file}")
                 return False
             
-            # Extract selector name
-            selector_name = config.get('name', yaml_file.stem)
-            
-            # Use full qualified name for registration to match scraper expectations
-            full_selector_name = f"extraction.match_list.basketball.{yaml_file.stem}"
-            
+            # Register under the file stem — the stable, site-local name
+            # scrapers use with the engine (config['name'] is a display name)
+            selector_name = yaml_file.stem
+
             # Register selector
-            success = await self.register_selector(full_selector_name, config)
+            success = await self.register_selector(selector_name, config)
             
             # Record performance metrics
             load_time = (datetime.now() - start_time).total_seconds()

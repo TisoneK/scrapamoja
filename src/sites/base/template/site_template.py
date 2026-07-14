@@ -98,7 +98,7 @@ class BaseSiteTemplate(ISiteTemplate):
                 return False
             
             # Initialize integration components
-            if not await self._initialize_integration_components():
+            if not await self._setup_integration_components():
                 logger.error(f"Integration components initialization failed for {self.name}")
                 return False
             
@@ -301,7 +301,7 @@ class BaseSiteTemplate(ISiteTemplate):
         
         return info
     
-    def _validate_framework_compatibility(self) -> bool:
+    async def _validate_framework_compatibility(self) -> bool:
         """
         Validate framework version compatibility.
         

@@ -106,12 +106,12 @@ class BaseIntegrationBridge(IIntegrationBridge):
                 return False
             
             # Load selectors
-            if not await self._load_selectors():
+            if not await self.load_selectors():
                 logger.error("Selector loading failed")
                 return False
-            
+
             # Setup extraction rules
-            if not await self._setup_extraction_rules():
+            if not await self.setup_extraction_rules():
                 logger.error("Extraction rules setup failed")
                 return False
             
@@ -809,17 +809,28 @@ class BaseIntegrationBridge(IIntegrationBridge):
             # Check if selector engine has register_selector method
             if hasattr(self.selector_engine, 'register_selector'):
                 # Create SemanticSelector object from configuration
-                from src.models.selector_models import SemanticSelector
-                
+                from src.models.selector_models import SemanticSelector, StrategyPattern
+
+                strategies = [
+                    StrategyPattern(
+                        id=f"{selector_name}_strategy_{i}",
+                        type=strategy.get('type', 'css'),
+                        priority=i + 1,
+                        config=strategy
+                    )
+                    for i, strategy in enumerate(config.get('strategies', []))
+                ]
+
                 selector = SemanticSelector(
                     name=selector_name,
-                    strategies=config.get('strategies', []),
-                    confidence_threshold=config.get('confidence_threshold', 0.7),
-                    validation_rules=config.get('validation_rules', [])
+                    description=config.get('description', f"{self.template_name} selector: {selector_name}"),
+                    context=config.get('context', f"{self.template_name}_extraction"),
+                    strategies=strategies,
+                    validation_rules=config.get('validation_rules', []),
+                    confidence_threshold=config.get('confidence_threshold', 0.7)
                 )
-                
-                self.selector_engine.register_selector(selector_name, selector)
-                return True
+
+                return await self.selector_engine.register_selector(selector)
             else:
                 logger.warning(f"Selector engine does not support registration for {selector_name}")
                 return False
