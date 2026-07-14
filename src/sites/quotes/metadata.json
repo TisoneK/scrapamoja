@@ -1,0 +1,16 @@
+{
+  "name": "quotes",
+  "version": "1.0.0",
+  "description": "Quotes to Scrape \u2014 template framework proof-of-life",
+  "author": "Tisone Kironget",
+  "site_domain": "quotes.toscrape.com",
+  "framework_version": "1.0.0",
+  "capabilities": [
+    "scraping",
+    "extraction"
+  ],
+  "dependencies": [],
+  "tags": [],
+  "created_at": "2026-07-13T00:04:49.384202",
+  "updated_at": "2026-07-13T00:04:49.384204"
+}

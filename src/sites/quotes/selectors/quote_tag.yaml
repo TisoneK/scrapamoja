@@ -1,0 +1,20 @@
+id: quote_tag
+name: Quote Tag
+selector_type: hybrid
+description: "A tag link inside a quote block"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".tags a.tag"
+    weight: 1.0
+  - type: "css"
+    selector: "a.tag"
+    weight: 0.8
+  - type: "xpath"
+    selector: "//div[@class='tags']/a[@class='tag']"
+    weight: 0.7
+metadata:
+  volatile_selectors: []
+  stable_selectors: [".tags a.tag"]

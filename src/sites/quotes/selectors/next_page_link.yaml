@@ -1,0 +1,20 @@
+id: next_page_link
+name: Next Page Link
+selector_type: hybrid
+description: "Pagination link to the next page of quotes"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: "li.next > a"
+    weight: 1.0
+  - type: "xpath"
+    selector: "//li[@class='next']/a"
+    weight: 0.8
+  - type: "css"
+    selector: ".pager .next a"
+    weight: 0.7
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["li.next > a"]

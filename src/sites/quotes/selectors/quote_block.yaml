@@ -1,0 +1,20 @@
+id: quote_block
+name: Quote Block
+selector_type: hybrid
+description: "A single quote card on quotes.toscrape.com"
+confidence_threshold: 0.7
+timeout: 5.0
+retry_count: 3
+strategies:
+  - type: "css"
+    selector: ".quote"
+    weight: 1.0
+  - type: "xpath"
+    selector: "//div[@class='quote']"
+    weight: 0.8
+  - type: "css"
+    selector: "div.quote"
+    weight: 0.7
+metadata:
+  volatile_selectors: []
+  stable_selectors: [".quote"]
