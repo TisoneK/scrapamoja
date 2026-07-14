@@ -11,6 +11,7 @@ accordingly).
 |---|---|---|---|---|
 | Claude Code | claude-opus-4-8 | 2026-07-12 | 2026-07-12 | 3 |
 | Claude Code | claude-fable-5 | 2026-07-12 | 2026-07-12 | 1 |
+| Super Z | unknown | 2026-07-14 | 2026-07-14 | 1 |
 
 ## Observations
 
@@ -23,3 +24,5 @@ Update in place when a newer session contradicts an old observation.
 - **Claude Code / claude-opus-4-8:** Stood up the toolchain with `uv` (user-space, no admin) — CPython 3.12.13 + `.venv`; found `pyproject.toml` omitted 10 runtime deps and fixed it (`bb0e636`); found 3 pre-existing import-time crashes via a dependency-driven import sweep. (2026-07-12)
 - **Claude Code / claude-fable-5:** Model id from the agent's own system prompt (stated fact, not a guess). Correction to the sessions table: the opus-4-8 row's session count was left at 1 after sessions 2–3; set to 3. (2026-07-12)
 - **Claude Code / claude-fable-5:** Ran the template-framework review (session 4): found the framework's create→validate→generate path had never worked (4 independent breaks), fixed via targeted `ruff --select F821` sweep + CLI smoke test rather than full-suite runs — the per-area test-run pattern (`pytest tests/sites/template --timeout=60 --timeout-method=signal --no-cov`) avoids the suite-wide hang problem. (2026-07-12)
+- **Super Z / unknown:** Model id recorded as `unknown` — system prompt names the family "GLM" but not an exact version ID; per the kickoff rule, the agent does not guess its own model. (2026-07-14)
+- **Super Z / unknown:** Ran the first cloud/sandbox session on this repo (session 5, sync). Successfully cloned both repos with PAT auth, synced structural files from the package skeleton, generated the missing `.context/kickoff.md` from the template, and pushed to `origin/main` — all without issues. Followed the SYNC.md structural-vs-data split rule correctly. Did NOT run the toolchain baseline (sync task didn't need it); a future review/fix session on this sandbox should verify `uv` + `pytest` work here before relying on them. (2026-07-14)

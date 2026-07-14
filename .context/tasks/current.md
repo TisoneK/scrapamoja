@@ -5,6 +5,8 @@ session start (protocol Step 3), clear it at session end (Step 15). If
 you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
-- **Session:** 2026-07-12 — Session 4 (continuation)
-- **Task:** Make the template framework real: generate a quotes.toscrape.com scraper via `template create`, wire real selector/page logic, prove it with a live end-to-end run; fix every fake layer the proof exposes. (User decision: prove-out path, `src/sites/base/template/` becomes canonical.)
-- **Status:** in progress
+- **Session:** 2026-07-14 — Session 5
+- **Task:** Sync `.context/` with the package skeleton (user request).
+- **Status:** done — structural sync applied (README.md, SYNC.md from package); `.context/kickoff.md` generated from the skeleton template; all pushed to `origin/main` (`63e854e..c552669`). See Session 5 entry in `agents/sessions.md`.
+
+Project is idle — no active task. Next session should consult `tasks/backlog.md` and pick up an open item, or accept a new target from the user.

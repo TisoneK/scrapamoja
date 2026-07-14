@@ -49,3 +49,12 @@ past entries — append corrections instead.
 - **Outcome:** done — the "create → validate → generate" path was broken at 4 independent points; all fixed (`template create` smoke-tested working). Target-area tests: 14 passed/27 failed/22 errors + e2e uncollectable → 39 passed/33 failed/2 errors, e2e collects 11. Remaining failures = tests drifted from the canonical interface (backlogged, needs owner call).
 - **Open items:** 6 new in tasks/backlog.md (test-API alignment; 6 missing .j2 templates; hierarchy ADR; Dependabot triage; CLI log file; progress note on collection errors — 14 files remain).
 - **Report:** .context/reviews/2026-07-12-review-2.md
+
+---
+## 2026-07-14 — Session 5
+- **Agent:** Super Z | **Model:** unknown (system prompt names the family "GLM" but not an exact version ID; recorded per kickoff rule — never guess) | **Platform:** Z.ai cloud sandbox (Debian 13 trixie, x86_64, kernel 5.10.134) | **Role:** engineer
+- **Task:** Sync `.context/` with the package skeleton (user request). First session on this repo from a cloud/sandbox agent; prior sessions were Claude Code on a local Mac.
+- **Commits:** 3 (`7d39fc1`..`HEAD`) — 2 sync commits + 1 bookkeeping commit (this entry).
+- **Outcome:** done — structural sync (README.md + SYNC.md updated from package; other 4 structural files already identical); generated `.context/kickoff.md` from the skeleton template (was missing — the convention was added to the package after this project's bootstrap); all pushed to `origin/main` (`63e854e..c552669`). PAT-handling note for future cloud/sandbox sessions on this repo: the package repo `TisoneK/.context` is **private** (the original external kickoff contradicted itself on this — line 27 said private, line 81 said public; ground truth is private). A fine-grained PAT scoped to both repos (Contents: RW for project, R for package) is required for clone-of-package + push-to-project.
+- **Open items:** none new. Push surfaced the existing Dependabot warning (46 alerts: 1 critical / 17 high / 23 moderate / 5 low) — already backlogged (line 109 of tasks/backlog.md).
+- **Report:** no review report — this was a sync session, not a review. Summary delivered in chat.
