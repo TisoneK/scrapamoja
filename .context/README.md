@@ -14,6 +14,7 @@ This directory describes the **process**.
 .context/
 ├── README.md            # this file — structure + rules
 ├── SYNC.md              # structural-vs-data split + how sync from the package works
+├── kickoff.md           # inbound kickoff — generated at bootstrap, entry point for every future session
 ├── system/
 │   ├── environments.md  # machines/sandboxes agents have run on (OS, toolchain versions, quirks)
 │   └── ai-models.md     # registry: which agents + models have worked on this repo
@@ -124,5 +125,6 @@ project's product, or am I editing the agent's memory of the project?"
 | `system/ai-models.md` | update in place |
 | `user/identity.md` | update in place |
 | `user/preferences.md` | update in place |
+| `kickoff.md` | generated at bootstrap; facts updated in place |
 | `secrets/<slug>` | local-only — never committed, never travels |
 | `SYNC.md`, `*/README.md`, `secrets/.gitignore` | structural — synced from the package (see `SYNC.md`) |
