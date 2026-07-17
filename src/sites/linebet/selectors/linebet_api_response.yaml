@@ -1,0 +1,20 @@
+id: linebet_api_response
+name: Linebet API Response (captured)
+description: >
+  Marker selector used by the Linebet hybrid scraper. The actual data is
+  harvested from JSON captured by NetworkInterceptor — this selector
+  exists only so the framework's selector loader + validator have a
+  representative YAML file per the template-framework contract.
+selector_type: hybrid
+confidence_threshold: 0.5
+timeout: 5.0
+retry_count: 1
+strategies:
+  - type: "css"
+    selector: "body"
+    weight: 0.5
+metadata:
+  volatile_selectors: []
+  stable_selectors: ["body"]
+  hybrid_mode: true
+  data_source: "network_interceptor"

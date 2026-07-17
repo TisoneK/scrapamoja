@@ -1,0 +1,26 @@
+id: cookie_consent_banner
+name: Cookie Consent Banner
+description: >
+  Best-effort selector for the cookie / consent banner Linebet shows on
+  first visit. Used by LinebetFlow.dismiss_consent_if_present as a
+  fallback when the programmatic button-text locators don't match.
+selector_type: hybrid
+confidence_threshold: 0.6
+timeout: 2.0
+retry_count: 0
+strategies:
+  - type: "css"
+    selector: "div[id*='consent' i], div[class*='consent' i], div[id*='cookie' i]"
+    weight: 0.9
+  - type: "css"
+    selector: "iframe[id*='consent' i], iframe[title*='consent' i]"
+    weight: 0.7
+  - type: "css"
+    selector: "#onetrust-banner-sdk"
+    weight: 0.8
+validation_rules:
+  - type: existence
+    required: false
+metadata:
+  volatile_selectors: []
+  stable_selectors: []
