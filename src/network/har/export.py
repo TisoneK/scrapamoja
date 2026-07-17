@@ -39,6 +39,8 @@ from typing import Any, Dict, List, Optional
 
 from playwright.async_api import async_playwright
 
+from src.network.proxy import ProxyEndpoint
+
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -74,6 +76,10 @@ class HarExporterConfig:
     locale: str = DEFAULT_LOCALE
     timezone: str = DEFAULT_TIMEZONE
     extra_http_headers: Dict[str, str] = field(default_factory=dict)
+    # Route the browser through this proxy. None or a DIRECT endpoint means a
+    # normal, un-proxied connection. Built via src.network.proxy so the launch
+    # never constructs a Playwright proxy dict by hand.
+    proxy: Optional[ProxyEndpoint] = None
 
 
 class HarExporter:
@@ -112,6 +118,9 @@ class HarExporter:
             "waf_block_detected": False,
         }
 
+        playwright_proxy = cfg.proxy.to_playwright_proxy() if cfg.proxy else None
+        summary["proxy"] = cfg.proxy.id if (cfg.proxy and not cfg.proxy.is_direct) else None
+
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(headless=cfg.headless)
             context = await browser.new_context(
@@ -121,6 +130,7 @@ class HarExporter:
                 timezone_id=cfg.timezone,
                 record_har_path=str(cfg.output),
                 record_har_content="embed",  # include response bodies in the HAR
+                **({"proxy": playwright_proxy} if playwright_proxy else {}),
                 **({"extra_http_headers": cfg.extra_http_headers}
                    if cfg.extra_http_headers else {}),
             )
@@ -214,6 +224,10 @@ def main() -> int:
                         help="Show the browser window (useful for manual CAPTCHA solving)")
     parser.add_argument("--user-agent", default=DEFAULT_USER_AGENT,
                         help="Override the User-Agent string")
+    parser.add_argument("--proxy", default=None,
+                        help="Route through this proxy, e.g. "
+                             "http://user:pass@host:port (use for geo/WAF-blocked "
+                             "sites via a residential/allowed-country proxy)")
     args = parser.parse_args()
 
     config = HarExporterConfig(
@@ -224,6 +238,7 @@ def main() -> int:
         settle_seconds=args.settle,
         headless=not args.headed,
         user_agent=args.user_agent,
+        proxy=ProxyEndpoint.from_url(args.proxy) if args.proxy else None,
     )
 
     summary = asyncio.run(HarExporter(config).run())

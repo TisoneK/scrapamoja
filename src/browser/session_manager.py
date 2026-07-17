@@ -8,8 +8,11 @@ following the IBrowserSession interface.
 import asyncio
 import time
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 import structlog
+
+if TYPE_CHECKING:
+    from src.network.proxy import ProxyManager
 
 try:
     from playwright.async_api import Browser, BrowserContext, Page
@@ -39,12 +42,17 @@ class BrowserSessionManager(IBrowserSession):
         session: BrowserSession,
         playwright_browser: Optional[Browser] = None,
         state_manager: Optional[StateManager] = None,
-        snapshot_manager: Optional[SnapshotManager] = None
+        snapshot_manager: Optional[SnapshotManager] = None,
+        proxy_manager: Optional["ProxyManager"] = None,
     ):
         self.session = session
         self._playwright_browser = playwright_browser
         self._playwright_context: Optional[BrowserContext] = None
         self._active_context_id: Optional[str] = None
+        # Canonical proxy source. When set, it is the single authority for the
+        # context's proxy; when None we fall back to the session's flat proxy_*
+        # fields so existing callers are unaffected.
+        self._proxy_manager = proxy_manager
         
         # Managers
         self.state_manager = state_manager or StateManager()
@@ -469,16 +477,27 @@ class BrowserSessionManager(IBrowserSession):
         if config.user_agent:
             options["user_agent"] = config.user_agent
             
-        # Add proxy if configured
-        if config.proxy_server:
-            options["proxy"] = {
-                "server": config.proxy_server
-            }
-            if config.proxy_username and config.proxy_password:
-                options["proxy"]["username"] = config.proxy_username
-                options["proxy"]["password"] = config.proxy_password
-                
+        # Add proxy. The canonical ProxyManager wins when injected; otherwise
+        # fall back to the session's flat proxy_* fields (no behavior change for
+        # existing callers).
+        proxy_dict = self._resolve_proxy(config)
+        if proxy_dict:
+            options["proxy"] = proxy_dict
+
         return options
+
+    def _resolve_proxy(self, config: Any) -> Optional[Dict[str, Any]]:
+        """Resolve the Playwright proxy dict from the manager or flat fields."""
+        if self._proxy_manager is not None:
+            endpoint = self._proxy_manager.acquire(site=getattr(config, "start_url", None))
+            return endpoint.to_playwright_proxy()  # None for DIRECT
+        if getattr(config, "proxy_server", None):
+            proxy: Dict[str, Any] = {"server": config.proxy_server}
+            if config.proxy_username and config.proxy_password:
+                proxy["username"] = config.proxy_username
+                proxy["password"] = config.proxy_password
+            return proxy
+        return None
         
     async def _setup_event_listeners(self) -> None:
         """Setup event listeners for the browser context."""

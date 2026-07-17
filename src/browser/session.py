@@ -81,6 +81,10 @@ class BrowserSession:
         self._snapshot_manager = get_snapshot_manager()
         self._session_snapshot = SessionSnapshot(self._snapshot_manager)
         
+        # Canonical proxy source (optional). When set via set_proxy_manager(),
+        # it is the single authority for this session's context proxy.
+        self._proxy_manager = None
+
         # Track subprocess handles for cleanup
         self._subprocess_handles = []
         
@@ -89,7 +93,15 @@ class BrowserSession:
             self.session_id,
             self.configuration.browser_type.value
         )
-    
+
+    def set_proxy_manager(self, proxy_manager) -> None:
+        """Inject the canonical ProxyManager (from src.network.proxy).
+
+        Once set, contexts created by this session route through the endpoint the
+        manager hands out for ``self.site``. Pass ``None`` to clear.
+        """
+        self._proxy_manager = proxy_manager
+
     def _cleanup_subprocess_handles(self) -> None:
         """Clean up subprocess handles with Windows-specific handling."""
         for handle in self._subprocess_handles:
@@ -432,7 +444,15 @@ class BrowserSession:
             
             final_options["bypass_csp"] = self.configuration.stealth.bypass_csp
             final_options["ignore_https_errors"] = self.configuration.stealth.ignore_https_errors
-            
+
+            # Apply proxy from the canonical manager, if one is injected. Only
+            # override when the caller didn't already pass an explicit proxy.
+            if self._proxy_manager is not None and "proxy" not in context_options:
+                endpoint = self._proxy_manager.acquire(site=self.site)
+                proxy_dict = endpoint.to_playwright_proxy()  # None for DIRECT
+                if proxy_dict:
+                    final_options["proxy"] = proxy_dict
+
             context = await self.browser.new_context(**final_options)
             self.contexts.append(context)
             

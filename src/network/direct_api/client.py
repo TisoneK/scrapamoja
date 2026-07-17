@@ -30,7 +30,8 @@ class AsyncHttpClient:
         self,
         base_url: str | None = None,
         rate_limit: float = 10.0,
-        rate_capacity: float = 10.0
+        rate_capacity: float = 10.0,
+        proxy: "Any | None" = None,
     ) -> None:
         """Initialize the async HTTP client.
 
@@ -38,9 +39,13 @@ class AsyncHttpClient:
             base_url: Optional base URL to prepend to all requests
             rate_limit: Default requests per second per domain (default: 10)
             rate_capacity: Default maximum tokens per domain (default: 10)
+            proxy: Optional proxy. Accepts a ``src.network.proxy.ProxyEndpoint``
+                (rendered via ``to_httpx_proxy()``) or a proxy URL string. A
+                DIRECT endpoint or ``None`` means an un-proxied client.
         """
         self._base_url = base_url
-        self._client = httpx.AsyncClient()
+        proxy_url = proxy.to_httpx_proxy() if hasattr(proxy, "to_httpx_proxy") else proxy
+        self._client = httpx.AsyncClient(**({"proxy": proxy_url} if proxy_url else {}))
         self._rate_limiter = RateLimiter(rate=rate_limit, capacity=rate_capacity)
         
         # Check for verbose logging and warn about potential credential exposure
