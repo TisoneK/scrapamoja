@@ -86,16 +86,62 @@ The proxy endpoint is any allowed-country HTTP proxy (a `gost` proxy exposed via
 TCP tunnel works). The raw HAR is **not committed** — it contains session cookies;
 only this writeup + the redacted endpoint catalog are.
 
-## Open questions for the next session
+## Prior operator investigation (the header mystery — now explained)
 
-1. **Find the live-odds endpoint.** It's behind the service-worker transport.
-   Next step: attach a **CDP** session with `Target.setAutoAttach` to the service
-   worker target and enable `Network` there, OR read the IndexedDB `vpn/headers`
-   at runtime and look for the odds fetch the app issues. (The SPA `entry-*.js`
-   only revealed the casino `service-api` endpoints, not the sportsbook feed —
-   the sportsbook chunk is loaded separately.)
-2. **DOM extraction fallback.** Odds render fully in the DOM; a Playwright DOM
-   extractor is the reliable path today. Selectors live in the live betting grid
-   (`c-events` / champ rows).
-3. Feed a real capture to the scraping-mode classifier — this is the validation
-   case (expected: hybrid/playwright with a SW transport, not clean intercept).
+An earlier abandoned attempt (operator's own notes, folded in 2026-07-17) got
+further on the *data* endpoint than this session's automated capture, and the two
+halves now fit together:
+
+- **The odds data comes from a `LineFeed` endpoint** — the classic
+  1xbet/melbet-family `/LineFeed/...` feed. This confirms linebet runs that
+  platform. (This session didn't see it because it's issued behind the service
+  worker; see below.)
+- **The response is heavily compressed**; once decompressed it is JSON with
+  **terse single-letter keys** (`T`, `E`, `C`, `G`, …) — the standard 1xbet
+  LineFeed schema (e.g. `Value[].O1/O2` = teams, `E[]` = markets with `T`=type,
+  `C`=coefficient). The exact key map must be re-derived from a live capture.
+- **The request carried auth headers the scraper could never reproduce** — an
+  auth token **with an expiry time**, plus a header carrying the **URL of the
+  previous page** (a referer-like navigation-context header). In a real browser
+  they were all present; in a plain HTTP scraper they were **completely absent**.
+
+**Why the headers were invisible — solved.** This is exactly what `ivpn-sw.js`
+does (see the SW table above): it keeps those headers in IndexedDB (`vpn`/
+`headers`), and the **service worker injects them into every outgoing request**
+*after* the page hands the request off. So they never appear in the page's own
+JS, in network interception, or in the HAR — the browser "has" them only because
+the SW adds them. That is the mechanism behind the operator's observation and
+behind this session's "odds feed invisible to interception" finding. Same wall,
+two sides.
+
+## Concrete plan for next session (the unblock)
+
+The proxy must be live again (gost + a TCP tunnel, e.g. `bore`; see capture recipe
+above). Then:
+
+1. **Dump the injected headers.** Load linebet live, let the SPA initialize, then
+   read IndexedDB `vpn` → `headers` (via `page.evaluate` opening the DB, or CDP
+   `IndexedDB.requestData`). This yields the auth token, its expiry, `x-project-id`
+   / `x-dt`, and the referer-like navigation header — the set `ivpn-sw.js` injects.
+2. **Capture a real `LineFeed` request.** Either attach a **CDP** session with
+   `Target.setAutoAttach {autoAttach:true, flatten:true}` to the **service-worker**
+   target and enable its `Network` domain (page-level Playwright can't see SW
+   traffic), or find the `LineFeed` URL + query params in the sportsbook JS chunk
+   (loaded separately from the `entry-*.js` that only exposed casino `service-api`).
+3. **Replay `LineFeed` directly** with the IndexedDB-sourced headers, then
+   **decompress** (try gzip/deflate/brotli; the platform sometimes wraps a custom
+   scheme) → parse the terse JSON. Map the single-letter keys to `Event`/`Market`/
+   `Selection` (the linebet `extraction/models.py` dataclasses already exist).
+4. **Watch the token expiry.** Because the auth header expires, a long-running
+   scraper must re-harvest it from IndexedDB (or re-bootstrap the browser) on a
+   timer — this is a `hybrid`/`sw_replay` concern, not simple `intercepted`.
+
+**DOM fallback (works today):** odds render fully in the DOM; a Playwright DOM
+extractor over the live betting grid (`c-events` / champ rows) is the reliable
+path if the LineFeed replay proves too brittle.
+
+**Classifier note:** feed a real capture to the scraping-mode classifier — linebet
+is the validation case. Expected output: `playwright` (or the future `sw_replay`)
+extraction mode **plus** an AccessProfile of `geo_gated + requires_proxy +
+transport: service_worker + interceptable: false + header_source: indexeddb`
+(see ADR-2 in `.context/memory/plans/decisions.md`).
