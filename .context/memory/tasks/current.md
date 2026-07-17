@@ -7,6 +7,9 @@ check its session entry and backlog before starting.
 
 - **Session:** 2026-07-17 — Session 7
 - **Task:** Two-part: (a) migrate `.context/` from 0.1.x flat layout to 0.2.0 two-zone layout; (b) set up Scrapamoja for Railway deployment.
-- **Status:** (a) done — committed as `chore(context): migrate to core 0.2.0 two-zone layout` (see Session 7 entry in `memory/agents/sessions.md`). (b) in progress — Railway config files (Dockerfile, railway.json, .dockerignore, Procfile) being authored next, will land as a separate project-mode commit.
+- **Status:** done — both parts complete.
+  - (a) committed as `chore(context): migrate to core 0.2.0 two-zone layout` (`dd6bf69`).
+  - (b) committed as `feat(deploy): add Railway deployment config` (`ebfae15`). Files: `Dockerfile`, `.dockerignore`, `railway.json`, `Procfile`, `RAILWAY.md`. Verified locally — FastAPI app imports cleanly with full `requirements.txt`, `/health` returns `200 OK`.
+- **Open items:** none. See Session 7 entry in `memory/agents/sessions.md` for full details.
 
-Project is mid-session on part (b) — Railway deployment setup. Next agent should pick up part (b) if this session is interrupted.
+Project is idle — no active task. Next session should consult `tasks/backlog.md` and pick up an open item, or accept a new target from the user.
