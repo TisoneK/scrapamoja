@@ -142,3 +142,37 @@ past entries — append corrections instead.
   - Implement the httpx-based replay mode (sub-second polling without relaunching the browser). MEDIUM.
   - Register LinebetScraper with the global ScraperRegistry at app startup. LOW.
 - **Report:** no review report — this was a hardening + tooling session. Summary delivered in chat.
+
+---
+## 2026-07-17 — Session 10 (reframe + framework generalization)
+- **Agent:** Super Z | **Model:** GLM (Z.ai cloud sandbox, Linux x86_64) | **Role:** engineer | **Core:** 0.2.0
+- **Task:** User correction — I had built snapshot + HAR tooling inside `src/sites/linebet/` instead of in the framework, and had been treating linebet as the deliverable when it's actually just the *test case* for a future site scraping-mode classifier. Reframe: linebet = validation case for a classifier we are building; the deliverable is a system that learns + classifies a site's scraping mode. This session: stop, survey existing systems, generalize the HAR + snapshot tooling into the framework, remove the duplicated linebet code.
+- **Commits:** 1 project-surface `refactor(snapshot,har):` (framework generalization) + 1 `.context/`-surface `chore(context):` (session log + reframe) — pending push to `origin/main`.
+- **Outcome:** done —
+  - **Survey findings** (what I had missed in earlier sessions):
+    - `src/core/snapshot/` already had a full snapshot system: `SnapshotManager`, `SnapshotStorage`, `SnapshotBundle`, `SnapshotMode` (FULL_PAGE/SELECTOR/MINIMAL/BOTH), 7 domain handlers (browser/session/scraper/selector/error/retry/monitoring), `TriggerManager`, `MetricsCollector`. Its `_capture_network_logs` recorded URL/status/method/response-headers but NOT bodies or request headers, and didn't dedupe or normalize.
+    - `src/extraction/router.py` already had `ExtractionModeRouter` + `ExtractionMode` enum (`raw` / `intercepted` / `hybrid` / `playwright`) + `SiteConfig.extraction_mode` field + `InterceptedConfig` / `HybridConfig` sub-configs. The router already implements session-bootstrap mode (browser harvests cookies → HTTP client reuses them via `SessionHarvester`).
+    - `docs/proposals/browser_api_hybrid/` had 9 feature proposals (SCR-001 through SCR-009), including SCR-006 (Session Harvesting) and SCR-002 (Network Interception), with a phased build order. Status: only SCR-001 (Direct API Mode) was Completed; the rest were Proposed.
+    - So my linebet HAR scripts duplicated SCR-006's proposed design, and my linebet snapshot normalizer duplicated a capability the existing snapshot system was missing (post-processing on captured network responses for drift comparison).
+  - **Generalized into the framework** (the actual deliverable for this session):
+    - `src/core/snapshot/normalize.py` — new module. `normalize_captured_response()` + `normalize_capture_list()` + `NormalizerConfig` (configurable: volatile query params, env query params, signal request headers, noise header prefixes, volatile JSON keys, path-hash regex patterns, max body chars). Site-agnostic. CLI: `python -m src.core.snapshot.normalize <input> <output>`. Replaces the deleted `src/sites/linebet/snapshots/normalize.py`.
+    - `src/core/snapshot/diff.py` — new module. `diff_snapshots()` reports added/removed/changed endpoints between two normalized snapshots. CLI: `python -m src.core.snapshot.diff <old> <new>`. Replaces the deleted `src/sites/linebet/snapshots/diff.py`.
+    - `src/core/snapshot/__init__.py` — extended to export the new API.
+    - `src/network/har/` — new framework package. `export.py` (`HarExporter` + `HarExporterConfig` + CLI), `replay.py` (`HarReplayer` + `HarReplayResult` + CLI), `to_snapshot.py` (HAR → capture-dicts, HAR → framework `CapturedResponse` objects, HAR → normalized snapshot). Site-agnostic. Implements the proposed SCR-006. CLIs: `python -m src.network.har.export --url ... --output ...`, `python -m src.network.har.replay <input.har> <output.json> --normalize snap.json`.
+  - **Updated linebet to USE the framework** (no duplicated code):
+    - `src/sites/linebet/snapshots/__init__.py` — now just re-exports the framework API for backward compat + holds the committed fixtures under `raw/` and `normalized/`.
+    - `src/sites/linebet/scripts/har_export.py` — rewritten as a thin wrapper around `HarExporter` with linebet-specific defaults (URLs, scroll behaviour). ~50 lines vs the previous ~150.
+    - `src/sites/linebet/scripts/har_replay.py` — rewritten as a thin wrapper around `HarReplayer` + the linebet `LinebetExtractionRules` extractor. ~80 lines vs the previous ~150.
+    - Deleted: `src/sites/linebet/snapshots/normalize.py`, `src/sites/linebet/snapshots/diff.py`, `src/sites/linebet/tests/test_linebet_snapshots.py` (replaced by framework tests).
+  - **Tests** (66 total passing — was 45):
+    - `tests/unit/core/snapshot/test_normalize.py` — 16 framework normalizer tests (site-agnostic).
+    - `tests/unit/core/snapshot/test_diff.py` — 6 framework diff tests.
+    - `tests/unit/network/har/test_replay.py` — 13 framework HAR tests (HAR loading, decoding, URL filtering, normalization, replayer with/without extractor, error handling).
+    - `src/sites/linebet/tests/test_linebet_har_replay.py` — 3 linebet-specific integration tests (verifies the linebet extractor works when fed via the framework `HarReplayer`).
+    - `src/sites/linebet/tests/test_linebet_scraper.py` — 22 existing linebet scraper tests (unchanged).
+  - **Memory updates**: cleared `tasks/current.md` with the reframe (linebet = test fixture, not deliverable; next step is the classifier). Added "Build site scraping-mode classifier" backlog item with the heuristic starter list. This session entry.
+- **Open items (see backlog for detail):**
+  - Build `src/extraction/classifier/` — the actual deliverable. HIGH.
+  - Capture a real Linebet HAR from a residential IP → feed to the classifier as the validation case. HIGH (already in backlog from Session 9 continuation).
+  - Implement the httpx-based replay mode (sub-second polling). MEDIUM (already in backlog).
+- **Report:** no review report — this was a refactor + framework-generalization session. Summary delivered in chat.

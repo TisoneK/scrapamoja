@@ -175,3 +175,23 @@ don't remove the line.
       wherever the other sites (wikipedia, github, flashscore) get
       registered. LOW — the CLI works without it, but registry-driven
       discovery won't find Linebet until this is done.
+
+---
+- [ ] **Build site scraping-mode classifier** (added 2026-07-17 by Super Z, Session 10) —
+      THE actual deliverable. Linebet is just the validation case, not the goal.
+      Build `src/extraction/classifier/` — a system that watches a site behave
+      (either live via Playwright or via a HAR replay) and classifies which
+      `ExtractionMode` (`raw` / `intercepted` / `hybrid` / `playwright`) fits,
+      then emits a recommended `SiteConfig` (with `API_URL_PATTERNS`,
+      `REPLAY_FORWARD_HEADERS`, etc.). Heuristics to start with: (a) fraction
+      of page data fetched via XHR vs rendered in initial HTML; (b) presence
+      of WAF signals (HTTP 203 / Cloudflare challenge pages / cf-ray headers);
+      (c) auth-cookie behaviour (does the site set long-lived cookies that
+      gate API access? → suggests `intercepted`+session-bootstrap); (d) API
+      URL patterns (under `/api/`, `/bff-api/`, `/graphql` → suggests
+      `intercepted` or `hybrid`); (e) DOM data density (sparse HTML +
+      JS-rendered → not `playwright`/`raw`). Validate by feeding it a real
+      Linebet HAR (once captured from a residential IP — see the existing
+      "residential-IP HAR" backlog item) and asserting the classifier outputs
+      `ExtractionMode.HYBRID` with the right patterns. HIGH — this is what
+      the whole linebet exercise was building toward.
