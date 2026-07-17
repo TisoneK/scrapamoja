@@ -100,15 +100,47 @@ RUN groupadd --system --gid 10001 appuser \
                 --home-dir /home/appuser --create-home \
                 --shell /usr/sbin/nologin appuser
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Pre-create the runtime directories the app writes to, and chown /app
+# ITSELF (not just its contents) to the runtime user.
+#
+# This is NOT optional. Two import-time side effects in the codebase require
+# it:
+#
+#   1. src/core/snapshot/__init__.py:_initialize_module() runs at IMPORT
+#      time (before the app finishes booting) and calls:
+#          os.makedirs("data/snapshots", exist_ok=True)
+#          os.makedirs("config",          exist_ok=True)
+#      These paths are RELATIVE to the cwd (WORKDIR /app), so they resolve
+#      to /app/data/snapshots and /app/config. To create them, the runtime
+#      user needs WRITE permission on /app itself — not just on the
+#      pre-existing subdirs.
+#
+#   2. The SQLite DB lands in /app/data/adaptive.db (overridable via
+#      ADAPTIVE_DB_PATH). If a Railway Volume is mounted at /app/data, the
+#      mount point must also be writable by appuser.
+#
+# Pre-creating the dirs means the import-time makedirs() call sees them
+# already exist (exist_ok=True → no-op). Chowning /app means that if the
+# app ever needs to create a NEW dir under /app at runtime, it can.
+#
+# Pre-create: data/snapshots (snapshot bundles), config (snapshot config
+# writes), output (CLI scrape output), logs (structured logs), .checkpoints
+# (resilience checkpoint serializer). All are in .gitignore, so they're
+# absent from the COPY below.
+# ──────────────────────────────────────────────────────────────────────────────
 WORKDIR /app
-
-# Create the runtime data directory and chown it. If a Railway Volume is
-# mounted at /app/data, Railway will overlay this — the chown still applies
-# to the volume's root on first mount.
-RUN mkdir -p /app/data && chown -R appuser:appuser /app/data
+RUN mkdir -p /app/data/snapshots \
+                /app/config \
+                /app/output \
+                /app/logs \
+                /app/.checkpoints \
+    && chown -R appuser:appuser /app
 
 # Copy the project. .dockerignore strips tests/, .git/, .context/, node_modules,
-# caches, and other build artifacts so the layer stays small.
+# caches, and other build artifacts so the layer stays small. The --chown flag
+# ensures copied files are owned by appuser; the chown above already covered
+# /app itself and the pre-created subdirs.
 COPY --chown=appuser:appuser . /app
 
 USER appuser
