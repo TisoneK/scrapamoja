@@ -247,3 +247,36 @@ don't remove the line.
       odds endpoint (item above) is reverse-engineered. Feeds the scraping-mode
       classifier as evidence linebet = hybrid/playwright, not clean intercept.
       MEDIUM.
+
+---
+- [ ] **Reverse-engineer linebet `/LineFeed/` odds via IndexedDB header replay** (added 2026-07-17 by Claude Opus 4.8, Session 11 cont. — AUGMENTS the two "live-odds endpoint" + "DOM extractor" items above with concrete operator intel) —
+      Combines this session's SW-transport finding with the operator's prior
+      (abandoned) linebet attempt. Known facts:
+        * The odds data endpoint is **`/LineFeed/...`** (1xbet/melbet-family).
+          Response is **heavily compressed**; decompressed it's JSON with **terse
+          single-letter keys** (`T`,`E`,`C`,`G`,`O1`,`O2`,…) — re-derive the exact
+          key map from a live capture (the linebet `extraction/models.py`
+          Event/Market/Selection dataclasses are the target shape).
+        * The request needs headers a plain scraper never has: an **auth token
+          WITH an expiry**, `x-project-id`/`x-dt` (650), and a **referer-like
+          header carrying the URL of the previous page** (pre-click navigation
+          context). These are injected by the `ivpn-sw.js` service worker from
+          IndexedDB **`vpn`→`headers`** — that's why they're invisible to
+          interception and to the page JS. See `src/sites/linebet/RECON.md`
+          "Prior operator investigation" + ADR-2.
+      Concrete plan (needs the Kenya proxy live again — gost + `bore` tunnel):
+        1. Load linebet live, let the SPA init, then dump IndexedDB `vpn/headers`
+           (via `page.evaluate` opening the DB, or CDP `IndexedDB.requestData`) →
+           get the token + expiry + referer header + x-dt/x-project-id.
+        2. Capture a real `LineFeed` request: CDP `Target.setAutoAttach
+           {autoAttach:true,flatten:true}` on the **service-worker** target +
+           enable its `Network` domain (page-level Playwright can't see SW
+           traffic), OR find the `LineFeed` URL+params in the sportsbook JS chunk
+           (separate from the casino `entry-*.js`).
+        3. Replay `LineFeed` with the IndexedDB headers → decompress
+           (gzip/deflate/brotli; possibly a custom wrapper) → parse terse JSON →
+           map keys to Event/Market/Selection.
+        4. Handle **token expiry**: re-harvest from IndexedDB (or re-bootstrap the
+           browser) on a timer — this is the `sw_replay`/`hybrid` concern per ADR-2.
+      DOM extraction over the live grid (`c-events`/champ rows) remains the
+      works-today fallback. HIGH — this is the linebet scraper's core unblock.
