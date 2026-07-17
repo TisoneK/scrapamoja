@@ -1,0 +1,100 @@
+# =============================================================================
+# .dockerignore — keep the build context lean
+# -----------------------------------------------------------------------------
+# Everything listed here is excluded from the COPY . /app layer in the
+# Dockerfile. This both speeds up builds (smaller context to send to the
+# builder) and shrinks the final image (no test data or caches baked in).
+# =============================================================================
+
+# ── Version control & agent memory ──────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+.context/
+.github/
+.gitlab/
+
+# ── Python caches & build artifacts ─────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# ── Virtualenvs (built inside the image) ────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── Tests, docs, examples — not needed at runtime ───────────────────────────
+tests/
+docs/
+examples/
+scripts/
+
+# ── UI source — backend deployment only. Build the UI as a separate service
+#    or via a separate Dockerfile.ui if needed.
+ui/
+
+# ── Runtime data — don't bake the dev DB or output into the image ───────────
+data/
+output/
+output_bmad/
+_bmad/
+_bmad-output/
+artifacts/
+.checkpoints/
+config_backups/
+logs/
+*.log
+
+# ── Node (in case the UI gets built into this image later) ─────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# ── Editor / OS / IDE junk ──────────────────────────────────────────────────
+.vscode/
+.idea/
+.windsurf/
+.kilocode/
+.kilocodemodes/
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ── Env files — never bake secrets into an image ───────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Misc project files that have no runtime role ───────────────────────────
+README.md
+SCRAPAMOJA-RULES.md
+RAILWAY.md
+Dockerfile
+.dockerignore
+railway.json
+railway.toml
+Procfile
+pytest.ini
+.python-version
