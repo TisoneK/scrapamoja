@@ -214,7 +214,7 @@ don't remove the line.
       classes and the flat fields. Re-validate the stealth pipeline's tests
       (`tests/stealth/test_proxy_manager.py`). MEDIUM — architectural; do
       deliberately, one caller at a time, with tests green.
-- [ ] **Capture linebet HAR through the Kenyan ngrok proxy (Stage 4)** (added 2026-07-17 by Claude Opus 4.8, Session 11) —
+- [x] **Capture linebet HAR through the Kenyan ngrok proxy (Stage 4)** (added 2026-07-17 by Claude Opus 4.8, Session 11; DONE 2026-07-17 Session 11 cont., commit `9878dcf` — captured via `bore` tunnel not ngrok; found the odds feed is SW-mediated/invisible, see RECON.md + the two new follow-ups below) —
       The proxy abstraction is done; the remaining step is the actual capture,
       blocked on the user standing up a `gost` HTTP proxy on their Kenyan Windows
       box exposed via `ngrok tcp`. When they send host:port + basic-auth
@@ -224,3 +224,26 @@ don't remove the line.
       normalized snapshot under `src/sites/linebet/snapshots/`. This finally
       yields the real sports/odds endpoints + headers and feeds the classifier.
       See `tasks/current.md` for the exact resume steps. HIGH.
+
+---
+- [ ] **Find linebet's live-odds endpoint (SW-mediated transport)** (added 2026-07-17 by Claude Opus 4.8, Session 11 cont.) —
+      Stage-4 capture proved the live odds render in the DOM but the feed is
+      INVISIBLE to Playwright page/context interception, the HAR, and page
+      WebSocket/SSE events — it rides linebet's service-worker transport
+      (`ivpn-sw.js` header injection from IndexedDB `vpn/headers`; `domain-sw.js`
+      mirror-domain failover). To find the actual odds endpoint: (a) attach a CDP
+      session with `Target.setAutoAttach {autoAttach:true, flatten:true}` to the
+      service-worker target and enable the `Network` domain there (page-level
+      Playwright can't see SW traffic), OR (b) after the SPA initializes, read the
+      IndexedDB `vpn/headers` store + locate the sportsbook fetch the app issues
+      (the SPA `entry-*.js` only revealed casino `service-api` endpoints; the
+      sportsbook chunk loads separately). Requires the Kenya proxy live again
+      (bore/gost). HIGH — this is the endpoint a direct-API linebet scraper needs.
+- [ ] **Build a linebet live-odds DOM extractor** (added 2026-07-17 by Claude Opus 4.8, Session 11 cont.) —
+      Since the odds feed is SW-hidden, the reliable extraction path today is the
+      rendered DOM (odds render fully — verified). Build a Playwright DOM extractor
+      over the live betting grid (champ rows / `c-events` items: teams, scores,
+      market odds). This is the pragmatic linebet scraper until/unless the direct
+      odds endpoint (item above) is reverse-engineered. Feeds the scraping-mode
+      classifier as evidence linebet = hybrid/playwright, not clean intercept.
+      MEDIUM.

@@ -5,12 +5,14 @@ session start (protocol Step 3), clear it at session end (Step 15). If
 you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
-**BLOCKED ON USER (Session 11, 2026-07-17, local agent / Claude Opus 4.8
-on Baos-Mac-mini):** Building the proxy abstraction, then capturing
-linebet through a Kenyan proxy. Stages 1–3 + 5 DONE and pushed; Stage 4
-(the actual linebet capture) is blocked waiting for the user's ngrok
-connection details (host:port + basic-auth user/pass for a `gost` HTTP
-proxy on their Kenyan Windows box).
+**SESSION 11 COMPLETE (2026-07-17, local agent / Claude Opus 4.8 on
+Baos-Mac-mini):** Built the proxy abstraction (Stages 1–3+5), then plugged
+in the user's Kenyan proxy (Stage 4) and did the FIRST live linebet capture.
+All 5 stages done + pushed. Recon findings written up in
+`src/sites/linebet/RECON.md` + `snapshots/normalized/linebet_api_catalog.json`
+(commit `9878dcf`). Proxy transport used: `gost` HTTP proxy (Kisumu, KE)
+→ `bore` TCP tunnel (`bore.pub:<port>`) → framework `ProxyManager`. ngrok
+was NOT usable (TCP needs card); `bore` (no account) worked.
 
 **How the session evolved:** started as linebet recon ("learn the headers
 + endpoints, use a proxy if you can't connect"). Confirmed BOTH browser
@@ -42,22 +44,34 @@ before plugging in their Kenyan Windows proxy via ngrok.
   route through the manager's endpoint).  Commits `8fb284f`, `467acb1`.
   har + direct_api suites still green (no regressions).
 
-**NEXT STEP (Stage 4 — resume here when the user sends ngrok details):**
-1. Build a manager: `build_proxy_manager({"endpoints": [{"id":"direct",
-   "scheme":"direct"}, {"id":"kenya","url":"http://USER:PASS@HOST:PORT",
-   "country":"KE","source":"ngrok"}], "routing":[{"pattern":"*linebet.com",
-   "target":"kenya"}], "default_target":"direct"})`.
-2. `verify_proxy(manager.get("kenya"))` → assert egress countryCode == "KE".
-3. `HarExporter(HarExporterConfig(url="https://linebet.com/en",
-   live_url="https://linebet.com/en/live", proxy=manager.get("kenya"),
-   output=Path("linebet_kenya.har")))` → expect 200 (not 203/block),
-   record HAR.
-4. Replay: `HarReplayer` + `src/core/snapshot/normalize.py` → catalog the
-   REAL sports/odds endpoints + request headers (the original recon goal).
-   Commit the normalized snapshot under `src/sites/linebet/snapshots/`.
-5. Follow-up backlog item: migrate `stealth/coordinator` + `navigation`
-   onto the canonical ProxyManager and deprecate the duplicate
-   ProxySettings classes (see backlog).
+**KEY RECON FINDINGS (Stage 4 — DONE):**
+- Kenya proxy → linebet `/en` + `/en/live` load `200` (not 203). Egress
+  confirmed KE (102.210.56.70, Kisumu). Live sportsbook DOM renders real
+  matches + odds (screenshot verified).
+- **Live odds feed is invisible to interception.** Odds render in the DOM,
+  but ZERO odds requests appear at Playwright page/context level, in the
+  HAR, or as page WebSocket/SSE. Transport is service-worker-mediated:
+  `ivpn-sw.js` injects headers from IndexedDB (`vpn/headers`; derives
+  `x-dt` from `x-project-id`), `domain-sw.js` does mirror-domain failover
+  (`/checker/redirect/stat/run/`). So linebet is NOT clean `intercepted`
+  mode — DOM/hybrid extraction (or CDP-level SW capture) is required.
+- Bootstrap API surface documented: `bff-api` (config/licenses/event-logo,
+  params `lang/d/g=KE/p=650`), `web-api` (session 204, bonuses KES, banners),
+  `service-api/gamespreview/*`, `fatman-api` (telemetry), `analytics-module-api`.
+  Full writeup: `src/sites/linebet/RECON.md` + `snapshots/normalized/
+  linebet_api_catalog.json`.
+
+**NEXT STEPS (future sessions):**
+1. Find the actual live-odds endpoint: attach CDP `Target.setAutoAttach`
+   to the service-worker target + enable `Network` there, OR read
+   IndexedDB `vpn/headers` at runtime and locate the sportsbook fetch.
+   (SPA `entry-*.js` only exposed casino `service-api` endpoints, not the
+   sportsbook feed — that chunk loads separately.)
+2. Build a DOM extractor for the live grid (`c-events`/champ rows) as the
+   reliable path — odds render fine.
+3. Feed a real capture to the scraping-mode classifier (the deliverable).
+4. Migrate `stealth/coordinator` + `navigation` onto the canonical
+   ProxyManager; deprecate duplicate ProxySettings (backlog item).
 
 **Standing reframe (Session 10):** linebet is the validation CASE for a
 future site scraping-mode classifier (`src/extraction/classifier/`), not
