@@ -1,0 +1,142 @@
+{
+  "source": "live capture via Kenya proxy 2026-07-17",
+  "geo": "g=KE",
+  "endpoints": {
+    "v3.traincdn.com/genfiles/banners-admin-api/all/368b833ebe6bee7dc03c1b4011a8e457.webp": {
+      "method": "GET",
+      "status": 200,
+      "mime": "image/webp",
+      "query_shape": "",
+      "count": 1,
+      "purpose": ""
+    },
+    "linebet.com/bff-api/config/group/get": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "groups=<v>&lang=en&d=linebet.com&g=KE&p=650",
+      "count": 3,
+      "purpose": "SPA config groups (b.core/d.* feature configs)"
+    },
+    "linebet.com/analytics-module-api/v1/analytics": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "projectId=650&domain=linebet.com",
+      "count": 1,
+      "purpose": "analytics counter config (Yandex+GA ids)"
+    },
+    "linebet.com/fatman-api/a6f69e4388362d761ee5bb073edb23ae3d9341fb/fc": {
+      "method": "POST",
+      "status": 204,
+      "mime": "x-unknown",
+      "query_shape": "",
+      "count": 1,
+      "purpose": "first-party analytics/telemetry (event.json, ab.json, metadata.json)"
+    },
+    "linebet.com/fatman-api/a6f69e4388362d761ee5bb073edb23ae3d9341fb/ab.json": {
+      "method": "POST",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "",
+      "count": 1,
+      "purpose": "first-party analytics/telemetry (event.json, ab.json, metadata.json)"
+    },
+    "linebet.com/fatman-api/a6f69e4388362d761ee5bb073edb23ae3d9341fb/event.json": {
+      "method": "POST",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "",
+      "count": 8,
+      "purpose": "first-party analytics/telemetry (event.json, ab.json, metadata.json)"
+    },
+    "linebet.com/fatman-api/a6f69e4388362d761ee5bb073edb23ae3d9341fb/metadata.json": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "",
+      "count": 1,
+      "purpose": "first-party analytics/telemetry (event.json, ab.json, metadata.json)"
+    },
+    "linebet.com/checker/redirect/stat/run/": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "",
+      "count": 1,
+      "purpose": "MIRROR-DOMAIN list for failover (domain-sw.js)"
+    },
+    "linebet.com/service-api/gamespreview/getbanner": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "whence=55&ref=189&gr=650&lng=en&fCountry=87",
+      "count": 2,
+      "purpose": "casino games preview banner"
+    },
+    "linebet.com/sys-welcome-app-front/en": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "",
+      "count": 2,
+      "purpose": ""
+    },
+    "linebet.com/web-api/api/third-party/banner-for-header": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "",
+      "count": 2,
+      "purpose": "header promo banner"
+    },
+    "linebet.com/sys-office-app-front/en": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "",
+      "count": 2,
+      "purpose": ""
+    },
+    "linebet.com/web-api/api/v3/bonuses/welcome-bonuses": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/vnd.api+json",
+      "query_shape": "",
+      "count": 2,
+      "purpose": "welcome bonus offers (currency=KES)"
+    },
+    "linebet.com/bff-api/event-logo/v2/suitable.json": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "lang=en&d=linebet.com&g=KE&p=650",
+      "count": 2,
+      "purpose": "country/league logos (returns g=KE flag)"
+    },
+    "linebet.com/bff-api/config/licenses.json": {
+      "method": "GET",
+      "status": 200,
+      "mime": "application/json",
+      "query_shape": "lang=en&d=linebet.com&g=KE&p=650",
+      "count": 2,
+      "purpose": "licence/footer config"
+    },
+    "linebet.com/hd-api/external/apps/c5e31d5915661de4393e3f1489b00ebc4497dd48/api.js": {
+      "method": "GET",
+      "status": 200,
+      "mime": "text/javascript",
+      "query_shape": "",
+      "count": 2,
+      "purpose": ""
+    },
+    "linebet.com/web-api/session": {
+      "method": "GET",
+      "status": 204,
+      "mime": "x-unknown",
+      "query_shape": "",
+      "count": 2,
+      "purpose": "anonymous session bootstrap (204)"
+    }
+  }
+}
