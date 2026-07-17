@@ -17,10 +17,11 @@ goes in `../inefficiencies/log.md` — **not here**. The split:
 
 This file is the **source of truth** inside this project. Periodically —
 or when a pattern repeats across sessions — the flaws here are
-back-ported to the protocol package at `TisoneK/.context` (the repo
-that holds `ai-engineering-protocol.md`, `context-skeleton/`, and
-`roles/`). The package fix might be: a new pitfall, a reworded step, a
-new template field, or a structural change to `.context/`.
+back-ported to the protocol package (the "Package upstream" URL in
+`../workflows/active.md` — the repo that `core/` is vendored from). The
+package fix might be: a new pitfall, a reworded step, a new template
+field, a schema change, or a new core release. It reaches this project
+on the next `context-sync update`.
 
 When a flaw is fixed in the package, append a "Fixed in package" line
 to the entry here — don't delete the original. The history of what was

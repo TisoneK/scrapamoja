@@ -6,12 +6,12 @@ past entries — append corrections instead.
 <!-- TEMPLATE — copy below the last entry:
 ---
 ## YYYY-MM-DD — Session N
-- **Agent:** <name> | **Model:** <model id> | **Platform:** <machine/sandbox + OS> | **Role:** <engineer, or overlay from the protocol package's roles/>
+- **Agent:** <name> | **Model:** <model id> | **Platform:** <machine/sandbox + OS> | **Role:** <engineer, or overlay from .context/core/roles/> | **Core:** <version from .context/core/VERSION>
 - **Task:** <what this session set out to do>
 - **Commits:** <count> (<first-sha>..<last-sha>)
 - **Outcome:** <done / partial / blocked — one line>
 - **Open items:** <pointers into tasks/backlog.md, or "none">
-- **Report:** .context/reviews/YYYY-MM-DD-review.md
+- **Report:** .context/memory/reviews/YYYY-MM-DD-review.md
 -->
 
 ---
@@ -67,3 +67,18 @@ past entries — append corrections instead.
 - **Outcome:** done — regenerated `.context/kickoff.md` from the updated template. Key changes adopted: (1) canonical package clone path is now `../context` (was `../.context`); legacy `../.context` clones are still found by the local-agent find-loop for backward compat. (2) Local-agent Step 0 now locates an existing package clone by REMOTE URL (not directory name) via a find-loop, with two new guards: "never clone when a package clone already exists" (prevents the clone-into-existing-dir retry loop) and "a failed pull is not a missing package" (use on-disk copy if pull fails). (3) Step 3 references `$PKG` (the found clone) instead of a hardcoded path. Project Facts unchanged from Session 5 — verified against `user/identity.md`, `workflows/active.md`, `git remote`. Template grep-check passes (1 hit = literal grep instruction in HTML comment). No real PAT in file; `${GIT_TOKEN}` stays symbolic. Note: the on-disk package clone for THIS session is still at `../.context` (cloned Session 5 under the old path); not moved, since the local-agent find-loop handles both names and cloud/sandbox sessions are ephemeral. The updated template has NOT been pushed to the package repo (`TisoneK/.context`) — that's the user's call; this commit only updates the in-repo `kickoff.md`.
 - **Open items:** none new. If the user wants the package skeleton itself updated to match, that's a separate push to `TisoneK/.context` (out of scope here — agents don't push to the package unless explicitly asked).
 - **Report:** no review report — template update only. Summary delivered in chat.
+
+---
+## 2026-07-17 — Session 7
+- **Agent:** Super Z | **Model:** GLM (Z.ai cloud sandbox, Linux x86_64) | **Role:** engineer | **Core:** 0.2.0
+- **Task:** Migrate `.context/` from the 0.1.x flat layout to the 0.2.0 two-zone layout (vendored `core/` + project-owned `memory/`), per `MIGRATION.md` in the package. Followed by a separate project task: set up Railway deployment config (out-of-scope for this `.context/`-surface commit — that lands in its own project-mode commit).
+- **Commits:** 1 (this commit) — `chore(context): migrate to core 0.2.0 two-zone layout`.
+- **Outcome:** done — migration applied exactly per `MIGRATION.md`:
+  1. `git mv`'d all 11 memory modules (agents, flaws, inefficiencies, plans, reviews, secrets, system, tasks, user, workflows) into `.context/memory/` — history preserved (git tracks renames).
+  2. Retired old structural files: removed `SYNC.md` (basename rule retired in 0.2.0), old root `README.md` and `kickoff.md` (replaced from new templates).
+  3. Vendored the package core at `.context/core/` from the freshly-cloned package (TisoneK/.context @ current `main`, core VERSION 0.2.0). `sh .context/core/bin/context-sync verify` passes — every file matches `MANIFEST.sha256`. `memory/core.lock` written automatically: `version=0.2.0 verified=2026-07-17`.
+  4. Seeded the new root files from templates: `.context/README.md` (zone map), `.context/kickoff.md` (front door, Project Facts refilled from `memory/user/identity.md` + `memory/workflows/active.md` + `git remote get-url origin`), root `AGENTS.md` (weak-agent digest, `<PROJECT_NAME>` filled with "Scrapamoja"), and `.context/memory/overrides/rules.md` (project-local protocol adjustments — empty placeholder, no overrides yet).
+  5. Updated `memory/workflows/active.md` to the 0.2.0 template shape: Protocol now recorded "by agent type" naming BOTH editions at their `.context/core/rules/` paths (was: a single hard-coded local edition + raw/blob GitHub URLs that 404'd after the package restructure); replaced with `Protocol location: vendored in .context/core/` + `Package upstream: https://github.com/TisoneK/.context.git`.
+  6. Path sweep: refreshed the memory-dir READMEs (`memory/secrets/README.md`, `memory/reviews/README.md`, `memory/flaws/README.md`) from the new templates so path references now point to `.context/memory/<dir>/` not `.context/<dir>/`. Patched the top template block in `memory/agents/sessions.md` (added `Core:` field, fixed the `Report:` path to `.context/memory/reviews/`). Historical log entries left untouched per the append-only rule.
+- **Open items:** none for this commit. Railway deployment setup lands in a separate project-mode commit (different surface, different commit prefix).
+- **Report:** no review report — this was a migration session, not a code review. Summary delivered in chat.
