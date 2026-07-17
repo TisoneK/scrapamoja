@@ -1,0 +1,72 @@
+[
+  {
+    "entry": "https://linebet.com/en/prematch",
+    "status": 203,
+    "final_url": "https://linebet.com/en/block",
+    "title": "",
+    "blocked": true,
+    "captured_count": 10,
+    "unique_paths": [
+      "/analytics-module-api/v1/analytics",
+      "/bff-api/config/group/get",
+      "/bff-api/config/v2/contacts.json",
+      "/fatman-api/..."
+    ]
+  },
+  {
+    "entry": "https://linebet.com/en/live",
+    "status": 203,
+    "final_url": "https://linebet.com/en/block",
+    "title": "",
+    "blocked": true,
+    "captured_count": 10,
+    "unique_paths": [
+      "/analytics-module-api/v1/analytics",
+      "/bff-api/config/group/get",
+      "/bff-api/config/v2/contacts.json",
+      "/fatman-api/..."
+    ]
+  },
+  {
+    "entry": "https://m.linebet.com/en",
+    "status": 200,
+    "final_url": "https://m.linebet.com/en",
+    "title": "Gcore",
+    "blocked": true,
+    "captured_count": 10,
+    "unique_paths": [
+      "/analytics-module-api/v1/analytics",
+      "/bff-api/config/group/get",
+      "/bff-api/config/v2/contacts.json",
+      "/fatman-api/..."
+    ]
+  },
+  {
+    "entry": "https://linebet.com/en/sport/1",
+    "status": 203,
+    "final_url": "https://linebet.com/en/block",
+    "title": "",
+    "blocked": true,
+    "captured_count": 10,
+    "unique_paths": [
+      "/analytics-module-api/v1/analytics",
+      "/bff-api/config/group/get",
+      "/bff-api/config/v2/contacts.json",
+      "/fatman-api/..."
+    ]
+  },
+  {
+    "entry": "https://linebet.com/en/sport/football",
+    "status": 203,
+    "final_url": "https://linebet.com/en/block",
+    "title": "",
+    "blocked": true,
+    "captured_count": 10,
+    "unique_paths": [
+      "/analytics-module-api/v1/analytics",
+      "/bff-api/config/group/get",
+      "/bff-api/config/v2/contacts.json",
+      "/fatman-api/..."
+    ]
+  }
+]

@@ -63,38 +63,77 @@ LIVE_URL = "https://linebet.com/en/live"
 # ``src.network.interception.patterns.match_url``. Order matters only for
 # readability — match_url is OR-semantics.
 #
-# Known Linebet API surfaces (verified by inspecting the SPA's network
-# tab in a real browser session):
+# Real Linebet API prefixes (verified by probing the live site from a real
+# browser session and capturing the network traffic — see
+# scripts/linebet_capture_real_bodies.py). The actual prefixes are NOT
+# "/api/" (that was an early guess); they are:
 #
-#   * /api/list/*           — pre-match fixture lists / sports tree
-#   * /api/live/*           — live in-play events
-#   * /api/bet/*            — bet slips, market details
-#   * /api/menu/*           — left-nav sports menu
-#   * /api/translations/*   — i18n strings (optional, large)
-#   * /api/info/*           — bookmaker info / settings
+#   * /bff-api/                — Backend-For-Frontend API. Config, sports
+#                                 tree, fixtures, markets, odds. This is
+#                                 the main surface for sportsbook data.
+#   * /fatman-api/             — Analytics / AB-testing / event tracking.
+#                                 Identified by a long hash in the path
+#                                 (a6f69e43...). Not useful for sports
+#                                 data but kept for completeness.
+#   * /analytics-module-api/   — Analytics config (Google / Yandex IDs).
 #
-# We deliberately keep the patterns broad (prefix matches) so that when
-# Linebet ships a new endpoint under /api/, we automatically pick it up.
+# We keep the patterns as broad prefixes so that when Linebet ships a new
+# endpoint under /bff-api/, we automatically pick it up.
 API_URL_PATTERNS: List[str] = [
-    "https://linebet.com/api/",
-    "https://www.linebet.com/api/",
-    "https://m.linebet.com/api/",
-    "https://linebet1.com/api/",
+    "https://linebet.com/bff-api/",
+    "https://www.linebet.com/bff-api/",
+    "https://m.linebet.com/bff-api/",
+    "https://linebet1.com/bff-api/",
+    "https://linebet.com/fatman-api/",
+    "https://www.linebet.com/fatman-api/",
+    "https://linebet.com/analytics-module-api/",
+]
+
+# Endpoints we DON'T care about (analytics/telemetry). Used to filter
+# captured responses before extraction — fatman-api + analytics-module-api
+# are captured for visibility but skipped by the extractor.
+NOISE_PATTERNS: List[str] = [
+    "/fatman-api/",
+    "/analytics-module-api/",
 ]
 
 # When replaying captured requests directly with httpx (advanced use), we
 # need to forward these request headers from the browser session —
-# without them the API returns 403.
+# without them the API returns 403. Verified against real captured
+# requests (see scripts/linebet_probe_profiles.py output).
 REPLAY_FORWARD_HEADERS: List[str] = [
+    # Standard browser headers
     "accept",
     "accept-language",
+    "accept-encoding",
     "referer",
     "origin",
     "user-agent",
-    "x-requested-with",
-    "x-csrf-token",
     "cookie",
+    # Linebet-specific headers — observed in real captured requests
+    "x-svc-source",       # e.g. "__TECHNICAL_PAGES_APP__" / "__MAIN_APP__"
+    "x-app-n",            # same value as x-svc-source
+    "x-requested-with",   # "XMLHttpRequest"
+    "is-srv",             # "false"
+    "content-type",       # "application/json"
+    # Sec-Fetch-* headers — anti-bot checks these
+    "sec-fetch-dest",
+    "sec-fetch-mode",
+    "sec-fetch-site",
+    "sec-fetch-user",
+    "sec-ch-ua",
+    "sec-ch-ua-mobile",
+    "sec-ch-ua-platform",
 ]
+
+# Linebet project ID, observed as the ``p=`` query param on every /bff-api/
+# request. projectId=650 = linebet.com. Other Linebet mirrors may use
+# different IDs.
+LINEBET_PROJECT_ID = 650
+
+# Geolocation code observed as the ``g=`` query param. HK = Hong Kong
+# (the WAF edge we hit). Real users get a country-appropriate code.
+DEFAULT_GEO_CODE = "HK"
 
 
 # ---------------------------------------------------------------------------

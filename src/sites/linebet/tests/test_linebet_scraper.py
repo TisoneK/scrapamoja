@@ -150,7 +150,7 @@ class TestExtractionRules:
     def test_decode_captured_response_valid_json(self, rules: LinebetExtractionRules) -> None:
         body = json.dumps(PREMATCH_PAYLOAD).encode("utf-8")
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/list/prematch",
+            url="https://linebet.com/bff-api/sports/list/prematch",
             status=200,
             content_type="application/json",
             raw_bytes=body,
@@ -162,7 +162,7 @@ class TestExtractionRules:
     def test_decode_captured_response_jsonp_wrapper(self, rules: LinebetExtractionRules) -> None:
         body = b'jQuery123({"Value": []});'
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/list",
+            url="https://linebet.com/bff-api/sports/list",
             status=200,
             content_type="application/javascript",
             raw_bytes=body,
@@ -171,7 +171,7 @@ class TestExtractionRules:
 
     def test_decode_captured_response_garbage(self, rules: LinebetExtractionRules) -> None:
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/list",
+            url="https://linebet.com/bff-api/sports/list",
             status=200,
             content_type="application/json",
             raw_bytes=b"not json at all",
@@ -180,7 +180,7 @@ class TestExtractionRules:
 
     def test_decode_captured_response_bodyless(self, rules: LinebetExtractionRules) -> None:
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/list",
+            url="https://linebet.com/bff-api/sports/list",
             status=204,
             content_type="application/json",
             raw_bytes=None,
@@ -190,7 +190,7 @@ class TestExtractionRules:
 
     def test_extract_prematch(self, rules: LinebetExtractionRules) -> None:
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/list/prematch",
+            url="https://linebet.com/bff-api/sports/list/prematch",
             status=200,
             content_type="application/json",
             raw_bytes=json.dumps(PREMATCH_PAYLOAD).encode("utf-8"),
@@ -218,7 +218,7 @@ class TestExtractionRules:
 
     def test_extract_live(self, rules: LinebetExtractionRules) -> None:
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/live/all",
+            url="https://linebet.com/bff-api/sports/live/all",
             status=200,
             content_type="application/json",
             raw_bytes=json.dumps(LIVE_PAYLOAD).encode("utf-8"),
@@ -234,7 +234,7 @@ class TestExtractionRules:
 
     def test_extract_market_detail(self, rules: LinebetExtractionRules) -> None:
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/bet/event/ev-1001",
+            url="https://linebet.com/bff-api/bet/event/ev-1001",
             status=200,
             content_type="application/json",
             raw_bytes=json.dumps(MARKET_DETAIL_PAYLOAD).encode("utf-8"),
@@ -254,18 +254,39 @@ class TestExtractionRules:
         lines = [s.line for s in handicap.selections]
         assert -1.5 in lines and 1.5 in lines
 
-    def test_extract_unknown_endpoint_returns_empty(self, rules: LinebetExtractionRules) -> None:
+    def test_extract_config_endpoint_returns_empty(self, rules: LinebetExtractionRules) -> None:
+        """Real captured /bff-api/config/group/get response — has no events."""
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/info/settings",
+            url="https://linebet.com/bff-api/config/group/get?groups=d.technical,d.global&lang=en&d=linebet.com&g=HK&p=650",
             status=200,
             content_type="application/json",
-            raw_bytes=json.dumps({"theme": "dark"}).encode("utf-8"),
+            raw_bytes=b'{"1433": "errors_page_custom_block_mobile", "1432": "header_logo_light"}',
+        )
+        assert rules.extract_from_captured(cap) == []
+
+    def test_extract_analytics_endpoint_returns_empty(self, rules: LinebetExtractionRules) -> None:
+        """Real captured /analytics-module-api/ response — has no events."""
+        cap = rules.decode_captured_response(
+            url="https://linebet.com/analytics-module-api/v1/analytics?projectId=650&domain=linebet.com",
+            status=200,
+            content_type="application/json",
+            raw_bytes=b'{"counters": [{"type": 8, "code": "22934032"}], "settings": {"isDeferredLoadingEnabled": true}}',
+        )
+        assert rules.extract_from_captured(cap) == []
+
+    def test_extract_fatman_api_returns_empty(self, rules: LinebetExtractionRules) -> None:
+        """Real captured /fatman-api/ response — analytics, no events."""
+        cap = rules.decode_captured_response(
+            url="https://linebet.com/fatman-api/a6f69e4388362d761ee5bb073edb23ae3d9341fb/ab.json",
+            status=200,
+            content_type="application/json",
+            raw_bytes=b"[]",
         )
         assert rules.extract_from_captured(cap) == []
 
     def test_extract_malformed_payload_does_not_raise(self, rules: LinebetExtractionRules) -> None:
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/list/prematch",
+            url="https://linebet.com/bff-api/sports/list/prematch",
             status=200,
             content_type="application/json",
             raw_bytes=b'{"Value": "not a list of events"}',
@@ -280,7 +301,7 @@ class TestExtractionRules:
             {"Id": "x3", "SportName": "Unknown Sport", "Home": "E", "Away": "F"},
         ]}
         cap = rules.decode_captured_response(
-            url="https://linebet.com/api/list",
+            url="https://linebet.com/bff-api/sports/list",
             status=200,
             content_type="application/json",
             raw_bytes=json.dumps(payload).encode("utf-8"),
@@ -318,15 +339,21 @@ def mock_selector_engine() -> MagicMock:
 
 @pytest.fixture
 def scraper(mock_page: MagicMock, mock_selector_engine: MagicMock) -> LinebetScraper:
-    s = LinebetScraper(mock_page, mock_selector_engine)
-    # Skip the heavy initialize() path; set the bare-minimum state.
-    s.flow = MagicMock()
-    s.flow.navigate_to_home = AsyncMock(return_value=True)
-    s.flow.navigate_to_live = AsyncMock(return_value=True)
-    s.flow.scroll_fixtures = AsyncMock(return_value=None)
-    s.flow.dismiss_consent_if_present = AsyncMock(return_value=None)
-    s.flow.wait_for_api_burst = AsyncMock(return_value=True)
-    return s
+    # BaseSiteScraper.__init__ calls asyncio.create_task() to kick off
+    # modular-component init, so we need a running event loop when the
+    # scraper is constructed. Run the construction inside a fresh loop.
+    async def _build() -> LinebetScraper:
+        s = LinebetScraper(mock_page, mock_selector_engine)
+        # Skip the heavy initialize() path; set the bare-minimum state.
+        s.flow = MagicMock()
+        s.flow.navigate_to_home = AsyncMock(return_value=True)
+        s.flow.navigate_to_live = AsyncMock(return_value=True)
+        s.flow.scroll_fixtures = AsyncMock(return_value=None)
+        s.flow.dismiss_consent_if_present = AsyncMock(return_value=None)
+        s.flow.wait_for_api_burst = AsyncMock(return_value=True)
+        return s
+
+    return asyncio.run(_build())
 
 
 class _StubInterceptor:
@@ -377,7 +404,7 @@ class TestScraperPlumbing:
     ) -> None:
         from src.network.interception.models import CapturedResponse
         cap = CapturedResponse(
-            url="https://linebet.com/api/list/prematch",
+            url="https://linebet.com/bff-api/sports/list/prematch",
             status=200,
             headers={"content-type": "application/json"},
             raw_bytes=json.dumps(PREMATCH_PAYLOAD).encode("utf-8"),
@@ -412,7 +439,7 @@ class TestScraperPlumbing:
     ) -> None:
         from src.network.interception.models import CapturedResponse
         cap = CapturedResponse(
-            url="https://linebet.com/api/list/prematch",
+            url="https://linebet.com/bff-api/sports/list/prematch",
             status=200,
             headers={"content-type": "application/json"},
             raw_bytes=json.dumps(PREMATCH_PAYLOAD).encode("utf-8"),

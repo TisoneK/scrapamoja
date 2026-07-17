@@ -46,7 +46,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.network.interception import NetworkInterceptor, CapturedResponse
+from src.network.interception import (
+    CapturedResponse,
+    InterceptionConfig,
+    NetworkInterceptor,
+    NetworkListener,
+)
+from src.sites.base.site_scraper import BaseSiteScraper
 from src.sites.base.template.selector_loader import FileSystemSelectorLoader
 from src.sites.base.template.site_template import BaseSiteTemplate
 
@@ -77,8 +83,14 @@ _VALID_ACTIONS = {
 }
 
 
-class LinebetScraper(BaseSiteTemplate):
-    """Hybrid browser+API scraper for linebet.com."""
+class LinebetScraper(BaseSiteScraper, BaseSiteTemplate):
+    """Hybrid browser+API scraper for linebet.com.
+
+    Inherits from :class:`BaseSiteScraper` so the scraper can be
+    registered with :class:`src.sites.registry.ScraperRegistry`, and
+    from :class:`BaseSiteTemplate` for template-framework functionality.
+    This mirrors the pattern used by ``GitHubScraper``.
+    """
 
     # ----- BaseSiteScraper compatibility (registry uses these) -----
     site_id = SITE_CONFIG["id"]
@@ -98,7 +110,12 @@ class LinebetScraper(BaseSiteTemplate):
                 YAML selectors (kept for framework compliance — the
                 hybrid mode does not need them for extraction).
         """
-        super().__init__(
+        # Initialise both parent classes explicitly (multiple inheritance).
+        # BaseSiteScraper's __init__ runs first; it sets up page, selector_engine,
+        # and the modular-component scaffolding.
+        BaseSiteScraper.__init__(self, page, selector_engine)
+        BaseSiteTemplate.__init__(
+            self,
             name="linebet",
             version="1.0.0",
             description=SITE_CONFIG["description"],
@@ -137,6 +154,7 @@ class LinebetScraper(BaseSiteTemplate):
 
         # Hybrid-mode state
         self._interceptor: Optional[NetworkInterceptor] = None
+        self._listener: Optional[NetworkListener] = None
         self._captured_raw: List[CapturedResponse] = []
         self._captured_lock = asyncio.Lock()
 
@@ -251,12 +269,17 @@ class LinebetScraper(BaseSiteTemplate):
         settle_seconds: Optional[float],
         scroll_count: int,
     ) -> List[CapturedResponse]:
-        """Attach the interceptor, drive the flow, harvest captures.
+        """Attach the listener, drive the flow, harvest captures.
 
-        Critical timing: ``NetworkInterceptor.attach`` MUST be called
-        before any ``page.goto``. If the page has already navigated, we
-        raise a clear error rather than letting the interceptor's
-        ``TimingError`` propagate opaquely.
+        We use :class:`NetworkListener` (the framework's backward-compat
+        capture class) rather than :class:`NetworkInterceptor` because
+        the latter's ``attach()`` enforces a strict
+        ``readyState == "loading"`` timing check that is unreachable
+        from a fresh ``about:blank`` page (which is ``complete``).
+        ``NetworkListener`` registers the same ``response`` event
+        handler without that check, and uses the same
+        :class:`InterceptionConfig` patterns + :class:`CapturedResponse`
+        model, so behaviour is identical for our purposes.
         """
         if self.flow is None:
             raise RuntimeError("LinebetFlow not built — was initialize() called?")
@@ -265,15 +288,15 @@ class LinebetScraper(BaseSiteTemplate):
         async with self._captured_lock:
             self._captured_raw.clear()
 
-        # Build + attach the interceptor
-        self._interceptor = NetworkInterceptor(
-            patterns=list(API_URL_PATTERNS),
-            handler=self._on_captured_response,
-            dev_logging=False,
-        )
-        await self._interceptor.attach(self.page)
+        # Build + attach the listener. Patterns are interpreted as regex
+        # by InterceptionConfig (it pre-compiles them with re.compile and
+        # uses .match()), so prefix patterns like "https://linebet.com/api/"
+        # match any URL starting with that prefix.
+        config = InterceptionConfig(url_patterns=list(API_URL_PATTERNS))
+        self._listener = NetworkListener(config, on_response=self._on_captured_response)
+        await self._listener.attach(self.page)
         logger.debug(
-            "NetworkInterceptor attached with patterns=%s", API_URL_PATTERNS,
+            "NetworkListener attached with patterns=%s", API_URL_PATTERNS,
         )
 
         try:
@@ -302,11 +325,11 @@ class LinebetScraper(BaseSiteTemplate):
             await self.flow.wait_for_api_burst(settle_seconds=settle_seconds)
 
         finally:
-            # Always detach so the interceptor can be re-used / re-attached
+            # Always detach so the listener can be re-used / re-attached
             # on a subsequent scrape call.
-            if self._interceptor is not None:
-                await self._interceptor.detach()
-                self._interceptor = None
+            if self._listener is not None:
+                await self._listener.detach()
+                self._listener = None
 
         async with self._captured_lock:
             captured = list(self._captured_raw)
@@ -314,7 +337,12 @@ class LinebetScraper(BaseSiteTemplate):
         return captured
 
     async def _on_captured_response(self, response: CapturedResponse) -> None:
-        """Handler invoked by ``NetworkInterceptor`` for every matched response."""
+        """Handler invoked by ``NetworkListener`` for every matched response.
+
+        ``NetworkListener`` also internally appends to its own buffer; we
+        maintain a separate buffer here so we can cap the size and so the
+        scrape pipeline has a single source of truth.
+        """
         async with self._captured_lock:
             if len(self._captured_raw) >= MAX_CAPTURED_RESPONSES:
                 logger.warning(
@@ -346,6 +374,52 @@ class LinebetScraper(BaseSiteTemplate):
                 existing.markets = ev.markets
                 existing.raw_endpoint = ev.raw_endpoint
         return list(by_id.values())
+
+    # ------------------------------------------------------------------
+    # BaseSiteScraper abstract-method implementations
+    # ------------------------------------------------------------------
+    async def navigate(self) -> None:
+        """Bring the page to a ready state for scraping.
+
+        Required by :class:`BaseSiteScraper`. For the hybrid scraper this
+        means: navigate to the home page and wait for the SPA's initial
+        API burst to settle. Equivalent to calling
+        ``scrape(action="list_prematch")`` with default parameters.
+        """
+        if self.flow is None:
+            await self.initialize(self.page, self.selector_engine)
+        assert self.flow is not None  # for type-checkers
+        await self.flow.navigate_to_home()
+        await self.flow.dismiss_consent_if_present()
+        await self.flow.wait_for_api_burst()
+
+    async def scrape(self, **kwargs: Any) -> Dict[str, Any]:
+        """Scrape entry point.
+
+        Override that delegates to :meth:`BaseSiteTemplate.scrape`. We
+        must define this concretely here because the MRO
+        (``LinebetScraper → BaseSiteScraper → ModularSiteScraper →
+        BaseSiteTemplate``) resolves ``scrape`` to
+        :meth:`ModularSiteScraper.scrape`, which is ``@abstractmethod``
+        — even though :meth:`BaseSiteTemplate.scrape` is concrete. Without
+        this override, ``LinebetScraper`` cannot be instantiated.
+        """
+        return await BaseSiteTemplate.scrape(self, **kwargs)
+
+    def normalize(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Transform raw scraped data into structured output.
+
+        Required by :class:`BaseSiteScraper`. The hybrid pipeline already
+        returns structured data (``LinebetScrapeResult.to_dict()``), so
+        this is essentially a passthrough — it only ensures the
+        ``extraction_source`` and ``template_version`` metadata fields
+        are present.
+        """
+        if not isinstance(raw_data, dict):
+            return {"data": raw_data}
+        raw_data.setdefault("extraction_source", "linebet_scraper")
+        raw_data.setdefault("template_version", "1.0.0")
+        return raw_data
 
     # ------------------------------------------------------------------
     # Introspection / framework compliance

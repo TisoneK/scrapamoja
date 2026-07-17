@@ -1,0 +1,35 @@
+[
+  {
+    "profile": "default_chromium",
+    "status": 203,
+    "final_url": "https://linebet.com/en/block",
+    "title": "",
+    "blocked": true,
+    "captured_count": 44,
+    "captures_file": "/home/z/my-project/download/linebet_probe/captures_default_chromium.json"
+  },
+  {
+    "profile": "chrome_124_linux",
+    "status": 203,
+    "final_url": "https://linebet.com/en/block",
+    "title": "",
+    "blocked": true,
+    "captured_count": 45,
+    "captures_file": "/home/z/my-project/download/linebet_probe/captures_chrome_124_linux.json"
+  },
+  {
+    "profile": "chrome_124_win10",
+    "status": 203,
+    "final_url": "https://linebet.com/en/block",
+    "title": "",
+    "blocked": true,
+    "captured_count": 44,
+    "captures_file": "/home/z/my-project/download/linebet_probe/captures_chrome_124_win10.json"
+  },
+  {
+    "profile": "firefox_125_linux",
+    "error": "launch failed: BrowserType.launch: Executable doesn't exist at /home/z/.cache/ms-playwright/firefox-1497/firefox/firefox\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551 Looks like Playwright was just installed or updated.       \u2551\n\u2551 Please run the following command to download new browsers: \u2551\n\u2551                                                            \u2551\n\u2551     playwright install                                     \u2551\n\u2551                                                            \u2551\n\u2551 <3 Playwright Team                                         \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d",
+    "captured_count": 0,
+    "captures_file": "/home/z/my-project/download/linebet_probe/captures_firefox_125_linux.json"
+  }
+]

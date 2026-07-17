@@ -41,27 +41,53 @@ logger = logging.getLogger(__name__)
 
 # Map known API path fragments to logical endpoint types. We use these
 # to route a captured response to the right extractor.
+#
+# These path fragments come from REAL captured traffic against
+# linebet.com (see scripts/linebet_probe_profiles.py +
+# scripts/linebet_capture_real_bodies.py output in
+# /home/z/my-project/download/linebet_probe/). The actual sportsbook
+# data endpoints (events, odds) live somewhere under /bff-api/ but the
+# sandbox IP is WAF-blocked before the SPA can fire them — so the
+# sports-data endpoint names below are still best-effort guesses based
+# on the prefixes we DID observe. The extractor degrades gracefully to
+# "no events" if the path doesn't match.
 _ENDPOINT_PREMATCH = "prematch"
 _ENDPOINT_LIVE = "live"
 _ENDPOINT_MARKET = "market"
-_ENDPOINT_MENU = "menu"
-_ENDPOINT_INFO = "info"
+_ENDPOINT_CONFIG = "config"        # /bff-api/config/... — no events
+_ENDPOINT_ANALYTICS = "analytics"  # /fatman-api/, /analytics-module-api/ — no events
 _ENDPOINT_UNKNOWN = "unknown"
 
 
 def _classify_endpoint(url: str) -> str:
-    """Classify a captured URL into a logical endpoint type."""
+    """Classify a captured URL into a logical endpoint type.
+
+    Based on the real API prefixes observed in captured traffic:
+    /bff-api/, /fatman-api/, /analytics-module-api/.
+    """
     u = url.lower()
-    if "/api/live" in u or "/api/inplay" in u:
-        return _ENDPOINT_LIVE
-    if "/api/list" in u or "/api/prematch" in u or "/api/sport" in u:
+
+    # Noise endpoints first (they're a subset of bff-api sometimes)
+    if "/fatman-api/" in u or "/analytics-module-api/" in u:
+        return _ENDPOINT_ANALYTICS
+    if "/bff-api/config/" in u or "/bff-api/contacts" in u:
+        return _ENDPOINT_CONFIG
+
+    # Sports data endpoints — these are the paths we EXPECT to see once
+    # the SPA gets past the WAF. They haven't been verified against real
+    # traffic (the sandbox IP is blocked), so we keep the matching broad.
+    if "/bff-api/" in u:
+        # Heuristics on the bff-api sub-path
+        if any(p in u for p in ("/live", "/inplay", "/in-play")):
+            return _ENDPOINT_LIVE
+        if any(p in u for p in ("/list", "/prematch", "/sport", "/fixture", "/event", "/match")):
+            return _ENDPOINT_PREMATCH
+        if any(p in u for p in ("/bet", "/market", "/odds")):
+            return _ENDPOINT_MARKET
+        # Unknown bff-api endpoint — try the prematch extractor since
+        # most bff-api responses are list-shaped.
         return _ENDPOINT_PREMATCH
-    if "/api/bet" in u or "/api/market" in u or "/api/odds" in u:
-        return _ENDPOINT_MARKET
-    if "/api/menu" in u:
-        return _ENDPOINT_MENU
-    if "/api/info" in u or "/api/translations" in u:
-        return _ENDPOINT_INFO
+
     return _ENDPOINT_UNKNOWN
 
 
@@ -217,6 +243,11 @@ class LinebetExtractionRules:
         if not payload:
             return []
 
+        # Config + analytics endpoints never contain events — skip them
+        # explicitly so we don't waste time walking their payloads.
+        if endpoint in (_ENDPOINT_CONFIG, _ENDPOINT_ANALYTICS, _ENDPOINT_UNKNOWN):
+            return []
+
         try:
             if endpoint == _ENDPOINT_PREMATCH:
                 return self._extract_prematch(payload, captured.url)
@@ -224,7 +255,6 @@ class LinebetExtractionRules:
                 return self._extract_live(payload, captured.url)
             if endpoint == _ENDPOINT_MARKET:
                 return self._extract_market_detail(payload, captured.url)
-            # menu / info / unknown endpoints don't produce events directly.
             return []
         except Exception as exc:  # noqa: BLE001 — defensive projection
             logger.warning("Extraction failed for %s: %s", captured.url, exc)
