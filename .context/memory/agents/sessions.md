@@ -82,3 +82,21 @@ past entries — append corrections instead.
   6. Path sweep: refreshed the memory-dir READMEs (`memory/secrets/README.md`, `memory/reviews/README.md`, `memory/flaws/README.md`) from the new templates so path references now point to `.context/memory/<dir>/` not `.context/<dir>/`. Patched the top template block in `memory/agents/sessions.md` (added `Core:` field, fixed the `Report:` path to `.context/memory/reviews/`). Historical log entries left untouched per the append-only rule.
 - **Open items:** none for this commit. Railway deployment setup lands in a separate project-mode commit (different surface, different commit prefix).
 - **Report:** no review report — this was a migration session, not a code review. Summary delivered in chat.
+
+---
+## 2026-07-17 — Session 8
+- **Agent:** Super Z | **Model:** GLM (Z.ai cloud sandbox, Linux x86_64) | **Role:** engineer | **Core:** 0.2.0
+- **Task:** Follow-up to Session 7. Two parts: (a) fix the Railway deploy crash the user reported (the build failed because every gunicorn worker died with `PermissionError` on startup — `src/core/snapshot/__init__.py:_initialize_module()` runs `os.makedirs("config")` + `os.makedirs("data/snapshots")` at IMPORT time, but `/app` was root-owned and `appuser` couldn't write to it); (b) record in `.context/memory` that Scrapamoja is now linked to Railway via GitHub integration, plus the Railway plan limits (8 vCPU / 8 GB per-replica cap) the user shared.
+- **Commits:** 2 (pending push) — one project-surface `fix(deploy):` for the Dockerfile, one `.context/`-surface `chore(context):` for the memory updates.
+- **Outcome:** done —
+  - (a) Dockerfile fix: pre-create `config/`, `data/snapshots/`, `output/`, `logs/`, `.checkpoints/` AND `chown -R appuser:appuser /app` (the directory ITSELF, not just its contents — that was the bug). The original `WORKDIR /app` created `/app` as root, and `chown -R appuser:appuser /app/data` only covered the `data/` subtree. Pre-creation makes the import-time `os.makedirs(..., exist_ok=True)` a no-op; the `/app` chown covers any future runtime-created dirs. Added a long comment in the Dockerfile explaining why (so the next agent doesn't revert it).
+  - (b) Memory updates (all under `.context/memory/`):
+    - `system/environments.md` — new "Railway" block: GitHub integration active (pushes to `main` auto-deploy), plan limit 8 vCPU / 8 GB, Dockerfile builder, runtime = python:3.12-slim + Playwright + Chromium + non-root appuser, volume mount needed at `/app/data` (NOT yet mounted — user needs to add it), full quirks list including the import-time makedirs crash and the no-Docker-on-this-sandbox caveat.
+    - `inefficiencies/log.md` — appended a 2026-07-17 entry: root cause = product code smell (import-time filesystem writes with relative paths) + Dockerfile gap (chowned `/app/data` not `/app`); workaround = Dockerfile pre-create + chown; prevent-next-time = always chown WORKDIR itself, and grep for module-level `os.makedirs` when smoke-testing a Dockerfile without Docker.
+    - `plans/decisions.md` — appended ADR-1: "Deploy the FastAPI control plane to Railway via Dockerfile". Records what's deployed (API only, not UI), what's not (UI as separate static site, scrapes as separate jobs), volume requirement, and constraints future agents must respect (don't add UI build to this Dockerfile; if swapping SQLite→Postgres, drop the Volume + ADAPTIVE_DB_PATH).
+    - `tasks/backlog.md` — appended: source-level fix for `_initialize_module()` (make lazy or use absolute paths; recommend lazy). Medium severity. Includes the grep finding (13 `os.makedirs` calls in src/, only this one at import time).
+- **Open items:**
+  - Push both commits to `origin/main` (Railway will auto-redeploy).
+  - User should add a Railway Volume at `/app/data` for SQLite persistence (not yet done — flagged in the new environments.md block).
+  - Source-level fix for `_initialize_module()` is in backlog — not blocking, but should be picked up before the next non-container deploy target.
+- **Report:** no review report — this was a deploy-fix + memory session. Summary delivered in chat.

@@ -39,6 +39,23 @@ block (and its "last verified" date) every time you run on it again.
   - Network/filesystem-writing uv commands were run with the sandbox disabled (they need internet + writes to `~/.cache/uv`, `~/.local`).
 
 ---
+## Railway (deployment target — linked 2026-07-17, session 7)
+- **Identify by:** service URL pattern `*.up.railway.app`, deploy triggered by pushes to `TisoneK/scrapamoja` `main` (Railway GitHub integration), Dockerfile builder.
+- **Linkage:** **GitHub integration active** — `TisoneK/scrapamoja` repo is linked to the Railway project. Pushes to `main` trigger automatic redeploy. The Railway GitHub app has read access to the repo's webhooks/contents.
+- **Plan limit:** **8 vCPU / 8 GB RAM** (per-replica cap on the current plan). Replica resource allocation is configurable per-service up to that ceiling — don't over-provision; the FastAPI control plane + Chromium needs ~1–2 GB and ~1 vCPU under normal load.
+- **Builder:** Dockerfile (`Dockerfile` at repo root; `railway.json` pins `builder: DOCKERFILE` + healthcheck at `/health` + ON_FAILURE restart, 5 retries).
+- **Runtime:** `python:3.12-slim-bookworm` base, multi-stage build. Builder stage installs deps from `requirements.txt` + `.[prod]` extras (gunicorn, uvicorn). Runtime stage copies the venv, installs `playwright install --with-deps chromium` (~500 MB layer), runs as non-root `appuser` (uid 10001), starts gunicorn with uvicorn workers bound to `0.0.0.0:$PORT`.
+- **Persistent volume:** mount at `/app/data` for the SQLite DB (`ADAPTIVE_DB_PATH=/app/data/adaptive.db`). Without a volume, every redeploy wipes feature flags + failure events (the DB is rebuilt from `_seed_demo_flags()` on each boot). Volume status: **not yet mounted as of session 7/8** — user needs to add it in the Railway dashboard.
+- **Verified commands:** none yet locally on this sandbox (no Docker available here — Railway is the build host). The Dockerfile has been smoke-tested at the *app* level: `python3 -m venv + pip install -r requirements.txt + import src.api.main:app` succeeds, and `GET /health` returns `200 {"status":"ok","service":"scrapamoja-api"}` via `fastapi.testclient.TestClient`.
+- **Quirks / gotchas:**
+  - **Import-time `os.makedirs` crash (fixed session 8).** `src/core/snapshot/__init__.py:_initialize_module()` runs at IMPORT time and calls `os.makedirs("data/snapshots")` + `os.makedirs("config")` with RELATIVE paths (resolved against WORKDIR `/app`). The non-root `appuser` couldn't write to `/app` itself (only `/app/data` was chowned), so every gunicorn worker crashed on startup with `PermissionError` and the `/health` healthcheck timed out. Fix in `Dockerfile`: pre-create `config/`, `data/snapshots/`, `output/`, `logs/`, `.checkpoints/` AND `chown -R appuser:appuser /app` (the directory itself, not just its contents). Source-level fix (make `_initialize_module` lazy or use absolute paths) is tracked in `tasks/backlog.md`.
+  - **Chromium is memory-hungry.** Don't run scrape jobs inside the API service under load — each browser spawn costs ~500 MB. Run scrapes as `railway run python -m src.main ...` jobs or as a separate worker service.
+  - **Plan headroom is large (8 vCPU/8 GB).** Default `GUNICORN_WORKERS=2` is conservative; safe to bump to 4–8 for the control plane under real traffic. Reserve headroom for Chromium if scrapes run in-process.
+  - **Healthcheck start period.** Dockerfile `HEALTHCHECK --start-period=30s` + `railway.json` `healthcheckTimeout: 30`. First deploy may take ~5–8 min for the Playwright+Chromium layer; subsequent builds hit cache.
+  - **No `docker` on this Z.ai sandbox.** Local `docker build` verification is not possible from here — Railway is the build host. Smoke-test the *app* layer locally with venv + TestClient instead.
+- **Last verified:** 2026-07-17 (session 8 — Dockerfile fix for the import-time makedirs crash).
+
+---
 ## Z.ai cloud sandbox (last verified 2026-07-14, session 5)
 - **Identify by:** ephemeral container hostname (e.g. `c-6a55bf2b-…`), workspace `/home/z/my-project`, OS user `z`. Hostname changes per session — identify by the workspace path + Debian trixie + ephemeral hostname pattern, not a stable hostname.
 - **OS:** Debian GNU/Linux 13 (trixie), x86_64, kernel 5.10.134

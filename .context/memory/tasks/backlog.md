@@ -115,3 +115,24 @@ don't remove the line.
       `FileHandler('template_cli.log')` unconditionally, so any CLI invocation litters
       the caller's cwd (untracked file in the repo root when run from there). Route it
       to the project's log/data dir or make it opt-in. Low.
+
+- [ ] **Fix import-time `os.makedirs` in `src/core/snapshot/__init__.py`** (added 2026-07-17 by Super Z, session 8) —
+      `_initialize_module()` (lines 246–260) runs at MODULE IMPORT time and calls
+      `os.makedirs("data/snapshots")` + `os.makedirs("config")` with RELATIVE paths.
+      This crashed the first Railway deploy: the container runs as non-root `appuser`
+      and `/app` was root-owned, so every gunicorn worker died with `PermissionError`
+      on startup and the `/health` healthcheck timed out. Dockerfile-only fix is in
+      place (pre-create the dirs + `chown -R appuser:appuser /app`), but the root
+      cause is the import-time side effect. Fix options (pick one):
+        (a) Make `_initialize_module()` lazy — call it from `SnapshotManager.__init__`
+            or a `get_snapshot_manager()` first-call hook, not at import time.
+        (b) Use absolute paths under a single writable root (e.g. `data/snapshots/`
+            resolved via `Path(__file__).parents[N] / "data" / "snapshots"`).
+        (c) Wrap the makedirs in try/except PermissionError + log a warning, so a
+            read-only cwd doesn't crash the import (weakest option — hides the
+            real misconfiguration).
+      Recommend (a) — import-time filesystem writes are a code smell regardless of
+      deployment target. Also sweep `src/` for other module-level `os.makedirs` /
+      `Path(...).mkdir` calls (grep found 13 total, but only this one runs at import
+      time — the rest are inside functions). Medium. See `inefficiencies/log.md`
+      2026-07-17 entry + ADR-1 in `plans/decisions.md`.
