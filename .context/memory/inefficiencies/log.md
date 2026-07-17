@@ -85,3 +85,34 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
    suspect that the captured responses are from the technical-pages /
    block page (not the main app) and check the captured URLs against
    the known sports-data endpoint patterns.
+
+---
+## 2026-07-17 — Claude Opus 4.8 (Session 11, local agent)
+
+- **Problem 1 — both local browser surfaces egress from a US datacenter IP.**
+  Assumed a *local* agent on Baos-Mac-mini would present the user's residential
+  IP (Sessions 9/10 blamed the WAF on the Z.ai datacenter IP). Wrong: BOTH
+  `mcp__Claude_Browser__*` (in-app cloud browser) AND `mcp__claude-in-chrome__*`
+  ("Claude in Chrome") egress from `135.180.70.225`, flagged US, and hit
+  linebet's geo-block (203 → `/en/block`). Neither routes through the user's
+  home network. Cost: ~2 browser round-trips confirming the block.
+  - **Prevent next time:** a local Claude Code agent does NOT get the user's
+    residential IP for free — the browser tools egress from Anthropic infra
+    (US). Reaching a geo/WAF-blocked site requires an explicit proxy the USER
+    supplies (VPN on their machine, or a proxy endpoint). Don't assume "local =
+    residential." Also: linebet's block IS geo-based here (names the country),
+    distinct from the Session 9 sandbox block which read as datacenter-IP
+    fingerprinting — both can be true depending on the egress.
+
+- **Problem 2 — pytest async config is inert (repo config bug).** New
+  `async def` tests errored with "async def not natively supported" despite
+  `asyncio_mode = "auto"` in `pyproject.toml`. Root cause: `pytest.ini` exists
+  and shadows pyproject, but its section header is `[tool:pytest]` (setup.cfg
+  style) so pytest reads NO config from it either — asyncio_mode never applies.
+  (Already a known backlog item.) Cost: ~1 test-run cycle.
+  - **Prevent next time:** in this repo, mark async tests explicitly with
+    `@pytest.mark.asyncio` (the established convention — see
+    `tests/unit/test_feature_flag_service.py`); do not rely on
+    `asyncio_mode=auto` until the `pytest.ini` header bug is fixed. Custom
+    markers (`integration`/`unit`) also warn as "unknown" for the same reason,
+    but `-m "not integration"` selection still works.

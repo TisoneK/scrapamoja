@@ -195,3 +195,32 @@ don't remove the line.
       "residential-IP HAR" backlog item) and asserting the classifier outputs
       `ExtractionMode.HYBRID` with the right patterns. HIGH — this is what
       the whole linebet exercise was building toward.
+
+---
+- [ ] **Migrate stealth + navigation onto the canonical `src/network/proxy` ProxyManager** (added 2026-07-17 by Claude Opus 4.8, Session 11) —
+      Session 11 built the canonical proxy layer in `src/network/proxy/`
+      (ProxyEndpoint + ProxyManager + providers + verify + config) and wired the
+      browser-launch / HAR / httpx chokepoints to it, but INTENTIONALLY left the
+      two pre-existing proxy systems in place to avoid a risky rewrite:
+      `src/stealth/proxy_manager.py` (residential rotation, wired into
+      `src/stealth/coordinator.py`) and `src/navigation/proxy_manager.py`.
+      There are also two duplicate `ProxySettings` classes
+      (`src/browser/models/proxy.py` and `src/browser/models/configuration.py`)
+      plus the flat `config.proxy_server/username/password` fields the browser
+      session manager falls back to. Follow-up: point `stealth/coordinator` and
+      `navigation` at the canonical ProxyManager (adapters already exist:
+      `ProxyEndpoint.from_stealth_session` / `.from_navigation_config` /
+      `.from_browser_proxysettings`), then deprecate the duplicate ProxySettings
+      classes and the flat fields. Re-validate the stealth pipeline's tests
+      (`tests/stealth/test_proxy_manager.py`). MEDIUM — architectural; do
+      deliberately, one caller at a time, with tests green.
+- [ ] **Capture linebet HAR through the Kenyan ngrok proxy (Stage 4)** (added 2026-07-17 by Claude Opus 4.8, Session 11) —
+      The proxy abstraction is done; the remaining step is the actual capture,
+      blocked on the user standing up a `gost` HTTP proxy on their Kenyan Windows
+      box exposed via `ngrok tcp`. When they send host:port + basic-auth
+      user/pass: `build_proxy_manager({...kenya endpoint + *linebet.com routing})`,
+      `verify_proxy` (assert countryCode KE), then `HarExporter(url=linebet,
+      proxy=kenya)` → 200 not 203 → HAR → `HarReplayer` + normalize → commit the
+      normalized snapshot under `src/sites/linebet/snapshots/`. This finally
+      yields the real sports/odds endpoints + headers and feeds the classifier.
+      See `tasks/current.md` for the exact resume steps. HIGH.
