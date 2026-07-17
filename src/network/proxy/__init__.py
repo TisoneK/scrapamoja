@@ -24,6 +24,7 @@ actually changes our IP.
 
 from __future__ import annotations
 
+from .config import DEFAULT_PROXY_CONFIG, build_endpoint, build_proxy_manager
 from .manager import (
     NoHealthyProxyError,
     ProxyManager,
@@ -50,6 +51,10 @@ __all__ = [
     "RotationStrategy",
     "RoutingRule",
     "NoHealthyProxyError",
+    # config
+    "build_proxy_manager",
+    "build_endpoint",
+    "DEFAULT_PROXY_CONFIG",
     # providers
     "ProxyProvider",
     "DirectProvider",
