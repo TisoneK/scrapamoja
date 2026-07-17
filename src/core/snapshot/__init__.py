@@ -106,6 +106,13 @@ from .handlers import (
     MonitoringSnapshot,
     SnapshotCoordinator
 )
+from .normalize import (
+    normalize_captured_response,
+    normalize_capture_list,
+    NormalizerConfig,
+    DEFAULT_NORMALIZER_CONFIG,
+)
+from .diff import diff_snapshots
 
 # Version information
 __version__ = "1.0.0"
@@ -175,14 +182,21 @@ __all__ = [
     
     # Handlers
     "BrowserSnapshot",
-    "SessionSnapshot", 
+    "SessionSnapshot",
     "ScraperSnapshot",
     "SelectorSnapshot",
     "ErrorSnapshot",
     "RetrySnapshot",
     "MonitoringSnapshot",
     "SnapshotCoordinator",
-    
+
+    # Normalization + diff (post-processing on captured network responses)
+    "normalize_captured_response",
+    "normalize_capture_list",
+    "NormalizerConfig",
+    "DEFAULT_NORMALIZER_CONFIG",
+    "diff_snapshots",
+
     # Version
     "__version__",
     "__author__"

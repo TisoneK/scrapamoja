@@ -1,47 +1,41 @@
-"""HAR exporter — record a browser session and dump it as a HAR file.
+"""Linebet-specific HAR exporter — thin wrapper around the framework module.
 
-This is the **production** solution to Linebet's WAF block. The sandbox
-/ datacenter IPs are blocked, but a residential IP is not. So the
-workflow is:
+The framework module :mod:`src.network.har.export` is site-agnostic.
+This script just pre-fills the Linebet-specific defaults (URLs,
+user-agent, scroll behaviour) so an operator can run:
 
-  1. Operator (with a residential IP) runs this script. It launches a
-     REAL Playwright browser, navigates through linebet.com, and exports
-     the full network trace as a HAR file.
-  2. Operator ships the HAR file to the developer (or commits it to the
-     repo under src/sites/linebet/snapshots/raw/).
-  3. Developer runs ``python -m src.sites.linebet.scripts.har_replay
-     <input.har>`` to extract events from the HAR — no live browser
-     needed.
+    python -m src.sites.linebet.scripts.har_export --output linebet.har
 
-Run as:
-    python -m src.sites.linebet.scripts.har_export --output my_session.har
+For full options, use the framework CLI directly:
 
-Options:
-    --output PATH       Where to write the HAR file (default: linebet.har)
-    --url URL           Entry URL (default: https://linebet.com/en)
-    --live              Also visit /en/live after the home page
-    --scroll N          Number of times to scroll the fixtures list
-    --settle SECONDS    How long to wait after each navigation
-    --headed            Show the browser window (useful if a CAPTCHA
-                        needs to be solved manually)
+    python -m src.network.har.export --url https://linebet.com/en --output linebet.har
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
 import sys
 from pathlib import Path
 
 from ._common import output_dir
 
-from playwright.async_api import async_playwright
+# Ensure repo root is on sys.path when run as a script
+from ._common import ensure_repo_on_path
+ensure_repo_on_path()
+
+from src.network.har import HarExporter, HarExporterConfig  # noqa: E402
 
 
-async def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Linebet HAR exporter. Records a Playwright browser session "
+            "against linebet.com as a HAR file. Run this from a RESIDENTIAL "
+            "IP — the sandbox / datacenter IP is WAF-blocked."
+        ),
+    )
     parser.add_argument("--output", type=Path, default=Path("linebet.har"),
-                        help="Where to write the HAR file")
+                        help="Where to write the HAR file (default: linebet.har)")
     parser.add_argument("--url", default="https://linebet.com/en",
                         help="Entry URL (default: https://linebet.com/en)")
     parser.add_argument("--live", action="store_true",
@@ -54,64 +48,34 @@ async def main() -> int:
                         help="Show the browser window (useful for manual CAPTCHA solving)")
     args = parser.parse_args()
 
+    # Resolve output relative to the linebet output dir if not absolute
     if not args.output.is_absolute():
         args.output = output_dir("linebet_har") / args.output
 
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=not args.headed)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1536, "height": 864},
-            locale="en-US",
-            timezone_id="Europe/London",
-            record_har_path=str(args.output),
-            record_har_content="embed",  # include response bodies in the HAR
+    import asyncio
+    config = HarExporterConfig(
+        url=args.url,
+        output=args.output,
+        live_url="https://linebet.com/en/live" if args.live else None,
+        scroll_count=args.scroll,
+        settle_seconds=args.settle,
+        headless=not args.headed,
+    )
+    summary = asyncio.run(HarExporter(config).run())
+
+    print(f"\nHAR written: {summary['output']} ({summary['har_bytes']:,} bytes)")
+    if summary.get("waf_block_detected"):
+        print(
+            "WARNING: WAF block detected during the session. The HAR will only "
+            "contain the technical-pages / block-page API calls, not the actual "
+            "sportsbook data. Re-run from a residential IP (or use --headed and "
+            "solve the CAPTCHA if shown).",
+            file=sys.stderr,
         )
-        page = await context.new_page()
-
-        try:
-            print(f"Navigating to {args.url} ...", flush=True)
-            resp = await page.goto(args.url, wait_until="domcontentloaded", timeout=60000)
-            if resp and resp.status == 203:
-                print(
-                    f"WARNING: WAF block (status=203). The HAR will only "
-                    "contain the technical-pages API calls. To capture the "
-                    "actual sports data, run this script from a residential "
-                    "IP (or use --headed and solve the CAPTCHA if shown).",
-                    flush=True,
-                )
-
-            # Scroll to trigger lazy-loaded fixtures
-            for i in range(args.scroll):
-                await page.evaluate("window.scrollBy(0, window.innerHeight * 0.8)")
-                await asyncio.sleep(1.5)
-                print(f"  scrolled {i+1}/{args.scroll}", flush=True)
-
-            print(f"Waiting {args.settle}s for API calls to settle...", flush=True)
-            await asyncio.sleep(args.settle)
-
-            if args.live:
-                live_url = "https://linebet.com/en/live"
-                print(f"Navigating to {live_url} ...", flush=True)
-                await page.goto(live_url, wait_until="domcontentloaded", timeout=60000)
-                for i in range(args.scroll):
-                    await page.evaluate("window.scrollBy(0, window.innerHeight * 0.8)")
-                    await asyncio.sleep(1.5)
-                await asyncio.sleep(args.settle)
-
-        finally:
-            await context.close()  # this flushes the HAR to disk
-            await browser.close()
-
-    size = args.output.stat().st_size
-    print(f"\nHAR written: {args.output} ({size:,} bytes)", flush=True)
-    print(f"Replay with: python -m src.sites.linebet.scripts.har_replay "
-          f"{args.output} <output.json>", flush=True)
+    print(f"\nReplay with: python -m src.sites.linebet.scripts.har_replay "
+          f"{summary['output']} <output.json>")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    sys.exit(main())

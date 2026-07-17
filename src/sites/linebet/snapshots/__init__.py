@@ -1,27 +1,25 @@
-"""Linebet snapshot package — normalizes captured API responses for diffing.
+"""Linebet snapshot package — fixtures + thin re-exports of the framework API.
 
-Public API:
-
-    from src.sites.linebet.snapshots.normalize import (
-        normalize_captured_response,
-        normalize_capture_list,
-    )
-    from src.sites.linebet.snapshots.diff import diff_snapshots
-
-CLI:
-
-    # Normalize a raw capture file into a stable snapshot
-    python -m src.sites.linebet.snapshots.normalize <input.json> <output.json>
-
-    # Diff two normalized snapshots to detect API drift
-    python -m src.sites.linebet.snapshots.diff <old.json> <new.json>
+The normalizer + diff logic lives in the framework now
+(:mod:`src.core.snapshot.normalize` + :mod:`src.core.snapshot.diff`).
+This package just re-exports them so existing linebet code that did
+``from src.sites.linebet.snapshots.normalize import ...`` keeps working,
+and provides a home for the committed linebet fixtures under
+``raw/`` and ``normalized/``.
 """
 
-from .normalize import normalize_captured_response, normalize_capture_list
-from .diff import diff_snapshots
+# Re-export the framework API for backward compatibility with any
+# existing linebet code that imported from here.
+from src.core.snapshot.normalize import (  # noqa: F401
+    normalize_captured_response,
+    normalize_capture_list,
+    NormalizerConfig,
+)
+from src.core.snapshot.diff import diff_snapshots  # noqa: F401
 
 __all__ = [
     "normalize_captured_response",
     "normalize_capture_list",
+    "NormalizerConfig",
     "diff_snapshots",
 ]
