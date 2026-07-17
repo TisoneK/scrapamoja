@@ -136,3 +136,42 @@ don't remove the line.
       `Path(...).mkdir` calls (grep found 13 total, but only this one runs at import
       time — the rest are inside functions). Medium. See `inefficiencies/log.md`
       2026-07-17 entry + ADR-1 in `plans/decisions.md`.
+
+---
+- [ ] **Linebet: capture a real HAR from a residential IP and discover the actual sports/odds endpoints** (added 2026-07-17 by Super Z, Session 9 continuation) —
+      The Linebet scraper is built and tested, but the actual sportsbook-data
+      endpoints (`/bff-api/sports/...` or whatever they are) have NOT been
+      verified against real traffic because the sandbox IP is WAF-blocked
+      (HTTP 203 → /en/block) before the SPA can fire them. Probed 3 browser
+      profiles + 3 free US proxies + 5 alt entry points — all blocked at the
+      nginx edge, so this is datacenter-IP fingerprinting, NOT geo-blocking.
+      Action needed: run `python -m src.sites.linebet.scripts.har_export
+      --output my_session.har --live` from a RESIDENTIAL IP (or a paid
+      residential-proxy service like Bright Data / Soax), then commit the HAR
+      to `src/sites/linebet/snapshots/raw/` and replay it with `python -m
+      src.sites.linebet.scripts.har_replay <har> <out.json> --normalize
+      <snapshot.json>`. Once we see the real sports-data endpoint URLs +
+      JSON shape, update `src/sites/linebet/extraction/rules.py::_classify_endpoint`
+      + the `_extract_prematch` / `_extract_live` / `_extract_market_detail`
+      methods to match the real schema. The extractor is already defensive
+      (multi-key `_get_first` lookups + shape heuristics), so it will likely
+      "just work" once the right endpoints are captured — but the
+      `_SPORT_ALIASES` map and `_MARKET_NAME_PATTERNS` regex may need
+      tightening against real data. HIGH — blocks real-world use.
+- [ ] **Linebet: implement the httpx-based replay mode** (added 2026-07-17 by Super Z, Session 9 continuation) —
+      `ENABLE_REPLAY_MODE` is plumbed in `config.py` but the actual httpx
+      re-issue path (take a captured request, forward cookies + the 14
+      `REPLAY_FORWARD_HEADERS` we observed in real traffic, re-issue via
+      httpx, return the response) is not implemented. Would let us poll
+      Linebet sub-second without relaunching the browser each time. Build
+      it once the residential-IP HAR above gives us a known-good request
+      to replay. MEDIUM.
+- [ ] **Linebet: register `LinebetScraper` with the global `ScraperRegistry` at app startup** (added 2026-07-17 by Super Z, Session 9 continuation) —
+      `src/sites/linebet/__init__.py::register(registry)` exists and works,
+      but nothing calls it. The CLI (`python -m src.main linebet ...`) is
+      registered in `src/main.py::SITE_CLIS`, but the central
+      `ScraperRegistry` instance (used by the FastAPI control plane + the
+      validation suite) does NOT have Linebet registered. Wire it up
+      wherever the other sites (wikipedia, github, flashscore) get
+      registered. LOW — the CLI works without it, but registry-driven
+      discovery won't find Linebet until this is done.
