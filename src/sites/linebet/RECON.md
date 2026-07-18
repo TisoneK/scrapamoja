@@ -334,3 +334,21 @@ its `Value` is a list of games (teams/scores/dates) = the recent-matches data.
 If so, wire an H2H fetch as `fetch("sports_short", root, extra_params={"sports":<SI>,"champs":<champId>,"groupChamps":"true"})` and parse the event list. httpx-replayable
 like the other feeds (base headers + cookies). The champ id comes from the match
 URL (`/<champId>-slug/<eventId>-slug`) — already parsed for GetGameZip.
+
+### H2H candidates — TESTED, none carry H2H data (2026-07-18)
+
+Fetched + decoded each hover/click endpoint; NONE is the head-to-head source:
+- `GetGameZip?id=` → markets only (`GE`/`SG`/`MEC`), no H2H fields.
+- `GetSportsShortZip?sports=3&champs=75093&groupChamps=true` → the **sports menu
+  list** (`Value[82]`, keys `I`(sport id)/`N`(name)/`R`/`C`, e.g. `{"I":1,"N":"Football"}`)
+  — NOT games, NOT H2H. It's the left-sidebar sport tree.
+- `WebGetTopChampsZip` → top champs list. `expressDay` → express. `event.json` →
+  fatman analytics `{"ts":…}`.
+
+**Conclusion:** these are the SPA's general navigation refresh, not the H2H data.
+The real head-to-head "recent matches" (previous meetings / team form) is a
+SEPARATE, still-unidentified SW-mediated request. To isolate it: in DevTools open
+the H2H section so it renders past matches, then find the request whose RESPONSE
+contains match history (opponent names + dates + final scores) — likely a
+`service-api/…statistic…` path or a stats host. Filter Network by `statistic` or
+sort by response Size (H2H data is a few KB; ignore the ~0.2 kB analytics pings).
