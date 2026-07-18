@@ -328,3 +328,19 @@ don't remove the line.
       handling; 1win.pro is a DIFFERENT platform (200 HTML, no service-api) — exclude.
       See `src/sites/linebet/RECON.md` "Generalizes to the 1xbet/BetB2B family". This
       supersedes the linebet-only build item into a family-wide one. HIGH.
+
+---
+- [ ] **Lift the odds-enrichment cap + confirm markets across all 8 skins** (added 2026-07-18 by Claude Opus 4.8, Session 18) —
+      `GetGameZip` odds enrichment works (commit `3aad7c6`): linebet basketball
+      prematch → Orlando Magic v Boston Celtics = 39 markets / 238 selections,
+      verified live. It is capped by `skin.max_odds_fetch` (default 20) so a big
+      list doesn't fan out to hundreds of per-match requests. Follow-ups:
+      (1) decide the production cap / add pagination or concurrency (currently
+      sequential + rate-limited) so a full card (100+ events) is fetchable without
+      a huge wall-clock; consider `asyncio.gather` with a semaphore honouring the
+      client rate limit. (2) Confirm markets>0 on the other 7 skins (helabet,
+      megapari, melbet, betwinner, paripesa, 888starz, 22bet) — they share the
+      same `GetGameZip` endpoint + schema so it should "just work," but the
+      per-skin `partner`/`gr` placeholders may need the real values (see the
+      existing per-skin partner/gr backlog item). Run `validate_live --skin <x>`
+      through the proxy for each. Medium.
