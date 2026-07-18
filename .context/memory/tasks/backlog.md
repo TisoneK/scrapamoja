@@ -48,6 +48,16 @@ don't remove the line.
       fastapi 0.139: a route's return annotation (`FailureService`) isn't a valid Pydantic
       response field. Add `response_model=None` to the decorator or fix the annotation.
       Medium; may be version-sensitive (surfaced with newly-installed fastapi).
+- [ ] **Fix DOM extraction to extract markets/odds/scores from BetB2B Vue grid** (added 2026-07-18 by GitHub Copilot) —
+      Current DOM extraction finds events (championships + team names) but `markets=0` across
+      all 8 skins. The Vue.js rendered grid likely uses non-standard element structures or
+      the selectors in `dom_selectors` don't match the actual rendered cells. All 3/3 working
+      skins hit this (linebet, helabet, megapari). Medium-High priority — without markets the
+      scraper produces event stubs with no odds.
+- [ ] **Investigate paripesa 0 basketball events** (added 2026-07-18 by GitHub Copilot) —
+      Paripesa boots successfully (cookie harvest, 2 captures) but produces 0 events from
+      both live and prematch. Could be empty page for basketball, different Vue component
+      IDs, or a timing issue. Low priority.
       Repro: `.venv/bin/python -c "import src.selectors.adaptive.api.middleware.rate_limiting"`.
 - [ ] **Test suite cannot run to completion on this machine — ~24% of tests hang** (added 2026-07-12 by Claude Code) —
       With a Python 3.12 venv + deps + playwright browsers installed, `pytest` collected

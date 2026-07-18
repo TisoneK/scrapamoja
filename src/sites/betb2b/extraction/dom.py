@@ -88,10 +88,15 @@ def _build_page_script(selectors: DOMSelectors) -> str:
     championship. For each game row it pulls the team names (trying each
     selector in order), the live score (optional), and the odds cells.
     """
-    team_sels = ", ".join(f'"{s}"' for s in selectors.team_names)
-    score_sels = ", ".join(f'"{s}"' for s in selectors.team_scores)
-    odds_sels = ", ".join(f'"{s}"' for s in selectors.odds)
-    time_sels = ", ".join(f'"{s}"' for s in selectors.start_time)
+    def _js_str(s: str) -> str:
+        """Quote a string for JS embedding, escaping internal double quotes."""
+        esc = s.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{esc}"'
+
+    team_sels = ", ".join(_js_str(s) for s in selectors.team_names)
+    score_sels = ", ".join(_js_str(s) for s in selectors.team_scores)
+    odds_sels = ", ".join(_js_str(s) for s in selectors.odds)
+    time_sels = ", ".join(_js_str(s) for s in selectors.start_time)
     live_pat = selectors.live_class_pattern
 
     return r"""

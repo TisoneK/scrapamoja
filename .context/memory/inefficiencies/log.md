@@ -28,6 +28,14 @@ if literally nothing slowed you down.
 - **Cost:** ~10 min of repeated artifact cleanup + a stray `src/sites/templates/` dir created as a side effect of the (buggy) scaffolder path.
 - **Cause:** Product code wrote captures/logs to bare filenames in the process cwd.
 - **Workaround / fix:** Captures fixed in-product (`681f3da` — now `data/snapshots/`, gitignored). CLI log file backlogged. Ran CLI smoke tests from the scratchpad dir to keep the repo clean.
+
+---
+## 2026-07-18 — GitHub Copilot / DeepSeek V4 Flash Free (Session 3)
+- **Problem:** `_build_page_script()` in `dom.py` used naive `f'"{s}"'` quoting for CSS selectors, producing broken JS when a selector contained double quotes (e.g. `[class*="bet"]` → `"[class*="bet"]"`). This caused a JS `SyntaxError: Unexpected identifier` at runtime, blocking ALL DOM extraction.
+- **Cost:** ~30 min of debugging (first blamed proxy, then browser config, then finally read the generated JS).
+- **Cause:** Undocumented assumption that CSS selectors never contain double-quote characters. The BetB2B default selectors in the sports registry use `[class*="bet"]` etc.
+- **Workaround / fix:** Added `_js_str()` helper that escapes `"` → `\"` and `\` → `\\` before embedding in JS template strings.
+- **Prevent next time:** Any code that generates JavaScript strings from Python values must quote-escape. Add a lint rule or test that catches unescaped quotes in generated JS.
 - **Prevent next time:** Run anything that might write files from a scratch dir first; check `git status` after every test run in this repo.
 
 ---

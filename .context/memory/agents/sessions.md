@@ -28,6 +28,15 @@ past entries — append corrections instead.
 - **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS 15.7.7) | **Role:** engineer
 - **Task:** Install dependencies (user request) — unblock the Python 3.12 toolchain.
 - **Commits:** 1 (`bb0e636`) `fix(deps)` + `.context` updates.
+
+---
+## 2026-07-18 — Session 3
+- **Agent:** GitHub Copilot | **Model:** DeepSeek V4 Flash Free | **Platform:** Windows 11 (TisoneK local) | **Role:** engineer
+- **Task:** Run per-sport framework validations across BetB2B skins; fix DOM JS quoting bug.
+- **Commits:** 1 (pending — `_js_str()` fix in `dom.py`)
+- **Outcome:** partial — DOM extraction works for 3/8 skins fully (linebet, helabet, megapari each 20 events), 2/8 partially (melbet 10, betwinner 10), 3/8 blocked (888starz, 22bet, paripesa=0 events). markets=0 across all — selector tuning needed.
+- **Open items:** markets/scores DOM selector depth (backlog); paripesa 0 events needs investigation
+- **Report:** See tasks/current.md for full validation matrix
 - **Outcome:** done — installed uv → CPython 3.12.13 → `.venv` → deps (with `--only-binary :all:`). Found `pyproject.toml` was missing 10 runtime deps (fastapi/numpy/scipy/aiohttp/requests/networkx/watchdog/jinja2/semantic-version/python-json-logger) that `src/` imports; declared them. Discovered 3 pre-existing import-time code bugs (see backlog).
 - **Open items:** `playwright install` + run pytest/ruff/mypy baseline; 3 new import-crash bugs in tasks/backlog.md.
 - **Report:** .context/reviews/2026-07-12-review.md (F1–F4); dep + toolchain work captured in this entry + system/environments.md.
