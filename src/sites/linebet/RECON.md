@@ -6,21 +6,31 @@ First successful **live** capture of linebet.com, via a residential Kenyan proxy
 documents what the live site actually does. Companion data:
 [`snapshots/normalized/linebet_api_catalog.json`](snapshots/normalized/linebet_api_catalog.json).
 
+> **UPDATE 2026-07-18 — the odds feed is SOLVED and directly scrapable.** An
+> earlier draft of this file concluded the live odds were "service-worker-mediated
+> / DOM-only." That was **wrong**: the odds are a normal `service-api/LiveFeed/*`
+> XHR that **replays directly from httpx (no browser)**. The correction and the
+> proof are in "SOLVED: the live odds feed" below; the service-worker machinery is
+> real but does **not** gate the odds feed. Extraction mode for linebet is
+> **`hybrid`** (browser bootstrap once for cookies → direct HTTP polling), not a
+> new mode — see ADR-3 in `.context/memory/plans/decisions.md`.
+
 ## TL;DR for a future scraper
 
 - **Access is geo-gated at the nginx edge.** From a US/datacenter IP you get
   `HTTP 203 → /en/block` before any app code runs. From an allowed-country IP
   (Kenya confirmed) the full SPA loads (`200`). The detected country flows through
-  every API call as the `g=` query param (`g=KE` here; `g=US` on the block page).
-- **The live odds feed is NOT a normal XHR/WebSocket you can intercept.** The
-  sportsbook renders real live matches + odds in the DOM, yet *zero* odds requests
-  appear at Playwright's page **or** context level, in the HAR, or as a page
-  WebSocket/SSE. The transport is mediated by a **service worker** (see below), so
-  standard network interception and HAR replay will **not** capture live odds.
-- **Practical extraction path is the rendered DOM** (Playwright/`hybrid`), or
-  reverse-engineering the service-worker header injection + the odds endpoint.
-  This is a strong signal for the scraping-mode classifier: linebet is **not**
-  cleanly `intercepted` mode.
+  the config API as the `g=` query param (`g=KE`; `g=US` on the block page).
+- **The live odds come from `/service-api/LiveFeed/Get1x2_VZip`** (and siblings —
+  see below). It is a plain HTTP GET returning JSON (1xbet terse-key schema).
+  **Proven:** replays from `httpx` with no browser, `Success=true`, real events.
+- **What it takes to replay:** (1) an allowed-country proxy, (2) the base betting
+  headers (`is-srv:false`, `x-app-n:__BETTING_APP__`, `x-requested-with:XMLHttpRequest`,
+  `x-svc-source:__BETTING_APP__`), (3) session cookies (harvest once from a browser
+  bootstrap). The `x-hd` token is sent on *some* requests but is **not required**
+  for the odds feed (replay without it returned identical data).
+- **Extraction mode = `hybrid`** (browser-harvest cookies → direct `httpx` polling).
+  The DOM also renders odds as a fallback. This is the classifier's validation case.
 
 ## Anti-blocking architecture (three service workers)
 
@@ -34,9 +44,13 @@ domain blocking:
 | `check-rum.worker.js` | RUM / performance monitoring (not data). |
 | `pwa-module-sw.js` | PWA cache (`networkFirst` + TTL cache cleanup). |
 
-Implication: any direct-API replay must reproduce the `ivpn-sw` header set
-(`x-project-id`, `x-dt`, and whatever else the app writes into the `vpn/headers`
-store at runtime) — read them out of IndexedDB after the app initializes.
+Implication (revised 2026-07-18): this `ivpn-sw` header machinery is real and
+gates *some* endpoints (e.g. `champs-api` sends `x-project-id`/`x-referral`/
+`x-whence`, and the first `Get1x2` load carried an `x-hd` token), **but it does
+NOT gate the live-odds feed** — `Get1x2_VZip` replays fine without `x-hd`/IndexedDB
+headers (see "SOLVED" below). Treat the SW header injection as an anti-block /
+telemetry layer, not a hard requirement for the odds data. In practice the
+IndexedDB `vpn/headers` store was often empty at capture time anyway.
 
 ## Bootstrap / config API surface (observed live, `g=KE`)
 
@@ -86,62 +100,91 @@ The proxy endpoint is any allowed-country HTTP proxy (a `gost` proxy exposed via
 TCP tunnel works). The raw HAR is **not committed** — it contains session cookies;
 only this writeup + the redacted endpoint catalog are.
 
-## Prior operator investigation (the header mystery — now explained)
+## SOLVED: the live odds feed (2026-07-18)
 
-An earlier abandoned attempt (operator's own notes, folded in 2026-07-17) got
-further on the *data* endpoint than this session's automated capture, and the two
-halves now fit together:
+The operator's prior attempt named the data endpoint (`LineFeed`); this session
+captured it live and **proved a browserless replay works**. How it was found: an
+in-page `window.fetch` wrapper (init script) logs every URL — this catches the
+feed calls that Playwright's `page.on("response")` / context events and the HAR
+all missed (a Playwright surfacing quirk, **not** a service-worker transport as
+the earlier draft guessed).
 
-- **The odds data comes from a `LineFeed` endpoint** — the classic
-  1xbet/melbet-family `/LineFeed/...` feed. This confirms linebet runs that
-  platform. (This session didn't see it because it's issued behind the service
-  worker; see below.)
-- **The response is heavily compressed**; once decompressed it is JSON with
-  **terse single-letter keys** (`T`, `E`, `C`, `G`, …) — the standard 1xbet
-  LineFeed schema (e.g. `Value[].O1/O2` = teams, `E[]` = markets with `T`=type,
-  `C`=coefficient). The exact key map must be re-derived from a live capture.
-- **The request carried auth headers the scraper could never reproduce** — an
-  auth token **with an expiry time**, plus a header carrying the **URL of the
-  previous page** (a referer-like navigation-context header). In a real browser
-  they were all present; in a plain HTTP scraper they were **completely absent**.
+### The endpoints (host `linebet.com`, all `service-api`)
 
-**Why the headers were invisible — solved.** This is exactly what `ivpn-sw.js`
-does (see the SW table above): it keeps those headers in IndexedDB (`vpn`/
-`headers`), and the **service worker injects them into every outgoing request**
-*after* the page hands the request off. So they never appear in the page's own
-JS, in network interception, or in the HAR — the browser "has" them only because
-the SW adds them. That is the mechanism behind the operator's observation and
-behind this session's "odds feed invisible to interception" finding. Same wall,
-two sides.
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /service-api/LiveFeed/Get1x2_VZip?count=10&lng=en&gr=650&mode=4&country=87&top=true&partner=189&virtualSports=true&noFilterBlockEvent=true` | **live events + odds** (in-play). `count`=events, `top=true`=featured. |
+| `GET /service-api/LiveFeed/GetSportsShortZip?lng=en&gr=650&country=87&partner=189&groupChamps=true` | live sports/champ tree |
+| `GET /service-api/LiveFeed/WebGetTopChampsZip?lng=en&gr=650&country=87` | top live championships |
+| `GET /service-api/LiveFeed/GetTopGamesStatZip?lng=en&partner=189` | top games stats |
+| `GET /service-api/main-line-feed/v1/…` | **pre-match** ("line") feed (vs `main-live-feed` for in-play) |
+| `GET /champs-api/v1/get-champs-by-params-web` | championship list (sends the richer `x-*` header set) |
 
-## Concrete plan for next session (the unblock)
+Stable query params: `gr=650` (project/group id), `country=87`, `partner=189`,
+`ref=189`, `lng=en`. `_VZip`/`Zip` suffix = the response was gzip-compressed at the
+HTTP layer (httpx/browser decompress it automatically → JSON).
 
-The proxy must be live again (gost + a TCP tunnel, e.g. `bore`; see capture recipe
-above). Then:
+### Required request headers (values captured live)
 
-1. **Dump the injected headers.** Load linebet live, let the SPA initialize, then
-   read IndexedDB `vpn` → `headers` (via `page.evaluate` opening the DB, or CDP
-   `IndexedDB.requestData`). This yields the auth token, its expiry, `x-project-id`
-   / `x-dt`, and the referer-like navigation header — the set `ivpn-sw.js` injects.
-2. **Capture a real `LineFeed` request.** Either attach a **CDP** session with
-   `Target.setAutoAttach {autoAttach:true, flatten:true}` to the **service-worker**
-   target and enable its `Network` domain (page-level Playwright can't see SW
-   traffic), or find the `LineFeed` URL + query params in the sportsbook JS chunk
-   (loaded separately from the `entry-*.js` that only exposed casino `service-api`).
-3. **Replay `LineFeed` directly** with the IndexedDB-sourced headers, then
-   **decompress** (try gzip/deflate/brotli; the platform sometimes wraps a custom
-   scheme) → parse the terse JSON. Map the single-letter keys to `Event`/`Market`/
-   `Selection` (the linebet `extraction/models.py` dataclasses already exist).
-4. **Watch the token expiry.** Because the auth header expires, a long-running
-   scraper must re-harvest it from IndexedDB (or re-bootstrap the browser) on a
-   timer — this is a `hybrid`/`sw_replay` concern, not simple `intercepted`.
+```
+accept: application/json, text/plain, */*
+content-type: application/json
+is-srv: false
+x-app-n: __BETTING_APP__
+x-svc-source: __BETTING_APP__
+x-requested-with: XMLHttpRequest
+x-mobile-project-id: 0
+# x-hd: <long base64 blob>   <- sent on SOME requests; NOT required for the odds
+#                              feed (replay without it returned identical data).
+#                              This is the operator's "auth token with expiry".
+```
 
-**DOM fallback (works today):** odds render fully in the DOM; a Playwright DOM
-extractor over the live betting grid (`c-events` / champ rows) is the reliable
-path if the LineFeed replay proves too brittle.
+Plus **session cookies** (harvested from a browser bootstrap — 21–22 cookies).
 
-**Classifier note:** feed a real capture to the scraping-mode classifier — linebet
-is the validation case. Expected output: `playwright` (or the future `sw_replay`)
-extraction mode **plus** an AccessProfile of `geo_gated + requires_proxy +
-transport: service_worker + interceptable: false + header_source: indexeddb`
-(see ADR-2 in `.context/memory/plans/decisions.md`).
+### Proof — direct httpx replay (no browser)
+
+Replaying `Get1x2_VZip` from `httpx` through the Kenya proxy, with the base betting
+headers + harvested cookies:
+
+```
+DIRECT httpx REPLAY: status 200  Success=True  Value=9 events  (29 KB JSON)
+   without x-hd  -> status 200  (identical bytes)
+```
+
+→ **linebet is scrapable in `hybrid` mode**: bootstrap a browser once to harvest
+cookies (the framework's `HybridConfig` + `SessionHarvester` already model this),
+then poll the `LiveFeed`/`main-line-feed` endpoints directly with `httpx`. No
+browser per poll, no DOM scraping, no `x-hd`/service-worker replay needed.
+
+### Response schema (1xbet terse-key `Value[]`)
+
+Top: `{"Success":true,"Error":"","Value":[ <event>, … ]}`. Per event (key → meaning):
+
+| Key | Meaning | Key | Meaning |
+|-----|---------|-----|---------|
+| `I` / `ZP` | event id | `O1` / `O2` | team names (`O1E`/`O2E` = English) |
+| `SN` / `SI` | sport name / id | `O1I` / `O2I` | team ids |
+| `L` / `LI` | league name / id | `S` | start time (unix) |
+| `CN` | country | `SC` | score: `FS`={`S1`,`S2`}, `PS`=periods[], `CP`=cur period, `TS`=clock secs, `SLS`=time-left text |
+| `E[]` | **markets**: `T`=market-type id, `G`=group (1=1x2, 2=handicap, …), `C`=coefficient (odds), `CV`=odds str, `P`=param (handicap/total line), `B`=blocked | `AE[]` | grouped markets: `{G, ME:[…same as E]}` |
+
+The linebet `extraction/models.py` `Event`/`Market`/`Selection` dataclasses map
+onto this directly. A sample decoded event is in
+[`snapshots/normalized/livefeed_get1x2_schema.md`](snapshots/normalized/livefeed_get1x2_schema.md).
+
+### Why the operator's earlier scraper failed (all three needed together)
+
+1. **No allowed-country IP** → `203`/block before any feed call.
+2. **Missing the `x-app-n` / `x-svc-source` / `is-srv` betting headers** → the
+   `service-api` rejects/ignores the request.
+3. **No harvested cookies** → unauthenticated. (The `x-hd`/service-worker/IndexedDB
+   rabbit hole was a red herring for the odds feed.)
+
+### Remaining unknowns / next build steps
+
+- Map the `T` (market-type) and `G` (group) id tables to human market names
+  (1=1x2 W1/X/W2, 2=handicap, 17=totals, …) — partially known from the 1xbet family.
+- Confirm cookie TTL / whether re-bootstrap is needed periodically (hybrid session
+  refresh).
+- Build the `hybrid` scraper: `SessionHarvester` bootstrap → `httpx` poll loop over
+  the `LiveFeed` endpoints → map terse JSON to `Event`/`Market`/`Selection`.
