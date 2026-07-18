@@ -125,7 +125,28 @@ The proxy endpoint is any allowed-country HTTP proxy (a `gost` proxy exposed via
 TCP tunnel works). The raw HAR is **not committed** — it contains session cookies;
 only this writeup + the redacted endpoint catalog are.
 
-## SOLVED: the live odds feed (2026-07-18)
+> **⚠️ MOVING TARGET — re-verified 2026-07-19 (Session 13).** The direct-API
+> replay below is **NOT a stable static-header recipe**. As of 2026-07-19 the exact
+> base-header httpx replay that worked on 2026-07-18 returns **`406`
+> `feed/NotAcceptableException`** — *and so does a bare in-browser `fetch`*. Two
+> changes on the platform side:
+> 1. The feed request **moved into a worker context** — invisible to page
+>    `fetch`/XHR wrappers AND page-target CDP `Network` (both see 0 feed requests).
+>    Do NOT rely on `page.on("request"/"response")`, an init-script `fetch` hook, or
+>    a page-target CDP session to capture it — they will show nothing.
+> 2. `ivpn-sw.js` now injects a required header (`x-dt`, derived from
+>    `x-project-id`) from a store the app fills via `postMessage`; it only activates
+>    when the SW is registered with an `?i=` param, and the old IndexedDB
+>    `vpn/headers` store is gone. Missing that injected header ⇒ `406`.
+>
+> **Consequence for the scraper (see ADR-4):** treat **DOM extraction as the
+> primary path** (drift-proof — odds render fine) and **direct-API as best-effort**:
+> capture the genuine headers per-session via CDP `Target.setAutoAttach` to the
+> service-worker/worker target + `Network`, replay those, and treat `406` as a
+> re-harvest/DOM-fallback trigger — never a hard failure. The endpoints, params, and
+> schema documented below are still correct; only the *auth-header contract* rotates.
+
+## SOLVED: the live odds feed (2026-07-18) — endpoints/schema still valid; see the moving-target warning above
 
 The operator's prior attempt named the data endpoint (`LineFeed`); this session
 captured it live and **proved a browserless replay works**. How it was found: an
