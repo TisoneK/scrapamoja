@@ -55,6 +55,7 @@ from .config import BetB2BSkinConfig
 from .extraction.models import BetB2BScrapeResult, CapturedFeedResponse, Event, Sport
 from .extraction.rules import BetB2BExtractionRules
 from .session import BetB2BSessionManager
+from .telemetry_integration import BetB2BTelemetry
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,9 @@ class BetB2BScraper:
         timeout: float = 20.0,
         rate_limit_per_minute: int = 30,
         settle_seconds: float = 12.0,
+        telemetry: Optional[BetB2BTelemetry] = None,
+        telemetry_enabled: bool = True,
+        telemetry_output_dir: str = "./data/telemetry/betb2b",
     ) -> None:
         """Initialise the scraper for one skin.
 
@@ -103,6 +107,10 @@ class BetB2BScraper:
             rate_limit_per_minute: polite cap on feed polls.
             settle_seconds: how long to let the SPA settle during
                 cookie-harvest bootstrap.
+            telemetry: a pre-built :class:`BetB2BTelemetry` instance.
+                If None, one is created automatically.
+            telemetry_enabled: master switch for telemetry collection.
+            telemetry_output_dir: where telemetry JSON files are written.
         """
         self.skin = skin
         self.proxy_manager = proxy_manager
@@ -129,6 +137,16 @@ class BetB2BScraper:
         )
         self.extraction_rules = BetB2BExtractionRules(skin)
 
+        # Telemetry — create if not provided, respect enabled flag.
+        if telemetry is not None:
+            self.telemetry = telemetry
+        elif telemetry_enabled:
+            self.telemetry = BetB2BTelemetry(
+                skin, output_dir=telemetry_output_dir,
+            )
+        else:
+            self.telemetry = BetB2BTelemetry.disabled(skin)
+
         self._started = False
 
     # ------------------------------------------------------------------ #
@@ -152,6 +170,8 @@ class BetB2BScraper:
         if not self._started:
             return
         await self.feed_client.close()
+        # Flush any buffered telemetry events.
+        self.telemetry.flush()
         self._started = False
         logger.info("BetB2BScraper closed for skin=%s", self.skin.name)
 
@@ -211,6 +231,12 @@ class BetB2BScraper:
                 "skin=%s scrape '%s' timed out after %ss",
                 self.skin.name, action, overall_timeout,
             )
+            self.telemetry.record_scrape_complete(
+                action=action, total_events=0, total_captures=0,
+                session_harvested=self.session_manager.has_session,
+                scrape_duration_seconds=(datetime.now(timezone.utc) - start).total_seconds(),
+                error=f"scrape timed out after {overall_timeout}s",
+            )
             result = BetB2BScrapeResult(
                 skin=self.skin.name,
                 action=action,
@@ -245,6 +271,24 @@ class BetB2BScraper:
             "skin=%s scrape '%s' done: %d events from %d captures in %.2fs",
             self.skin.name, action, len(events), len(captured), duration,
         )
+
+        # Record telemetry for the complete scrape.
+        total_markets = sum(len(e.markets) for e in events)
+        self.telemetry.record_extraction(
+            source="api" if captured else "dom",
+            event_count=len(events),
+            market_count=total_markets,
+            duration_ms=duration * 1000,
+        )
+        self.telemetry.record_scrape_complete(
+            action=action,
+            total_events=len(events),
+            total_captures=len(captured),
+            session_harvested=session_harvested,
+            scrape_duration_seconds=duration,
+            error=result.error,
+        )
+
         return result.to_dict()
 
     # ------------------------------------------------------------------ #
@@ -421,4 +465,5 @@ class BetB2BScraper:
                 self.session_manager.session_age.total_seconds()
                 if self.session_manager.session_age is not None else None
             ),
+            "telemetry": self.telemetry.get_summary(),
         }

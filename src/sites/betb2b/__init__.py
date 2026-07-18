@@ -51,6 +51,7 @@ from .extraction.models import (
 from .extraction.rules import BetB2BExtractionRules
 from .scraper import BetB2BScraper
 from .session import BetB2BSessionManager
+from .telemetry_integration import BetB2BTelemetry
 
 __version__ = "1.0.0"
 __author__ = "Tisone Kironget"
@@ -81,6 +82,8 @@ __all__ = [
     "Sport",
     "CapturedFeedResponse",
     "BetB2BScrapeResult",
+    # Telemetry
+    "BetB2BTelemetry",
 ]
 
 
