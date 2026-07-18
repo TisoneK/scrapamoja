@@ -297,3 +297,23 @@ Clicking "recent matches" fires `event.json` (operator-observed).
 {autoAttach:true,flatten:true}` on the SW target + `Network.enable`, OR read the
 Request URL straight from DevTools. Likely replayable via httpx like `GetGameZip`
 (base betting headers + cookies) once the exact URL + params are known.
+
+### H2H investigation — status (2026-07-18, in progress)
+
+Operator DevTools shows only 3 requests around the H2H hover on the match page,
+and **none carries the head-to-head data**:
+- `GetGameZip?id=…&GroupEvents=true&countevents=250&marketType=1&isNewBuilder=true`
+  — verified: returns markets ONLY (`GE`[grouped markets], `SG`[sub-games],
+  `MEC`[market categories]); **no** H2H/statistics/previous-meetings fields.
+  (Note this is the SPA's real match query; it returns the newer `GE` grouped
+  format. Our scraper uses the simpler `isSubGames=true&grMode=4` variant that
+  returns `E[]`, which `BetB2BExtractionRules` already parses — keep as-is.)
+- `WebGetTopChampsZip?lng=en&country=87&gr=650` — champ list, not H2H.
+- `/fatman-api/<hash>/event.json` — analytics ping (`{"ts":…}`), not data.
+
+**Still open:** the actual H2H "recent matches" data endpoint. It's a SEPARATE
+SW-mediated request (invisible to headless Playwright capture). Find it in DevTools
+by its RESPONSE — a few-KB JSON of past matches (team names/dates/scores), NOT the
+~0.2 kB analytics ping; filter Network by `statistic` or sort by Size. Once its
+URL+params are known, test the httpx replay (base betting headers + cookies, like
+`GetGameZip`) and, if it replays, wire an H2H fetch into the scraper the same way.
