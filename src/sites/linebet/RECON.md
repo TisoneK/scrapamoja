@@ -248,3 +248,29 @@ onto this directly. A sample decoded event is in
   refresh).
 - Build the `hybrid` scraper: `SessionHarvester` bootstrap → `httpx` poll loop over
   the `LiveFeed` endpoints → map terse JSON to `Event`/`Market`/`Selection`.
+
+## SOLVED (2026-07-18): odds via per-match `GetGameZip` (the markets=0 fix)
+
+The list/live grids render only event *stubs* (teams, league) — **odds do NOT
+render in the DOM in headless** (0 coefficient elements on both list and match
+pages), and the `top=true` list feed 406s (SW-gated, ADR-4). The odds live in the
+**per-match** feed, which is NOT SW-gated and replays from httpx:
+
+```
+GET /service-api/{LineFeed|LiveFeed}/GetGameZip?id=<eventId>&lng=en&country=87&partner=189&gr=650&isSubGames=true&grMode=4
+  headers: is-srv:false, x-app-n:__BETTING_APP__, x-svc-source:__BETTING_APP__,
+           x-requested-with:XMLHttpRequest, x-mobile-project-id:0  + session cookies
+```
+
+- `LineFeed/GetGameZip` = prematch, `LiveFeed/GetGameZip` = in-play (the other
+  returns `Success:false` for the wrong state). Confirmed live 2026-07-18:
+  id=351745496 → `Success:true`, `Value[0].E[]` = **238 markets** (terse
+  `T`/`P`/`C`/`G` — maps onto `BetB2BExtractionRules`).
+- **`<eventId>`** comes from the match URL the SPA builds on click, e.g.
+  `/en/line/basketball/75093-nba-summer-league/351745496-orlando-magic-boston-celtics`
+  → id = `351745496`. Extract IDs from the rendered list (game row anchors / click
+  target) or from a working list endpoint.
+
+**Scraper model (fixes markets=0):** list → event IDs → `GetGameZip?id=` per event →
+parse `E[]`/`AE[]`. This is the odds path; DOM-odds and the `top=true` list feed are
+not viable headless.
