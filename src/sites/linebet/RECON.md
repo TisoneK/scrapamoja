@@ -274,3 +274,26 @@ GET /service-api/{LineFeed|LiveFeed}/GetGameZip?id=<eventId>&lng=en&country=87&p
 **Scraper model (fixes markets=0):** list → event IDs → `GetGameZip?id=` per event →
 parse `E[]`/`AE[]`. This is the odds path; DOM-odds and the `top=true` list feed are
 not viable headless.
+
+## H2H / statistics — ServiceWorker-mediated (2026-07-18)
+
+Head-to-head appears on **hover over a team name** (list + match pages; team el
+class `dashboard-game-team-`). Operator DevTools capture (match page
+`…/351745496-orlando-magic-boston-celtics`) shows the data requests are
+**ServiceWorker-initiated** — Initiator column reads `(ServiceWorker)` /
+`pwa-ivpn-sw.js?pwa=1`. Consequence: these requests are **invisible to Playwright
+`page.on()` AND `context.on("request")` and to init-script fetch/XHR hooks**
+(headless capture sees only the document + static assets). Only DevTools or a CDP
+`Target.setAutoAttach` to the SW target sees them. This is the same SW transport
+noted in ADR-4 — and the reason repeated headless hover-capture attempts returned
+nothing after hover.
+
+Endpoints fired on team-hover (all SW-mediated, `service-api`):
+`GetSportsShortZip?sports=<SI>&champs=<champId>` (e.g. `sports=3&champs=75093`),
+`WebGetTopChampsZip`, `main-{line,live}-feed/v1/expressDay`, and `GetGameZip?id=`.
+Clicking "recent matches" fires `event.json` (operator-observed).
+
+**To capture the exact H2H endpoint** (headless): CDP `Target.setAutoAttach
+{autoAttach:true,flatten:true}` on the SW target + `Network.enable`, OR read the
+Request URL straight from DevTools. Likely replayable via httpx like `GetGameZip`
+(base betting headers + cookies) once the exact URL + params are known.
