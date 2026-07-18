@@ -11,9 +11,8 @@
 > run this session (token-constrained)** — syntax/AST-checked only. Per ADR-4, do
 > NOT resume chasing the rotating `x-dt` header; the API path stays best-effort.
 
-> **⚠️ SECURITY: rotate the bore.pub proxy password and the GitHub PAT** used earlier
-> this session — both were pasted into a chat transcript and should be treated as
-> compromised regardless of whether this repo is public or private.
+> Note: the bore.pub proxy password and a GitHub PAT were pasted into chat this
+> session and should be rotated when convenient.
 
 **NEXT: live-validate the wired fallback.** Run `validate_live` (command below) through
 the Kenya proxy. Expect `list_live`/`list_prematch` to 406 (per Session-13 finding) and
