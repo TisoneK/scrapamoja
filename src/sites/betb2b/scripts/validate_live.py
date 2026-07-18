@@ -101,78 +101,71 @@ async def main() -> int:
         summary_path.write_text(json.dumps(summary, indent=2, default=str))
         return 1
 
-    # ----- Step 2: build proxy from env -----
+    # ----- Step 2: build proxy from env (optional) -----
     print("[2/6] Building proxy manager from env ...", flush=True)
     proxy_url = os.environ.get("BETB2B_PROXY_URL")
-    if not proxy_url:
-        msg = (
-            "BETB2B_PROXY_URL is not set. The betb2b scraper needs an "
-            "allowed-country proxy to bootstrap a session. Set:\n"
-            "  export BETB2B_PROXY_URL=http://bore.pub:1074\n"
-            "  export BETB2B_PROXY_USER=TisoneK\n"
-            "  export BETB2B_PROXY_PASS=Taalib01\n"
-            "  export BETB2B_PROXY_COUNTRY=KE\n"
-            "  export BETB2B_PROXY_ID=kenya"
-        )
-        print(f"    FAILED: {msg}", flush=True)
-        summary["steps"].append({"step": "build_proxy", "ok": False, "error": msg})
-        summary_path.write_text(json.dumps(summary, indent=2, default=str))
-        return 1
+    pm = None
+    endpoint_id = None
 
-    user = os.environ.get("BETB2B_PROXY_USER", "")
-    pw = os.environ.get("BETB2B_PROXY_PASS", "")
-    if user and pw and "@" not in proxy_url:
-        from urllib.parse import urlparse, urlunparse
+    if proxy_url:
+        user = os.environ.get("BETB2B_PROXY_USER", "")
+        pw = os.environ.get("BETB2B_PROXY_PASS", "")
+        if user and pw and "@" not in proxy_url:
+            from urllib.parse import urlparse, urlunparse
 
-        p = urlparse(proxy_url)
-        netloc = f"{user}:{pw}@{p.hostname}"
-        if p.port:
-            netloc += f":{p.port}"
-        proxy_url = urlunparse(p._replace(netloc=netloc))
+            p = urlparse(proxy_url)
+            netloc = f"{user}:{pw}@{p.hostname}"
+            if p.port:
+                netloc += f":{p.port}"
+            proxy_url = urlunparse(p._replace(netloc=netloc))
 
-    endpoint_id = os.environ.get("BETB2B_PROXY_ID", "kenya")
-    country = os.environ.get("BETB2B_PROXY_COUNTRY", "KE")
+        endpoint_id = os.environ.get("BETB2B_PROXY_ID", "kenya")
+        country = os.environ.get("BETB2B_PROXY_COUNTRY", "KE")
 
-    pm = build_proxy_manager({
-        "endpoints": [
-            {"id": endpoint_id, "url": proxy_url,
-             "country": country, "source": "ngrok"},
-        ],
-        "routing": [
-            {"pattern": f"*.{skin.domain}", "target": endpoint_id},
-        ],
-    })
-    ep = pm.get(endpoint_id) or pm.acquire(site=skin.domain)
-    print(f"    proxy endpoint: {ep!r}", flush=True)
-    summary["steps"].append({"step": "build_proxy", "ok": True, "endpoint": repr(ep)})
-
-    # ----- Step 3: verify proxy egress country -----
-    print(f"[3/6] Verifying proxy egress country (expected: {skin.allowed_countries}) ...", flush=True)
-    try:
-        check = await verify_proxy(ep, timeout=30.0, with_geo=True)
-        print(f"    {check}", flush=True)
-        summary["steps"].append({
-            "step": "verify_proxy", "ok": check.ok,
-            "egress_ip": check.egress_ip,
-            "country_code": check.country_code,
-            "latency_ms": check.latency_ms,
-            "error": check.error,
+        pm = build_proxy_manager({
+            "endpoints": [
+                {"id": endpoint_id, "url": proxy_url,
+                 "country": country, "source": "ngrok"},
+            ],
+            "routing": [
+                {"pattern": f"*.{skin.domain}", "target": endpoint_id},
+            ],
         })
-        if not check.ok:
-            print(f"    FAILED: proxy unreachable — {check.error}", flush=True)
+        ep = pm.get(endpoint_id) or pm.acquire(site=skin.domain)
+        print(f"    proxy endpoint: {ep!r}", flush=True)
+        summary["steps"].append({"step": "build_proxy", "ok": True, "endpoint": repr(ep)})
+
+        # ----- Step 3: verify proxy egress country -----
+        print(f"[3/6] Verifying proxy egress country (expected: {skin.allowed_countries}) ...", flush=True)
+        try:
+            check = await verify_proxy(ep, timeout=30.0, with_geo=True)
+            print(f"    {check}", flush=True)
+            summary["steps"].append({
+                "step": "verify_proxy", "ok": check.ok,
+                "egress_ip": check.egress_ip,
+                "country_code": check.country_code,
+                "latency_ms": check.latency_ms,
+                "error": check.error,
+            })
+            if not check.ok:
+                print(f"    FAILED: proxy unreachable — {check.error}", flush=True)
+                summary_path.write_text(json.dumps(summary, indent=2, default=str))
+                return 1
+            if check.country_code and check.country_code not in skin.allowed_countries:
+                print(
+                    f"    WARNING: proxy country={check.country_code} not in "
+                    f"allowed={skin.allowed_countries} — bootstrap may fail.",
+                    flush=True,
+                )
+        except Exception as exc:  # noqa: BLE001
+            summary["steps"].append({"step": "verify_proxy", "ok": False, "error": str(exc)})
+            print(f"    FAILED: {exc}", flush=True)
             summary_path.write_text(json.dumps(summary, indent=2, default=str))
             return 1
-        if check.country_code and check.country_code not in skin.allowed_countries:
-            print(
-                f"    WARNING: proxy country={check.country_code} not in "
-                f"allowed={skin.allowed_countries} — bootstrap will likely fail.",
-                flush=True,
-            )
-    except Exception as exc:  # noqa: BLE001
-        summary["steps"].append({"step": "verify_proxy", "ok": False, "error": str(exc)})
-        print(f"    FAILED: {exc}", flush=True)
-        summary_path.write_text(json.dumps(summary, indent=2, default=str))
-        return 1
+    else:
+        print("    No BETB2B_PROXY_URL set — running in DIRECT mode.", flush=True)
+        print("    (Use a proxy if your egress country is geo-blocked by the skin.)", flush=True)
+        summary["steps"].append({"step": "build_proxy", "ok": True, "mode": "direct"})
 
     # ----- Step 4 + 5: scrape (bootstrap + poll + extract) -----
     actions_to_run = []

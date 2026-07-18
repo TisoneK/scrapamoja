@@ -302,10 +302,11 @@ python -m src.sites.betb2b.scripts.probe_family
   responses, run `action="raw_capture"` and inspect the JSON to find
   the new field names.
 - **Geo-block.** All BetB2B skins geo-block at the nginx edge
-  (`HTTP 203 → /en/block` from disallowed countries). An
-  allowed-country proxy is mandatory — the scraper refuses to
-  bootstrap if `verify_proxy()` reports a country not in
-  `skin.allowed_countries`.
+  (`HTTP 203 → /en/block` from disallowed countries). A proxy is
+  **optional** — if your egress IP is already in an allowed country
+  (e.g. running from Kenya for a KE skin), the scraper works fine
+  in direct mode (`proxy_manager=None`). Set `BETB2B_PROXY_URL` and
+  related env vars only when your egress country is blocked.
 - **1xbet.com is Cloudflare-fronted.** The flagship domain sits
   behind a `403 "Just a moment…"` challenge the skins don't. A
   1xbet.com skin is shipped disabled by default — needs anti-CF

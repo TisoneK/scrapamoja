@@ -142,8 +142,11 @@ All snapshot paths are controlled by `snapshot_on_error` (default True) and
 
 11. **Never chase the BetB2B auth-header contract in code.** The `x-dt`/`x-project-id` header rotates per session. DOM extraction is the stable path (ADR-4).
 12. **Skins are YAML-only.** To add a bookmaker, create `skins/<name>.yaml` — no Python changes.
-13. **Proxy is required for bootstrap.** BetB2B sites geo-block. Set `BETB2B_PROXY_URL`, `BETB2B_PROXY_USER`, `BETB2B_PROXY_PASS`, `BETB2B_PROXY_COUNTRY`, `BETB2B_PROXY_ID` env vars.
-14. **The validate_live script is the e2e test.** Run `python -m src.sites.betb2b.scripts.validate_live --skin linebet` with proxy env vars set.
+13. **Proxy is optional.** BetB2B sites geo-block per skin, but if your
+    egress is already in an allowed country, the scraper runs fine in
+    direct mode (no proxy). Set `BETB2B_PROXY_URL` / related env vars
+    only when needed.
+14. **The validate_live script is the e2e test.** Run `python -m src.sites.betb2b.scripts.validate_live --skin linebet`. Proxy env vars are optional — omit them if your egress is in an allowed country.
 
 ### Development Setup
 
@@ -166,12 +169,15 @@ pytest tests/ -x
 # BetB2B-specific tests
 pytest tests/ -k "betb2b" -v
 
-# BetB2B live validation (requires proxy env vars)
+# BetB2B live validation (proxy optional — omit if egress is in allowed country)
+# With proxy:
 BETB2B_PROXY_URL=http://bore.pub:55068 \
 BETB2B_PROXY_USER=TisoneK \
 BETB2B_PROXY_PASS=Taalib01 \
 BETB2B_PROXY_COUNTRY=KE \
 BETB2B_PROXY_ID=kenya \
+python -m src.sites.betb2b.scripts.validate_live --skin linebet
+# Without proxy (direct mode):
 python -m src.sites.betb2b.scripts.validate_live --skin linebet
 ```
 
