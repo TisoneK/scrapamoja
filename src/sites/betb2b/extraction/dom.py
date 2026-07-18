@@ -156,6 +156,23 @@ def _build_page_script(selectors: DOMSelectors) -> str:
             }
           });
 
+          // Fallback: if the CSS odds selectors matched nothing (the Vue grid's
+          // coefficient classes drift often), collect any leaf descendant whose
+          // text is a plausible coefficient (1.01..999). Class-name-independent.
+          if (odds.length === 0) {
+            row.querySelectorAll('*').forEach(el => {
+              if (el.childElementCount !== 0) return;
+              const t = txt(el);
+              if (/^\d{1,3}\.\d{1,3}$/.test(t)) {
+                const v = parseFloat(t);
+                if (v >= 1.01 && v <= 999) {
+                  const cl = (el.className && el.className.baseVal !== undefined) ? el.className.baseVal : (el.className || "");
+                  odds.push({ label: "", price: v, suspended: /lock|suspend|disabled|blocked|is-disabled/i.test('' + cl) });
+                }
+              }
+            });
+          }
+
           // Scores (live).
           const scoreEls = queryFirst(row, SCORE_SEL);
           const scoreTxt = scoreEls.map(txt).filter(Boolean).join(' ');
