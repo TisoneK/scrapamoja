@@ -1,5 +1,21 @@
 # Current Task (overwrite each session)
 
+> **⚠️ READ FIRST (Session 15): `ui/app` Dependabot alerts resolved, 46 → 0.**
+> Fixed via `npm audit fix` (axios 1.13.6→1.18.1, form-data, follow-redirects,
+> react-router/-dom) + a lockfile resync that picked up already-permitted patch/minor
+> bumps (vite→7.3.6, vitest→4.1.10 incl. the critical arbitrary-file-read fix, undici,
+> flatted) — none of those needed a `package.json` change. One real version bump:
+> `@typescript-eslint/eslint-plugin`/`parser` 6.x→8.64.0 (peer-compatible with the
+> installed eslint 8.57.1) to clear a `minimatch` ReDoS chain. Verified: `npm audit` →
+> 0 vulnerabilities, vitest suite passes, `vite build` succeeds.
+>
+> Found but NOT fixed (pre-existing, confirmed via `git stash` — unrelated to the
+> dep bumps): (1) no `.eslintrc` exists at all, so `npm run lint` fails outright;
+> (2) `tsc --noEmit` has ~33 errors (unused imports/vars, a `flagged_at` vs `flagged`
+> field mismatch in `FailureDashboard.tsx`, missing test-lib types, `NodeJS` namespace
+> not found) — since `build` is `tsc && vite build`, `npm run build` currently fails
+> even though `vite build` alone works. Next session: fix these if asked.
+
 > **⚠️ READ FIRST (Session 14): DOM fallback is now WIRED, still UNTESTED live.**
 > `src/sites/betb2b/extraction/dom.py` (Session 13) is now called automatically from
 > `BetB2BScraper._run_action`: for `list_live`/`list_prematch`/`list_all`, any feed
