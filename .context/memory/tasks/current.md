@@ -1,6 +1,20 @@
 # Current Task (overwrite each session)
 
-**NEXT: live-validate the betb2b family scraper end-to-end** (Session 12 ended here,
+> **⚠️ READ FIRST (Session 13, 2026-07-19): live validation revealed the direct-API
+> contract DRIFTED.** `service-api/{Live,Line}Feed/Get1x2_VZip` now returns **`406
+> feed/NotAcceptableException`** to httpx with the base headers+cookies that worked
+> 2026-07-18 — and to a bare in-browser `fetch` too. The feed moved to a **worker
+> context** (invisible to page fetch/XHR hooks + page-target CDP) and `ivpn-sw.js`
+> now injects a required header (`x-dt`←`x-project-id`) via `postMessage`. **Do NOT
+> keep hunting the header** — it rotates. Per **ADR-4**: build a **DOM extractor as
+> the PRIMARY betb2b path** (odds render fine); keep httpx as best-effort with
+> 406→re-harvest/DOM-fallback. If you do want direct-API, capture headers per session
+> via CDP `Target.setAutoAttach` to the SW/worker target + `Network`. Proxy env below
+> still works for a browser bootstrap (page loads 200, egress KE). See
+> `src/sites/linebet/RECON.md` "MOVING TARGET" warning + ADR-4.
+
+**NEXT: add a DOM extractor to the betb2b scraper (primary path), then live-validate**
+(supersedes the Session-12 "live-validate httpx" plan — that path now 406s). Session 12 ended here,
 2026-07-18). The `src/sites/betb2b/` base scraper is **built, unit-tested (24/24
 passing), and committed/pushed** — but the live end-to-end validation through the
 Kenya proxy is **pending**. It was blocked three times in Session 12 by a recurring
