@@ -301,3 +301,20 @@ don't remove the line.
            17=totals, …; 1xbet-family tables) and confirm cookie TTL / re-bootstrap cadence.
       Needs the Kenya proxy live (gost + bore). HIGH — this ships the scraper the
       whole exercise was for. Extraction mode = `hybrid` per ADR-3.
+
+---
+- [ ] **Generalize the linebet scraper into a `betb2b` family base scraper** (added 2026-07-18 by Claude Opus 4.8, Session 11 cont.) —
+      VERIFIED 2026-07-18: linebet is one skin of the BetB2B/1xbet platform, and the
+      recon generalizes across the family. Probing `/service-api/LineFeed/Get1x2_VZip`
+      through the Kenya proxy returned the IDENTICAL `feed/NotAcceptableException` 406
+      envelope (same feed microservice) on: melbet, betwinner, 22bet, megapari,
+      888starz, helabet, paripesa, linebet. So the endpoints/headers/schema/hybrid
+      approach are shared. Build a `src/sites/betb2b/` base scraper + thin per-skin
+      `SiteConfig`s. Per-skin params that differ: `domain`, `partner`/`ref`
+      (linebet=189), `gr` project id (linebet=650), geo `country`, per-skin cookie
+      harvest. Shared: LiveFeed(in-play)/LineFeed(prematch) roots, endpoint names,
+      base betting headers, terse-key Value[] schema, hybrid cookie-harvest→httpx poll.
+      EXCEPTIONS: 1xbet.com is Cloudflare-fronted (403 challenge) — needs anti-CF
+      handling; 1win.pro is a DIFFERENT platform (200 HTML, no service-api) — exclude.
+      See `src/sites/linebet/RECON.md` "Generalizes to the 1xbet/BetB2B family". This
+      supersedes the linebet-only build item into a family-wide one. HIGH.
