@@ -66,3 +66,7 @@ skin=linebet.`
 - `src/sites/betb2b/README.md` — operator guide.
 - `agents/sessions.md` — Sessions 12–16 have the full build/fix/correction log.
 - `reviews/2026-07-18-betb2b-base-scraper-build.md` — Session 12 review.
+- `reviews/2026-07-19-session16-protocol-compliance-failures.md` — full itemized
+  list of Session 14–16 protocol violations (wrong commit identity, surface-mixing,
+  skipped Entry Steps, missing registry entries) — read before assuming this repo's
+  process has been followed correctly in recent history.
