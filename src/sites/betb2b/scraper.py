@@ -289,6 +289,11 @@ class BetB2BScraper:
             error=result.error,
         )
 
+        # Success-path result snapshot (structured JSON, no browser needed).
+        self.telemetry.capture_result_snapshot(
+            action=action, result_data=result.to_dict(),
+        )
+
         return result.to_dict()
 
     # ------------------------------------------------------------------ #
@@ -381,21 +386,44 @@ class BetB2BScraper:
         return cap.status == 0 or cap.status >= 400 or not cap.decoded
 
     async def _dom_fallback(self, *, is_live: bool) -> List[Event]:
-        """Render the corresponding live/line page and extract via DOM."""
+        """Render the corresponding live/line page and extract via DOM.
+
+        Also captures a page snapshot via the telemetry system (success
+        path) and an error snapshot if extraction fails.
+        """
         try:
             default_sport = Sport.OTHER
         except Exception:  # noqa: BLE001
             default_sport = None
         try:
-            return await self.session_manager.render_dom_events(
+            events = await self.session_manager.render_dom_events(
                 is_live=is_live, sport=default_sport,
+                _on_page_ready=self._on_dom_page_ready,
             )
+            return events
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "skin=%s DOM fallback (is_live=%s) failed: %s",
                 self.skin.name, is_live, exc,
             )
+            # Capture error snapshot (no page available — JSON fallback).
+            await self.telemetry.capture_error_snapshot(
+                phase=f"dom_fallback_{'live' if is_live else 'prematch'}",
+                error=str(exc),
+            )
             return []
+
+    async def _on_dom_page_ready(self, page: Any, *, is_live: bool) -> None:
+        """Callback injected into render_dom_events for snapshot capture.
+
+        Called while the Playwright page is still alive (before the browser
+        closes), giving us a window to capture a success-path snapshot of
+        the rendered DOM for drift detection.
+        """
+        phase = "dom_live" if is_live else "dom_prematch"
+        await self.telemetry.capture_page_snapshot(
+            page, phase=phase, label="render",
+        )
 
     # ------------------------------------------------------------------ #
     # Helpers

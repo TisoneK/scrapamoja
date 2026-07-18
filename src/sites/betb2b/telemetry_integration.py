@@ -85,6 +85,8 @@ class BetB2BTelemetry:
       - ``enabled``: master switch (default True)
       - ``snapshot_on_error``: capture a snapshot (via the snapshot system)
         when a scrape phase fails
+      - ``snapshot_on_success``: capture a page+result snapshot after every
+        successful scrape (for drift detection / audit trail)
       - ``max_events_per_file``: rotate event files after this many events
       - ``include_captured_bodies``: whether to include raw feed response
         bodies in the telemetry events (large but useful for replay)
@@ -97,6 +99,7 @@ class BetB2BTelemetry:
         enabled: bool = True,
         output_dir: str = "./data/telemetry/betb2b",
         snapshot_on_error: bool = True,
+        snapshot_on_success: bool = True,
         max_events_per_file: int = 1000,
         include_captured_bodies: bool = False,
     ) -> None:
@@ -104,12 +107,14 @@ class BetB2BTelemetry:
         self.enabled = enabled
         self.output_dir = Path(output_dir)
         self.snapshot_on_error = snapshot_on_error
+        self.snapshot_on_success = snapshot_on_success
         self.max_events_per_file = max_events_per_file
         self.include_captured_bodies = include_captured_bodies
 
         self._events: List[BetB2BTelemetryEvent] = []
         self._file_counter = 0
         self._session_id = uuid.uuid4().hex[:12]
+        self._snapshot_counter = 0
 
         if self.enabled:
             self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -307,7 +312,7 @@ class BetB2BTelemetry:
                 session_id=self._session_id,
             )
             config = SnapshotConfig(
-                mode=SnapshotMode.SELECTOR,
+                mode=SnapshotMode.FULL_PAGE,
                 capture_html=True,
                 capture_screenshot=True,
             )
@@ -335,6 +340,138 @@ class BetB2BTelemetry:
             )
 
         return snapshot_path
+
+    async def capture_page_snapshot(
+        self,
+        page: Any,
+        *,
+        phase: str,
+        label: str = "success",
+    ) -> Optional[str]:
+        """Capture a snapshot of the browser page (success path).
+
+        Called after a successful DOM render or extraction to save the
+        page state for drift detection and audit. Uses the framework's
+        ``SnapshotManager`` when available, falls back to a raw HTML
+        save via Playwright directly.
+
+        Returns the path to the saved artifact, or None on failure.
+        """
+        if not self.enabled or not self.snapshot_on_success:
+            return None
+
+        snapshot_path: Optional[str] = None
+
+        # Try the framework snapshot system.
+        try:
+            from src.core.snapshot import (
+                SnapshotContext, SnapshotConfig, SnapshotMode,
+                get_snapshot_manager,
+            )
+
+            manager = get_snapshot_manager()
+            self._snapshot_counter += 1
+            context = SnapshotContext(
+                site=self.skin.name,
+                module="betb2b",
+                component=f"{phase}_{label}",
+                session_id=self._session_id,
+            )
+            config = SnapshotConfig(
+                mode=SnapshotMode.FULL_PAGE,
+                capture_html=True,
+                capture_screenshot=True,
+            )
+
+            bundle = await manager.capture_snapshot(page, context, config)
+            if bundle and bundle.html_path:
+                snapshot_path = str(bundle.html_path)
+
+        except Exception as exc:
+            logger.debug("Framework snapshot unavailable, using direct HTML save: %s", exc)
+            snapshot_path = await self._save_page_html_direct(page, phase, label)
+
+        if snapshot_path:
+            import os
+            size = os.path.getsize(snapshot_path) if os.path.exists(snapshot_path) else 0
+            self.record_snapshot_captured(
+                snapshot_type="page",
+                path=snapshot_path,
+                size_bytes=size,
+            )
+
+        return snapshot_path
+
+    def capture_result_snapshot(
+        self,
+        *,
+        action: str,
+        result_data: Dict[str, Any],
+    ) -> Optional[str]:
+        """Persist a scrape result as a JSON snapshot (success path).
+
+        Unlike browser-page snapshots (which need a Playwright page),
+        this serializes the structured scrape result — events, markets,
+        captures — into a timestamped JSON file. Useful for audit trails
+        and for diff-based drift detection across sessions without
+        needing a browser.
+
+        Returns the file path, or None if disabled.
+        """
+        if not self.enabled or not self.snapshot_on_success:
+            return None
+
+        self._snapshot_counter += 1
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        snapshot_dir = self.output_dir / "result_snapshots"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"{self.skin.name}_{action}_{ts}_{self._snapshot_counter}.json"
+        filepath = snapshot_dir / filename
+
+        payload = {
+            "session_id": self._session_id,
+            "skin": self.skin.name,
+            "domain": self.skin.domain,
+            "action": action,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "result": result_data,
+        }
+
+        try:
+            filepath.write_text(
+                json.dumps(payload, indent=2, default=str, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            logger.warning("skin=%s failed to write result snapshot: %s", self.skin.name, exc)
+            return None
+
+        self.record_snapshot_captured(
+            snapshot_type="result",
+            path=str(filepath),
+            size_bytes=filepath.stat().st_size,
+        )
+        return str(filepath)
+
+    async def _save_page_html_direct(
+        self,
+        page: Any,
+        phase: str,
+        label: str,
+    ) -> Optional[str]:
+        """Fallback: save page HTML directly via Playwright (no framework SnapshotManager)."""
+        try:
+            html = await page.content()
+        except Exception as exc:
+            logger.warning("skin=%s could not get page content: %s", self.skin.name, exc)
+            return None
+
+        snapshot_dir = self.output_dir / "snapshots" / "pages"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        filepath = snapshot_dir / f"{self.skin.name}_{phase}_{label}_{ts}.html"
+        filepath.write_text(html, encoding="utf-8")
+        return str(filepath)
 
     # ------------------------------------------------------------------ #
     # Persistence

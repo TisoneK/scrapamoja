@@ -285,6 +285,7 @@ class BetB2BSessionManager:
         is_live: bool,
         sport: Optional[Any] = None,
         settle_seconds: Optional[float] = None,
+        _on_page_ready: Optional[Any] = None,
     ) -> List[Any]:
         """Navigate the live/line page and extract events from the rendered DOM.
 
@@ -293,6 +294,15 @@ class BetB2BSessionManager:
         the SPA already rendered in a real browser instead of chasing the
         API's auth-header contract. Best-effort — returns an empty list
         on any failure rather than raising.
+
+        Args:
+            is_live: True for the live feed page, False for prematch.
+            sport: optional sport filter passed to ``extract_events_from_page``.
+            settle_seconds: how long to wait for the SPA to settle.
+            _on_page_ready: optional async callback(page, is_live=bool) invoked
+                after the page has loaded and settled but *before* extraction.
+                Used by the scraper to capture success-path snapshots while
+                the Playwright page is still alive.
         """
         from playwright.async_api import async_playwright
 
@@ -335,6 +345,17 @@ class BetB2BSessionManager:
 
                     await self._dismiss_consent(page)
                     await asyncio.sleep(wait_s)
+
+                    # Invoke the page-ready callback (e.g. for snapshot capture)
+                    # while the page is still alive.
+                    if _on_page_ready is not None:
+                        try:
+                            await _on_page_ready(page, is_live=is_live)
+                        except Exception as cb_exc:  # noqa: BLE001
+                            logger.debug(
+                                "skin=%s _on_page_ready callback failed: %s",
+                                self.skin.name, cb_exc,
+                            )
 
                     events = await extract_events_from_page(
                         page, is_live=is_live, source_url=url, sport=sport,

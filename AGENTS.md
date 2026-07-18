@@ -96,7 +96,7 @@ at each lifecycle point in `scraper.py`. Fully customizable via constructor para
 `output_dir`, `enabled`, `snapshot_on_error`, `max_events_per_file`,
 `include_captured_bodies`. Auto-flushes to rotating JSON files.
 
-### Snapshot System (`src/core/snapshot/`) — ⚠️ Partially wired into betb2b
+### Snapshot System (`src/core/snapshot/`) — ✅ Wired into betb2b
 
 Browser state capture for debugging and drift detection:
 - Context-aware organization: site/module/component/timestamp hierarchy
@@ -105,14 +105,25 @@ Browser state capture for debugging and drift detection:
 - Normalization + diff for captured network responses
 - Handlers: browser, session, scraper, selector, error, retry, monitoring, coordinator
 
-**BetB2B integration:** The snapshot system is wired into `BetB2BTelemetry` via the
-`capture_error_snapshot()` method. When `snapshot_on_error=True` (default), a failed
-scrape phase will attempt to use the framework's `SnapshotManager` to capture browser
-state (HTML + screenshot) and fall back to a JSON error file if the manager is
-unavailable. **However, snapshots are only triggered on the error path** — there is no
-proactive snapshot on successful scrapes (e.g., periodic DOM snapshots for drift
-detection). A future agent should add: (1) success-path snapshot captures at configurable
-intervals, (2) automatic diff-based drift detection comparing snapshots across sessions.
+**BetB2B integration (fully wired via `telemetry_integration.py`):**
+
+1. **Success-path page snapshots** — `capture_page_snapshot()` is called during
+   DOM fallback renders (live + prematch). The `render_dom_events()` method in
+   `session.py` accepts an `_on_page_ready` callback that the scraper uses to
+   capture a full-page HTML + screenshot snapshot via the framework's
+   `SnapshotManager`, with a direct-HTML fallback if the manager is unavailable.
+
+2. **Success-path result snapshots** — `capture_result_snapshot()` serializes
+   every completed scrape result (events, markets, captures) into a timestamped
+   JSON file under `data/telemetry/betb2b/result_snapshots/`. This enables
+   diff-based drift detection across sessions without needing a browser.
+
+3. **Error-path snapshots** — `capture_error_snapshot()` triggers on failures
+   (DOM fallback errors, timeouts). Uses the framework's `SnapshotManager` with
+   a JSON fallback when no browser page is available.
+
+All snapshot paths are controlled by `snapshot_on_error` (default True) and
+`snapshot_on_success` (default True) flags on `BetB2BTelemetry`.
 
 ## Rules (beyond the .context protocol)
 
