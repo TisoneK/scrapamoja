@@ -16,6 +16,12 @@ Extraction mode is **hybrid** (ADR-3 in
      :class:`Event` / :class:`Market` / :class:`Selection` (via
      :class:`BetB2BExtractionRules`).
 
+Per ADR-4, step 2 is best-effort: if a feed capture comes back non-2xx
+or undecodable (the platform's auth-header contract rotates), the
+scraper falls back to rendering the corresponding live/line page and
+reading the odds via :func:`~.extraction.dom.extract_events_from_page`
+instead of retrying the API.
+
 Usage::
 
     from src.network.proxy import build_proxy_manager
@@ -46,7 +52,7 @@ from src.network.proxy import ProxyManager
 
 from .client import BetB2BFeedClient
 from .config import BetB2BSkinConfig
-from .extraction.models import BetB2BScrapeResult, CapturedFeedResponse, Event
+from .extraction.models import BetB2BScrapeResult, CapturedFeedResponse, Event, Sport
 from .extraction.rules import BetB2BExtractionRules
 from .session import BetB2BSessionManager
 
@@ -197,7 +203,7 @@ class BetB2BScraper:
 
         try:
             async with asyncio.timeout(overall_timeout):
-                captured, action_url = await self._run_action(
+                captured, action_url, dom_events = await self._run_action(
                     action=action, sport_id=sport_id, count=count,
                 )
         except asyncio.TimeoutError:
@@ -219,6 +225,7 @@ class BetB2BScraper:
         if action != "raw_capture":
             for cap in captured:
                 events.extend(self.extraction_rules.extract_from_captured(cap))
+            events.extend(dom_events)
             events = self._dedupe_events(events)
 
         # Did the session get harvested?
@@ -249,27 +256,38 @@ class BetB2BScraper:
         action: str,
         sport_id: Optional[int],
         count: int,
-    ) -> "tuple[List[CapturedFeedResponse], str]":
-        """Dispatch the action to one or more feed fetches."""
+    ) -> "tuple[List[CapturedFeedResponse], str, List[Event]]":
+        """Dispatch the action to one or more feed fetches.
+
+        Per ADR-4, the direct-API feed is best-effort: a failed capture
+        (non-2xx status, e.g. the 406 seen when the platform rotates its
+        auth-header contract) triggers a DOM-extraction fallback on the
+        corresponding live/line page instead of retrying the API.
+        """
         extra_params: Dict[str, str] = {"count": str(count)}
         if sport_id is not None:
             extra_params["sports"] = str(sport_id)
 
         captured: List[CapturedFeedResponse] = []
+        dom_events: List[Event] = []
 
         if action == "list_live":
             cap = await self.feed_client.fetch(
                 "events_top", root="live", extra_params=extra_params,
             )
             captured.append(cap)
-            return captured, cap.url
+            if self._capture_failed(cap):
+                dom_events.extend(await self._dom_fallback(is_live=True))
+            return captured, cap.url, dom_events
 
         if action == "list_prematch":
             cap = await self.feed_client.fetch(
                 "events_top", root="line", extra_params=extra_params,
             )
             captured.append(cap)
-            return captured, cap.url
+            if self._capture_failed(cap):
+                dom_events.extend(await self._dom_fallback(is_live=False))
+            return captured, cap.url, dom_events
 
         if action == "list_all":
             live_cap = await self.feed_client.fetch(
@@ -279,34 +297,61 @@ class BetB2BScraper:
                 "events_top", root="line", extra_params=extra_params,
             )
             captured.extend([live_cap, line_cap])
-            return captured, live_cap.url
+            if self._capture_failed(live_cap):
+                dom_events.extend(await self._dom_fallback(is_live=True))
+            if self._capture_failed(line_cap):
+                dom_events.extend(await self._dom_fallback(is_live=False))
+            return captured, live_cap.url, dom_events
 
         if action == "raw_capture":
-            # Capture both roots, no extraction.
+            # Capture both roots, no extraction, no DOM fallback.
             live_cap = await self.feed_client.fetch(
                 "events_top", root="live", extra_params=extra_params,
             )
             captured.append(live_cap)
-            return captured, live_cap.url
+            return captured, live_cap.url, dom_events
 
         if action == "sports_short":
             # Both roots have a sports-short endpoint — prefer LineFeed
-            # (prematch has the fuller tree).
+            # (prematch has the fuller tree). No DOM fallback (not an
+            # event listing).
             cap = await self.feed_client.fetch(
                 "sports_short", root="line", extra_params=extra_params,
             )
             captured.append(cap)
-            return captured, cap.url
+            return captured, cap.url, dom_events
 
         if action == "top_champs":
             cap = await self.feed_client.fetch(
                 "top_champs", root="line", extra_params=extra_params,
             )
             captured.append(cap)
-            return captured, cap.url
+            return captured, cap.url, dom_events
 
         # Unreachable — action validated above.
         raise ValueError(f"Unhandled action {action!r}")
+
+    @staticmethod
+    def _capture_failed(cap: CapturedFeedResponse) -> bool:
+        """True if the API capture didn't yield usable data."""
+        return cap.status == 0 or cap.status >= 400 or not cap.decoded
+
+    async def _dom_fallback(self, *, is_live: bool) -> List[Event]:
+        """Render the corresponding live/line page and extract via DOM."""
+        try:
+            default_sport = Sport.OTHER
+        except Exception:  # noqa: BLE001
+            default_sport = None
+        try:
+            return await self.session_manager.render_dom_events(
+                is_live=is_live, sport=default_sport,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "skin=%s DOM fallback (is_live=%s) failed: %s",
+                self.skin.name, is_live, exc,
+            )
+            return []
 
     # ------------------------------------------------------------------ #
     # Helpers
@@ -363,7 +408,7 @@ class BetB2BScraper:
         return {
             "skin": self.skin.to_dict(),
             "actions": sorted(_VALID_ACTIONS),
-            "extraction_mode": "hybrid",
+            "extraction_mode": "hybrid (API primary, DOM fallback on failed capture — ADR-4)",
             "proxy_endpoint": (
                 self.proxy_endpoint.to_dict(redact=True)
                 if self.proxy_endpoint is not None

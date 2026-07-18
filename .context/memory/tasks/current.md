@@ -1,26 +1,27 @@
 # Current Task (overwrite each session)
 
-> **⚠️ READ FIRST (Session 13, 2026-07-19): live validation revealed the direct-API
-> contract DRIFTED.** `service-api/{Live,Line}Feed/Get1x2_VZip` now returns **`406
-> feed/NotAcceptableException`** to httpx with the base headers+cookies that worked
-> 2026-07-18 — and to a bare in-browser `fetch` too. The feed moved to a **worker
-> context** (invisible to page fetch/XHR hooks + page-target CDP) and `ivpn-sw.js`
-> now injects a required header (`x-dt`←`x-project-id`) via `postMessage`. **Do NOT
-> keep hunting the header** — it rotates. Per **ADR-4**: build a **DOM extractor as
-> the PRIMARY betb2b path** (odds render fine); keep httpx as best-effort with
-> 406→re-harvest/DOM-fallback. If you do want direct-API, capture headers per session
-> via CDP `Target.setAutoAttach` to the SW/worker target + `Network`. Proxy env below
-> still works for a browser bootstrap (page loads 200, egress KE). See
-> `src/sites/linebet/RECON.md` "MOVING TARGET" warning + ADR-4.
+> **⚠️ READ FIRST (Session 14): DOM fallback is now WIRED, still UNTESTED live.**
+> `src/sites/betb2b/extraction/dom.py` (Session 13) is now called automatically from
+> `BetB2BScraper._run_action`: for `list_live`/`list_prematch`/`list_all`, any feed
+> capture that comes back non-2xx or undecodable triggers
+> `BetB2BSessionManager.render_dom_events()`, which navigates the skin's live/line
+> page and reads odds straight off the rendered DOM (selectors in `dom.py` are
+> best-guess, unverified against a real page). `raw_capture`/`sports_short`/
+> `top_champs` are unchanged (no DOM fallback — not event listings). **No live test
+> run this session (token-constrained)** — syntax/AST-checked only. Per ADR-4, do
+> NOT resume chasing the rotating `x-dt` header; the API path stays best-effort.
 
-**NEXT: add a DOM extractor to the betb2b scraper (primary path), then live-validate**
-(supersedes the Session-12 "live-validate httpx" plan — that path now 406s). Session 12 ended here,
-2026-07-18). The `src/sites/betb2b/` base scraper is **built, unit-tested (24/24
-passing), and committed/pushed** — but the live end-to-end validation through the
-Kenya proxy is **pending**. It was blocked three times in Session 12 by a recurring
-`broken session: 403 Forbidden` outage of the Bash tool that always hit right before
-the `validate_live` command. See the "Live validation pending" section below for the
-exact command + the operator's proxy env vars.
+> **⚠️ SECURITY: rotate the bore.pub proxy password and the GitHub PAT** used earlier
+> this session — both were pasted into a chat transcript and should be treated as
+> compromised regardless of whether this repo is public or private.
+
+**NEXT: live-validate the wired fallback.** Run `validate_live` (command below) through
+the Kenya proxy. Expect `list_live`/`list_prematch` to 406 (per Session-13 finding) and
+then fall back to DOM — check the result's `events` come back non-empty and
+`raw_endpoint="dom"`. If DOM selectors in `_PAGE_SCRIPT` (in `extraction/dom.py`) miss
+real events, capture a page screenshot/HTML dump and tune the `[class*=...]` selectors
+against actual markup. See "Live validation pending" below for the exact command +
+proxy env vars.
 
 ## What shipped (Session 12, on `main`)
 - `src/sites/betb2b/` — the family base scraper. Public surface:

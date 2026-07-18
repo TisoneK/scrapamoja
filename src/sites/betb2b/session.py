@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from src.network.proxy import ProxyEndpoint, verify_proxy
 from src.network.session import SessionHarvester, SessionPackage, SessionValidator
@@ -278,6 +278,77 @@ class BetB2BSessionManager:
             result.latency_ms or 0.0,
         )
         return True
+
+    async def render_dom_events(
+        self,
+        *,
+        is_live: bool,
+        sport: Optional[Any] = None,
+        settle_seconds: Optional[float] = None,
+    ) -> List[Any]:
+        """Navigate the live/line page and extract events from the rendered DOM.
+
+        This is the drift-tolerant fallback path (ADR-4): when the direct
+        ``httpx`` feed poll fails (e.g. a non-2xx status), read the odds
+        the SPA already rendered in a real browser instead of chasing the
+        API's auth-header contract. Best-effort — returns an empty list
+        on any failure rather than raising.
+        """
+        from playwright.async_api import async_playwright
+
+        from .extraction.dom import extract_events_from_page
+
+        wait_s = self.settle_seconds if settle_seconds is None else settle_seconds
+        route = "live" if is_live else "line"
+        url = self.skin.bootstrap_url(route)
+        stealth = self.skin.stealth_profile
+
+        try:
+            async with async_playwright() as pw:
+                browser = await pw.chromium.launch(headless=stealth.get("headless", True))
+                try:
+                    context_kwargs: dict[str, Any] = {
+                        "user_agent": stealth.get("user_agent"),
+                        "viewport": stealth.get("viewport", {"width": 1536, "height": 864}),
+                        "locale": stealth.get("locale", "en-US"),
+                        "timezone_id": stealth.get("timezone", "Europe/London"),
+                    }
+                    if self.proxy is not None and not self.proxy.is_direct:
+                        pp = self.proxy.to_playwright_proxy()
+                        if pp:
+                            context_kwargs["proxy"] = pp
+
+                    context = await browser.new_context(**context_kwargs)
+                    page = await context.new_page()
+
+                    try:
+                        await page.goto(
+                            url, wait_until="domcontentloaded",
+                            timeout=self.bootstrap_timeout_ms,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning(
+                            "skin=%s dom-render goto %s failed: %s",
+                            self.skin.name, url, exc,
+                        )
+                        return []
+
+                    await self._dismiss_consent(page)
+                    await asyncio.sleep(wait_s)
+
+                    events = await extract_events_from_page(
+                        page, is_live=is_live, source_url=url, sport=sport,
+                    )
+                    logger.info(
+                        "skin=%s dom-render extracted %d events from %s",
+                        self.skin.name, len(events), url,
+                    )
+                    return events
+                finally:
+                    await browser.close()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("skin=%s dom-render failed: %s", self.skin.name, exc)
+            return []
 
     async def _dismiss_consent(self, page: Any) -> None:
         """Best-effort cookie-consent banner dismissal."""
