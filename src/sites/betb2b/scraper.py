@@ -1,0 +1,377 @@
+"""BetB2B family base scraper.
+
+The public surface of the betb2b site package. Parameterised by a
+:class:`BetB2BSkinConfig` — every BetB2B-family bookmaker (linebet,
+melbet, betwinner, 22bet, megapari, 888starz, helabet, paripesa, …)
+is one skin config away from being scrapable.
+
+Extraction mode is **hybrid** (ADR-3 in
+`.context/memory/plans/decisions.md`):
+
+  1. Browser bootstrap once through an allowed-country proxy to harvest
+     ~21 session cookies (via :class:`BetB2BSessionManager`).
+  2. ``httpx``-poll the ``/service-api/{LiveFeed,LineFeed}/…`` feeds
+     directly (via :class:`BetB2BFeedClient`) — no browser per poll.
+  3. Project the 1xbet terse-key ``Value[]`` JSON onto
+     :class:`Event` / :class:`Market` / :class:`Selection` (via
+     :class:`BetB2BExtractionRules`).
+
+Usage::
+
+    from src.network.proxy import build_proxy_manager
+    from src.sites.betb2b import BetB2BScraper
+    from src.sites.betb2b.config import BetB2BSkinConfig
+
+    skin = BetB2BSkinConfig.from_yaml("src/sites/betb2b/skins/linebet.yaml")
+    pm = build_proxy_manager({
+        "endpoints": [{"id": "kenya",
+                       "url": "http://USER:PASS@bore.pub:1074",
+                       "country": "KE", "source": "ngrok"}],
+        "routing": [{"pattern": "*.linebet.com", "target": "kenya"}],
+    })
+
+    async with BetB2BScraper(skin, proxy_manager=pm) as scraper:
+        result = await scraper.scrape(action="list_live")
+        print(result["event_count"], "live events")
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from src.network.proxy import ProxyManager
+
+from .client import BetB2BFeedClient
+from .config import BetB2BSkinConfig
+from .extraction.models import BetB2BScrapeResult, CapturedFeedResponse, Event
+from .extraction.rules import BetB2BExtractionRules
+from .session import BetB2BSessionManager
+
+logger = logging.getLogger(__name__)
+
+
+_VALID_ACTIONS = {
+    "list_live",          # poll LiveFeed (in-play)
+    "list_prematch",      # poll LineFeed (prematch/scheduled)
+    "list_all",           # poll both roots
+    "raw_capture",        # capture only, no extraction
+    "sports_short",       # poll the sports/champ tree
+    "top_champs",         # poll the top-championships list
+}
+
+
+class BetB2BScraper:
+    """Hybrid base scraper for the BetB2B / 1xbet family.
+
+    This is a standalone scraper (NOT a ``BaseSiteScraper`` subclass) —
+    the betb2b family is parameterised by skin, not by site, so it
+    doesn't fit the one-class-per-site registry model. Per-skin
+    :class:`LinebetScraper`-style adapters can wrap this if registry
+    integration is needed.
+    """
+
+    def __init__(
+        self,
+        skin: BetB2BSkinConfig,
+        *,
+        proxy_manager: Optional[ProxyManager] = None,
+        proxy_endpoint_id: Optional[str] = None,
+        timeout: float = 20.0,
+        rate_limit_per_minute: int = 30,
+        settle_seconds: float = 12.0,
+    ) -> None:
+        """Initialise the scraper for one skin.
+
+        Args:
+            skin: the :class:`BetB2BSkinConfig` to scrape.
+            proxy_manager: a :class:`ProxyManager` with the skin's
+                allowed-country proxy wired in. If None, the scraper
+                runs DIRECT (only works for non-geo-gated testing).
+            proxy_endpoint_id: which endpoint id in the
+                :class:`ProxyManager` to route through. Defaults to
+                ``skin.proxy_endpoint_id`` or "direct".
+            timeout: per-request httpx timeout (seconds).
+            rate_limit_per_minute: polite cap on feed polls.
+            settle_seconds: how long to let the SPA settle during
+                cookie-harvest bootstrap.
+        """
+        self.skin = skin
+        self.proxy_manager = proxy_manager
+        self.timeout = timeout
+        self.rate_limit_per_minute = rate_limit_per_minute
+        self.settle_seconds = settle_seconds
+
+        # Resolve the proxy endpoint for this skin.
+        endpoint_id = proxy_endpoint_id or skin.proxy_endpoint_id
+        self.proxy_endpoint = self._resolve_proxy(endpoint_id)
+
+        # Wire up the session manager + feed client.
+        self.session_manager = BetB2BSessionManager(
+            skin=skin,
+            proxy=self.proxy_endpoint,
+            settle_seconds=settle_seconds,
+        )
+        self.feed_client = BetB2BFeedClient(
+            skin=skin,
+            session_manager=self.session_manager,
+            proxy=self.proxy_endpoint,
+            timeout=timeout,
+            rate_limit_per_minute=rate_limit_per_minute,
+        )
+        self.extraction_rules = BetB2BExtractionRules(skin)
+
+        self._started = False
+
+    # ------------------------------------------------------------------ #
+    # Lifecycle
+    # ------------------------------------------------------------------ #
+    async def __aenter__(self) -> "BetB2BScraper":
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.close()
+
+    async def start(self) -> None:
+        if self._started:
+            return
+        await self.feed_client.start()
+        self._started = True
+        logger.info("BetB2BScraper started for skin=%s", self.skin.name)
+
+    async def close(self) -> None:
+        if not self._started:
+            return
+        await self.feed_client.close()
+        self._started = False
+        logger.info("BetB2BScraper closed for skin=%s", self.skin.name)
+
+    # ------------------------------------------------------------------ #
+    # Scrape
+    # ------------------------------------------------------------------ #
+    async def scrape(
+        self,
+        *,
+        action: str = "list_live",
+        sport_id: Optional[int] = None,
+        count: int = 50,
+        timeout_seconds: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Run one scrape action and return a :class:`BetB2BScrapeResult` dict.
+
+        Args:
+            action: one of :data:`_VALID_ACTIONS`.
+            sport_id: optional sport id (``SI``) to filter the feed
+                (e.g. Basketball=3, Football=1). Adds ``sports=<id>``
+                to the feed query params.
+            count: the ``count=`` query param (number of events to ask
+                for, where supported).
+            timeout_seconds: hard cap on the whole scrape.
+
+        Returns:
+            ``BetB2BScrapeResult.to_dict()`` — see
+            :meth:`BetB2BScrapeResult.to_dict`.
+        """
+        if action not in _VALID_ACTIONS:
+            raise ValueError(
+                f"Unknown action {action!r} — valid: {sorted(_VALID_ACTIONS)}"
+            )
+
+        if not self.skin.enabled:
+            raise RuntimeError(f"skin={self.skin.name} is disabled")
+
+        if not self._started:
+            await self.start()
+
+        errors = self.skin.validate()
+        if errors:
+            raise RuntimeError(
+                f"skin={self.skin.name} config invalid: {errors}"
+            )
+
+        start = datetime.now(timezone.utc)
+        overall_timeout = timeout_seconds or 120.0
+
+        try:
+            async with asyncio.timeout(overall_timeout):
+                captured, action_url = await self._run_action(
+                    action=action, sport_id=sport_id, count=count,
+                )
+        except asyncio.TimeoutError:
+            logger.error(
+                "skin=%s scrape '%s' timed out after %ss",
+                self.skin.name, action, overall_timeout,
+            )
+            result = BetB2BScrapeResult(
+                skin=self.skin.name,
+                action=action,
+                url=self.skin.base_url,
+                scrape_duration_seconds=(datetime.now(timezone.utc) - start).total_seconds(),
+                error=f"scrape timed out after {overall_timeout}s",
+            )
+            return result.to_dict()
+
+        # Extract events (unless raw_capture).
+        events: List[Event] = []
+        if action != "raw_capture":
+            for cap in captured:
+                events.extend(self.extraction_rules.extract_from_captured(cap))
+            events = self._dedupe_events(events)
+
+        # Did the session get harvested?
+        session_harvested = self.session_manager.has_session
+
+        duration = (datetime.now(timezone.utc) - start).total_seconds()
+        result = BetB2BScrapeResult(
+            skin=self.skin.name,
+            action=action,
+            url=action_url,
+            events=events,
+            captured_responses=captured,
+            scrape_duration_seconds=duration,
+            session_harvested=session_harvested,
+        )
+        logger.info(
+            "skin=%s scrape '%s' done: %d events from %d captures in %.2fs",
+            self.skin.name, action, len(events), len(captured), duration,
+        )
+        return result.to_dict()
+
+    # ------------------------------------------------------------------ #
+    # Action dispatch
+    # ------------------------------------------------------------------ #
+    async def _run_action(
+        self,
+        *,
+        action: str,
+        sport_id: Optional[int],
+        count: int,
+    ) -> "tuple[List[CapturedFeedResponse], str]":
+        """Dispatch the action to one or more feed fetches."""
+        extra_params: Dict[str, str] = {"count": str(count)}
+        if sport_id is not None:
+            extra_params["sports"] = str(sport_id)
+
+        captured: List[CapturedFeedResponse] = []
+
+        if action == "list_live":
+            cap = await self.feed_client.fetch(
+                "events_top", root="live", extra_params=extra_params,
+            )
+            captured.append(cap)
+            return captured, cap.url
+
+        if action == "list_prematch":
+            cap = await self.feed_client.fetch(
+                "events_top", root="line", extra_params=extra_params,
+            )
+            captured.append(cap)
+            return captured, cap.url
+
+        if action == "list_all":
+            live_cap = await self.feed_client.fetch(
+                "events_top", root="live", extra_params=extra_params,
+            )
+            line_cap = await self.feed_client.fetch(
+                "events_top", root="line", extra_params=extra_params,
+            )
+            captured.extend([live_cap, line_cap])
+            return captured, live_cap.url
+
+        if action == "raw_capture":
+            # Capture both roots, no extraction.
+            live_cap = await self.feed_client.fetch(
+                "events_top", root="live", extra_params=extra_params,
+            )
+            captured.append(live_cap)
+            return captured, live_cap.url
+
+        if action == "sports_short":
+            # Both roots have a sports-short endpoint — prefer LineFeed
+            # (prematch has the fuller tree).
+            cap = await self.feed_client.fetch(
+                "sports_short", root="line", extra_params=extra_params,
+            )
+            captured.append(cap)
+            return captured, cap.url
+
+        if action == "top_champs":
+            cap = await self.feed_client.fetch(
+                "top_champs", root="line", extra_params=extra_params,
+            )
+            captured.append(cap)
+            return captured, cap.url
+
+        # Unreachable — action validated above.
+        raise ValueError(f"Unhandled action {action!r}")
+
+    # ------------------------------------------------------------------ #
+    # Helpers
+    # ------------------------------------------------------------------ #
+    def _resolve_proxy(self, endpoint_id: Optional[str]) -> Optional[Any]:
+        """Resolve the proxy endpoint for this skin from the ProxyManager."""
+        if self.proxy_manager is None:
+            return None
+        try:
+            ep = self.proxy_manager.acquire(
+                site=self.skin.domain,
+                endpoint_id=endpoint_id,
+            )
+            return ep
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "skin=%s proxy resolution failed (endpoint_id=%s): %s — "
+                "falling back to DIRECT",
+                self.skin.name, endpoint_id, exc,
+            )
+            return None
+
+    @staticmethod
+    def _dedupe_events(events: List[Event]) -> List[Event]:
+        """De-duplicate events by ``event_id`` and merge markets."""
+        by_id: Dict[str, Event] = {}
+        for ev in events:
+            if not ev.event_id:
+                continue
+            existing = by_id.get(ev.event_id)
+            if existing is None:
+                by_id[ev.event_id] = ev
+                continue
+            # Merge: prefer richer market lists; keep the first source_url.
+            if len(ev.markets) > len(existing.markets):
+                existing.markets = ev.markets
+                existing.raw_endpoint = ev.raw_endpoint
+            # Prefer the live version if we have both.
+            if ev.is_live and not existing.is_live:
+                existing.is_live = True
+                existing.status = ev.status
+                existing.score_home = ev.score_home or existing.score_home
+                existing.score_away = ev.score_away or existing.score_away
+                existing.minute = ev.minute or existing.minute
+                existing.period = ev.period or existing.period
+                existing.time_remaining = ev.time_remaining or existing.time_remaining
+        return list(by_id.values())
+
+    # ------------------------------------------------------------------ #
+    # Introspection
+    # ------------------------------------------------------------------ #
+    def get_info(self) -> Dict[str, Any]:
+        """Return scraper + skin info for the ``info`` CLI command."""
+        return {
+            "skin": self.skin.to_dict(),
+            "actions": sorted(_VALID_ACTIONS),
+            "extraction_mode": "hybrid",
+            "proxy_endpoint": (
+                self.proxy_endpoint.to_dict(redact=True)
+                if self.proxy_endpoint is not None
+                else None
+            ),
+            "session_harvested": self.session_manager.has_session,
+            "session_age_seconds": (
+                self.session_manager.session_age.total_seconds()
+                if self.session_manager.session_age is not None else None
+            ),
+        }

@@ -1,0 +1,21 @@
+# Linebet skin — the BetB2B skin we reverse-engineered against.
+# See src/sites/linebet/RECON.md for the full recon notes.
+#
+# To add a new skin: copy this file, change `name` + `domain` + the
+# identity fields (partner/gr/country/geo), commit. The base scraper
+# picks it up automatically — no Python changes needed.
+
+name: linebet
+domain: linebet.com
+partner: 189            # the `partner=` / `ref=` query param (linebet = 189)
+gr: 650                 # the `gr=` project-group id (linebet = 650)
+country: 87             # internal BetB2B country id (87 = Kenya)
+geo: KE                 # ISO country for proxy routing / config API
+language: en
+enabled: true
+proxy_endpoint_id: kenya
+allowed_countries: ["KE"]
+notes: |
+  Default skin — linebet.com (Kenya-confirmed 2026-07-18).
+  Same backend as melbet/betwinner/22bet/megapari/888starz/helabet/paripesa.
+  See src/sites/linebet/RECON.md for the full reverse-engineering writeup.

@@ -1,0 +1,16 @@
+# Megapari skin — BetB2B family member.
+# Verified 2026-07-18: same backend, same endpoints, same schema as linebet.
+
+name: megapari
+domain: megapari.com
+partner: 1             # megapari partner id (confirm against live capture)
+gr: 1                  # megapari project-group id (confirm)
+country: 87
+geo: KE
+language: en
+enabled: true
+proxy_endpoint_id: kenya
+allowed_countries: ["KE"]
+notes: |
+  BetB2B family — megapari.com. Verified 2026-07-18 as same-backend.
+  Per-skin partner/gr ids are best-effort — confirm with a live capture.

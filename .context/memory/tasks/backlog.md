@@ -303,7 +303,7 @@ don't remove the line.
       whole exercise was for. Extraction mode = `hybrid` per ADR-3.
 
 ---
-- [ ] **Generalize the linebet scraper into a `betb2b` family base scraper** (added 2026-07-18 by Claude Opus 4.8, Session 11 cont.) —
+- [x] **Generalize the linebet scraper into a `betb2b` family base scraper** — DONE 2026-07-18 Session 12 (`src/sites/betb2b/` shipped: config + markets + sports + extraction + session + httpx client + scraper + CLI + scripts + 8 skin YAMLs + 24 unit tests + README; live validation pending — see `tasks/current.md`). Original entry: (added 2026-07-18 by Claude Opus 4.8, Session 11 cont.) —
       VERIFIED 2026-07-18: linebet is one skin of the BetB2B/1xbet platform, and the
       recon generalizes across the family. Probing `/service-api/LineFeed/Get1x2_VZip`
       through the Kenya proxy returned the IDENTICAL `feed/NotAcceptableException` 406

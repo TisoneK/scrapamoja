@@ -1,0 +1,16 @@
+# Betwinner skin — BetB2B family member.
+# Verified 2026-07-18: same backend, same endpoints, same schema as linebet.
+
+name: betwinner
+domain: betwinner.com
+partner: 1             # betwinner partner id (confirm against live capture)
+gr: 1                  # betwinner project-group id (confirm)
+country: 87
+geo: KE
+language: en
+enabled: true
+proxy_endpoint_id: kenya
+allowed_countries: ["KE"]
+notes: |
+  BetB2B family — betwinner.com. Verified 2026-07-18 as same-backend.
+  Per-skin partner/gr ids are best-effort — confirm with a live capture.

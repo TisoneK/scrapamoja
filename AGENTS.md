@@ -53,3 +53,48 @@ If you read nothing else, obey these rules:
 Formats and file rules: `.context/core/schemas/context-schema.md` is
 the single source of truth. Project-specific rule adjustments:
 `.context/memory/overrides/rules.md` (they win over the edition).
+
+---
+
+## Active task — `src/sites/betb2b/` family base scraper
+
+**One-paragraph brief.** The linebet recon (see
+`src/sites/linebet/RECON.md` + ADR-3 in `.context/memory/plans/decisions.md`)
+generalizes across the BetB2B / 1xbet family of bookmakers (melbet,
+betwinner, 22bet, megapari, 888starz, helabet, paripesa, linebet).
+Build `src/sites/betb2b/` as the family base scraper, with thin
+per-skin configs (a `BetB2BSkinConfig` dataclass: `domain`,
+`partner`/`ref`, `gr` project id, geo `country`). Extraction mode is
+**`hybrid`** — browser bootstrap once through an allowed-country proxy
+to harvest ~21 session cookies (the framework's `SessionHarvester` +
+`HybridConfig` already model this), then `httpx`-poll the
+`/service-api/{LiveFeed,LineFeed}/…` feeds directly. See
+`.context/memory/tasks/current.md` for the active build state and
+`src/sites/betb2b/README.md` for the operator guide.
+
+**Hard rules for this task:**
+
+1. **Everything is customizable.** The family scraper must be
+   config-driven: every feed URL, every header, every query param,
+   every market-id mapping, every sport-id mapping, every proxy route
+   comes from a `BetB2BSkinConfig` (Python dataclass, optionally
+   loaded from per-skin YAML). No skin-specific values hardcoded in
+   the base scraper.
+2. **Re-use the framework.** `ProxyManager` (`src/network/proxy/`),
+   `SessionHarvester` (`src/network/session.py`), and
+   `ExtractionMode.HYBRID` (`src/sites/base/site_config.py`) already
+   exist — wire into them, do not re-invent.
+3. **Never log secrets.** Proxy credentials and harvested cookies are
+   redacted by `ProxyEndpoint.to_dict(redact=True)` and
+   `SessionPackage.to_dict()`. Never `print()` a raw cookie or proxy
+   URL.
+4. **Per-skin config lives in `src/sites/betb2b/skins/<name>.yaml`.**
+   A `BetB2BSkinConfig.from_yaml(path)` classmethod loads it. The
+   shipped skins (linebet, melbet, betwinner, 22bet, megapari,
+   888starz, helabet, paripesa) are starting points — operators add
+   new skins by dropping a YAML file in.
+5. **Live tests against the real site are gated on the operator's
+   proxy.** The sandbox IP is geo-blocked (HTTP 203 → `/en/block`).
+   Never assume live capture works without a Kenya-style residential
+   proxy in `ProxyManager`. Always provide a `--no-live` /
+   offline-replay path in scripts so the test suite runs CI-clean.

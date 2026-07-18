@@ -1,0 +1,19 @@
+# Melbet skin — BetB2B family member.
+# Verified 2026-07-18: same backend, same endpoints, same schema as linebet.
+# Per-skin params (partner/gr/country) are best-effort starting points —
+# confirm against a live capture before production use.
+
+name: melbet
+domain: melbet.com
+partner: 61            # melbet partner id (confirm against live capture)
+gr: 6                  # melbet project-group id (confirm)
+country: 87
+geo: KE
+language: en
+enabled: true
+proxy_endpoint_id: kenya
+allowed_countries: ["KE"]
+notes: |
+  BetB2B family — melbet.com. Verified 2026-07-18 as same-backend
+  (identical 406 feed/NotAcceptableException envelope on bare probe).
+  Per-skin partner/gr ids are best-effort — confirm with a live capture.

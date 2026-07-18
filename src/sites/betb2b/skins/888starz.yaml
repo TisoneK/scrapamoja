@@ -1,0 +1,16 @@
+# 888starz skin — BetB2B family member.
+# Verified 2026-07-18: same backend, same endpoints, same schema as linebet.
+
+name: "888starz"
+domain: 888starz.bet
+partner: 1             # 888starz partner id (confirm against live capture)
+gr: 1                  # 888starz project-group id (confirm)
+country: 87
+geo: KE
+language: en
+enabled: true
+proxy_endpoint_id: kenya
+allowed_countries: ["KE"]
+notes: |
+  BetB2B family — 888starz.bet. Verified 2026-07-18 as same-backend.
+  Per-skin partner/gr ids are best-effort — confirm with a live capture.
