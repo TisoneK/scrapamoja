@@ -21,9 +21,10 @@ documents what the live site actually does. Companion data:
   `HTTP 203 → /en/block` before any app code runs. From an allowed-country IP
   (Kenya confirmed) the full SPA loads (`200`). The detected country flows through
   the config API as the `g=` query param (`g=KE`; `g=US` on the block page).
-- **The live odds come from `/service-api/LiveFeed/Get1x2_VZip`** (and siblings —
-  see below). It is a plain HTTP GET returning JSON (1xbet terse-key schema).
-  **Proven:** replays from `httpx` with no browser, `Success=true`, real events.
+- **Odds come from `/service-api/{LiveFeed,LineFeed}/Get1x2_VZip`** (+ siblings):
+  `LiveFeed` = in-play (`/en/live`), `LineFeed` = prematch/scheduled
+  (`/en/line/<sport>`). Plain HTTP GET → JSON (1xbet terse-key schema).
+  **Proven:** both roots replay from `httpx` with no browser, `Success=true`.
 - **What it takes to replay:** (1) an allowed-country proxy, (2) the base betting
   headers (`is-srv:false`, `x-app-n:__BETTING_APP__`, `x-requested-with:XMLHttpRequest`,
   `x-svc-source:__BETTING_APP__`), (3) session cookies (harvest once from a browser
@@ -111,18 +112,32 @@ the earlier draft guessed).
 
 ### The endpoints (host `linebet.com`, all `service-api`)
 
-| Endpoint | Purpose |
+**Two feed roots — this is the key split:**
+- **`LiveFeed/…`** = **in-play** (the site's `/en/live` pages). Confirmed replayable.
+- **`LineFeed/…`** = **pre-match / scheduled** (the site's `/en/line/<sport>` pages,
+  e.g. `https://linebet.com/en/line/basketball`). Confirmed replayable.
+
+They are the same endpoint names + schema under different roots:
+
+| Endpoint (swap `LiveFeed`↔`LineFeed` for in-play↔prematch) | Purpose |
 |----------|---------|
-| `GET /service-api/LiveFeed/Get1x2_VZip?count=10&lng=en&gr=650&mode=4&country=87&top=true&partner=189&virtualSports=true&noFilterBlockEvent=true` | **live events + odds** (in-play). `count`=events, `top=true`=featured. |
-| `GET /service-api/LiveFeed/GetSportsShortZip?lng=en&gr=650&country=87&partner=189&groupChamps=true` | live sports/champ tree |
-| `GET /service-api/LiveFeed/WebGetTopChampsZip?lng=en&gr=650&country=87` | top live championships |
-| `GET /service-api/LiveFeed/GetTopGamesStatZip?lng=en&partner=189` | top games stats |
-| `GET /service-api/main-line-feed/v1/…` | **pre-match** ("line") feed (vs `main-live-feed` for in-play) |
+| `GET /service-api/{LiveFeed,LineFeed}/Get1x2_VZip?count=10&lng=en&mode=4&country=87&top=true&partner=189&virtualSports=true` | **events + odds** (`top=true` = top games across sports; add a sport/champ filter for a full per-sport list — see note). Live adds `gr=650`, `mode=4`, `noFilterBlockEvent=true`. |
+| `GET /service-api/{LiveFeed,LineFeed}/WebGetTopChampsZip?lng=en&country=87&gr=650` | top championships |
+| `GET /service-api/{LiveFeed,LineFeed}/GetSportsShortZip?lng=en&gr=650&country=87&partner=189&groupChamps=true` | sports/champ tree |
+| `GET /service-api/{LiveFeed,LineFeed}/GetTopGamesStatZip?lng=en&antisports=66&partner=189` | top games stats |
+| `GET /service-api/main-{live,line}-feed/v1/expressDay?cfView=3&country=87&gr=650&lng=en&ref=189` | express-of-the-day |
 | `GET /champs-api/v1/get-champs-by-params-web` | championship list (sends the richer `x-*` header set) |
 
-Stable query params: `gr=650` (project/group id), `country=87`, `partner=189`,
-`ref=189`, `lng=en`. `_VZip`/`Zip` suffix = the response was gzip-compressed at the
-HTTP layer (httpx/browser decompress it automatically → JSON).
+Stable query params: `gr=650` (project/group id), `country=87`, `partner=189`
+(`ref=189`), `lng=en`. `_VZip`/`Zip` suffix = the response is gzip-compressed at the
+HTTP layer (httpx/browser decompress automatically → JSON).
+
+> **Note — `top=true` returns only "top games," not a full sport list.** On
+> `/en/line/basketball` the captured `LineFeed/Get1x2_VZip?top=true` returned 10 top
+> games *across all sports* (e.g. a football match), not the full basketball card.
+> For a complete per-sport prematch list the scraper must add a sport filter
+> (`sports=<SI>`, e.g. Basketball `SI=3`, Football `SI=1`) and/or walk champs via
+> `GetChampsZip` → `GetGamesZip`. Map the sport-id table during the build.
 
 ### Required request headers (values captured live)
 
