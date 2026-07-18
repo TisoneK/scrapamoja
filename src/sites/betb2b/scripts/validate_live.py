@@ -60,12 +60,16 @@ async def main() -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skin", default="linebet", help="Skin name (default: linebet)")
+    parser.add_argument("--sport", default=None,
+                        help="Sport slug (e.g. basketball, football, ice-hockey, tennis, esports). "
+                             "Default: all sports. Customizes the bootstrap URL + DOM selectors + "
+                             "market name overrides.")
     parser.add_argument("--settle", type=float, default=12.0,
                         help="Bootstrap SPA settle seconds (default: 12)")
     parser.add_argument("--count", type=int, default=50,
                         help="`count=` query param (default: 50)")
     parser.add_argument("--sport-id", type=int, default=None,
-                        help="Filter by sport SI id")
+                        help="Filter by sport SI id (overrides --sport)")
     parser.add_argument("--skip-live", action="store_true",
                         help="Skip LiveFeed (prematch-only test)")
     parser.add_argument("--skip-line", action="store_true",
@@ -77,7 +81,9 @@ async def main() -> int:
     from src.sites.betb2b import BetB2BScraper
     from src.sites.betb2b.cli.main import _load_skin
 
-    out_dir = Path(args.out) if args.out else _output_dir(f"betb2b_validate_{args.skin}")
+    out_dir = Path(args.out) if args.out else _output_dir(
+        f"betb2b_validate_{args.skin}{'_' + args.sport if args.sport else ''}"
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
     summary_path = out_dir / "summary.json"
     captured_dir = out_dir / "captured"
@@ -86,6 +92,7 @@ async def main() -> int:
     summary: Dict[str, Any] = {
         "started_at": datetime.now(timezone.utc).isoformat(),
         "skin": args.skin,
+        "sport": args.sport,
         "steps": [],
     }
 
@@ -183,6 +190,7 @@ async def main() -> int:
         proxy_endpoint_id=endpoint_id,
         rate_limit_per_minute=20,
         settle_seconds=args.settle,
+        sport=args.sport,
     ) as scraper:
         for i, action in enumerate(actions_to_run, start=4):
             print(f"[{i}/6] Running scrape action={action} ...", flush=True)
@@ -232,12 +240,22 @@ async def main() -> int:
     summary["total_events"] = len(all_events)
     summary["total_captures"] = len(all_captures)
     summary["events_preview"] = all_events[:5]
+    # Sport sanity-check: if every event has the same home/away, the DOM
+    # extractor is producing template garbage (the prior bug). Flag it.
+    if all_events:
+        homes = {e.get("home") for e in all_events if e.get("home")}
+        aways = {e.get("away") for e in all_events if e.get("away")}
+        summary["unique_home_count"] = len(homes)
+        summary["unique_away_count"] = len(aways)
+        summary["dom_quality"] = (
+            "ok" if len(homes) > 1 and len(aways) > 1 else "degenerate (template duplication)"
+        )
     summary_path.write_text(json.dumps(summary, indent=2, default=str))
 
     # Print a small summary to stdout.
     print(
         f"\nDONE: {len(all_events)} events, {len(all_captures)} captures "
-        f"from skin={args.skin}.",
+        f"from skin={args.skin}" + (f" sport={args.sport}" if args.sport else ""),
         flush=True,
     )
     print(f"Summary: {summary_path}", flush=True)
@@ -247,7 +265,8 @@ async def main() -> int:
         print(
             f"Sample event: {sample.get('home')} vs {sample.get('away')} "
             f"({sample.get('sport')}, {sample.get('competition')}) "
-            f"markets={len(sample.get('markets', []))}",
+            f"markets={len(sample.get('markets', []))} "
+            f"raw_endpoint={sample.get('raw_endpoint')}",
             flush=True,
         )
     return 0

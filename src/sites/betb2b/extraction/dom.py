@@ -1,28 +1,39 @@
 """DOM extractor for BetB2B skins — the PRIMARY, drift-proof extraction path.
 
-Per ADR-4, the direct-API feed (`service-api/{Live,Line}Feed/*`) rotates its
-auth-header contract (returns 406 without an SW-injected `x-dt`), so DOM
-extraction — reading the odds the SPA already rendered — is the reliable path.
-This module drives an already-navigated Playwright ``page`` and returns the same
-``Event``/``Market``/``Selection`` models the API extractor produces.
+Per ADR-4, the direct-API feed (``service-api/{Live,Line}Feed/*``) rotates
+its auth-header contract (returns 406 without an SW-injected ``x-dt``), so
+DOM extraction — reading the odds the SPA already rendered — is the
+reliable path. This module drives an already-navigated Playwright ``page``
+and returns the same ``Event``/``Market``/``Selection`` models the API
+extractor produces.
 
-Selectors are intentionally broad (class-name *contains* matches) so minor CSS
-churn on the 1xbet/BetB2B grid doesn't break extraction. It never raises: on any
-trouble it returns whatever parsed (possibly an empty list).
+Selectors target the **1xbet/BetB2B Vue grid** shipped on linebet/melbet/
+betwinner/22bet/megapari/888starz/helabet/paripesa — the
+``dashboard-champ`` → ``dashboard-champ__game`` → ``dashboard-game-block__team``
+hierarchy. Each sport can override the selectors via
+:class:`~src.sites.betb2b.sports.base.DOMSelectors`.
 
-NOTE: shipped without live testing (token-constrained session). Verify against a
-real `/en/live` + `/en/line/<sport>` page through the Kenya proxy before relying
-on it, and tune the selectors in ``_PAGE_SCRIPT`` if the grid markup differs.
+The extractor is **strict** by default — it rejects rows that don't yield
+exactly two non-empty team names. This avoids the failure mode where broad
+``[class*="team"]`` matches pick up score numbers, controls, or duplicate
+template strings and synthesize garbage events (the prior bug).
+
+It never raises: on any trouble it returns whatever parsed (possibly an
+empty list).
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, List, Optional
 
+from ..sports.base import DOMSelectors
 from .models import Event, EventStatus, Market, MarketType, Selection, Sport
 
 __all__ = ["extract_events_from_page"]
+
+logger = logging.getLogger(__name__)
 
 
 def _enum_fallback(enum_cls, *names):
@@ -33,48 +44,146 @@ def _enum_fallback(enum_cls, *names):
     return list(enum_cls)[-1]
 
 
-# In-page walker: returns a list of plain dicts (teams, score, competition, odds).
-# Broad matches so it survives class-name drift across skins/versions.
-_PAGE_SCRIPT = r"""
-() => {
-  const txt = el => (el && el.textContent ? el.textContent.trim() : "");
-  const num = s => { const m = (s||"").replace(',', '.').match(/-?\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
-  const rows = new Set();
-  // event rows: 1xbet/BetB2B grids use c-events__item / dashboard-game / *event*item*
-  document.querySelectorAll('[class*="c-events__item"],[class*="dashboard-game"],[class*="event"][class*="item"]').forEach(r => rows.add(r));
-  const out = [];
-  rows.forEach(row => {
-    // team names
-    const nameEls = row.querySelectorAll('[class*="team"],[class*="name__"],[class*="__name"],[class*="opponent"]');
-    const names = [...nameEls].map(txt).filter(Boolean);
-    if (names.length < 2) return;
-    const home = names[0], away = names[1];
-    // competition: nearest preceding champ/league header
-    let comp = "";
-    let p = row;
-    for (let i = 0; i < 6 && p; i++) {
-      p = p.previousElementSibling || (p.parentElement ? p.parentElement.previousElementSibling : null);
-      if (p && /champ|league|title|caption|head/i.test(p.className || "")) { comp = txt(p).split('\n')[0]; break; }
-    }
-    // scores (live)
-    const scoreEls = row.querySelectorAll('[class*="score"] [class*="value"],[class*="score__"],[class*="c-events-scoreboard"]');
-    const scoreTxt = [...scoreEls].map(txt).filter(Boolean).join(' ');
-    // odds buttons: coefficient cells
-    const betEls = row.querySelectorAll('[class*="bet"] [class*="coef"],[class*="__coef"],[class*="c-bets__bet"],[class*="value--coef"],button[class*="bet"]');
-    const odds = [];
-    betEls.forEach(b => {
-      const label = (b.getAttribute('data-name') || b.getAttribute('title') || b.getAttribute('aria-label') || "").trim();
-      const price = num(txt(b));
-      if (price && price >= 1.0) odds.push({ label, price, suspended: /lock|suspend|disabled|blocked/i.test((b.className||"") + " " + txt(b)) });
-    });
-    const live = /c-events__item--live|live/i.test(row.className || "");
-    out.push({ home, away, comp, scoreTxt, odds, live });
-  });
-  return out;
-}
-"""
+# ---------------------------------------------------------------------------
+# Validation — reject garbage team names
+# ---------------------------------------------------------------------------
+# Team names that are obviously not team names (score fragments, template
+# placeholders, score board labels). Used to filter out the prior failure
+# mode where the broad selectors picked up score numbers as team names.
+_GARBAGE_TEAM_PATTERNS = [
+    re.compile(r"^\d+$"),                          # pure number
+    re.compile(r"^\d+\s*[:\-]\s*\d+$"),            # score "2 : 1"
+    re.compile(r"^\d+\s+\d+\s+\d+$"),              # "0 0 0"
+    re.compile(r"^[A-Z\s]{20,}$"),                 # all-caps shouting
+    re.compile(r"^0000$"),                          # the placeholder bug
+    re.compile(r"^\d{4}$"),                         # 4-digit year/code
+]
+# Reject team names that are too long (real team names are < 80 chars).
+_MAX_TEAM_NAME_LEN = 80
+# Reject team names that are too short (1 char is not a team).
+_MIN_TEAM_NAME_LEN = 2
 
+
+def _is_plausible_team_name(name: str) -> bool:
+    """Heuristic: is this string plausibly a real team name?"""
+    if not name:
+        return False
+    n = name.strip()
+    if not ( _MIN_TEAM_NAME_LEN <= len(n) <= _MAX_TEAM_NAME_LEN):
+        return False
+    for pat in _GARBAGE_TEAM_PATTERNS:
+        if pat.match(n):
+            return False
+    return True
+
+
+# ---------------------------------------------------------------------------
+# In-page walker — uses sport-specific selectors
+# ---------------------------------------------------------------------------
+def _build_page_script(selectors: DOMSelectors) -> str:
+    """Build the in-page JS walker that returns a list of plain event dicts.
+
+    The script walks the ``dashboard-champ`` containers, reads the
+    championship name from the header, then walks the game rows inside each
+    championship. For each game row it pulls the team names (trying each
+    selector in order), the live score (optional), and the odds cells.
+    """
+    team_sels = ", ".join(f'"{s}"' for s in selectors.team_names)
+    score_sels = ", ".join(f'"{s}"' for s in selectors.team_scores)
+    odds_sels = ", ".join(f'"{s}"' for s in selectors.odds)
+    time_sels = ", ".join(f'"{s}"' for s in selectors.start_time)
+    live_pat = selectors.live_class_pattern
+
+    return r"""
+    (cfg) => {
+      const txt = el => (el && el.textContent ? el.textContent.trim() : "");
+      const num = s => { const m = (s||"").replace(',', '.').match(/-?\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
+
+      const TEAM_SEL = [%s];
+      const SCORE_SEL = [%s];
+      const ODDS_SEL = [%s];
+      const TIME_SEL = [%s];
+      const LIVE_PAT = %r;
+      const CHAMP = %r;
+      const CHAMP_NAME = %r;
+      const GAME = %r;
+
+      const queryFirst = (root, sels) => {
+        for (const s of sels) {
+          try {
+            const els = root.querySelectorAll(s);
+            if (els.length > 0) return [...els];
+          } catch(e) { /* ignore */ }
+        }
+        return [];
+      };
+
+      // Walk championship containers.
+      const champs = document.querySelectorAll(CHAMP);
+      const out = [];
+      champs.forEach(champ => {
+        // Championship name (league / competition title).
+        let comp = "";
+        const nameEl = champ.querySelector(CHAMP_NAME);
+        if (nameEl) comp = txt(nameEl).split('\n')[0];
+
+        // Game rows inside this championship.
+        const games = champ.querySelectorAll(GAME);
+        games.forEach(row => {
+          // Team names — expect exactly 2.
+          const teamEls = queryFirst(row, TEAM_SEL);
+          // Filter to non-empty
+          const teams = teamEls.map(txt).filter(Boolean);
+          if (teams.length < 2) return;
+
+          // Odds cells.
+          const oddEls = queryFirst(row, ODDS_SEL);
+          const odds = [];
+          oddEls.forEach(b => {
+            const label = (b.getAttribute('data-name') || b.getAttribute('title') || b.getAttribute('aria-label') || "").trim();
+            const price = num(txt(b));
+            if (price && price >= 1.0) {
+              odds.push({
+                label,
+                price,
+                suspended: /lock|suspend|disabled|blocked|is-disabled/i.test((b.className||"") + " " + txt(b)),
+              });
+            }
+          });
+
+          // Scores (live).
+          const scoreEls = queryFirst(row, SCORE_SEL);
+          const scoreTxt = scoreEls.map(txt).filter(Boolean).join(' ');
+
+          // Start time.
+          const timeEls = queryFirst(row, TIME_SEL);
+          const timeTxt = timeEls.map(txt).filter(Boolean).join(' ');
+
+          // Live flag — check row class for the LIVE_PAT token.
+          const live = LIVE_PAT ? new RegExp(LIVE_PAT, 'i').test(row.className || "") : false;
+
+          out.push({
+            home: teams[0],
+            away: teams[1],
+            comp: comp,
+            scoreTxt: scoreTxt,
+            timeTxt: timeTxt,
+            odds: odds,
+            live: live,
+          });
+        });
+      });
+      return out;
+    }
+    """ % (team_sels, score_sels, odds_sels, time_sels, live_pat,
+           selectors.championship, selectors.championship_name, selectors.game)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 _1X2_LABELS = {0: "1", 1: "X", 2: "2"}
+_H2H_LABELS = {0: "1", 1: "2"}
 
 
 def _score_pair(s: str):
@@ -90,29 +199,54 @@ async def extract_events_from_page(
     is_live: bool,
     source_url: str = "",
     sport: Optional[Sport] = None,
+    dom_selectors: Optional[DOMSelectors] = None,
+    has_draw: bool = True,
 ) -> List[Event]:
     """Extract ``Event`` objects from an already-loaded live/line grid page.
 
-    ``page`` is a Playwright Page already navigated to ``/en/live`` or
-    ``/en/line/<sport>`` and given time to render. Best-effort and non-raising.
+    Args:
+        page: a Playwright Page already navigated to ``/en/live`` or
+            ``/en/line/<sport>`` and given time to render.
+        is_live: True for the live feed page, False for prematch.
+        source_url: the URL the page was navigated to (recorded on each Event).
+        sport: the :class:`Sport` enum value to tag events with. Defaults to
+            ``Sport.OTHER``.
+        dom_selectors: a :class:`DOMSelectors` bundle. Defaults to the
+            1xbet/BetB2B grid selectors shipped with :mod:`.base`.
+        has_draw: if False (e.g. basketball, tennis, esports), the odds
+            labels default to "1"/"2" (h2h); otherwise "1"/"X"/"2" (1x2).
+
+    Best-effort and non-raising.
     """
+    selectors = dom_selectors or DOMSelectors()
+
     try:
-        raw = await page.evaluate(_PAGE_SCRIPT)
-    except Exception:
+        raw = await page.evaluate(_build_page_script(selectors))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("DOM evaluate failed on %s: %s", source_url, exc)
         return []
 
     default_sport = sport or _enum_fallback(Sport, "OTHER", "UNKNOWN")
     other_market = _enum_fallback(MarketType, "OTHER", "UNKNOWN", "MATCH_ODDS")
     st_live = _enum_fallback(EventStatus, "LIVE", "IN_PLAY", "NOT_STARTED")
     st_pre = _enum_fallback(EventStatus, "NOT_STARTED", "SCHEDULED", "PREMATCH")
+
+    label_map = _1X2_LABELS if has_draw else _H2H_LABELS
+
     events: List[Event] = []
+    seen_ids: set[str] = set()
 
     for i, r in enumerate(raw or []):
         try:
             home = (r.get("home") or "").strip()
             away = (r.get("away") or "").strip()
-            if not home or not away:
+
+            # Strict validation: reject garbage team names.
+            if not _is_plausible_team_name(home) or not _is_plausible_team_name(away):
                 continue
+            if home == away:
+                continue  # template duplication bug guard
+
             sh, sa = _score_pair(r.get("scoreTxt", ""))
             live = bool(r.get("live") or is_live)
 
@@ -123,7 +257,7 @@ async def extract_events_from_page(
                     continue
                 selections.append(
                     Selection(
-                        name=(o.get("label") or _1X2_LABELS.get(j, str(j + 1))),
+                        name=(o.get("label") or label_map.get(j, str(j + 1))),
                         price=float(price),
                         is_suspended=bool(o.get("suspended")),
                     )
@@ -131,18 +265,31 @@ async def extract_events_from_page(
 
             markets: List[Market] = []
             if selections:
+                market_name = "To Win Match" if not has_draw else "1x2"
+                mt = _enum_fallback(
+                    MarketType,
+                    "MONEYLINE_H2H" if not has_draw else "MONEYLINE_12",
+                    "OTHER",
+                )
                 markets.append(
                     Market(
-                        name="Main",
-                        market_type=other_market,
+                        name=market_name,
+                        market_type=mt,
                         selections=selections,
                         is_live=live,
                     )
                 )
 
+            # Build a stable event id from team names (not the row index,
+            # which would shift between renders).
+            eid = f"dom-{home}-{away}"[:120]
+            if eid in seen_ids:
+                continue
+            seen_ids.add(eid)
+
             events.append(
                 Event(
-                    event_id=f"dom-{i}-{home}-{away}"[:120],
+                    event_id=eid,
                     sport=default_sport,
                     competition=(r.get("comp") or "").strip(),
                     home=home,
@@ -156,7 +303,12 @@ async def extract_events_from_page(
                     raw_endpoint="dom",
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             continue
 
+    logger.info(
+        "DOM extract: %d valid events from %s (raw_rows=%d, rejected=%d)",
+        len(events), source_url, len(raw or []),
+        len(raw or []) - len(events),
+    )
     return events

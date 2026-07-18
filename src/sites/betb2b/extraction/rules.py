@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import BetB2BSkinConfig
 from ..markets import lookup_market
-from ..sports import lookup_sport
+from ..sport_ids import lookup_sport
 from .models import (
     CapturedFeedResponse,
     Event,

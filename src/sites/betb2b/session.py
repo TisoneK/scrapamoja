@@ -177,13 +177,15 @@ class BetB2BSessionManager:
                 home_url = self.skin.bootstrap_url("home")
                 logger.info("skin=%s navigating to %s", self.skin.name, home_url)
 
-                # domcontentloaded — the SPA fires its first API calls
-                # immediately after DCL. networkidle would hang (linebet
-                # keeps a long-poll open for live odds).
+                # 'commit' is the earliest non-empty document state.
+                # The BetB2B SPA keeps long-poll connections open after
+                # load, so 'domcontentloaded' and 'networkidle' can hang
+                # through slow residential proxies. 'commit' fires the
+                # moment a navigable document exists.
                 try:
                     resp = await page.goto(
                         home_url,
-                        wait_until="domcontentloaded",
+                        wait_until="commit",
                         timeout=self.bootstrap_timeout_ms,
                     )
                 except Exception as exc:  # noqa: BLE001
@@ -214,7 +216,7 @@ class BetB2BSessionManager:
                 try:
                     await page.goto(
                         live_url,
-                        wait_until="domcontentloaded",
+                        wait_until="commit",
                         timeout=self.bootstrap_timeout_ms,
                     )
                     await asyncio.sleep(min(self.settle_seconds, 6.0))
@@ -286,6 +288,9 @@ class BetB2BSessionManager:
         sport: Optional[Any] = None,
         settle_seconds: Optional[float] = None,
         _on_page_ready: Optional[Any] = None,
+        bootstrap_path: Optional[str] = None,
+        dom_selectors: Optional[Any] = None,
+        has_draw: bool = True,
     ) -> List[Any]:
         """Navigate the live/line page and extract events from the rendered DOM.
 
@@ -303,14 +308,24 @@ class BetB2BSessionManager:
                 after the page has loaded and settled but *before* extraction.
                 Used by the scraper to capture success-path snapshots while
                 the Playwright page is still alive.
+            bootstrap_path: override the bootstrap path. Defaults to the skin's
+                ``live`` or ``line`` bootstrap path. Use this to target a
+                per-sport page like ``/en/line/basketball``.
+            dom_selectors: optional :class:`DOMSelectors` bundle for the
+                extractor. Passed through to :func:`extract_events_from_page`.
+            has_draw: whether the sport's main market is 3-way (1x2) or 2-way
+                (h2h). Passed through to :func:`extract_events_from_page`.
         """
         from playwright.async_api import async_playwright
 
         from .extraction.dom import extract_events_from_page
 
         wait_s = self.settle_seconds if settle_seconds is None else settle_seconds
-        route = "live" if is_live else "line"
-        url = self.skin.bootstrap_url(route)
+        if bootstrap_path:
+            url = f"{self.skin.base_url}{bootstrap_path}"
+        else:
+            route = "live" if is_live else "line"
+            url = self.skin.bootstrap_url(route)
         stealth = self.skin.stealth_profile
 
         try:
@@ -332,8 +347,12 @@ class BetB2BSessionManager:
                     page = await context.new_page()
 
                     try:
+                        # 'commit' is the earliest non-empty document state.
+                        # linebet's SPA keeps a long-poll open after load,
+                        # so 'domcontentloaded'/'networkidle' can hang through
+                        # slow residential proxies.
                         await page.goto(
-                            url, wait_until="domcontentloaded",
+                            url, wait_until="commit",
                             timeout=self.bootstrap_timeout_ms,
                         )
                     except Exception as exc:  # noqa: BLE001
@@ -341,7 +360,8 @@ class BetB2BSessionManager:
                             "skin=%s dom-render goto %s failed: %s",
                             self.skin.name, url, exc,
                         )
-                        return []
+                        # Even on timeout the page may be partially loaded —
+                        # give it a short grace period and try anyway.
 
                     await self._dismiss_consent(page)
                     await asyncio.sleep(wait_s)
@@ -359,6 +379,7 @@ class BetB2BSessionManager:
 
                     events = await extract_events_from_page(
                         page, is_live=is_live, source_url=url, sport=sport,
+                        dom_selectors=dom_selectors, has_draw=has_draw,
                     )
                     logger.info(
                         "skin=%s dom-render extracted %d events from %s",

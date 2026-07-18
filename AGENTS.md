@@ -74,6 +74,62 @@ The most important active work. `src/sites/betb2b/` is a **parameterised base sc
 
 **Current skins:** linebet, 22bet, betwinner, melbet, megapari, 888starz, helabet, paripesa
 
+### Per-Sport Scrapers (`src/sites/betb2b/sports/`) — ✅ Initialized 2026-07-18
+
+The BetB2B backend tags every event with an integer `SI` sport id (1=Football,
+3=Basketball, 4=Tennis, …). The `sports/` subpackage lets each sport customize
+its scraper behavior without touching the base scraper:
+
+* **URL slug.** `/en/line/basketball` vs `/en/line/football` — the browser
+  bootstrap navigates here so the SPA loads the right championship tree and
+  the service worker injects the correct per-sport cookies.
+* **Feed query param.** The `sports=<SI>` filter is automatically added to
+  `/service-api/{Line,Live}Feed/Get1x2_VZip` requests.
+* **DOM selectors.** The drift-tolerance fallback extractor uses
+  `dashboard-champ` / `dashboard-champ__game` / `dashboard-game-block__team`
+  by default; sports with unusual layouts can override.
+* **Market-group name overrides.** `G=1` is "1x2" on football (3-way) but
+  "To Win Match" on basketball (2-way, no draw). `G=17` is "Total Goals"
+  on football but "Total Points" on basketball. Each sport ships its own
+  overrides that merge on top of `DEFAULT_MARKET_GROUPS`.
+* **Event enrichment hooks.** Each sport can map period strings to numbers
+  (e.g. "2nd quarter" → `minute=2`, "3rd set" → `minute=3`).
+
+**Shipped sports:** `all` (no filter), `football` (SI=1), `basketball` (SI=3),
+`ice-hockey` (SI=2), `tennis` (SI=4), `esports` (SI=20).
+
+**Adding a new sport** = drop a 50-line module in `sports/` and register it in
+`sports/registry.py`. No changes to `scraper.py` or `session.py`.
+
+```python
+from src.sites.betb2b import BetB2BScraper, BetB2BSkinConfig
+
+skin = BetB2BSkinConfig.from_yaml("src/sites/betb2b/skins/linebet.yaml")
+async with BetB2BScraper(skin, sport="basketball") as scraper:
+    result = await scraper.scrape(action="list_prematch")
+    # → bootstraps against /en/line/basketball, filters feed with sports=3,
+    #   tags events with Sport.BASKETBALL, applies "To Win Match" overrides.
+```
+
+CLI:
+
+```bash
+python -m src.sites.betb2b.cli.main scrape --skin linebet --sport basketball --action list_prematch
+python -m src.sites.betb2b.cli.main sports                # list registered sports
+python -m src.sites.betb2b.cli.main info --skin linebet --sport basketball
+```
+
+Live validation against linebet basketball:
+
+```bash
+export BETB2B_PROXY_URL=http://bore.pub:37582
+export BETB2B_PROXY_USER=TisoneK
+export BETB2B_PROXY_PASS=Taalib01
+export BETB2B_PROXY_COUNTRY=KE
+export BETB2B_PROXY_ID=kenya
+python -m src.sites.betb2b.scripts.validate_live --skin linebet --sport basketball
+```
+
 **BetB2B platform infrastructure (researched 2026-07-18):**
 - White-label platform provider (Curaçao), powers 18+ betting brands
 - Frontend: Nuxt.js (Vue.js SSR) — identified by `window.__NUXT__`, `/_nuxt/` assets, `data-v-*` scoped styles

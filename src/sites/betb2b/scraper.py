@@ -46,7 +46,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from src.network.proxy import ProxyManager
 
@@ -55,6 +55,7 @@ from .config import BetB2BSkinConfig
 from .extraction.models import BetB2BScrapeResult, CapturedFeedResponse, Event, Sport
 from .extraction.rules import BetB2BExtractionRules
 from .session import BetB2BSessionManager
+from .sports import SportScraper, SportScraperContext, resolve_sport
 from .telemetry_integration import BetB2BTelemetry
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,18 @@ class BetB2BScraper:
     doesn't fit the one-class-per-site registry model. Per-skin
     :class:`LinebetScraper`-style adapters can wrap this if registry
     integration is needed.
+
+    The scraper is also parameterised by **sport** (via the
+    :mod:`~src.sites.betb2b.sports` subpackage). Passing a ``sport``
+    customizes:
+
+    * the URL slug the DOM fallback bootstraps against
+      (``/en/line/basketball`` vs ``/en/line``),
+    * the ``sports=<SI>`` query param added to feed requests,
+    * DOM selectors for the drift-tolerance extractor,
+    * market-group name overrides (e.g. "To Win Match" for basketball
+      vs "1x2" for football),
+    * per-sport event enrichment hooks.
     """
 
     def __init__(
@@ -92,8 +105,9 @@ class BetB2BScraper:
         telemetry: Optional[BetB2BTelemetry] = None,
         telemetry_enabled: bool = True,
         telemetry_output_dir: str = "./data/telemetry/betb2b",
+        sport: Optional[Union[str, int, Sport, SportScraper]] = None,
     ) -> None:
-        """Initialise the scraper for one skin.
+        """Initialise the scraper for one skin + optional sport.
 
         Args:
             skin: the :class:`BetB2BSkinConfig` to scrape.
@@ -111,12 +125,23 @@ class BetB2BScraper:
                 If None, one is created automatically.
             telemetry_enabled: master switch for telemetry collection.
             telemetry_output_dir: where telemetry JSON files are written.
+            sport: optional sport filter — accepts a slug
+                (``"basketball"``), SI id (``3``), :class:`Sport` enum,
+                or a :class:`SportScraper` instance/subclass. Resolved
+                via :func:`src.sites.betb2b.sports.resolve_sport`.
+                ``None`` means "all sports" (no ``sports=`` filter).
         """
         self.skin = skin
         self.proxy_manager = proxy_manager
         self.timeout = timeout
         self.rate_limit_per_minute = rate_limit_per_minute
         self.settle_seconds = settle_seconds
+
+        # Resolve the sport strategy (None → AllSportsScraper).
+        self.sport_scraper: SportScraper = resolve_sport(sport)
+        self.sport_ctx: SportScraperContext = SportScraperContext.from_sport_scraper(
+            self.sport_scraper
+        )
 
         # Resolve the proxy endpoint for this skin.
         endpoint_id = proxy_endpoint_id or skin.proxy_endpoint_id
@@ -192,7 +217,9 @@ class BetB2BScraper:
             action: one of :data:`_VALID_ACTIONS`.
             sport_id: optional sport id (``SI``) to filter the feed
                 (e.g. Basketball=3, Football=1). Adds ``sports=<id>``
-                to the feed query params.
+                to the feed query params. Overrides the sport_id from
+                the scraper's :class:`SportScraper` if set; pass ``None``
+                to use the scraper's sport (or no filter if "all sports").
             count: the ``count=`` query param (number of events to ask
                 for, where supported).
             timeout_seconds: hard cap on the whole scrape.
@@ -218,13 +245,18 @@ class BetB2BScraper:
                 f"skin={self.skin.name} config invalid: {errors}"
             )
 
+        # Resolve the effective sport_id: caller override > sport_scraper.
+        effective_sport_id = sport_id if sport_id is not None else (
+            self.sport_scraper.sport_id if self.sport_scraper.sport_id > 0 else None
+        )
+
         start = datetime.now(timezone.utc)
         overall_timeout = timeout_seconds or 120.0
 
         try:
             async with asyncio.timeout(overall_timeout):
                 captured, action_url, dom_events = await self._run_action(
-                    action=action, sport_id=sport_id, count=count,
+                    action=action, sport_id=effective_sport_id, count=count,
                 )
         except asyncio.TimeoutError:
             logger.error(
@@ -252,6 +284,8 @@ class BetB2BScraper:
             for cap in captured:
                 events.extend(self.extraction_rules.extract_from_captured(cap))
             events.extend(dom_events)
+            # Apply sport-specific enrichment + dedupe.
+            events = [self.sport_scraper.enrich_event(e) for e in events]
             events = self._dedupe_events(events)
 
         # Did the session get harvested?
@@ -268,8 +302,9 @@ class BetB2BScraper:
             session_harvested=session_harvested,
         )
         logger.info(
-            "skin=%s scrape '%s' done: %d events from %d captures in %.2fs",
-            self.skin.name, action, len(events), len(captured), duration,
+            "skin=%s sport=%s scrape '%s' done: %d events from %d captures in %.2fs",
+            self.skin.name, self.sport_scraper.slug or "all", action,
+            len(events), len(captured), duration,
         )
 
         # Record telemetry for the complete scrape.
@@ -388,23 +423,45 @@ class BetB2BScraper:
     async def _dom_fallback(self, *, is_live: bool) -> List[Event]:
         """Render the corresponding live/line page and extract via DOM.
 
+        Uses the sport's bootstrap path (e.g. ``/en/line/basketball``)
+        when a sport is set, so the SPA loads the right championship
+        tree for the sport we're scraping. Also passes the sport's
+        DOM selectors and ``has_draw`` flag through to the extractor.
+
         Also captures a page snapshot via the telemetry system (success
         path) and an error snapshot if extraction fails.
         """
+        # Pick the bootstrap path: sport-specific if a sport is set,
+        # otherwise the skin's default live/line path.
+        if is_live:
+            bootstrap_path = (
+                self.sport_ctx.live_bootstrap_path or self.skin.bootstrap_paths.get("live")
+            )
+        else:
+            bootstrap_path = (
+                self.sport_ctx.bootstrap_path or self.skin.bootstrap_paths.get("line")
+            )
+
         try:
-            default_sport = Sport.OTHER
+            default_sport = self.sport_ctx.sport_enum
         except Exception:  # noqa: BLE001
-            default_sport = None
+            default_sport = Sport.OTHER
+
         try:
             events = await self.session_manager.render_dom_events(
-                is_live=is_live, sport=default_sport,
+                is_live=is_live,
+                sport=default_sport,
+                bootstrap_path=bootstrap_path,
+                dom_selectors=self.sport_ctx.dom_selectors,
+                has_draw=self.sport_scraper.has_draw,
                 _on_page_ready=self._on_dom_page_ready,
             )
             return events
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "skin=%s DOM fallback (is_live=%s) failed: %s",
-                self.skin.name, is_live, exc,
+                "skin=%s sport=%s DOM fallback (is_live=%s, path=%s) failed: %s",
+                self.skin.name, self.sport_scraper.slug or "all",
+                is_live, bootstrap_path, exc,
             )
             # Capture error snapshot (no page available — JSON fallback).
             await self.telemetry.capture_error_snapshot(
@@ -483,6 +540,8 @@ class BetB2BScraper:
             "skin": self.skin.to_dict(),
             "actions": sorted(_VALID_ACTIONS),
             "extraction_mode": "hybrid (API primary, DOM fallback on failed capture — ADR-4)",
+            "sport": self.sport_scraper.to_dict(),
+            "sport_context": self.sport_ctx.to_dict(),
             "proxy_endpoint": (
                 self.proxy_endpoint.to_dict(redact=True)
                 if self.proxy_endpoint is not None

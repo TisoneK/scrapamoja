@@ -444,7 +444,7 @@ def test_lookup_market_unknown(skin: BetB2BSkinConfig) -> None:
 
 
 def test_lookup_sport_known(skin: BetB2BSkinConfig) -> None:
-    from src.sites.betb2b.sports import lookup_sport
+    from src.sites.betb2b.sport_ids import lookup_sport
 
     assert lookup_sport(3, skin.sport_map) == "Basketball"
     assert lookup_sport(1, skin.sport_map) == "Football"
@@ -488,5 +488,74 @@ def test_scraper_get_info(skin: BetB2BSkinConfig) -> None:
     s = BetB2BScraper(skin)
     info = s.get_info()
     assert info["skin"]["name"] == "linebet"
-    assert info["extraction_mode"] == "hybrid"
+    # extraction_mode now carries the ADR-4 annotation — just check the prefix.
+    assert info["extraction_mode"].startswith("hybrid")
     assert "list_live" in info["actions"]
+    # New: sport context is always present (defaults to AllSportsScraper).
+    assert "sport" in info
+    assert "sport_context" in info
+    assert info["sport"]["slug"] == "" or info["sport"]["slug"] == "all"
+    assert info["sport_context"]["bootstrap_path"] == "/en/line"
+
+
+def test_scraper_get_info_with_sport(skin: BetB2BSkinConfig) -> None:
+    """Per-sport scraper framework: passing sport=basketball customizes context."""
+    from src.sites.betb2b.scraper import BetB2BScraper
+
+    s = BetB2BScraper(skin, sport="basketball")
+    info = s.get_info()
+    assert info["sport"]["slug"] == "basketball"
+    assert info["sport"]["sport_id"] == 3
+    assert info["sport_context"]["bootstrap_path"] == "/en/line/basketball"
+    assert info["sport_context"]["live_bootstrap_path"] == "/en/live/basketball"
+    assert info["sport_context"]["sport_enum"] == "Basketball"
+    # DOM selectors are populated.
+    assert info["sport_context"]["dom_selectors"]["championship"] == ".dashboard-champ"
+
+
+def test_sport_registry_resolves_all_sports() -> None:
+    """The sports registry resolves every shipped sport slug + SI id."""
+    from src.sites.betb2b.sports import (
+        get_sport_scraper, list_sport_slugs, resolve_sport,
+    )
+
+    slugs = list_sport_slugs()
+    assert "basketball" in slugs
+    assert "football" in slugs
+    assert "tennis" in slugs
+    assert "ice-hockey" in slugs
+    assert "esports" in slugs
+    assert "all" in slugs
+
+    # By slug.
+    assert get_sport_scraper(slug="basketball").sport_id == 3
+    # By SI id.
+    assert get_sport_scraper(sport_id=3).slug == "basketball"
+    # By Sport enum.
+    from src.sites.betb2b.extraction.models import Sport
+    assert get_sport_scraper(sport_enum=Sport.BASKETBALL).slug == "basketball"
+    # resolve_sport helper.
+    assert resolve_sport(None).slug in ("", "all")
+    assert resolve_sport("basketball").sport_id == 3
+    assert resolve_sport(3).slug == "basketball"
+    assert resolve_sport(Sport.FOOTBALL).slug == "football"
+
+
+def test_basketball_market_overrides() -> None:
+    """Basketball overrides G=1 to 'To Win Match' (2-way H2H, no draw)."""
+    from src.sites.betb2b.sports import get_sport_scraper
+
+    b = get_sport_scraper(slug="basketball")
+    overrides = b.market_group_overrides_dict
+    assert overrides[1].name == "To Win Match"
+    assert b.has_draw is False
+    assert b.period_name == "quarter"
+    assert b.periods_count == 4
+    # Enrichment: "1st quarter" → minute=1.
+    from src.sites.betb2b.extraction.models import Event, EventStatus, Sport
+    e = Event(
+        event_id="x", sport=Sport.BASKETBALL, competition="",
+        home="A", away="B", period="2nd quarter", status=EventStatus.LIVE,
+    )
+    b.enrich_event(e)
+    assert e.minute == 2

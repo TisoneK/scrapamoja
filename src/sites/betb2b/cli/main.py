@@ -104,8 +104,12 @@ class BetB2BCLI:
         scrape.add_argument("--skin", "-s", default="linebet", help="Skin name (default: linebet)")
         scrape.add_argument("--action", "-a", choices=_VALID_ACTIONS, default="list_live",
                             help="Scrape action (default: list_live)")
+        scrape.add_argument("--sport", default=None,
+                            help="Sport slug (e.g. basketball, football, ice-hockey, tennis, esports). "
+                                 "Default: all sports.")
         scrape.add_argument("--sport-id", type=int, default=None,
-                            help="Filter by sport SI id (Football=1, Basketball=3, …)")
+                            help="Filter by sport SI id (Football=1, Basketball=3, …). "
+                                 "Overrides --sport.")
         scrape.add_argument("--count", type=int, default=50,
                             help="`count=` query param — number of events (default: 50)")
         scrape.add_argument("--timeout", type=float, default=120.0,
@@ -123,13 +127,22 @@ class BetB2BCLI:
         # info
         info = sub.add_parser("info", help="Print skin config + scraper state")
         info.add_argument("--skin", "-s", default="linebet", help="Skin name")
+        info.add_argument("--sport", default=None,
+                          help="Sport slug (e.g. basketball). Default: all sports.")
 
         # skins
         sub.add_parser("skins", help="List available skins")
 
+        # sports
+        sports = sub.add_parser("sports", help="List available per-sport scrapers")
+        sports.add_argument("--verbose", "-v", action="store_true",
+                            help="Show full sport config (DOM selectors, market overrides)")
+
         # probe
         probe = sub.add_parser("probe", help="Connectivity probe — verify proxy + bootstrap")
         probe.add_argument("--skin", "-s", default="linebet", help="Skin name")
+        probe.add_argument("--sport", default=None,
+                           help="Sport slug to probe (e.g. basketball). Default: all sports.")
         probe.add_argument("--settle", type=float, default=12.0,
                            help="Bootstrap SPA settle seconds (default: 12)")
         probe.add_argument("--output", "-o", default=None,
@@ -147,6 +160,8 @@ class BetB2BCLI:
             return self._cmd_info(args)
         if args.command == "skins":
             return self._cmd_skins(args)
+        if args.command == "sports":
+            return self._cmd_sports(args)
         if args.command == "probe":
             return await self._cmd_probe(args)
 
@@ -166,6 +181,7 @@ class BetB2BCLI:
             print(json.dumps({
                 "skin": skin.to_dict(),
                 "action": args.action,
+                "sport": args.sport,
                 "sport_id": args.sport_id,
                 "count": args.count,
                 "would_run": True,
@@ -180,6 +196,7 @@ class BetB2BCLI:
                 proxy_endpoint_id=proxy_endpoint_id,
                 rate_limit_per_minute=args.rate,
                 settle_seconds=args.settle,
+                sport=args.sport,
             ) as scraper:
                 result = await scraper.scrape(
                     action=args.action,
@@ -195,10 +212,15 @@ class BetB2BCLI:
 
     def _cmd_info(self, args: argparse.Namespace) -> int:
         skin = _load_skin(args.skin)
+        from src.sites.betb2b import BetB2BScraper
+        # Instantiate the scraper just to read the resolved sport context.
+        scraper = BetB2BScraper(skin, sport=getattr(args, "sport", None))
         info: Dict[str, Any] = {
             "skin": skin.to_dict(),
             "actions": sorted(_VALID_ACTIONS),
             "extraction_mode": "hybrid",
+            "sport": scraper.sport_scraper.to_dict(),
+            "sport_context": scraper.sport_ctx.to_dict(),
             "feed_urls": {
                 "live_events_top": skin.feed_url("events_top", root="live"),
                 "line_events_top": skin.feed_url("events_top", root="line"),
@@ -208,6 +230,14 @@ class BetB2BCLI:
             "bootstrap_urls": {
                 "home": skin.bootstrap_url("home"),
                 "live": skin.bootstrap_url("live"),
+                "sport_line": (
+                    f"{skin.base_url}{scraper.sport_ctx.bootstrap_path}"
+                    if scraper.sport_ctx.slug else None
+                ),
+                "sport_live": (
+                    f"{skin.base_url}{scraper.sport_ctx.live_bootstrap_path}"
+                    if scraper.sport_ctx.slug else None
+                ),
             },
             "validation_errors": skin.validate(),
         }
@@ -216,6 +246,28 @@ class BetB2BCLI:
     def _cmd_skins(self, args: argparse.Namespace) -> int:
         skins = _list_skins()
         out = {"skins": skins, "count": len(skins), "skins_dir": str(_skins_dir())}
+        return self._emit(out, args, always_pretty=True)
+
+    def _cmd_sports(self, args: argparse.Namespace) -> int:
+        from src.sites.betb2b.sports import list_sport_scraper_summaries
+
+        summaries = list_sport_scraper_summaries()
+        if getattr(args, "verbose", False):
+            out: Dict[str, Any] = {
+                "sports": [
+                    {**s, "_full_config": (
+                        # Re-instantiate to dump the full config (selectors, overrides).
+                        # This is verbose but valuable for debugging selector drift.
+                        __import__(
+                            "src.sites.betb2b.sports", fromlist=["get_sport_scraper"]
+                        ).get_sport_scraper(slug=s["slug"]).to_dict()
+                    )}
+                    for s in summaries
+                ],
+                "count": len(summaries),
+            }
+        else:
+            out = {"sports": summaries, "count": len(summaries)}
         return self._emit(out, args, always_pretty=True)
 
     async def _cmd_probe(self, args: argparse.Namespace) -> int:
@@ -232,6 +284,7 @@ class BetB2BCLI:
                 proxy_manager=proxy_manager,
                 proxy_endpoint_id=proxy_endpoint_id,
                 settle_seconds=args.settle,
+                sport=getattr(args, "sport", None),
             ) as scraper:
                 # Bootstrap the session explicitly — proves the proxy +
                 # cookie harvest path end-to-end without polling feeds.
@@ -240,6 +293,8 @@ class BetB2BCLI:
                 probe_result = {
                     "skin": skin.name,
                     "domain": skin.domain,
+                    "sport": scraper.sport_scraper.slug or "all",
+                    "sport_id": scraper.sport_scraper.sport_id,
                     "session_harvested": True,
                     "cookie_count": len(session.cookies),
                     "session_age_seconds": (
@@ -251,6 +306,7 @@ class BetB2BCLI:
                     "would_call": {
                         "live_events_top": skin.feed_url("events_top", root="live"),
                         "line_events_top": skin.feed_url("events_top", root="line"),
+                        "sport_bootstrap_path": scraper.sport_ctx.bootstrap_path,
                     },
                 }
         except Exception as exc:  # noqa: BLE001

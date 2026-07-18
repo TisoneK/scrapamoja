@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Mapping, Optional
 import yaml
 
 from .markets import DEFAULT_MARKET_GROUPS, DEFAULT_MARKET_TYPES, MarketGroup, MarketTypeMap
-from .sports import DEFAULT_SPORT_MAP, SportMap
+from .sport_ids import DEFAULT_SPORT_MAP, SportMap
 
 
 # ---------------------------------------------------------------------------
