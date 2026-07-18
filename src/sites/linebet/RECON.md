@@ -317,3 +317,20 @@ by its RESPONSE — a few-KB JSON of past matches (team names/dates/scores), NOT
 ~0.2 kB analytics ping; filter Network by `statistic` or sort by Size. Once its
 URL+params are known, test the httpx replay (base betting headers + cookies, like
 `GetGameZip`) and, if it replays, wire an H2H fetch into the scraper the same way.
+
+### H2H candidate endpoints (operator-captured on "recent matches" click, 2026-07-18)
+
+Clicking H2H / "recent matches" fires (each once, all SW-mediated):
+- `GetSportsShortZip?sports=3&champs=75093&lng=en&country=87&partner=189&virtualSports=true&gr=650&groupChamps=true`
+  — **sport(3=basketball) + this exact champ (75093=NBA Summer League) scoped**.
+  Leading hypothesis: this IS the "recent matches" source — the games in the same
+  championship (linebet's H2H popup likely shows recent/other champ games rather
+  than a dedicated previous-meetings feed).
+- `WebGetTopChampsZip?lng=en&country=87&gr=650` — top champs (context).
+- `main-live-feed/v1/expressDay?cfView=3&country=87&gr=650&lng=en&ref=189` — express.
+
+TODO (needs proxy up): fetch `GetSportsShortZip?...&champs=<champId>` and confirm
+its `Value` is a list of games (teams/scores/dates) = the recent-matches data.
+If so, wire an H2H fetch as `fetch("sports_short", root, extra_params={"sports":<SI>,"champs":<champId>,"groupChamps":"true"})` and parse the event list. httpx-replayable
+like the other feeds (base headers + cookies). The champ id comes from the match
+URL (`/<champId>-slug/<eventId>-slug`) — already parsed for GetGameZip.
