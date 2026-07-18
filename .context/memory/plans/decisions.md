@@ -59,3 +59,16 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   - ADR-2's core point stands: the AccessProfile axis is still useful — linebet's profile is `geo_gated: true, requires_proxy: true, interceptable: true (via in-page fetch hook / httpx replay), transport: xhr, header_source: page+cookies`. (Note `interceptable` flips to true vs the ADR-2 draft.)
   - The classifier's discriminating lesson is refined: "DOM has data but `page.on(response)` shows nothing" does NOT imply a SW transport — verify with an in-page `fetch`/XHR hook before concluding non-interceptable. A tool quirk masqueraded as an architecture.
   - Next build step (backlog): implement the linebet `hybrid` scraper against these endpoints + map the terse `T`/`G` market ids.
+
+---
+## ADR-4: BetB2B direct-API is best-effort; DOM extraction is the primary path (2026-07-19)
+- **Status:** accepted (refines ADR-3)
+- **Context:** ADR-3 (2026-07-18) recorded linebet as `hybrid` (cookie-harvest → httpx `LiveFeed`/`LineFeed` polling) after a proven httpx replay. On 2026-07-19 (Session 13) that replay was re-verified and now returns **`406 feed/NotAcceptableException`** with the same base headers + cookies — AND a bare in-browser `fetch` also 406s. Two platform changes: (1) the feed request moved into a **worker context**, invisible to page `fetch`/XHR hooks and page-target CDP Network; (2) `ivpn-sw.js` now injects a required header (`x-dt` ← `x-project-id`) from a store the app fills via `postMessage`, active only when the SW is registered with `?i=`, and the old IndexedDB `vpn/headers` store is gone. So the direct-API auth-header contract **rotates** — it is not a stable static recipe. The endpoints/params/schema (RECON.md) are unchanged.
+- **Decision:**
+  1. **DOM extraction is the primary betb2b extractor** (`playwright` path) — the rendered odds are drift-proof against the API auth-header churn.
+  2. **Direct-API (httpx `LiveFeed`/`LineFeed`) is a best-effort optimization**, not the contract. When used, capture the genuine request headers **per session** at the worker level (CDP `Target.setAutoAttach {autoAttach:true,flatten:true}` to the service-worker/worker target + `Network.enable`), replay those, and treat `406` as a **re-harvest / DOM-fallback trigger**, never a hard failure.
+  3. Do NOT chase the specific injected header value in code — it rotates. Do NOT capture the feed via page `fetch`/XHR wrappers or a page-target CDP session (they see nothing now).
+- **Consequences:**
+  - The `src/sites/betb2b/` base scraper needs a DOM extractor added as the primary path; `BetB2BFeedClient` (httpx) becomes the fast-path with a DOM fallback + 406→re-harvest handling.
+  - RECON.md carries a "MOVING TARGET" warning atop the direct-API section.
+  - This is a live example of the README's "handles anti-bot measures / selector drift" promise — the framework must degrade gracefully, not depend on a frozen contract.
