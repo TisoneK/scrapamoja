@@ -280,3 +280,24 @@ don't remove the line.
            browser) on a timer — this is the `sw_replay`/`hybrid` concern per ADR-2.
       DOM extraction over the live grid (`c-events`/champ rows) remains the
       works-today fallback. HIGH — this is the linebet scraper's core unblock.
+
+---
+- [x] **Reverse-engineer linebet `/LineFeed/` odds via IndexedDB header replay** — **SUPERSEDED / SOLVED 2026-07-18** (Session 11 cont.): the odds feed does NOT need IndexedDB/x-hd headers. It's `GET /service-api/LiveFeed/Get1x2_VZip` (+ siblings), a plain XHR that replays from httpx with base betting headers + cookies + an allowed-country proxy (proven: 200/Success=true, and identical without x-hd). Full details in `src/sites/linebet/RECON.md` "SOLVED" + ADR-3. Replaces the IndexedDB-replay plan below.
+- [ ] **Build the linebet `hybrid` scraper (cookie-harvest → httpx LiveFeed polling)** (added 2026-07-18 by Claude Opus 4.8, Session 11 cont.) —
+      Everything needed is now known (RECON.md "SOLVED" + ADR-3). Implement:
+        1. Browser bootstrap through an allowed-country proxy (`ProxyManager` +
+           `SessionHarvester`/`HybridConfig` — already in the framework) to harvest
+           the ~21 session cookies.
+        2. `httpx` poll loop (through the same proxy) over the feeds:
+           `/service-api/LiveFeed/Get1x2_VZip` (live) and `/service-api/main-line-feed/v1/*`
+           (prematch), with base betting headers
+           (`is-srv:false`, `x-app-n:__BETTING_APP__`, `x-svc-source:__BETTING_APP__`,
+           `x-requested-with:XMLHttpRequest`) + cookies. Query params: `gr=650`,
+           `country=87`, `partner=189`, `lng=en`, `count=N`.
+        3. Map the terse `Value[]` JSON to the existing `extraction/models.py`
+           Event/Market/Selection (I/ZP=id, O1/O2=teams, SN=sport, L=league, S=start,
+           SC.FS=score; E[]/AE[].ME[] markets: T=type, G=group, C=odds, P=line, B=blocked).
+        4. Build the `T`(market-type)/`G`(group) id → market-name lookup (1=1x2, 2=handicap,
+           17=totals, …; 1xbet-family tables) and confirm cookie TTL / re-bootstrap cadence.
+      Needs the Kenya proxy live (gost + bore). HIGH — this ships the scraper the
+      whole exercise was for. Extraction mode = `hybrid` per ADR-3.
