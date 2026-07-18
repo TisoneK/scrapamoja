@@ -184,6 +184,16 @@ def _build_page_script(selectors: DOMSelectors) -> str:
           // Live flag — check row class for the LIVE_PAT token.
           const live = LIVE_PAT ? new RegExp(LIVE_PAT, 'i').test(row.className || "") : false;
 
+          // Real numeric event id — the last `/<digits>-slug` segment of the
+          // match link. Used to fetch per-match odds via GetGameZip?id=.
+          let eventId = "";
+          const a = row.querySelector('a[href]') || row.closest('a[href]');
+          const href = a ? (a.getAttribute('href') || a.href || "") : "";
+          (href.split('?')[0].split('/')).forEach(seg => {
+            const m = seg.match(/^(\d{4,})-/);
+            if (m) eventId = m[1];   // last match wins = the event id
+          });
+
           out.push({
             home: teams[0],
             away: teams[1],
@@ -192,6 +202,7 @@ def _build_page_script(selectors: DOMSelectors) -> str:
             timeTxt: timeTxt,
             odds: odds,
             live: live,
+            eventId: eventId,
           });
         });
       });
@@ -302,9 +313,11 @@ async def extract_events_from_page(
                     )
                 )
 
-            # Build a stable event id from team names (not the row index,
-            # which would shift between renders).
-            eid = f"dom-{home}-{away}"[:120]
+            # Prefer the real numeric event id (from the match link) — it's
+            # what GetGameZip?id= needs for odds. Fall back to a stable
+            # team-name id when no link was found.
+            num_id = str(r.get("eventId") or "").strip()
+            eid = num_id if num_id.isdigit() else f"dom-{home}-{away}"[:120]
             if eid in seen_ids:
                 continue
             seen_ids.add(eid)

@@ -72,6 +72,7 @@ DEFAULT_FEED_PATHS: Dict[str, str] = {
     # Per-root endpoints (relative to the chosen root).
     "events_top": "/Get1x2_VZip",           # events + odds (top=true)
     "events_by_sport": "/Get1x2_VZip",      # same endpoint with ?sports=<id>
+    "game": "/GetGameZip",                   # per-match full markets by ?id=<eventId>
     "top_champs": "/WebGetTopChampsZip",
     "sports_short": "/GetSportsShortZip",
     "top_games_stat": "/GetTopGamesStatZip",

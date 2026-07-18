@@ -29,6 +29,23 @@ from .extraction.rules import BetB2BExtractionRules
 logger = logging.getLogger(__name__)
 
 
+def _accept_encoding() -> str:
+    """Advertise only content-encodings this environment can decode.
+
+    httpx decodes gzip/deflate always; brotli (`br`) needs the optional
+    `brotli`/`brotlicffi` package. Advertising `br` without it makes the feed
+    microservice return brotli bodies httpx can't decompress → JSON parse fails
+    → zero markets. So include `br` only when a brotli decoder is importable.
+    """
+    for mod in ("brotlicffi", "brotli"):
+        try:
+            __import__(mod)
+            return "gzip, deflate, br"
+        except ImportError:
+            continue
+    return "gzip, deflate"
+
+
 class BetB2BFeedClient:
     """httpx-based feed poller for one BetB2B skin.
 
@@ -84,7 +101,11 @@ class BetB2BFeedClient:
             proxy=proxy_url,
             timeout=self.timeout,
             follow_redirects=True,
-            headers={"accept-encoding": "gzip, deflate, br"},
+            # Only advertise encodings httpx can actually decode. `br` (brotli)
+            # requires the optional `brotli`/`brotlicffi` package; advertising it
+            # without that installed yields undecodable bodies → JSON parse fails
+            # → silently zero markets. Add "br" back only if brotli is available.
+            headers={"accept-encoding": _accept_encoding()},
         )
         logger.info(
             "skin=%s feed client started (proxy=%s, rate=%d/min)",
@@ -184,6 +205,29 @@ class BetB2BFeedClient:
             content_type=content_type,
             raw_bytes=resp.content,
         )
+
+    async def fetch_game(
+        self,
+        event_id: str,
+        *,
+        root: str = "line",
+        extra_params: Optional[Dict[str, str]] = None,
+    ) -> CapturedFeedResponse:
+        """Fetch one match's full markets via ``GetGameZip?id=<eventId>``.
+
+        This is the odds path (RECON.md "SOLVED markets=0"): the list feeds only
+        carry stubs / are SW-gated, but the per-match ``GetGameZip`` returns the
+        full nested ``E[]``/``AE[]`` markets and is not SW-gated. ``root="line"``
+        for prematch, ``"live"`` for in-play.
+        """
+        params: Dict[str, str] = {
+            "id": str(event_id),
+            "isSubGames": "true",
+            "grMode": "4",
+        }
+        if extra_params:
+            params.update(extra_params)
+        return await self.fetch("game", root=root, extra_params=params)
 
     async def fetch_many(
         self,

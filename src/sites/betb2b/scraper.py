@@ -283,6 +283,10 @@ class BetB2BScraper:
         if action != "raw_capture":
             for cap in captured:
                 events.extend(self.extraction_rules.extract_from_captured(cap))
+            # DOM events are odds-less stubs; enrich them with per-match odds
+            # (GetGameZip?id=) — the working odds path per RECON.md.
+            if dom_events and getattr(self.skin, "enrich_dom_with_odds", True):
+                dom_events = await self._enrich_dom_events_with_odds(dom_events)
             events.extend(dom_events)
             # Apply sport-specific enrichment + dedupe.
             events = [self.sport_scraper.enrich_event(e) for e in events]
@@ -330,6 +334,45 @@ class BetB2BScraper:
         )
 
         return result.to_dict()
+
+    async def _enrich_dom_events_with_odds(
+        self, dom_events: List[Event],
+    ) -> List[Event]:
+        """Fill odds into DOM event stubs via per-match ``GetGameZip?id=``.
+
+        DOM grids render event stubs (teams/league) but no odds; the per-match
+        ``GetGameZip`` returns the full nested ``E[]``/``AE[]`` markets and is not
+        SW-gated (RECON.md "SOLVED markets=0"). Best-effort and capped by
+        ``skin.max_odds_fetch`` (default 20) so a big list doesn't fan out to
+        hundreds of requests.
+        """
+        limit = int(getattr(self.skin, "max_odds_fetch", 20) or 20)
+        out: List[Event] = []
+        fetched = 0
+        for e in dom_events:
+            eid = str(e.event_id)
+            if e.markets or not eid.isdigit() or fetched >= limit:
+                out.append(e)
+                continue
+            try:
+                root = "live" if e.is_live else "line"
+                cap = await self.feed_client.fetch_game(eid, root=root)
+                game_events = self.extraction_rules.extract_from_captured(cap)
+                fetched += 1
+                # The GetGameZip event carries teams + all markets, so it
+                # supersedes the DOM stub.
+                out.extend(game_events if game_events else [e])
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "skin=%s odds enrich failed for event=%s: %s",
+                    self.skin.name, eid, exc,
+                )
+                out.append(e)
+        logger.info(
+            "skin=%s odds enrichment: %d GetGameZip fetched (limit=%d)",
+            self.skin.name, fetched, limit,
+        )
+        return out
 
     # ------------------------------------------------------------------ #
     # Action dispatch
