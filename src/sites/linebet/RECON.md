@@ -33,6 +33,30 @@ documents what the live site actually does. Companion data:
 - **Extraction mode = `hybrid`** (browser-harvest cookies → direct `httpx` polling).
   The DOM also renders odds as a fallback. This is the classifier's validation case.
 
+## Generalizes to the whole 1xbet / BetB2B family (verified 2026-07-18)
+
+linebet is one skin of the **BetB2B** platform. The findings here are **family-wide**,
+confirmed empirically by probing `/service-api/LineFeed/Get1x2_VZip` across domains
+through the Kenya proxy:
+
+- **Same backend / same endpoint / same schema** (all returned the *identical*
+  `{"type":"feed/NotAcceptableException",...}` 406 envelope from the shared feed
+  microservice, i.e. the endpoint exists and behaves the same — 406 just means the
+  bare probe lacked the per-skin cookies/headers): **melbet, betwinner, 22bet,
+  megapari, 888starz, helabet, paripesa, linebet**.
+- **1xbet.com** (flagship): same family but **fronted by Cloudflare** (`403 "Just a
+  moment…"`) — needs anti-Cloudflare handling the skins don't.
+- **1win.pro**: **NOT** this platform (`200` HTML, `ru-RU`; no `service-api` feed) —
+  handle separately.
+
+**Implication:** one parameterized BetB2B scraper covers the family. Per-skin config
+is small — `domain`, `partner`/`ref` (linebet `189`), `gr` project id (linebet `650`),
+geo `country`, and a per-skin cookie harvest. Everything else (the `LiveFeed`/
+`LineFeed` roots, endpoint names, the `is-srv`/`x-app-n`/`x-svc-source`/
+`x-requested-with` headers, the terse-key `Value[]` schema, hybrid cookie-harvest →
+httpx polling) is shared. This fits the project's one-framework goal: a `betb2b`
+base scraper + thin per-skin `SiteConfig`s.
+
 ## Anti-blocking architecture (three service workers)
 
 The site installs three service workers that together defeat naive scraping and
