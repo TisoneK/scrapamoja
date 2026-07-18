@@ -361,11 +361,13 @@ class BetB2BScraper:
         if self.proxy_manager is None:
             return None
         try:
-            ep = self.proxy_manager.acquire(
-                site=self.skin.domain,
-                endpoint_id=endpoint_id,
-            )
-            return ep
+            # Prefer an explicit endpoint id when the caller named one;
+            # otherwise let routing rules pick from the skin's domain.
+            if endpoint_id:
+                ep = self.proxy_manager.get(endpoint_id)
+                if ep is not None:
+                    return ep
+            return self.proxy_manager.acquire(site=self.skin.domain)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "skin=%s proxy resolution failed (endpoint_id=%s): %s — "

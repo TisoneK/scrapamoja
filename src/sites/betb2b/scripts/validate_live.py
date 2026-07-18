@@ -142,7 +142,7 @@ async def main() -> int:
             {"pattern": f"*.{skin.domain}", "target": endpoint_id},
         ],
     })
-    ep = pm.acquire(site=skin.domain, endpoint_id=endpoint_id)
+    ep = pm.get(endpoint_id) or pm.acquire(site=skin.domain)
     print(f"    proxy endpoint: {ep!r}", flush=True)
     summary["steps"].append({"step": "build_proxy", "ok": True, "endpoint": repr(ep)})
 
