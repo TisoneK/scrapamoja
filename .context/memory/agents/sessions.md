@@ -288,7 +288,7 @@ past entries — append corrections instead.
 ## 2026-07-19 — Session 18 (H2H cross-skin investigation)
 - **Agent:** GitHub Copilot | **Model:** DeepSeek V4 Flash Free | **Platform:** Windows 11 (TisoneK local) | **Role:** engineer | **Core:** 0.2.0
 - **Task:** Cross-skin H2H failure investigation — fix 22bet timeout and paripesa redirect issues.
-- **Commits:** 4 (`5c902d6`..`636ed90`) — 1 project-surface fix + 3 context-surface
+- **Commits:** 5 (`5c902d6`..`18a2b12`) — 1 project-surface fix + 4 context-surface
 - **Outcome:** done — 22bet confirmed working (timing-sensitive, 30-90s bootstrap). paripesa domain fixed (`paripesa.bet` → `paripesa.cool`, the `.bet` TLD redirects to a bonus landing page). Working count: 3/8 → 5/8. 3 skins still blocked from Kenya (need proxy).
 - **Open items:** proxy investigation for 888starz, megapari, melbet
 - **Report:** no review report — investigation + small fix. Summary delivered in chat.
