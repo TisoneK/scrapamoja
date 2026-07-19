@@ -301,3 +301,12 @@ past entries — append corrections instead.
 - **Outcome:** (1) **Telemetry: ✅ already wired.** `BetB2BTelemetry` in `telemetry_integration.py` was already created and imported into `scraper.py` — it emits structured JSON events for bootstrap/poll/extract/dom_fallback/scrape_complete/snapshot phases. (2) **Snapshot: ⚠️ error-path only.** `capture_error_snapshot()` delegates to the framework's `SnapshotManager` on failures; no success-path/periodic snapshots. (3) Fixed a duplicate `from .telemetry_integration import BetB2BTelemetry` in `scraper.py`. (4) Updated `AGENTS.md` to accurately document the wiring status (was incorrectly stating both systems were NOT wired). (5) Updated `current.md` with clear PENDING instructions for the next agent to run `validate_live --skin linebet` through the updated proxy (`bore.pub:55068`). **Live e2e testing was NOT performed** — marked as the top-priority task for the next session.
 - **Open items:** LIVE E2E VALIDATION is the #1 task for the next agent (see `current.md`). Per-skin `partner`/`gr` confirmation still pending for 7 skins. Success-path snapshots are a future enhancement.
 - **Report:** none written (handoff session — instructions embedded in `current.md`).
+
+---
+## 2026-07-19 — Session 18 continuation (post-mortem analysis + context lifecycle)
+- **Agent:** GitHub Copilot | **Model:** DeepSeek V4 Flash Free | **Platform:** Windows 11 (TisoneK local) | **Role:** engineer | **Core:** 0.2.0
+- **Task:** Cross-skin H2H investigation → pivoted to meta-analysis: why GitHub Copilot / DeepSeek V4 Flash Free has more flaw/inefficiency entries than Claude Code or Super Z. Root cause analysis, inefficiency logging, context memory lifecycle understanding.
+- **Commits:** 1 (`43252be` — `chore(context): log AGENTS.md shallow-processing inefficiency`)
+- **Outcome:** meta-analysis done — root cause identified (attention-allocation failure, shallow document processing, analysis-over-action, linear-vs-cyclical execution). AGENTS.md shallow-processing inefficiency logged and pushed. Context memory E2E lifecycle understood (AGENTS.md → kickoff.md → protocol → work → ALL memory files updated → two-surface commit → push → next agent reads AGENTS.md).
+- **Open items:** proxy for 3 blocked skins; wire H2H data into scraper; paripesa 0 basketball events
+- **Report:** no review report — meta-analysis session. Summary delivered in chat.

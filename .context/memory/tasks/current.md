@@ -1,10 +1,10 @@
 # ✅ Done — Session Complete
 
-> **Cross-skin H2H investigation — paripesa domain fix (5/8 skins working)**
+> **H2H cross-skin investigation (Session 18) + Post-mortem analysis & context memory lifecycle (Session 18 continued)**
 
-## Session Results
+## Session 18 — H2H Cross-Skin Investigation
 
-### H2H Endpoint: 5/8 Skins Working from Kenya
+### Results: 5/8 Skins Working from Kenya
 
 | Skin | Status | Fix applied |
 |------|--------|-------------|
@@ -13,41 +13,34 @@
 | helabet | ✅ Working | — |
 | 22bet | ✅ Working | Timing-sensitive bootstrap (30-90s). Not a code issue. |
 | paripesa | ✅ Working | **`paripesa.bet` → `paripesa.cool`** in YAML (`.bet` redirects to bonus page) |
-| 888starz | ❌ Blocked | Geo-blocked from Kenya (ERR_CONNECTION_TIMED_OUT). Needs proxy. |
+| 888starz | ❌ Blocked | Geo-blocked from Kenya. Needs proxy. |
 | megapari | ❌ Blocked | Same as above. |
 | melbet | ❌ Blocked | Same as above. |
 
 ### Key Discovery
-- All 5 working skins return **identical H2H data** (19 games, 12 teams) — confirms fully shared BetB2B backend
+- All 5 working skins return **identical H2H data** — confirms fully shared BetB2B backend
 - paripesa correct domain is **`paripesa.cool`** (not `.bet` or `.com`)
 - 22bet works but is timing-sensitive (bootstrap 30-90s)
 
-### Next Steps
-- Investigate proxy for 3 blocked skins (888starz, megapari, melbet)
+## Session 18 continued — Post-mortem / Meta-analysis
+
+Results of root-cause analysis for GitHub Copilot / DeepSeek V4 Flash Free's higher flaw count:
+
+| Factor | Detail |
+|--------|--------|
+| Attention-allocation failure | Structured document pushes existing context aside instead of merging |
+| Shallow document processing | Consumes text but not meaning (AGENTS.md treated as reference, not workflow root) |
+| Analysis over action | Writes paragraphs instead of tersely logging and moving on |
+| Linear vs cyclical | Protocol treated as terminal checklist, not a feedback loop |
+| Reminders needed for everything | No autonomous action — protocol steps, memory updates, logging all required user prompts |
+
+### Commits this session
+- `43252be` — `chore(context): log AGENTS.md shallow-processing inefficiency`
+
+### Next Steps (backlogged)
+- proxy investigation for 3 blocked skins (888starz, megapari, melbet)
 - Wire H2H data into the BetB2B scraper (markets enrichment)
-
-  but not odds/scores cells. Need selector tuning for the rendered Vue grid structure.
-- **406 API drift confirmed** — all feed polls return HTTP 406, confirming ADR-4's DOM-primary path.
-- **paripesa** boots fine but finds 0 basketball events — may need investigation.
-
-### Validation Data
-All summaries in `data/betb2b_validate_{skin}_{sport}/summary.json`:
-- `betb2b_validate_linebet_basketball/` (v1)
-- `betb2b_validate_linebet_basketball_v2/` (v2)
-- `betb2b_validate_linebet_football/`
-- `betb2b_validate_helabet_basketball/`
-- `betb2b_validate_megapari_basketball/`
-- `betb2b_validate_melbet_basketball/`
-- `betb2b_validate_betwinner_basketball/`
-- `betb2b_validate_888starz_basketball/`
-- `betb2b_validate_paripesa_basketball/`
-- **Proxy down:** ask the operator for a new bore.pub port; update env vars.
-- **DOM selectors miss events:** capture page HTML, tune `[class*=...]` selectors in
-  `src/sites/betb2b/extraction/dom.py`.
-
-## Wiring Status (as of this session)
-
-| Subsystem | Status | Notes |
+- **paripesa** boots fine but finds 0 basketball events — may need investigation
 |-----------|--------|-------|
 | **Telemetry** | ✅ Fully wired | `BetB2BTelemetry` in `telemetry_integration.py`, called from `scraper.py` at every lifecycle point. JSON file output, auto-flush, customizable. |
 | **Snapshot** | ⚠️ Error-path only | `capture_error_snapshot()` in telemetry triggers `SnapshotManager` on failures. No success-path / periodic snapshots yet. |
