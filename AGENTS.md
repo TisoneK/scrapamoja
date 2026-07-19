@@ -130,14 +130,15 @@ export BETB2B_PROXY_ID=kenya
 python -m src.sites.betb2b.scripts.validate_live --skin linebet --sport basketball
 ```
 
-**BetB2B platform infrastructure (researched 2026-07-18):**
+**BetB2B platform infrastructure (researched 2026-07-18, H2H solved 2026-07-19):**
 - White-label platform provider (Curaçao), powers 18+ betting brands
-- Frontend: Nuxt.js (Vue.js SSR) — identified by `window.__NUXT__`, `/_nuxt/` assets, `data-v-*` scoped styles
+- Frontend: Microfrontend shell + betting app loaded via CDN (`v3.traincdn.com`). NOT Nuxt.js SSR (no `window.__NUXT__`)
 - Backend: `/service-api/LiveFeed/` and `/service-api/LineFeed/` REST endpoints returning terse-key JSON
 - All sister sites share the same odds feed, events, and markets; differences are branding + risk margins
 - Anti-bot: Cloudflare WAF, JS challenges, rate limiting, TLS fingerprinting, geo-blocking per skin
 - API endpoints: `Get1x2_VZip`, `GetSportsShortZip`, `WebGetTopChampsZip`, `GetTopGamesStatZip`
 - Response format: `{"Success": true, "Value": [{I, O1, O2, SN, SI, L, LI, S, SC, E[], AE[]}]}`
+- **H2H / statistics:** `/service-api/statisticfeed/api/v1/Game/h2h?id={gameId}&lng=en&ref={partner}&fcountry={country}&gr={gr}` — fires at bootstrap on scheduled match pages. The `id` param is **NOT** the URL event ID; it's found in `GetGameZip` or `GetSubsOptionsForGame` responses. Skins vary `partner`/`gr`/`country` values (see YAML). See `docs/H2H_DISCOVERY.md` for full spec.
 
 ### Telemetry System (`src/telemetry/`) — ✅ Wired into betb2b
 
@@ -204,6 +205,12 @@ All snapshot paths are controlled by `snapshot_on_error` (default True) and
     only when needed.
 14. **The validate_live script is the e2e test.** Run `python -m src.sites.betb2b.scripts.validate_live --skin linebet`. Proxy env vars are optional — omit them if your egress is in an allowed country.
 
+15. **H2H endpoint uses skin config params.** The `/statisticfeed/api/v1/Game/h2h` endpoint takes `ref={partner}`, `fcountry={country}`, `gr={gr}` from the skin YAML. Linebet uses `ref=189&fcountry=87&gr=650`; most other skins default to `ref=1&fcountry=87&gr=1`. See `docs/H2H_DISCOVERY.md`.
+
+16. **H2H discovery requires a scheduled (pre-match) major league event.** Live/in-play matches do NOT pre-fetch H2H data. Use `/en/line/` (pre-match) not `/en/live/`. The endpoint fires at bootstrap, not on hover. See `src/sites/betb2b/scripts/discover_h2h.py`.
+
+17. **The H2H `id` param is NOT the URL event ID.** It must be extracted from `GetGameZip` or `GetSubsOptionsForGame` response bodies. They are different numbers with no obvious relationship.
+
 ### Development Setup
 
 ```bash
@@ -268,7 +275,9 @@ python -m src.sites.betb2b.cli.main probe --skin linebet
 | `src/sites/betb2b/sports.py` | Sport ID → name mapping |
 | `src/sites/betb2b/skins/` | Per-bookmaker YAML skin configs |
 | `src/sites/betb2b/scripts/validate_live.py` | E2E validation script |
+| `src/sites/betb2b/scripts/discover_h2h.py` | H2H endpoint discovery script |
 | `src/sites/betb2b/cli/main.py` | CLI entry point |
+| `docs/H2H_DISCOVERY.md` | H2H endpoint full specification + integration guide |
 | `src/network/proxy/` | ProxyManager, ProxyEndpoint, proxy verification |
 | `src/network/session.py` | SessionHarvester, SessionPackage, SessionValidator |
 | `src/telemetry/` | Full telemetry system (collectors, processors, storage, reporting) |

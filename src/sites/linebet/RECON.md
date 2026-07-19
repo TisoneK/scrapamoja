@@ -275,80 +275,173 @@ GET /service-api/{LineFeed|LiveFeed}/GetGameZip?id=<eventId>&lng=en&country=87&p
 parse `E[]`/`AE[]`. This is the odds path; DOM-odds and the `top=true` list feed are
 not viable headless.
 
-## H2H / statistics — ServiceWorker-mediated (2026-07-18)
+## SOLVED (2026-07-19): H2H / head-to-head endpoint (`statisticfeed`)
 
-Head-to-head appears on **hover over a team name** (list + match pages; team el
-class `dashboard-game-team-`). Operator DevTools capture (match page
-`…/351745496-orlando-magic-boston-celtics`) shows the data requests are
-**ServiceWorker-initiated** — Initiator column reads `(ServiceWorker)` /
-`pwa-ivpn-sw.js?pwa=1`. Consequence: these requests are **invisible to Playwright
-`page.on()` AND `context.on("request")` and to init-script fetch/XHR hooks**
-(headless capture sees only the document + static assets). Only DevTools or a CDP
-`Target.setAutoAttach` to the SW target sees them. This is the same SW transport
-noted in ADR-4 — and the reason repeated headless hover-capture attempts returned
-nothing after hover.
+Head-to-head appears on **hover over a team name** (match page only for
+scheduled/pre-match events; team el class `scoreboard-team-name`). The H2H popup
+shows two tabs: **"Recent Games"** and **"Previous meetings"**.
 
-Endpoints fired on team-hover (all SW-mediated, `service-api`):
-`GetSportsShortZip?sports=<SI>&champs=<champId>` (e.g. `sports=3&champs=75093`),
-`WebGetTopChampsZip`, `main-{line,live}-feed/v1/expressDay`, and `GetGameZip?id=`.
-Clicking "recent matches" fires `event.json` (operator-observed).
+**Contrary to earlier investigation, the H2H endpoint is NOT ServiceWorker-mediated.
+It fires during INITIAL PAGE LOAD and is fully visible to Playwright
+`page.on("response")`.** The earlier operator DevTools session (2026-07-18) may have
+missed it because it loaded a live/in-play match page where H2H data may not be
+pre-fetched, or the SW-cached response didn't trigger a new network request.
 
-**To capture the exact H2H endpoint** (headless): CDP `Target.setAutoAttach
-{autoAttach:true,flatten:true}` on the SW target + `Network.enable`, OR read the
-Request URL straight from DevTools. Likely replayable via httpx like `GetGameZip`
-(base betting headers + cookies) once the exact URL + params are known.
+Discovered 2026-07-19 via headless Playwright against a **scheduled** (pre-match)
+NBA Summer League match:
 
-### H2H investigation — status (2026-07-18, in progress)
+```
+GET https://linebet.com/service-api/statisticfeed/api/v1/Game/h2h?id=737455106&lng=en&ref=189&fcountry=87&gr=650
+```
 
-Operator DevTools shows only 3 requests around the H2H hover on the match page,
-and **none carries the head-to-head data**:
-- `GetGameZip?id=…&GroupEvents=true&countevents=250&marketType=1&isNewBuilder=true`
-  — verified: returns markets ONLY (`GE`[grouped markets], `SG`[sub-games],
-  `MEC`[market categories]); **no** H2H/statistics/previous-meetings fields.
-  (Note this is the SPA's real match query; it returns the newer `GE` grouped
-  format. Our scraper uses the simpler `isSubGames=true&grMode=4` variant that
-  returns `E[]`, which `BetB2BExtractionRules` already parses — keep as-is.)
-- `WebGetTopChampsZip?lng=en&country=87&gr=650` — champ list, not H2H.
-- `/fatman-api/<hash>/event.json` — analytics ping (`{"ts":…}`), not data.
+**Key properties:**
 
-**Still open:** the actual H2H "recent matches" data endpoint. It's a SEPARATE
-SW-mediated request (invisible to headless Playwright capture). Find it in DevTools
-by its RESPONSE — a few-KB JSON of past matches (team names/dates/scores), NOT the
-~0.2 kB analytics ping; filter Network by `statistic` or sort by Size. Once its
-URL+params are known, test the httpx replay (base betting headers + cookies, like
-`GetGameZip`) and, if it replays, wire an H2H fetch into the scraper the same way.
+| Property | Value |
+|----------|-------|
+| Path | `/service-api/statisticfeed/api/v1/Game/h2h` |
+| Method | GET |
+| Media | JSON (~17KB for 19 games) |
+| SW-gated? | **NO** — captured via `page.on("response")`, not SW |
+| Trigger | Fires on **initial page load**, NOT on hover |
+| Hover role | Hover over team name **shows the pre-loaded data** in a popup |
+| Game ID source | NOT the URL event ID — comes from `GetGameZip` response |
+| httpx-replayable? | **Likely yes** — standard service-api endpoint, base betting headers + cookies |
 
-### H2H candidate endpoints (operator-captured on "recent matches" click, 2026-07-18)
+### Query parameters
 
-Clicking H2H / "recent matches" fires (each once, all SW-mediated):
-- `GetSportsShortZip?sports=3&champs=75093&lng=en&country=87&partner=189&virtualSports=true&gr=650&groupChamps=true`
-  — **sport(3=basketball) + this exact champ (75093=NBA Summer League) scoped**.
-  Leading hypothesis: this IS the "recent matches" source — the games in the same
-  championship (linebet's H2H popup likely shows recent/other champ games rather
-  than a dedicated previous-meetings feed).
-- `WebGetTopChampsZip?lng=en&country=87&gr=650` — top champs (context).
-- `main-live-feed/v1/expressDay?cfView=3&country=87&gr=650&lng=en&ref=189` — express.
+| Param | Example | Source |
+|-------|---------|--------|
+| `id` | `737455106` | Game ID from `GetGameZip` response (not URL event ID `352015844`) |
+| `lng` | `en` | Language |
+| `ref` | `189` | Partner/affiliate ID |
+| `fcountry` | `87` | Country filter |
+| `gr` | `650` | Project/group ID |
 
-TODO (needs proxy up): fetch `GetSportsShortZip?...&champs=<champId>` and confirm
-its `Value` is a list of games (teams/scores/dates) = the recent-matches data.
-If so, wire an H2H fetch as `fetch("sports_short", root, extra_params={"sports":<SI>,"champs":<champId>,"groupChamps":"true"})` and parse the event list. httpx-replayable
-like the other feeds (base headers + cookies). The champ id comes from the match
-URL (`/<champId>-slug/<eventId>-slug`) — already parsed for GetGameZip.
+### Response structure
 
-### H2H candidates — TESTED, none carry H2H data (2026-07-18)
+```json
+{
+  "teams": [
+    {
+      "id": "5ab1265c494765f3ca240306",
+      "countryId": "153",
+      "title": "Brooklyn Nets",
+      "subTeams": [{"title": "Brooklyn Nets", "image": "/sfiles/logo_teams/..."}],
+      "teamType": 1,
+      "clId": 6852,
+      "image": "/sfiles/logo_teams/...",
+      "country": {"id": 153, "title": "United States", "logoId": 12753, "image": "..."}
+    },
+    ...  (12 teams total — all NBA teams with games in the returned set)
+  ],
+  "gameShorts": [
+    {
+      "id": "6865cd0d9930a40b3ceaeffb",
+      "stageId": "68659e8b9930a40b3cb0bfd6",
+      "team1": "5ab1265c494765f3ca240306",   // references teams[].id
+      "team2": "5ab1265c494765f3ca240317",
+      "dateStart": 1752183000,                // Unix timestamp
+      "score1": 81,
+      "score2": 90,
+      "subScore1": 0,
+      "subScore2": 0,
+      "countRedCards1": 0,
+      "countRedCards2": 0,
+      "winner": 2,                            // 1=team1, 2=team2, 0=draw
+      "status": 3,                             // 3=finished
+      "subStatus": 0,
+      "periods": [
+        {"score1": 15, "score2": 22, "type": 18},
+        {"score1": 22, "score2": 22, "type": 19},
+        {"score1": 21, "score2": 23, "type": 20},
+        {"score1": 23, "score2": 23, "type": 21}
+      ]
+    },
+    ...  (19 gameShorts entries)
+  ],
+  "sportId": 3,
+  "subSportId": null,
+  "entity": "..."
+}
+```
 
-Fetched + decoded each hover/click endpoint; NONE is the head-to-head source:
-- `GetGameZip?id=` → markets only (`GE`/`SG`/`MEC`), no H2H fields.
-- `GetSportsShortZip?sports=3&champs=75093&groupChamps=true` → the **sports menu
-  list** (`Value[82]`, keys `I`(sport id)/`N`(name)/`R`/`C`, e.g. `{"I":1,"N":"Football"}`)
-  — NOT games, NOT H2H. It's the left-sidebar sport tree.
-- `WebGetTopChampsZip` → top champs list. `expressDay` → express. `event.json` →
-  fatman analytics `{"ts":…}`.
+### Period types (basketball)
 
-**Conclusion:** these are the SPA's general navigation refresh, not the H2H data.
-The real head-to-head "recent matches" (previous meetings / team form) is a
-SEPARATE, still-unidentified SW-mediated request. To isolate it: in DevTools open
-the H2H section so it renders past matches, then find the request whose RESPONSE
-contains match history (opponent names + dates + final scores) — likely a
-`service-api/…statistic…` path or a stats host. Filter Network by `statistic` or
-sort by response Size (H2H data is a few KB; ignore the ~0.2 kB analytics pings).
+| `type` | Meaning |
+|--------|---------|
+| 18 | 1st quarter |
+| 19 | 2nd quarter |
+| 20 | 3rd quarter |
+| 21 | 4th quarter |
+
+### How to find the Game ID (`id` param)
+
+The `id` parameter (`737455106` in the example) is **NOT the event ID in the URL**
+(`352015844`). It comes from somewhere in the `GetGameZip` response or the page
+state. Possible sources:
+- `GetGameZip` response may contain a `constId` field
+- The `SubscriptionServiceV3/api/v3/games/GetSubsOptionsForGame?constId=737455106`
+  endpoint uses the same ID — confirmed during discovery
+- The ID may be embedded in the page HTML or the service worker state
+
+### Full endpoint catalog (linebet.com match page bootstrap)
+
+| # | Endpoint | Size | Purpose |
+|---|----------|------|---------|
+| 1 | `GET /bff-api/config/group/get?groups=b.core,...` | 92KB | App config/bootstrap |
+| 2 | `POST /analytics-module-api/v1/analytics` | 152b | Analytics ping |
+| 3 | `GET /fatman-api/.../fc` | 7b | Fatman ping |
+| 4 | `GET /fatman-api/.../ab.json` | 2b | A/B test assignment |
+| 5 | `GET /fatman-api/.../event.json` | 23b | Analytics event |
+| 6 | `GET /fatman-api/.../metadata.json` | 42b | Analytics metadata |
+| 7 | `GET /bff-api/config/group/get?groups=b.rum` | 128b | RUM config |
+| 8 | `GET /bff-api/event-logo/v2/suitable.json` | 1KB | Event logos |
+| 9 | `GET /sys-*-app-front/.../match-page` | 3-4KB | Microfrontend shells |
+| 10 | `GET /service-api/gamespreview/getbanner` | 219b | Banner |
+| 11 | `POST /web-api/api/v3/bonuses/welcome-bonuses` | 837b | Welcome bonuses |
+| 12 | `GET /web-api/api/third-party/banner-for-header` | 232b | Header banner |
+| 13 | `GET /bff-api/config/licenses.json` | 2KB | Licenses |
+| 14 | `GET /web-api/session` | 7b | Session check |
+| 15 | `POST /hd-api/external/verify` | 737b | Human verification |
+| 16 | `GET /bff-api/config/group/get?groups=d.bringfriend` | 146b | Referral config |
+| 17 | `POST /web-api/api/v3/bonuses/first-deposit` | 436b | Deposit bonus |
+| 18 | **`GET /service-api/statisticfeed/api/v1/Game/h2h`** | **18KB** | **★ H2H data** |
+| 19 | `GET /service-api/LineFeed/GetGameZip` | 15KB | Match markets/odds |
+| 20 | `GET /service-api/LineFeed/GetSportsShortZip` | 15KB | Sports tree |
+| 21 | `GET /service-api/main-line-feed/v1/expressDay` | 24KB | Line feed |
+| 22 | `GET /service-api/main-live-feed/v1/expressDay` | 10KB | Live feed |
+| 23 | `GET /service-api/LineFeed/WebGetTopChampsZip` | 506b | Top champs |
+| 24 | `GET /service-api/LineFeed/GetTopGamesStatZip` | 9KB | Top games stats |
+| 25 | `GET /service-api/SubscriptionServiceV3/api/v3/games/GetSubsOptionsViews` | 194b | Subs views |
+| 26 | `GET /service-api/SubscriptionServiceV3/api/v3/games/GetSubsOptionsForGame` | 49b | Subs for game |
+| 27 | `GET /bff-api/config/video.json` | 2KB | Video config |
+| 28 | `POST /account-api/user/v1/phone-data` | 31KB | Phone data |
+| 29 | `POST /flexreg-api/v1/registration/form/widget` | 56KB | Registration form |
+| 30 | `GET /platform-apps-legacy-api/mobile` | 311b | Mobile platform |
+
+### How H2H discovery was done (methodology)
+
+1. Use a **scheduled** (not live) match from a **major league** (NBA Summer League)
+2. Navigate to match page with `wait_until="load"` + 25s SPA hydration wait
+3. Capture all responses via `page.on("response")` (NOT ServiceWorker-mediated!)
+4. Filter for `/service-api/` paths
+5. Hover over team names (`.scoreboard-team-name`) using Playwright `.hover()`
+   + JS `MouseEvent` dispatch for redundancy
+6. The H2H popup appears with "Recent Games" / "Previous meetings" tabs
+7. The actual API call happened at **bootstrap time** (index 130/153), hover just
+   reveals the pre-loaded UI
+
+### Previous incorrect assumptions (corrected)
+
+| Assumption | Correction |
+|------------|------------|
+| H2H is SW-mediated, invisible to Playwright | **False** — visible via `page.on("response")` for scheduled matches |
+| H2H fires only on hover | **False** — data is pre-loaded at bootstrap, hover only shows UI |
+| `GetSportsShortZip` might carry H2H data | **False** — it's the sports sidebar tree |
+| H2H endpoint is a separate SW request | **False** — it's `statisticfeed/api/v1/Game/h2h` |
+
+<!-- SECTION REPLACED 2026-07-19 — H2H endpoint discovered and documented in SOLVED section above -->
+
+<!-- SECTION REPLACED 2026-07-19 — H2H endpoint discovered. All candidate endpoints tested negative. The real endpoint is /service-api/statisticfeed/api/v1/Game/h2h -->
+
+<!-- SECTION REPLACED 2026-07-19 — Conclusion was correct (separate endpoint needed), but SW-mediated assumption was wrong. The actual endpoint /service-api/statisticfeed/api/v1/Game/h2h IS visible to Playwright and fires at bootstrap, NOT on hover. -->
