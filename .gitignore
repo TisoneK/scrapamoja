@@ -48,6 +48,9 @@ node_modules/
 # Database files
 *.db
 *.db-shm
+
+# BetB2B live validation output (generated)
+betb2b_validate_*/
 *.db-wal
 
 # Build artifacts

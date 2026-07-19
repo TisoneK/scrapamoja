@@ -62,6 +62,49 @@ All skins share country=87 (Kenya). The `fcountry` may differ for skins in other
 jurisdictions. The endpoint path is universal across all BetB2B skins since they
 share the same backend infrastructure.
 
+---
+
+## Cross-Skin Validation Results (2026-07-19)
+
+Eight BetB2B skins were tested via hybrid bootstrap (Playwright → session cookies →
+httpx with real betting headers) against the same NBA Summer League game ID `737455106`.
+
+### Working (3/8) — H2H confirmed from Kenya without proxy
+
+| Skin | Bootstrap domain | Final domain | Status | Games | Teams |
+|------|------------------|-------------|--------|-------|-------|
+| **linebet** | linebet.com | linebet.com | ✅ 200 | 19 | 12 |
+| **helabet** | helabet.com | helabetke.com | ✅ 200 | 19 | 12 |
+| **betwinner** | betwinner.com | betwinner.ke | ✅ 200 | 19 | 12 |
+
+All three served **identical H2H data** (same 19 gameShorts, same 12 teams) — confirming
+the BetB2B backend is fully shared and the endpoint is universal.
+
+### Blocked from Kenya (3/8) — need proxy
+
+| Skin | Domain | Error |
+|------|--------|-------|
+| **888starz** | 888starz.bet | `net::ERR_CONNECTION_TIMED_OUT` |
+| **megapari** | megapari.com | `net::ERR_CONNECTION_TIMED_OUT` |
+| **melbet** | melbet.com | `net::ERR_CONNECTION_TIMED_OUT` |
+
+These domains are geo-blocked from Kenya egress. Will need proxy routing through
+an allowed country (likely the skin's target market) to confirm H2H.
+
+### Need investigation (2/8)
+
+| Skin | Domain | Issue | Details |
+|------|--------|-------|---------|
+| **22bet** | 22bet.com | Bootstrap timeout | Geo-redirects to `22bet.co.ke`, loads 44 cookies but betting app never initialized (90s timeout). httpx call returned empty body. May need proxy to `22bet.com` (not `.co.ke`) or different bootstrap path. |
+| **paripesa** | paripesa.bet | Session insufficient | Redirects to `bonus.paripesa.cool` landing page. 16 cookies collected but betting app not detected. H2H httpx call got 302 redirect to `rdrctpar24.lol` bonus page. Skin may have moved domains or requires different bootstrap flow. |
+
+### Key conclusions
+
+1. **Endpoint universal** — Same path, same params, same response schema across all working skins
+2. **Session depth varies** — Working skins needed 28-32 cookies; failed ones had 0 or 16 (paripesa)
+3. **Geo-redirects differ** — Some skins redirect to country-specific domains (22bet.co.ke, betwinner.ke, helabetke.com); the scraper's bootstrap paths must handle these
+4. **Same data regardless of ref/gr** — betwinner and helabet both use `ref=1, gr=1` but returned identical data to linebet's `ref=189, gr=650`
+
 ### Headers (for httpx replay)
 
 ```python
