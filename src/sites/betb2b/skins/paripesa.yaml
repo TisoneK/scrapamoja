@@ -2,7 +2,7 @@
 # Verified 2026-07-18: same backend, same endpoints, same schema as linebet.
 
 name: paripesa
-domain: paripesa.bet
+domain: paripesa.cool
 partner: 1             # paripesa partner id (confirm against live capture)
 gr: 1                  # paripesa project-group id (confirm)
 country: 87
@@ -12,5 +12,8 @@ enabled: true
 proxy_endpoint_id: kenya
 allowed_countries: ["KE"]
 notes: |
-  BetB2B family — paripesa.bet. Verified 2026-07-18 as same-backend.
+  BetB2B family — paripesa.cool (not paripesa.bet — that redirects to a bonus
+  landing page). Verified 2026-07-19: same H2H data as other skins (19 games,
+  12 teams, HTTP 200 via hybrid bootstrap). Domain resolved: paripesa.com
+  redirects to paripesa.cool which serves the actual BetB2B SPA.
   Per-skin partner/gr ids are best-effort — confirm with a live capture.

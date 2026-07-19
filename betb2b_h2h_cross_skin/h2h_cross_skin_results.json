@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-07-19T15:17:33Z",
+  "timestamp": "2026-07-19T15:45:04Z",
   "game_id": "737455106",
-  "skin_count": 8,
+  "skin_count": 3,
   "working": 3,
   "results": [
     {
@@ -14,108 +14,29 @@
       },
       "match_url": "https://22bet.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
       "h2h_url": "https://22bet.com/service-api/statisticfeed/api/v1/Game/h2h?id=737455106&lng=en&ref=1&fcountry=87&gr=1",
-      "bootstrap_error": "Page.goto: Timeout 90000ms exceeded.\nCall log:\n  - navigating to \"https://22bet.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets\", waiting until \"load\"\n",
       "final_url": "https://22bet.co.ke/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
       "page_title": "Basketball Betting Lines & Pre-Match Odds Kenya | 22Bet",
       "has_betting_app": false,
-      "bootstrap_elapsed_s": 91.17,
-      "harvested_cookies": 44,
-      "api_responses_count": 0,
-      "httpx": {
-        "error": "",
-        "elapsed_s": 5.62
-      }
-    },
-    {
-      "skin": "888starz",
-      "domain": "888starz.bet",
-      "params": {
-        "ref": 1,
-        "gr": 1,
-        "fcountry": 87
-      },
-      "match_url": "https://888starz.bet/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
-      "h2h_url": "https://888starz.bet/service-api/statisticfeed/api/v1/Game/h2h?id=737455106&lng=en&ref=1&fcountry=87&gr=1",
-      "bootstrap_error": "Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://888starz.bet/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets\nCall log:\n  - navigating to \"https://888starz.",
-      "final_url": "about:blank",
-      "page_eval_error": "Page.title: Execution context was destroyed, most likely because of a navigation",
-      "bootstrap_elapsed_s": 21.2,
-      "harvested_cookies": 0,
-      "api_responses_count": 0,
-      "httpx": {
-        "error": "No cookies harvested — cannot make authenticated request"
-      }
-    },
-    {
-      "skin": "betwinner",
-      "domain": "betwinner.com",
-      "params": {
-        "ref": 1,
-        "gr": 1,
-        "fcountry": 87
-      },
-      "match_url": "https://betwinner.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
-      "h2h_url": "https://betwinner.com/service-api/statisticfeed/api/v1/Game/h2h?id=737455106&lng=en&ref=1&fcountry=87&gr=1",
-      "final_url": "https://betwinner.ke/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
-      "page_title": "Bet on Oklahoma City Thunder - Brooklyn Nets NBA. Summer League Basketball 2026/07/19 23:30 Betting Odds | BetWinner",
-      "has_betting_app": true,
-      "bootstrap_elapsed_s": 27.53,
-      "harvested_cookies": 28,
+      "bootstrap_elapsed_s": 30.94,
+      "harvested_cookies": 14,
       "api_responses_count": 0,
       "httpx": {
         "status": 200,
-        "elapsed_s": 0.83,
+        "elapsed_s": 0.78,
         "body_length": 16840,
         "teams_count": 12,
         "games_count": 19,
         "sport_id": 3,
         "has_valid_data": true,
         "team_names": [
-          "Dallas Mavericks",
+          "Brooklyn Nets",
           "Houston Rockets",
-          "Oklahoma City Thunder",
-          "Los Angeles Lakers"
+          "Los Angeles Lakers",
+          "Oklahoma City Thunder"
         ],
         "sample_game": {
-          "dateStart": 1704501000,
-          "score": "124-115",
-          "periods": 4
-        }
-      }
-    },
-    {
-      "skin": "helabet",
-      "domain": "helabet.com",
-      "params": {
-        "ref": 1,
-        "gr": 1,
-        "fcountry": 87
-      },
-      "match_url": "https://helabet.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
-      "h2h_url": "https://helabet.com/service-api/statisticfeed/api/v1/Game/h2h?id=737455106&lng=en&ref=1&fcountry=87&gr=1",
-      "final_url": "https://helabetke.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
-      "page_title": "Oklahoma City Thunder - Brooklyn Nets Betting - 19.07.2026 (NBA. Summer League) - Basketball ᐉ Helabet ᐉ Online Sports Betting ᐉ helabetke.com",
-      "has_betting_app": true,
-      "bootstrap_elapsed_s": 29.84,
-      "harvested_cookies": 32,
-      "api_responses_count": 0,
-      "httpx": {
-        "status": 200,
-        "elapsed_s": 0.59,
-        "body_length": 16840,
-        "teams_count": 12,
-        "games_count": 19,
-        "sport_id": 3,
-        "has_valid_data": true,
-        "team_names": [
-          "Dallas Mavericks",
-          "Houston Rockets",
-          "Oklahoma City Thunder",
-          "Los Angeles Lakers"
-        ],
-        "sample_game": {
-          "dateStart": 1704501000,
-          "score": "124-115",
+          "dateStart": 1783814400,
+          "score": "76-83",
           "periods": 4
         }
       }
@@ -133,91 +54,65 @@
       "final_url": "https://linebet.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
       "page_title": "Oklahoma City Thunder - Brooklyn Nets Betting - 19.07.2026 (NBA. Summer League) - Basketball ᐉ Linebet ᐉ Online Sports Betting ᐉ linebet.com",
       "has_betting_app": true,
-      "bootstrap_elapsed_s": 30.0,
+      "bootstrap_elapsed_s": 30.37,
       "harvested_cookies": 28,
-      "api_responses_count": 47,
+      "api_responses_count": 49,
       "httpx": {
         "status": 200,
-        "elapsed_s": 0.7,
+        "elapsed_s": 0.61,
         "body_length": 17520,
         "teams_count": 12,
         "games_count": 19,
         "sport_id": 3,
         "has_valid_data": true,
         "team_names": [
+          "Brooklyn Nets",
+          "Houston Rockets",
           "Los Angeles Lakers",
+          "Oklahoma City Thunder"
+        ],
+        "sample_game": {
+          "dateStart": 1783814400,
+          "score": "76-83",
+          "periods": 4
+        }
+      }
+    },
+    {
+      "skin": "paripesa",
+      "domain": "paripesa.cool",
+      "params": {
+        "ref": 1,
+        "gr": 1,
+        "fcountry": 87
+      },
+      "match_url": "https://paripesa.cool/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
+      "h2h_url": "https://paripesa.cool/service-api/statisticfeed/api/v1/Game/h2h?id=737455106&lng=en&ref=1&fcountry=87&gr=1",
+      "final_url": "https://paripesa.cool/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
+      "page_title": "PariPesa",
+      "has_betting_app": true,
+      "bootstrap_elapsed_s": 27.38,
+      "harvested_cookies": 33,
+      "api_responses_count": 161,
+      "httpx": {
+        "status": 200,
+        "elapsed_s": 0.26,
+        "body_length": 16840,
+        "teams_count": 12,
+        "games_count": 19,
+        "sport_id": 3,
+        "has_valid_data": true,
+        "team_names": [
           "Houston Rockets",
           "Brooklyn Nets",
-          "Oklahoma City Thunder"
+          "Oklahoma City Thunder",
+          "Los Angeles Lakers"
         ],
         "sample_game": {
           "dateStart": 1783278000,
           "score": "69-89",
           "periods": 4
         }
-      }
-    },
-    {
-      "skin": "megapari",
-      "domain": "megapari.com",
-      "params": {
-        "ref": 1,
-        "gr": 1,
-        "fcountry": 87
-      },
-      "match_url": "https://megapari.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
-      "h2h_url": "https://megapari.com/service-api/statisticfeed/api/v1/Game/h2h?id=737455106&lng=en&ref=1&fcountry=87&gr=1",
-      "bootstrap_error": "Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://megapari.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets\nCall log:\n  - navigating to \"https://megapari.",
-      "final_url": "about:blank",
-      "page_eval_error": "Page.title: Execution context was destroyed, most likely because of a navigation",
-      "bootstrap_elapsed_s": 21.12,
-      "harvested_cookies": 0,
-      "api_responses_count": 0,
-      "httpx": {
-        "error": "No cookies harvested — cannot make authenticated request"
-      }
-    },
-    {
-      "skin": "melbet",
-      "domain": "melbet.com",
-      "params": {
-        "ref": 61,
-        "gr": 6,
-        "fcountry": 87
-      },
-      "match_url": "https://melbet.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
-      "h2h_url": "https://melbet.com/service-api/statisticfeed/api/v1/Game/h2h?id=737455106&lng=en&ref=61&fcountry=87&gr=6",
-      "bootstrap_error": "Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://melbet.com/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets\nCall log:\n  - navigating to \"https://melbet.com/",
-      "final_url": "about:blank",
-      "page_eval_error": "Page.title: Execution context was destroyed, most likely because of a navigation",
-      "bootstrap_elapsed_s": 21.11,
-      "harvested_cookies": 0,
-      "api_responses_count": 0,
-      "httpx": {
-        "error": "No cookies harvested — cannot make authenticated request"
-      }
-    },
-    {
-      "skin": "paripesa",
-      "domain": "paripesa.bet",
-      "params": {
-        "ref": 1,
-        "gr": 1,
-        "fcountry": 87
-      },
-      "match_url": "https://paripesa.bet/en/line/basketball/75093-nba-summer-league/352015844-oklahoma-city-thunder-brooklyn-nets",
-      "h2h_url": "https://paripesa.bet/service-api/statisticfeed/api/v1/Game/h2h?id=737455106&lng=en&ref=1&fcountry=87&gr=1",
-      "final_url": "https://bonus.paripesa.cool/betting-4.5/index.html?lang=en",
-      "page_title": "PariPesa",
-      "has_betting_app": false,
-      "bootstrap_elapsed_s": 33.48,
-      "harvested_cookies": 16,
-      "api_responses_count": 1,
-      "httpx": {
-        "status": 302,
-        "elapsed_s": 0.23,
-        "body_length": 176,
-        "redirect": "https://bonus.rdrctpar24.lol/betting-4.5/index.html?id=737455106&lng=en&ref=1&fcountry=87&gr=1"
       }
     }
   ]

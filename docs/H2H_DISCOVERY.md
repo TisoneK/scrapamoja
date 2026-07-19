@@ -69,16 +69,22 @@ share the same backend infrastructure.
 Eight BetB2B skins were tested via hybrid bootstrap (Playwright → session cookies →
 httpx with real betting headers) against the same NBA Summer League game ID `737455106`.
 
-### Working (3/8) — H2H confirmed from Kenya without proxy
+### Working (5/8) — H2H confirmed from Kenya without proxy
 
-| Skin | Bootstrap domain | Final domain | Status | Games | Teams |
-|------|------------------|-------------|--------|-------|-------|
-| **linebet** | linebet.com | linebet.com | ✅ 200 | 19 | 12 |
-| **helabet** | helabet.com | helabetke.com | ✅ 200 | 19 | 12 |
-| **betwinner** | betwinner.com | betwinner.ke | ✅ 200 | 19 | 12 |
+| Skin | Bootstrap domain | Final domain | Status | Games | Teams | Boostrap | Notes |
+|------|------------------|-------------|--------|-------|-------|----------|-------|
+| **linebet** | linebet.com | linebet.com | ✅ 200 | 19 | 12 | ~30s | Baseline |
+| **betwinner** | betwinner.com | betwinner.ke | ✅ 200 | 19 | 12 | — | Geo-redirect to `.ke` |
+| **helabet** | helabet.com | helabetke.com | ✅ 200 | 19 | 12 | — | Geo-redirect to `.ke` |
+| **22bet** | 22bet.com | 22bet.co.ke | ✅ 200 | 19 | 12 | 30-90s | Timing-sensitive; redirect strips `/en/` prefix |
+| **paripesa** | paripesa.cool | paripesa.cool | ✅ 200 | 19 | 12 | ~27s | ⚠️ Uses `paripesa.cool` NOT `paripesa.bet` |
 
-All three served **identical H2H data** (same 19 gameShorts, same 12 teams) — confirming
+All five served **identical H2H data** (same 19 gameShorts, same 12 teams) — confirming
 the BetB2B backend is fully shared and the endpoint is universal.
+
+**Key fixes during investigation:**
+- **22bet**: Not a code fix — bootstrap timing varies (30-90s). Skin YAML is correct at `22bet.com`; the geo-redirect to `22bet.co.ke` is handled by Playwright automatically. The prior 90s timeout was a transient network/load issue.
+- **paripesa**: **YAML fix applied** — domain changed from `paripesa.bet` (which redirects to a bonus landing page on `bonus.rdrctpar24.lol`) to `paripesa.cool` (which serves the actual BetB2B SPA). Discovery path: `paripesa.com` → `paripesa.cool` (302 redirect, SPA detected).
 
 ### Blocked from Kenya (3/8) — need proxy
 
@@ -91,19 +97,14 @@ the BetB2B backend is fully shared and the endpoint is universal.
 These domains are geo-blocked from Kenya egress. Will need proxy routing through
 an allowed country (likely the skin's target market) to confirm H2H.
 
-### Need investigation (2/8)
+### Key conclusions (updated)
 
-| Skin | Domain | Issue | Details |
-|------|--------|-------|---------|
-| **22bet** | 22bet.com | Bootstrap timeout | Geo-redirects to `22bet.co.ke`, loads 44 cookies but betting app never initialized (90s timeout). httpx call returned empty body. May need proxy to `22bet.com` (not `.co.ke`) or different bootstrap path. |
-| **paripesa** | paripesa.bet | Session insufficient | Redirects to `bonus.paripesa.cool` landing page. 16 cookies collected but betting app not detected. H2H httpx call got 302 redirect to `rdrctpar24.lol` bonus page. Skin may have moved domains or requires different bootstrap flow. |
-
-### Key conclusions
-
-1. **Endpoint universal** — Same path, same params, same response schema across all working skins
-2. **Session depth varies** — Working skins needed 28-32 cookies; failed ones had 0 or 16 (paripesa)
-3. **Geo-redirects differ** — Some skins redirect to country-specific domains (22bet.co.ke, betwinner.ke, helabetke.com); the scraper's bootstrap paths must handle these
-4. **Same data regardless of ref/gr** — betwinner and helabet both use `ref=1, gr=1` but returned identical data to linebet's `ref=189, gr=650`
+1. **Endpoint universal** — Same path, same params, same response schema across all 5 working skins
+2. **22bet is timing-sensitive** — Bootstrap can take 30s or 90s. The load event fires inconsistently. Not a code bug.
+3. **paripesa uses `.cool` TLD** — Not `.bet` or `.com`. The correct domain is `paripesa.cool`.
+4. **Geo-redirects strip path prefixes** — 22bet.com → 22bet.co.KE removes `/en/` from path. Playwright handles this, but may affect SPA hydration timing.
+5. **Same data regardless of ref/gr** — betwinner/helabet (`ref=1, gr=1`) return identical data to linebet (`ref=189, gr=650`)
+6. **3 skins still blocked** — 888starz, megapari, melbet are geo-blocked from Kenya. Need proxy investigation.
 
 ### Headers (for httpx replay)
 
