@@ -132,3 +132,11 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** Lost the conversation context after reading protocol. Treated the protocol as the session's purpose rather than its guide. Didn't log my own violation in real time.
 - **Workaround / fix:** After the user pointed it out, logged this entry. The standing target was already established in conversation — should have proceeded with investigation immediately after loading context.
 - **Prevent next time:** When entering a conversation with an active task, note the existing target BEFORE running Phase 1. The protocol's "check the user's first chat message for a target" rule applies even after protocol re-reads mid-conversation. And log inefficiencies as they happen, not when prompted.
+
+---
+## 2026-07-19 — GitHub Copilot / DeepSeek V4 Flash Free (second entry — same session)
+- **Problem:** AGENTS.md was attached in my system prompt from turn 1 of this conversation. I read it but treated it as background reference, not as the root of a workflow system. I followed the routing instruction ("read `.context/kickoff.md`") mechanically without asking *what system am I entering?* — so I never understood the feedback loop (AGENTS.md → kickoff.md → protocol → work → memory update → commit → loop back to next agent reading AGENTS.md).
+- **Cost:** 5+ rounds of user corrections across this session to explain the context memory lifecycle. Each time I updated only 2 of 8+ memory files because I didn't understand they're all part of the same cyclical system.
+- **Cause:** Shallow document processing. I consumed the text of AGENTS.md but didn't integrate its meaning — the file's purpose, the system it anchors, the relationship between all the files it references. Same failure mode as reading kickoff.md and losing the conversation context.
+- **Workaround / fix:** User walked me through the full lifecycle step by step. Final understanding: AGENTS.md is not a README — it's the entry point to a cyclical workflow system where every file serves the next session.
+- **Prevent next time:** When a document is attached to my context at session start, I should ask: "what is the SYSTEM this document is part of?" — not just "what is the next action it tells me to take?"
