@@ -32,6 +32,8 @@ correction twice.
 
 ## Communication
 - Conventional Commits with scope; `chore(context):` for `.context/` updates (stated, 2026-07-12)
+- Agent must log inefficiencies in real time, not wait to be prompted (correction, 2026-07-19)
+- Agent must update `.context/memory/` files autonomously before ending session — user should not have to request this (correction, 2026-07-19)
 
 ## Code style
 

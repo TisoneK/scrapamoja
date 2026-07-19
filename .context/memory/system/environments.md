@@ -72,3 +72,22 @@ block (and its "last verified" date) every time you run on it again.
   - **No persistent state.** Every session starts from an empty workspace — both repos must be cloned fresh each time. The `.context/` memory lives in git, so nothing is lost, but anything not committed/pushed is gone when the session ends.
   - **PAT is the only credential.** No SSH keys, no `gh` CLI, no credential manager. A fine-grained PAT scoped to `TisoneK/scrapamoja` (Contents: RW) and `TisoneK/.context` (Contents: R) is required for any session that clones the package or pushes to the project. Never write the PAT to any file; pass it as an env var, strip it from `.git/config` after each push, and rotate after the session.
   - **The package repo `TisoneK/.context` is private.** The original external kickoff file contradicted itself on this (line 27 said private, line 81 said public) — ground truth is private. The in-repo `.context/kickoff.md` (generated session 5) records this correctly.
+
+---
+## TisoneK-Windows (last verified 2026-07-19, session 17)
+- **Identify by:** hostname `DESKTOP-*`, `$env:USERNAME` = `tison`, workspace `C:\Users\tison\Dev\scrapamoja`
+- **OS:** Windows 11, PowerShell (pwsh)
+- **Runtimes:** system python = 3.14.2 (from `.venv\Scripts\python.exe`); `.venv\` exists at repo root
+- **Package manager:** pip via `.venv\Scripts\python.exe -m pip`; project installed as `pip install -e ".[dev]"`
+- **Verified commands (all run from repo root):**
+  - `.venv\Scripts\python.exe -m pytest tests/ -k "betb2b" -v` — betb2b-specific tests
+  - `.venv\Scripts\python.exe -m src.sites.betb2b.scripts.validate_live --skin linebet` — e2e validation (with or without proxy)
+  - `.venv\Scripts\python.exe -m src.sites.betb2b.scripts.validate_h2h_cross_skin` — cross-skin H2H validation (session 17)
+  - `.venv\Scripts\python.exe -m src.sites.betb2b.cli.main skins` / `scrape` / `info` — CLI
+  - `git push` / `git pull` — works with GitHub CLI credential manager
+- **Not yet run:** full `pytest` suite (suite-wide hang issue still open), `ruff`, `mypy`
+- **Quirks / gotchas:**
+  - Some BetB2B skins geo-block Kenya egress: 888starz.bet, megapari.com, melbet.com all return `net::ERR_CONNECTION_TIMED_OUT` without proxy
+  - Use `$env:BETB2B_PROXY_URL` etc. for proxy-aware runs
+  - No `bore.pub` tunnel running; proxy vars not currently set
+  - Playwright installed with Chromium headless

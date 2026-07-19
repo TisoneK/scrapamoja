@@ -60,3 +60,12 @@ Friction caused by the `.context/` system or the protocol itself. See
   3. For long sessions, prefer committing work in small increments as soon as a
      Bash window opens — do not accumulate multiple steps of uncommitted work
      that all need Bash at the end.
+
+---
+## 2026-07-19 — GitHub Copilot / DeepSeek V4 Flash Free (Session 17)
+
+- **Flaw:** After re-reading `.context/kickoff.md` + the protocol mid-conversation, the agent ran Phase 1 steps mechanically instead of continuing the existing task (H2H cross-skin investigation). The user had to correct this twice: redirect to the actual task, then remind the agent to update `.context/memory/` per the exit checklist.
+- **Symptom:** ~3 wasted round-trips. Protocol says: "If the user has to remind you to commit or push, the protocol has failed."
+- **Root cause:** No rule exists for mid-conversation protocol re-reads. The agent lost the conversation context and treated the protocol as a fresh session start. Also, inefficiencies were not logged in real time.
+- **Suggested fix:** Add a mid-session rule: "If you re-read kickoff.md or the protocol mid-conversation, do NOT re-run Phase 1. Note the existing task target first, then proceed."
+- **Status:** open
