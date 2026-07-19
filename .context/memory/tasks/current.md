@@ -1,33 +1,31 @@
 # ✅ Done — Session Complete
 
-> **Per-sport framework validated across 8 BetB2B skins (aee7a27 + 1 fix).**
+> **Cross-skin H2H investigation — paripesa domain fix (5/8 skins working)**
 
 ## Session Results
 
-### DOM JS Bug Found & Fixed
-- **`src/sites/betb2b/extraction/dom.py`**: `_build_page_script()` used naive `f'"{s}"'`
-  quoting that broke when CSS selectors contained double quotes (e.g. `[class*="bet"]`).
-  Added `_js_str()` helper that properly escapes `"` → `\"` and `\` → `\\`.
-- Fix committed as part of this session.
+### H2H Endpoint: 5/8 Skins Working from Kenya
 
-### Reachability Map (Direct, No Proxy)
-| Skin | Live | Prematch | Total | Notes |
-|------|------|----------|-------|-------|
-| linebet | ✅ 10 | ✅ 10 | **20** | Full DOM extraction |
-| helabet | ✅ 10 | ✅ 10 | **20** | Full DOM extraction |
-| megapari | ✅ 10 | ✅ 10 | **20** | Full DOM extraction |
-| melbet | ❌ | ✅ 10 | **10** | Live page unreachable (ERR_SOCKET) |
-| betwinner | ✅ 10 | ❌ | **10** | Prematch times out |
-| paripesa | ✅ 0 | ✅ 0 | **0** | Bootstraps OK, no basketball events |
-| 888starz | ❌ | ❌ | ❌ | geo/WAF redirect to `/en/block` |
-| 22bet | ❌ | ❌ | ❌ | geo/WAF block |
+| Skin | Status | Fix applied |
+|------|--------|-------------|
+| linebet | ✅ Working | — |
+| betwinner | ✅ Working | — |
+| helabet | ✅ Working | — |
+| 22bet | ✅ Working | Timing-sensitive bootstrap (30-90s). Not a code issue. |
+| paripesa | ✅ Working | **`paripesa.bet` → `paripesa.cool`** in YAML (`.bet` redirects to bonus page) |
+| 888starz | ❌ Blocked | Geo-blocked from Kenya (ERR_CONNECTION_TIMED_OUT). Needs proxy. |
+| megapari | ❌ Blocked | Same as above. |
+| melbet | ❌ Blocked | Same as above. |
 
-### Sport Override Working
-- **linebet football** (SI=1): ✅ 20 events (correctly filters to football)
-- **linebet basketball** (SI=3): ✅ 20 events (correctly filters to basketball)
+### Key Discovery
+- All 5 working skins return **identical H2H data** (19 games, 12 teams) — confirms fully shared BetB2B backend
+- paripesa correct domain is **`paripesa.cool`** (not `.bet` or `.com`)
+- 22bet works but is timing-sensitive (bootstrap 30-90s)
 
-### Known Gaps
-- **markets=0 across ALL skins** — DOM selectors find events (championships + team names)
+### Next Steps
+- Investigate proxy for 3 blocked skins (888starz, megapari, melbet)
+- Wire H2H data into the BetB2B scraper (markets enrichment)
+
   but not odds/scores cells. Need selector tuning for the rendered Vue grid structure.
 - **406 API drift confirmed** — all feed polls return HTTP 406, confirming ADR-4's DOM-primary path.
 - **paripesa** boots fine but finds 0 basketball events — may need investigation.

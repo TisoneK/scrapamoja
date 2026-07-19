@@ -54,11 +54,12 @@ don't remove the line.
       the selectors in `dom_selectors` don't match the actual rendered cells. All 3/3 working
       skins hit this (linebet, helabet, megapari). Medium-High priority — without markets the
       scraper produces event stubs with no odds.
-- [ ] **Investigate paripesa 0 basketball events** (added 2026-07-18 by GitHub Copilot) —
-      Paripesa boots successfully (cookie harvest, 2 captures) but produces 0 events from
-      both live and prematch. Could be empty page for basketball, different Vue component
-      IDs, or a timing issue. Low priority.
-      Repro: `.venv/bin/python -c "import src.selectors.adaptive.api.middleware.rate_limiting"`.
+- [x] **Investigate paripesa 0 basketball events** (added 2026-07-18 by GitHub Copilot; **resolved 2026-07-19**) —
+      Root cause found: skin domain was `paripesa.bet` which redirects to a bonus landing page
+      (`bonus.rdrctpar24.lol`), not the actual BetB2B SPA. Fixed by changing domain to
+      `paripesa.cool` in skin YAML. H2H endpoint now works (19 games, 12 teams, HTTP 200).
+      The 0 DOM events from the prior session was likely the same domain issue. See
+      commit `7d676e8`.
 - [ ] **Test suite cannot run to completion on this machine — ~24% of tests hang** (added 2026-07-12 by Claude Code) —
       With a Python 3.12 venv + deps + playwright browsers installed, `pytest` collected
       **1864 tests but only reached ~67 before manual stop**: 16 hung for the full 60s

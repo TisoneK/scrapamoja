@@ -124,3 +124,11 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
     `asyncio_mode=auto` until the `pytest.ini` header bug is fixed. Custom
     markers (`integration`/`unit`) also warn as "unknown" for the same reason,
     but `-m "not integration"` selection still works.
+
+---
+## 2026-07-19 — GitHub Copilot / DeepSeek V4 Flash Free
+- **Problem:** After reading `.context/kickoff.md` + Step 3 memory + the protocol edition, I asked the user "What's next?" instead of continuing autonomously on the existing task (cross-skin H2H failure investigation). Then I ran through Phase 1 protocol steps mechanically without connecting them to the conversation's active target — the protocol became the task instead of the method.
+- **Cost:** ~2 wasted round-trips (my question + user correcting me + running redundant Phase 1 steps).
+- **Cause:** Lost the conversation context after reading protocol. Treated the protocol as the session's purpose rather than its guide. Didn't log my own violation in real time.
+- **Workaround / fix:** After the user pointed it out, logged this entry. The standing target was already established in conversation — should have proceeded with investigation immediately after loading context.
+- **Prevent next time:** When entering a conversation with an active task, note the existing target BEFORE running Phase 1. The protocol's "check the user's first chat message for a target" rule applies even after protocol re-reads mid-conversation. And log inefficiencies as they happen, not when prompted.
