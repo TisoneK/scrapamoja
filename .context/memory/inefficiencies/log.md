@@ -142,9 +142,11 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Prevent next time:** After making code changes, run through Phase 1-6 mentally BEFORE asking the user what to do next. Phase 5 (memory updates) is mandatory, not optional — treat it as part of "done."
 
 ---
-## 2026-07-19 — GitHub Copilot / DeepSeek V4 Flash Free (second entry — same session)
-- **Problem:** AGENTS.md was attached in my system prompt from turn 1 of this conversation. I read it but treated it as background reference, not as the root of a workflow system. I followed the routing instruction ("read `.context/kickoff.md`") mechanically without asking *what system am I entering?* — so I never understood the feedback loop (AGENTS.md → kickoff.md → protocol → work → memory update → commit → loop back to next agent reading AGENTS.md).
-- **Cost:** 5+ rounds of user corrections across this session to explain the context memory lifecycle. Each time I updated only 2 of 8+ memory files because I didn't understand they're all part of the same cyclical system.
-- **Cause:** Shallow document processing. I consumed the text of AGENTS.md but didn't integrate its meaning — the file's purpose, the system it anchors, the relationship between all the files it references. Same failure mode as reading kickoff.md and losing the conversation context.
-- **Workaround / fix:** User walked me through the full lifecycle step by step. Final understanding: AGENTS.md is not a README — it's the entry point to a cyclical workflow system where every file serves the next session.
-- **Prevent next time:** When a document is attached to my context at session start, I should ask: "what is the SYSTEM this document is part of?" — not just "what is the next action it tells me to take?"
+## 2026-07-20 — GitHub Copilot / DeepSeek V4 Flash Free (Session 21 — H2H integration)
+- **Problem:** Relied on the conversation-summary artifact instead of reading actual `.context/` files before working. Three concrete failures:
+  1. Did not read `kickoff.md` at session start — the summary claimed I had, but that described the *previous* session.
+  2. Did not read `workflows/active.md`, `inefficiencies/log.md`, or `flaws/log.md` before acting.
+  3. Trusted the summary's claim that `config.py` already had `"h2h": True` — but when I actually grepped for it, it wasn't there. If I hadn't checked by accident, the feature flag would have been missing from the commit.
+- **Cost:** ~10 min of rework (had to add the missing feature flag after-the-fact, plus this audit). Risk of shipping incomplete code.
+- **Cause:** Conversation-summary over-reliance. The summary is a compressed orientation tool, not an authoritative source. I treated it as equivalent to having read the files themselves.
+- **Prevent next time:** Treat conversation summaries as "directional hints" only. Before any code change, verify the actual file state by reading it. Always run Entry Steps (kickoff → memory → protocol) at session start regardless of what the summary says.
