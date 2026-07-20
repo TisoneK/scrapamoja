@@ -95,9 +95,14 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
    the known sports-data endpoint patterns.
 
 ---
-## 2026-07-17 — Claude Opus 4.8 (Session 11, local agent)
+## 2026-07-20 — GitHub Copilot / DeepSeek V4 Flash Free (Session 21)
 
-- **Problem 1 — both local browser surfaces egress from a US datacenter IP.**
+- **Problem:** Knew the platform was Windows (recorded in user prefs since Session 3) but never audited `.context/core/` scripts against it. The protocol's `context-sync` is POSIX-only and the `sh` commands in `kickoff.md` Step 1 are broken on this system — yet every session that followed the literal instructions silently failed or skipped this step without logging why.
+- **Cost:** Multiple sessions with a silently broken Step 1. The user had to point out the gap directly before it was investigated. ~15 min of discovery work that should have been done in Session 3.
+- **Cause:** Instructions were treated as literal truth rather than as data to validate against the environment. "The protocol says run `sh ...`" was processed as a command, not as a proposition to check. Also, no cross-reference existed between "environment facts" and "protocol requirements" — the agent had the facts but never connected them.
+- **Workaround / fix:** PowerShell alternative commands documented in `overrides/rules.md`. Flaw logged in `flaws/log.md`.
+- **Prevent next time:** Before executing any environment-dependent command from the protocol, cross-reference against known platform facts. When the protocol says `sh` or `bash` or `/bin/`, verify it exists on PATH first. If the protocol ships platform-specific tooling, audit it proactively — don't assume it works on your platform just because it's documented.
+---
   Assumed a *local* agent on Baos-Mac-mini would present the user's residential
   IP (Sessions 9/10 blamed the WAF on the Z.ai datacenter IP). Wrong: BOTH
   `mcp__Claude_Browser__*` (in-app cloud browser) AND `mcp__claude-in-chrome__*`

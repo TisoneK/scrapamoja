@@ -20,3 +20,25 @@ Example:
 -->
 
 *(none yet)*
+
+- **`kickoff.md` Step 1 — `sh .context/core/bin/context-sync verify`** → **On Windows, skip the `sh context-sync` commands and verify integrity manually via PowerShell** — `context-sync` is POSIX-only (`sha256sum`/`shasum`/`sh` are not on Windows PATH). Replace with:
+  ```powershell
+  # Verify: compare SHA256 of every file in .context/core/ against its MANIFEST.sha256
+  $manifest = Get-Content ".context/core/MANIFEST.sha256"
+  $fail = $false
+  foreach ($line in $manifest) {
+    $hash, $path = $line -split '\s+', 2
+    $path = $path.TrimStart('*').TrimStart(' ')
+    $actual = (Get-FileHash ".context/core/$path" -Algorithm SHA256).Hash.ToLower()
+    if ($actual -ne $hash.ToLower()) { Write-Warning "MISMATCH: $path"; $fail = $true }
+  }
+  if (-not $fail) { Write-Host "CORE INTEGRITY PASSED" }
+  ```
+  ```powershell
+  # Status: check core version + git log
+  Get-Content ".context/core/VERSION" | Select-Object -First 1
+  git log --oneline -5 -- .context/core/
+  ```
+  (set by agent, 2026-07-20)
+
+- **`kickoff.md` Step 1 — `git pull --ff-only`** → **No change needed** — git works fine from PowerShell on Windows. (set by agent, 2026-07-20)

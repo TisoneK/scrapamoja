@@ -69,3 +69,13 @@ Friction caused by the `.context/` system or the protocol itself. See
 - **Root cause:** No rule exists for mid-conversation protocol re-reads. The agent lost the conversation context and treated the protocol as a fresh session start. Also, inefficiencies were not logged in real time.
 - **Suggested fix:** Add a mid-session rule: "If you re-read kickoff.md or the protocol mid-conversation, do NOT re-run Phase 1. Note the existing task target first, then proceed."
 - **Status:** open
+
+---
+## 2026-07-20 — GitHub Copilot / DeepSeek V4 Flash Free (Session 21)
+
+- **Flaw:** `.context/core/bin/context-sync` is pure POSIX shell (`#!/bin/sh`, `sha256sum`/`shasum`, `CDPATH`, `cut`, `sed`) but the project is developed on Windows. The script — and by extension `kickoff.md` Step 1 which calls `sh .context/core/bin/context-sync verify` — is broken on this platform.
+- **Symptom:** `sh .context/core/bin/context-sync verify` fails immediately (`"need sha256sum or shasum on PATH"`) because Windows PATH has neither `sh.exe` nor `sha256sum.exe`. Even when called via the full path to Git Bash's `sh.exe`, `sha256sum` is still not on PATH so the hash check fails. Every `.context/` session that follows Step 1 literally hits a dead end.
+- **Root cause:** The protocol package ships POSIX-only scripts and has no Windows detection, no PowerShell fallback (
+`Get-FileHash -Algorithm SHA256` exists but is never called), and no documentation of the gap. The script's own header says "POSIX sh; runs on macOS and Linux."
+- **Suggested fix:** Add a Windows shim in `context-sync` (or a sibling `.ps1`) that detects `$env:OS` and uses `Get-FileHash` for integrity verification. At minimum, document the gap and provide an override in `overrides/rules.md`.
+- **Status:** open
