@@ -55,12 +55,6 @@ betb2b_validate_*/
 
 # Build artifacts
 *.egg-info/
-
-# Data directory
-data/
-
-# Build artifacts
-*.egg-info/
 scorewise_scraper.egg-info/
 
 # Bmad output
@@ -77,3 +71,8 @@ data/
 .checkpoints/
 .venv/
 config_backups/
+
+# Coverage artifacts
+.coverage
+coverage.xml
+htmlcov/
