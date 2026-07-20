@@ -1,12 +1,5 @@
-# ✅ Done — Session 22 (backlog correction + session close-out)
+# Idle — no session in progress
 
-**2026-07-20 — GitHub Copilot / DeepSeek V4 Flash Free**
-
-## Work done
-- Corrected stale backlog item: `analytics_engine` crash is missing numpy/scipy (not non-existent `report_generator`)
-- Pushed: `a9cb69c`
-- Session logged in `agents/sessions.md`
-
-## Next
-- Statistics enrichment (`statisticfeed/api/v1/Game/statistics`) needs NBA major league match to test
-- Proxy investigation for 3 blocked skins (888starz, megapari, melbet)
+Last session (23, 2026-07-20) shipped betb2b gzip storage + `view` CLI and
+verified the offline slice. Live e2e is blocked on the operator's Kenya proxy
+tunnel — see `tasks/backlog.md` "Run + confirm betb2b live e2e".

@@ -155,3 +155,11 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cost:** ~10 min of rework (had to add the missing feature flag after-the-fact, plus this audit). Risk of shipping incomplete code.
 - **Cause:** Conversation-summary over-reliance. The summary is a compressed orientation tool, not an authoritative source. I treated it as equivalent to having read the files themselves.
 - **Prevent next time:** Treat conversation summaries as "directional hints" only. Before any code change, verify the actual file state by reading it. Always run Entry Steps (kickoff → memory → protocol) at session start regardless of what the summary says.
+
+---
+## 2026-07-20 — Claude Code / claude-opus-4-8 (Session 23 — betb2b e2e + compression)
+- **Problem:** The task ("make sure it runs e2e and all endpoints collect data") cannot be fully satisfied on-demand: every betb2b feed is geo/WAF-gated and depends on the operator's Kenya proxy tunnel (bore.pub:1074), which was down (TCP conn refused). No sandbox/local egress can substitute.
+- **Cost:** ~5 min confirming the blocker (TCP probe + reading the last validate summary) before pivoting to the offline-verifiable slice + the compression deliverable.
+- **Cause:** Live validation is inherently operator-gated (residential/allowed-country egress). The proxy is an ephemeral tunnel, up only when the operator runs it on their Windows box.
+- **Workaround / fix:** Verify everything offline (tests, CLI JSON shape, compression); ship the compression feature; report the live blocker with the exact resume command. Left `tasks/current.md` pointing at the blocker.
+- **Prevent next time:** Before promising a live betb2b run, TCP-probe bore.pub:1074 first (`socket.connect`); if refused, the tunnel is down — do the offline slice and hand the live step back to the operator with env vars + command.

@@ -355,3 +355,12 @@ past entries — append corrections instead.
 - **Outcome:** partial — backlog correction committed and pushed. Core behavioral patterns NOT fixed: agent still asked "want me to clear current.md and log?" instead of just doing it, triggering user's "Nooooooo YOU SUCK!!" — the exact mistake user had been correcting all session.
 - **Open items:** statistics enrichment (needs NBA major league match); proxy for 3 blocked skins; numpy/scipy install in venv to unblock analytics_engine.
 - **Report:** no review report — meta-correction + session close-out. Summary delivered in chat.
+
+---
+## 2026-07-20 — Session 23 (betb2b e2e status + JSON compression)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS 15.7.7) | **Role:** engineer | **Core:** 0.2.0
+- **Task:** Target=betb2b. Verify e2e/endpoints/JSON persistence; decide + implement JSON compression with a decompress-for-viewing path.
+- **Commits:** 1 code (`fbe09c3`) + `.context` bookkeeping.
+- **Outcome:** partial — shipped `feat(betb2b)` gzip storage (`storage.py`: dump_json/load_json/compress_file/decompress_file) + `scrape --compress`, `validate_live --compress`, new `view` CLI subcommand, README, 9 tests. Verified offline: 43 betb2b tests pass, CLI JSON output OK, compression 97.9% on a synthetic full card. LIVE e2e BLOCKED: Kenya proxy tunnel (bore.pub:1074) down (conn refused) — all feeds are geo/WAF-gated. Last live run (07-18) also extracted 0 events from the list feeds.
+- **Open items:** live e2e / all-endpoints confirmation (blocked on proxy); list_live/list_prematch 0-event diagnosis; pre-existing ruff typing debt in cli/main.py + validate_live.py.
+- **Report:** .context/memory/reviews/2026-07-20-review-2.md

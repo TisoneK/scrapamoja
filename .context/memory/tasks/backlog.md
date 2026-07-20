@@ -344,3 +344,18 @@ don't remove the line.
       per-skin `partner`/`gr` placeholders may need the real values (see the
       existing per-skin partner/gr backlog item). Run `validate_live --skin <x>`
       through the proxy for each. Medium.
+
+---
+- [ ] **Run + confirm betb2b live e2e — all endpoints collect data** (added 2026-07-20 by Claude Code, Session 23) —
+      Operator-gated. Needs the Kenya proxy tunnel UP (bore.pub or gost/bore
+      on the operator's Windows box) + env: `BETB2B_PROXY_URL`,
+      `BETB2B_PROXY_USER`, `BETB2B_PROXY_PASS`, `BETB2B_PROXY_COUNTRY=KE`.
+      Then per skin: `python -m src.sites.betb2b.scripts.validate_live --skin
+      <skin> --sport basketball --count 50 --compress`. Confirm event_count>0
+      for BOTH `list_live` and `list_prematch` (the 2026-07-18 run got 0 from
+      both despite a verified-KE session + 1 capture each — feed empty at
+      capture time vs an extraction gap is undiagnosed). Also exercise
+      `sports_short` + `top_champs` actions. Ties into the existing "lift
+      odds-fetch cap + confirm markets across 8 skins" item. JSON output now
+      supports `--compress` (gzip) + `betb2b view <file>` to read back — see
+      `src/sites/betb2b/storage.py` + README "Saving & viewing output". HIGH.
