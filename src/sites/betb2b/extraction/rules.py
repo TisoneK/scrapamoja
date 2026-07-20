@@ -38,6 +38,8 @@ from .models import (
     CapturedFeedResponse,
     Event,
     EventStatus,
+    H2HData,
+    H2HGameShort,
     Market,
     MarketType,
     PeriodScore,
@@ -123,6 +125,28 @@ def _market_type_for_group(g_id: int) -> MarketType:
 # ---------------------------------------------------------------------------
 # Sport name → Sport enum
 # ---------------------------------------------------------------------------
+# Common BetB2B period-type integers to human-readable names.
+# These are sport-specific; type 18 = "1st quarter" for basketball
+# but could mean something different for other sports. The mapping
+# covers the most common values seen in H2H gameShorts.periods[].type.
+_PERIOD_TYPE_NAMES: Dict[int, str] = {
+    1: "1st half",
+    2: "2nd half",
+    3: "3rd period",
+    4: "4th period",
+    5: "1st set",
+    6: "2nd set",
+    7: "3rd set",
+    8: "4th set",
+    9: "5th set",
+    18: "1st quarter",
+    19: "2nd quarter",
+    20: "3rd quarter",
+    21: "4th quarter",
+    22: "1st overtime",
+    23: "2nd overtime",
+}
+
 _SPORT_NAME_ALIASES: Dict[str, Sport] = {
     "soccer": Sport.FOOTBALL,
     "football": Sport.FOOTBALL,
@@ -587,4 +611,79 @@ class BetB2BExtractionRules:
             is_live=is_live,
             is_suspended=all(s.is_suspended for s in selections),
             raw_g=g_id,
+        )
+
+    # ------------------------------------------------------------------ #
+    # H2H (statisticfeed)
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def extract_h2h_data(raw: Dict[str, Any]) -> Optional[H2HData]:
+        """Parse a statisticfeed H2H response into an :class:`H2HData`.
+
+        The H2H endpoint returns team metadata (``teams[]``) and
+        historical match results (``gameShorts[]``) with per-period
+        scores. Returns ``None`` if the raw data is malformed.
+
+        Response shape::
+
+            {
+                "teams": [{...}],
+                "gameShorts": [{
+                    "id": "...",
+                    "team1": "...",
+                    "team2": "...",
+                    "dateStart": 1752183000,
+                    "score1": 81,
+                    "score2": 90,
+                    "periods": [{"score1": 15, "score2": 22, "type": 18}]
+                }],
+                "sportId": 3
+            }
+        """
+        if not raw or not isinstance(raw, dict):
+            return None
+
+        teams = raw.get("teams")
+        game_shorts_raw = raw.get("gameShorts")
+        if not isinstance(teams, list) or not isinstance(game_shorts_raw, list):
+            return None
+
+        sport_id = _coerce_int(raw.get("sportId"))
+        game_shorts: List[H2HGameShort] = []
+
+        for gs in game_shorts_raw:
+            if not isinstance(gs, dict):
+                continue
+            periods_raw = gs.get("periods")
+            periods: List[PeriodScore] = []
+            if isinstance(periods_raw, list):
+                for p in periods_raw:
+                    if not isinstance(p, dict):
+                        continue
+                    pt = _coerce_int(p.get("type"))
+                    periods.append(PeriodScore(
+                        period_name=_PERIOD_TYPE_NAMES.get(pt, f"period_{pt}") if pt else "",
+                        home_score=_coerce_int(p.get("score1")) or 0,
+                        away_score=_coerce_int(p.get("score2")) or 0,
+                        period_key=pt or 0,
+                    ))
+
+            game_shorts.append(H2HGameShort(
+                game_id=str(gs.get("id", "")),
+                team1_id=str(gs.get("team1", "")),
+                team2_id=str(gs.get("team2", "")),
+                date_start=_coerce_datetime(gs.get("dateStart")),
+                score1=_coerce_int(gs.get("score1")),
+                score2=_coerce_int(gs.get("score2")),
+                sub_score1=_coerce_int(gs.get("subScore1")),
+                sub_score2=_coerce_int(gs.get("subScore2")),
+                winner=_coerce_int(gs.get("winner")),
+                status=_coerce_int(gs.get("status")),
+                periods=periods,
+            ))
+
+        return H2HData(
+            teams=teams,
+            game_shorts=game_shorts,
+            sport_id=sport_id,
         )

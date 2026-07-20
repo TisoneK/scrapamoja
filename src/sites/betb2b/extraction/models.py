@@ -160,6 +160,7 @@ class Event:
     is_live: bool = False
     country: Optional[str] = None         # event country (``CN``)
     statistics: List[Dict[str, Any]] = field(default_factory=list)  # ``SC.ST`` or statisticfeed
+    h2h_data: Optional[H2HData] = None    # H2H from statisticfeed endpoint
     markets: List[Market] = field(default_factory=list)
     source_url: str = ""
     raw_endpoint: str = ""                # which feed endpoint produced this
@@ -184,11 +185,72 @@ class Event:
             "is_live": self.is_live,
             "country": self.country,
             "statistics": self.statistics,
+            "h2h_data": self.h2h_data.to_dict() if self.h2h_data else None,
             "markets": [m.to_dict() for m in self.markets],
             "source_url": self.source_url,
             "raw_endpoint": self.raw_endpoint,
             "sport_id": self.sport_id,
             "league_id": self.league_id,
+        }
+
+
+@dataclass
+class H2HGameShort:
+    """A single historical match in an H2H response.
+
+    Maps to items in the ``gameShorts[]`` array returned by the
+    ``/service-api/statisticfeed/api/v1/Game/h2h`` endpoint.
+
+    Each entry represents one past meeting between two teams, with
+    scores and optional per-period breakdowns.
+    """
+
+    game_id: str
+    team1_id: str
+    team2_id: str
+    date_start: Optional[datetime] = None
+    score1: Optional[int] = None
+    score2: Optional[int] = None
+    sub_score1: Optional[int] = None
+    sub_score2: Optional[int] = None
+    winner: Optional[int] = None
+    status: Optional[int] = None
+    periods: List[PeriodScore] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "game_id": self.game_id,
+            "team1_id": self.team1_id,
+            "team2_id": self.team2_id,
+            "date_start": self.date_start.isoformat() if self.date_start else None,
+            "score1": self.score1,
+            "score2": self.score2,
+            "sub_score1": self.sub_score1,
+            "sub_score2": self.sub_score2,
+            "winner": self.winner,
+            "status": self.status,
+            "periods": [p.to_dict() for p in self.periods],
+        }
+
+
+@dataclass
+class H2HData:
+    """Head-to-head data container attached to an :class:`Event`.
+
+    Wraps the full ``/service-api/statisticfeed/api/v1/Game/h2h``
+    response: team metadata (``teams[]``) and the historical match
+    results (``gameShorts[]``).
+    """
+
+    teams: List[Dict[str, Any]] = field(default_factory=list)
+    game_shorts: List[H2HGameShort] = field(default_factory=list)
+    sport_id: Optional[int] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "teams": self.teams,
+            "game_shorts": [gs.to_dict() for gs in self.game_shorts],
+            "sport_id": self.sport_id,
         }
 
 

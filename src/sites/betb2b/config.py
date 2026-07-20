@@ -213,6 +213,7 @@ class BetB2BSkinConfig:
             "markets": True,
             "odds": True,
             "raw_capture": True,
+            "h2h": True,
         }
     )
 

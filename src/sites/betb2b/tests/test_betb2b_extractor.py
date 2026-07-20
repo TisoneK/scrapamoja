@@ -18,7 +18,14 @@ from pathlib import Path
 import pytest
 
 from src.sites.betb2b.config import BetB2BSkinConfig, DEFAULT_SKIN_CONFIG
-from src.sites.betb2b.extraction.models import EventStatus, MarketType, Sport
+from src.sites.betb2b.extraction.models import (
+    EventStatus,
+    H2HData,
+    H2HGameShort,
+    MarketType,
+    PeriodScore,
+    Sport,
+)
 from src.sites.betb2b.extraction.rules import BetB2BExtractionRules
 
 
@@ -617,3 +624,134 @@ def test_extract_period_scores_handles_malformed(rules: BetB2BExtractionRules) -
     assert len(ps2) == 1
     assert ps2[0].period_name == ""
     assert ps2[0].home_score == 10
+
+
+# ---------------------------------------------------------------------------
+# H2H extraction tests
+# ---------------------------------------------------------------------------
+
+SAMPLE_H2H_RESPONSE = {
+    "teams": [
+        {"id": "5ab1265c494765f3ca240306", "name": "Oklahoma City Thunder"},
+        {"id": "5ab1265c494765f3ca240317", "name": "Brooklyn Nets"},
+    ],
+    "gameShorts": [
+        {
+            "id": "6865cd0d9930a40b3ceaeffb",
+            "stageId": "68659e8b9930a40b3cb0bfd6",
+            "team1": "5ab1265c494765f3ca240306",
+            "team2": "5ab1265c494765f3ca240317",
+            "dateStart": 1752183000,
+            "score1": 81,
+            "score2": 90,
+            "subScore1": 0,
+            "subScore2": 0,
+            "winner": 2,
+            "status": 3,
+            "periods": [
+                {"score1": 15, "score2": 22, "type": 18},
+                {"score1": 20, "score2": 24, "type": 19},
+            ],
+        },
+        {
+            "id": "6865ce0d9930a40b3ceaeffc",
+            "team1": "5ab1265c494765f3ca240306",
+            "team2": "5ab1265c494765f3ca240317",
+            "dateStart": 1752269400,
+            "score1": 77,
+            "score2": 85,
+            "winner": 2,
+            "status": 3,
+            "periods": [],
+        },
+    ],
+    "sportId": 3,
+    "subSportId": None,
+    "entity": "GameH2H",
+}
+
+
+def test_extract_h2h_data_valid(rules: BetB2BExtractionRules) -> None:
+    """Valid H2H response should parse into H2HData with correct structure."""
+    result = rules.extract_h2h_data(SAMPLE_H2H_RESPONSE)
+    assert result is not None
+    assert isinstance(result, H2HData)
+    assert len(result.teams) == 2
+    assert result.teams[0]["name"] == "Oklahoma City Thunder"
+    assert result.sport_id == 3
+
+    # gameShorts
+    assert len(result.game_shorts) == 2
+
+    gs0 = result.game_shorts[0]
+    assert isinstance(gs0, H2HGameShort)
+    assert gs0.game_id == "6865cd0d9930a40b3ceaeffb"
+    assert gs0.score1 == 81
+    assert gs0.score2 == 90
+    assert gs0.winner == 2
+    assert gs0.date_start is not None
+
+    # Periods within gameShort
+    assert len(gs0.periods) == 2
+    assert gs0.periods[0].period_name == "1st quarter"
+    assert gs0.periods[0].home_score == 15
+    assert gs0.periods[0].away_score == 22
+    assert gs0.periods[0].period_key == 18
+    assert gs0.periods[1].period_name == "2nd quarter"
+
+    # Second game has no periods
+    gs1 = result.game_shorts[1]
+    assert gs1.periods == []
+
+    # Serialisation
+    d = result.to_dict()
+    assert len(d["teams"]) == 2
+    assert len(d["game_shorts"]) == 2
+    assert d["game_shorts"][0]["score1"] == 81
+    assert d["sport_id"] == 3
+
+
+def test_extract_h2h_data_none(rules: BetB2BExtractionRules) -> None:
+    """None or empty dict returns None."""
+    assert rules.extract_h2h_data(None) is None
+    assert rules.extract_h2h_data({}) is None
+
+
+def test_extract_h2h_data_malformed(rules: BetB2BExtractionRules) -> None:
+    """Malformed responses should return None gracefully."""
+    # Missing teams
+    assert rules.extract_h2h_data({"gameShorts": []}) is None
+    # Missing gameShorts
+    assert rules.extract_h2h_data({"teams": []}) is None
+    # Wrong types
+    assert rules.extract_h2h_data({"teams": "not_list", "gameShorts": []}) is None
+    assert rules.extract_h2h_data({"teams": [], "gameShorts": "not_list"}) is None
+
+
+def test_extract_h2h_data_empty_game_shorts(rules: BetB2BExtractionRules) -> None:
+    """Empty gameShorts array produces valid H2HData with no games."""
+    raw = {"teams": [], "gameShorts": [], "sportId": 1}
+    result = rules.extract_h2h_data(raw)
+    assert result is not None
+    assert result.game_shorts == []
+    assert result.sport_id == 1
+
+
+def test_extract_h2h_data_bad_periods(rules: BetB2BExtractionRules) -> None:
+    """Malformed periods within gameShorts should not crash."""
+    raw = {
+        "teams": [{"id": "t1", "name": "Team A"}],
+        "gameShorts": [
+            {"id": "g1", "team1": "t1", "team2": "t2", "periods": "not_a_list"},
+            {"id": "g2", "team1": "t1", "team2": "t2", "periods": [None, {"score1": 10}]},
+        ],
+        "sportId": 1,
+    }
+    result = rules.extract_h2h_data(raw)
+    assert result is not None
+    assert len(result.game_shorts) == 2
+    # First game: periods was not a list → empty periods
+    assert result.game_shorts[0].periods == []
+    # Second game: skips None item, parses the dict item
+    assert len(result.game_shorts[1].periods) == 1
+    assert result.game_shorts[1].periods[0].home_score == 10

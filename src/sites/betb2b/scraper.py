@@ -48,11 +48,13 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
+import httpx
+
 from src.network.proxy import ProxyManager
 
 from .client import BetB2BFeedClient
 from .config import BetB2BSkinConfig
-from .extraction.models import BetB2BScrapeResult, CapturedFeedResponse, Event, Sport
+from .extraction.models import BetB2BScrapeResult, CapturedFeedResponse, Event, H2HData, Sport
 from .extraction.rules import BetB2BExtractionRules
 from .session import BetB2BSessionManager
 from .sports import SportScraper, SportScraperContext, resolve_sport
@@ -291,6 +293,10 @@ class BetB2BScraper:
             # Apply sport-specific enrichment + dedupe.
             events = [self.sport_scraper.enrich_event(e) for e in events]
             events = self._dedupe_events(events)
+
+        # Enrich events with H2H data (best-effort, only if feature is on).
+        if self.skin.features.get("h2h", True) and events and action != "raw_capture":
+            await self._enrich_with_h2h(events)
 
         # Did the session get harvested?
         session_harvested = self.session_manager.has_session
@@ -573,6 +579,95 @@ class BetB2BScraper:
                 existing.period = ev.period or existing.period
                 existing.time_remaining = ev.time_remaining or existing.time_remaining
         return list(by_id.values())
+
+    # ------------------------------------------------------------------ #
+    # H2H enrichment
+    # ------------------------------------------------------------------ #
+    async def _enrich_with_h2h(self, events: List[Event]) -> None:
+        """Enrich events with H2H data from the statisticfeed endpoint.
+
+        Best-effort per-event: polls ``/service-api/statisticfeed/api/v1/Game/h2h``
+        for each event using the harvested session cookies. Non-fatal on failure
+        (just logs a warning and moves on). Controlled by the skin's ``h2h``
+        feature flag.
+
+        The H2H endpoint returns historical match results between the
+        two teams. We attach the parsed data to each ``Event.h2h_data``.
+        """
+        if not events:
+            return
+
+        session = await self.session_manager.get_session()
+        cookie_header = session.to_cookie_header()
+        headers = self.skin.merged_headers(session_cookies=cookie_header)
+        headers["accept"] = "application/json"
+
+        proxy_url = (
+            self.proxy_endpoint.to_httpx_proxy()
+            if self.proxy_endpoint is not None
+            else None
+        )
+
+        async with httpx.AsyncClient(
+            proxy=proxy_url, timeout=15.0, follow_redirects=True,
+        ) as client:
+            for ev in events:
+                eid = str(ev.event_id)
+                if not eid.isdigit():
+                    logger.debug(
+                        "skin=%s H2H skip non-numeric event_id=%s",
+                        self.skin.name, eid,
+                    )
+                    continue
+
+                try:
+                    params = {
+                        "id": eid,
+                        "lng": self.skin.language,
+                        "ref": str(self.skin.partner),
+                        "fcountry": str(self.skin.country),
+                        "gr": str(self.skin.gr),
+                    }
+                    url = (
+                        f"{self.skin.base_url}"
+                        f"/service-api/statisticfeed/api/v1/Game/h2h"
+                    )
+                    resp = await client.get(url, params=params, headers=headers)
+
+                    if resp.status_code == 204:
+                        # 204 = no H2H data for this match (minor league).
+                        logger.debug(
+                            "skin=%s H2H 204 (no data) for event=%s",
+                            self.skin.name, eid,
+                        )
+                        continue
+
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "skin=%s H2H status=%d for event=%s",
+                            self.skin.name, resp.status_code, eid,
+                        )
+                        continue
+
+                    raw = resp.json()
+                    h2h_data = BetB2BExtractionRules.extract_h2h_data(raw)
+                    if h2h_data is not None:
+                        ev.h2h_data = h2h_data
+                        logger.debug(
+                            "skin=%s H2H enriched event=%s (%d game shorts)",
+                            self.skin.name, eid, len(h2h_data.game_shorts),
+                        )
+
+                except httpx.HTTPError as exc:
+                    logger.warning(
+                        "skin=%s H2H HTTP error for event=%s: %s",
+                        self.skin.name, eid, exc,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "skin=%s H2H parse error for event=%s: %s",
+                        self.skin.name, eid, exc,
+                    )
 
     # ------------------------------------------------------------------ #
     # Introspection
