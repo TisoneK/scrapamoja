@@ -134,6 +134,14 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Prevent next time:** When entering a conversation with an active task, note the existing target BEFORE running Phase 1. The protocol's "check the user's first chat message for a target" rule applies even after protocol re-reads mid-conversation. And log inefficiencies as they happen, not when prompted.
 
 ---
+## 2026-07-20 — GitHub Copilot / DeepSeek V4 Flash Free (Session 19)
+- **Problem:** After implementing period_scores extraction (code changes + tests passing), I updated AGENTS.md to document the work — but ignored `.context/memory/` files entirely. The user corrected me twice: first about API-first vs DOM extraction emphasis, then about .context memory protocol vs AGENTS.md. The protocol's Phase 5 (Steps 15-17) explicitly says to update memory files — I knew this but still defaulted to AGENTS.md.
+- **Cost:** ~3 user corrections + rework of which files to update.
+- **Cause:** Protocol knowledge was present but not activated at the right time. AGENTS.md was attached in context and felt like "the right place" for project documentation. Memory of the .context protocol phases faded after reading 700+ lines of protocol text earlier.
+- **Workaround / fix:** The user redirecting me forced me to re-read kickoff.md and follow Phase 1-6 properly. Memory files are now updated.
+- **Prevent next time:** After making code changes, run through Phase 1-6 mentally BEFORE asking the user what to do next. Phase 5 (memory updates) is mandatory, not optional — treat it as part of "done."
+
+---
 ## 2026-07-19 — GitHub Copilot / DeepSeek V4 Flash Free (second entry — same session)
 - **Problem:** AGENTS.md was attached in my system prompt from turn 1 of this conversation. I read it but treated it as background reference, not as the root of a workflow system. I followed the routing instruction ("read `.context/kickoff.md`") mechanically without asking *what system am I entering?* — so I never understood the feedback loop (AGENTS.md → kickoff.md → protocol → work → memory update → commit → loop back to next agent reading AGENTS.md).
 - **Cost:** 5+ rounds of user corrections across this session to explain the context memory lifecycle. Each time I updated only 2 of 8+ memory files because I didn't understand they're all part of the same cyclical system.

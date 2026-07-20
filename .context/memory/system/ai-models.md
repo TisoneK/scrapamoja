@@ -12,7 +12,7 @@ accordingly).
 | Claude Code | claude-opus-4-8 | 2026-07-12 | 2026-07-12 | 3 |
 | Claude Code | claude-fable-5 | 2026-07-12 | 2026-07-12 | 1 |
 | Super Z | unknown | 2026-07-14 | 2026-07-14 | 1 |
-| GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-19 | 2026-07-19 | 1 |
+| GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-19 | 2026-07-20 | 2 |
 
 ## Observations
 
@@ -29,3 +29,4 @@ Update in place when a newer session contradicts an old observation.
 - **Super Z / unknown:** Ran the first cloud/sandbox session on this repo (session 5, sync). Successfully cloned both repos with PAT auth, synced structural files from the package skeleton, generated the missing `.context/kickoff.md` from the template, and pushed to `origin/main` — all without issues. Followed the SYNC.md structural-vs-data split rule correctly. Did NOT run the toolchain baseline (sync task didn't need it); a future review/fix session on this sandbox should verify `uv` + `pytest` work here before relying on them. (2026-07-14)
 - **GitHub Copilot / DeepSeek V4 Flash Free:** Model ID from the agent's own system prompt. (2026-07-19)
 - **GitHub Copilot / DeepSeek V4 Flash Free:** Cross-skin H2H investigation completed (5/8 skins working). Found and fixed paripesa wrong domain (`paripesa.bet` → `paripesa.cool`). The agent needed 2 user corrections for protocol compliance (mid-session protocol re-read caused loss of task context). (2026-07-19)
+- **GitHub Copilot / DeepSeek V4 Flash Free:** Implemented `PeriodScore` extraction from `SC.PS[]` in GetGameZip API responses — added `PeriodScore` dataclass, `_extract_period_scores()` in `rules.py`, wired into `_build_event()`. 29 tests pass. Agent needed correction to update `.context/memory/` files (was updating AGENTS.md instead). (2026-07-20)

@@ -310,3 +310,12 @@ past entries — append corrections instead.
 - **Outcome:** meta-analysis done — root cause identified (attention-allocation failure, shallow document processing, analysis-over-action, linear-vs-cyclical execution). AGENTS.md shallow-processing inefficiency logged and pushed. Context memory E2E lifecycle understood (AGENTS.md → kickoff.md → protocol → work → ALL memory files updated → two-surface commit → push → next agent reads AGENTS.md).
 - **Open items:** proxy for 3 blocked skins; wire H2H data into scraper; paripesa 0 basketball events
 - **Report:** no review report — meta-analysis session. Summary delivered in chat.
+
+---
+## 2026-07-20 — Session 19 (API extraction: period_scores from SC.PS[])
+- **Agent:** GitHub Copilot | **Model:** DeepSeek V4 Flash Free | **Platform:** Windows 11 (TisoneK local) | **Role:** engineer | **Core:** 0.2.0
+- **Task:** Wire `SC.PS[]` (period scores) extraction from GetGameZip API responses into the `Event` dataclass. Follow .context protocol properly (update memory files, not just AGENTS.md).
+- **Commits:** (pending — this session's work + context updates)
+- **Outcome:** partial — `PeriodScore` dataclass, `period_scores` field, `_extract_period_scores()` in `rules.py` all implemented and tested (29 pass). `compare_match.py` gap flags updated. AGENTS.md partially updated. Agent needed user correction to update `.context/memory/` files instead of AGENTS.md.
+- **Open items:** merge_match_detail.py and tests/rules comparisons removed (detected as accidental duplicate), clean commit of this session's work.
+- **Report:** no review report — feature-add + context memory update session. Summary delivered in chat.
