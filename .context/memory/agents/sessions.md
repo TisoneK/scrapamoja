@@ -337,7 +337,7 @@ past entries — append corrections instead.
 ## 2026-07-20 — Session 21 (H2H integration — wire statisticfeed into main scraper)
 - **Agent:** GitHub Copilot | **Model:** DeepSeek V4 Flash Free | **Platform:** Windows 11 (TisoneK local) | **Role:** engineer | **Core:** 0.2.0
 - **Task:** Wire H2H (`/service-api/statisticfeed/api/v1/Game/h2h`) into the main BetB2B scraper pipeline. Previously H2H was only used in standalone discovery (`discover_h2h.py`) and diagnostic comparison (`compare_match.py`). This session: add data models, parsing logic, feature flag, enrichment step, and tests.
-- **Commits:** (pending — product + context changes to be committed and pushed)
+- **Commits:** 3 (`9af8594` product + `5b41548` context + `3d568d0` inefficiency follow-up)
 - **Outcome:** done — H2H now a first-class best-effort enrichment in `scrape()`.
   - **`extraction/models.py`** — Added `H2HGameShort` + `H2HData` dataclasses with `to_dict()`; `h2h_data: Optional[H2HData]` field on `Event` with serialisation.
   - **`extraction/rules.py`** — Added `_PERIOD_TYPE_NAMES` mapping (18→"1st quarter", 5→"1st set", etc.) + `extract_h2h_data()` static method (defensive, returns `None` on malformed input).
