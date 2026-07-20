@@ -75,11 +75,16 @@ async def main() -> int:
     parser.add_argument("--skip-line", action="store_true",
                         help="Skip LineFeed (live-only test)")
     parser.add_argument("--out", default=None, help="Output directory (default: sandbox download)")
+    parser.add_argument("--compress", action="store_true",
+                        help="gzip the raw per-action capture files (they're large and "
+                             "compress ~85-90%). The summary stays plain for readability. "
+                             "Read any file back with `python -m src.sites.betb2b.cli view <file>`.")
     args = parser.parse_args()
 
     from src.network.proxy import build_proxy_manager, verify_proxy
     from src.sites.betb2b import BetB2BScraper
     from src.sites.betb2b.cli.main import _load_skin
+    from src.sites.betb2b.storage import dump_json
 
     out_dir = Path(args.out) if args.out else _output_dir(
         f"betb2b_validate_{args.skin}{'_' + args.sport if args.sport else ''}"
@@ -223,13 +228,14 @@ async def main() -> int:
                 all_events.extend(events)
                 all_captures.extend(captures)
 
-                # Persist per-action captures for offline replay.
-                (captured_dir / f"{action}_captures.json").write_text(
-                    json.dumps(captures, indent=2, default=str)
-                )
-                (captured_dir / f"{action}_events.json").write_text(
-                    json.dumps(events, indent=2, default=str)
-                )
+                # Persist per-action captures for offline replay. Captures are
+                # the large, compressible payloads; auto-compress when big, or
+                # force it with --compress. Events are usually small.
+                cap_compress = True if args.compress else None
+                dump_json(captures, captured_dir / f"{action}_captures.json",
+                          compress=cap_compress)
+                dump_json(events, captured_dir / f"{action}_events.json",
+                          compress=cap_compress)
             except Exception as exc:  # noqa: BLE001
                 summary["steps"].append({"step": action, "ok": False, "error": str(exc)})
                 print(f"    FAILED: {exc}", flush=True)

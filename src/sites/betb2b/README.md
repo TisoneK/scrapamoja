@@ -260,6 +260,42 @@ market_groups:
 }
 ```
 
+## Saving & viewing output (optional gzip)
+
+Scrape output is written as JSON. The feeds are terse-key JSON and a full
+card's odds run to hundreds of markets/selections, so the payloads are large
+and **highly compressible** (gzip typically shrinks a full capture ~85–97%,
+because the key set repeats on every object). The `storage` helper
+(`src/sites/betb2b/storage.py`) makes compression a transparent output detail:
+
+```bash
+# Write a scrape result gzipped (a .gz suffix is added automatically).
+python -m src.sites.betb2b.cli scrape -s linebet -a list_prematch \
+    -o card.json --compress          # -> card.json.gz
+
+# Read any output file back — gzip is auto-detected by magic bytes,
+# so this works whether the file is compressed or plain.
+python -m src.sites.betb2b.cli view card.json.gz              # pretty-print
+python -m src.sites.betb2b.cli view card.json.gz --compact    # one line
+python -m src.sites.betb2b.cli view card.json.gz --decompress-to card.json
+```
+
+In Python:
+
+```python
+from src.sites.betb2b.storage import dump_json, load_json
+
+path = dump_json(result, "card.json", compress=True)   # -> Path("card.json.gz")
+result = load_json(path)                                # transparent inflate
+```
+
+Guidance: **compress the large payloads** (`captured_responses`, full odds
+results) and keep the **small human-facing files plain** (run summaries,
+event previews) so they stay greppable. Under `compress=None` (the default),
+`dump_json` decides for you — it gzips anything over 64 KiB or any `.gz` path,
+and leaves small files as readable JSON. The `validate_live` script and the
+`scrape` CLI both accept `--compress`.
+
 ## Schema map (1xbet terse `Value[]`)
 
 | Key          | Meaning                                  | Maps to                      |

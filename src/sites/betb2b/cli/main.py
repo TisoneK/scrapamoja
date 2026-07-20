@@ -123,6 +123,10 @@ class BetB2BCLI:
         scrape.add_argument("--output", "-o", default=None,
                             help="Write JSON result to this file (default: stdout)")
         scrape.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
+        scrape.add_argument("--compress", action="store_true",
+                            help="gzip the --output file (a .gz suffix is added). "
+                                 "Read it back with `betb2b view <file>`. Large "
+                                 "results (full odds) compress ~85-90%.")
 
         # info
         info = sub.add_parser("info", help="Print skin config + scraper state")
@@ -147,6 +151,13 @@ class BetB2BCLI:
                            help="Bootstrap SPA settle seconds (default: 12)")
         probe.add_argument("--output", "-o", default=None,
                            help="Write JSON probe result to this file")
+
+        # view
+        view = sub.add_parser("view", help="Pretty-print a scrape output file (gzip or plain)")
+        view.add_argument("path", help="Path to a JSON or JSON.gz output file")
+        view.add_argument("--compact", action="store_true", help="Compact (unindented) JSON")
+        view.add_argument("--decompress-to", default=None,
+                          help="Instead of printing, write the decompressed JSON to this path")
 
         # compare-match
         cm = sub.add_parser("compare-match", help="Compare match page UI data vs API endpoints")
@@ -184,6 +195,8 @@ class BetB2BCLI:
             return self._cmd_sports(args)
         if args.command == "probe":
             return await self._cmd_probe(args)
+        if args.command == "view":
+            return self._cmd_view(args)
         if args.command == "compare-match":
             return await self._cmd_compare_match(args)
 
@@ -348,6 +361,28 @@ class BetB2BCLI:
             print(json.dumps(probe_result, indent=2))
         return 0
 
+    def _cmd_view(self, args: argparse.Namespace) -> int:
+        from src.sites.betb2b.storage import decompress_file, load_json
+
+        path = Path(args.path)
+        if not path.exists():
+            print(f"ERROR: no such file: {path}", file=sys.stderr)
+            return 1
+
+        if args.decompress_to:
+            out = decompress_file(path, args.decompress_to)
+            print(f"Decompressed {path} -> {out}", file=sys.stderr)
+            return 0
+
+        try:
+            payload = load_json(path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"ERROR: could not read {path}: {exc}", file=sys.stderr)
+            return 1
+        indent = None if args.compact else 2
+        print(json.dumps(payload, indent=indent, default=str, ensure_ascii=False))
+        return 0
+
     async def _cmd_compare_match(self, args: argparse.Namespace) -> int:
         from src.sites.betb2b.scripts.compare_match import main as compare_main
 
@@ -381,12 +416,18 @@ class BetB2BCLI:
     # ------------------------------------------------------------------ #
     def _emit(self, payload: Dict[str, Any], args: argparse.Namespace, always_pretty: bool = False) -> int:
         indent = 2 if (getattr(args, "pretty", False) or always_pretty) else None
-        text = json.dumps(payload, indent=indent, default=str)
-        if getattr(args, "output", None):
-            Path(args.output).write_text(text)
-            print(f"Wrote {len(text)} bytes to {args.output}", file=sys.stderr)
+        output = getattr(args, "output", None)
+        if output:
+            from src.sites.betb2b.storage import dump_json
+
+            # --compress forces gzip; otherwise auto (large results compress anyway).
+            compress = True if getattr(args, "compress", False) else None
+            written = dump_json(payload, output, compress=compress, indent=indent)
+            size = written.stat().st_size
+            note = " (gzip)" if written.suffix == ".gz" else ""
+            print(f"Wrote {size} bytes to {written}{note}", file=sys.stderr)
         else:
-            print(text)
+            print(json.dumps(payload, indent=indent, default=str))
         return 0
 
     def _configure_logging(self, verbose: bool, quiet: bool) -> None:
