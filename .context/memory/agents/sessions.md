@@ -319,3 +319,16 @@ past entries — append corrections instead.
 - **Outcome:** partial — `PeriodScore` dataclass, `period_scores` field, `_extract_period_scores()` in `rules.py` all implemented and tested (29 pass). `compare_match.py` gap flags updated. AGENTS.md partially updated. Agent needed user correction to update `.context/memory/` files instead of AGENTS.md.
 - **Open items:** merge_match_detail.py and tests/rules comparisons removed (detected as accidental duplicate), clean commit of this session's work.
 - **Report:** no review report — feature-add + context memory update session. Summary delivered in chat.
+
+---
+## 2026-07-20 — Session 20 (period_scores live validation + gap analysis)
+- **Agent:** GitHub Copilot | **Model:** DeepSeek V4 Flash Free | **Platform:** Windows 11 (TisoneK local) | **Role:** engineer | **Core:** 0.2.0
+- **Task:** Run live e2e validation of period_scores extraction using `compare-match --skin linebet --sport basketball --live`. Fix any stale gap-analysis flags. Check for next API extraction gap.
+- **Commits:** 1 (`compare_match.py` — stale `period_scores: False` → `True` fix)
+- **Outcome:** done.
+  - ✅ `compare_match --live` SUCCESS: 4 quarter scores validated (UI vs API both match)
+  - ✅ Stale flag fixed: `currently_collected.period_scores` in `compare_match.py:882`
+  - ✅ Next gap identified: statistics (statisticfeed/statistics returns 404 for minor leagues; needs NBA major league match to test)
+  - ✅ `.context/memory/` updated (tasks/current.md, agents/sessions.md)
+- **Open items:** (backlog) Wire statistics enrichment from statisticfeed API; wire H2H into main scraper; proxy for 3 blocked skins.
+- **Report:** no review report — live validation + gap analysis session. Summary delivered in chat.
