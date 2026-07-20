@@ -879,7 +879,7 @@ async def main() -> int:
         "event_basics": True,        # via Get1x2_VZip + GetGameZip
         "scores": True,              # via SC field in feed
         "markets": True,             # via GetGameZip E[]/AE[]
-        "period_scores": False,      # NOT extracted (in SC.PS[] but ignored)
+        "period_scores": True,       # extracted via _extract_period_scores() in rules.py (SC.PS[])
         "statistics": False,         # NOT collected (no endpoint wired)
         "h2h": False,                # NOT wired into main scraper
         "match_timeline": False,     # NOT collected
