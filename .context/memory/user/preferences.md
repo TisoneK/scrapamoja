@@ -35,6 +35,15 @@ correction twice.
 - Agent must log inefficiencies in real time, not wait to be prompted (correction, 2026-07-19)
 - Agent must update `.context/memory/` files autonomously before ending session — user should not have to request this (correction, 2026-07-19)
 
+## Autonomy & initiative
+- Do NOT ask rhetorical questions or seek permission when the right action is obvious — just execute (correction, 2026-07-20)
+- Always activate the project venv (`c:/Users/tison/Dev/scrapamoja/.venv/Scripts/activate.ps1`) at session start and use it consistently — bare `python` resolves to system interpreter otherwise (correction, 2026-07-20)
+- Cross-reference recorded platform facts (Windows, macOS, etc.) against every tool, script, and command the protocol asks you to run — if something won't work on this platform, log it as a flaw before being told (correction, 2026-07-20)
+
+## Context protocol compliance
+- `.context/` is the primary workflow, not a backup — internalize it as the source of truth over built-in agent workflows (correction, 2026-07-20)
+- Record every user correction as a preference in this file immediately — never let corrections pile up unrecorded across sessions (correction, 2026-07-20)
+
 ## Code style
 
 ## Review depth
