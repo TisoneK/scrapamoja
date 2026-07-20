@@ -32,10 +32,11 @@ don't remove the line.
       `src/sites/base/plugin_lifecycle.py:876,885`). Event loop holds only weak refs,
       so tasks can be GC'd mid-flight and exceptions lost. Store handles / await where
       completion matters. Low–Medium. See F4 in review.
-- [ ] **Fix import-time crash: `analytics_engine` imports non-existent module** (added 2026-07-12 by Claude Code) —
-      `src/telemetry/reporting/analytics_engine.py` does `import src.telemetry.report_generator`
-      but no such module exists → `ModuleNotFoundError` on import. Find the real module
-      (renamed/moved?) or restore it. High (breaks the telemetry reporting subsystem).
+- [ ] **Fix import-time crash: `analytics_engine` missing numpy/scipy** (added 2026-07-12 by Claude Code; **corrected 2026-07-20**: original diagnosis said it imports non-existent `report_generator`, but the actual error is `import numpy as np` / `from scipy import stats` failing because these deps weren't installed at bootstrap time) —
+      `src/telemetry/reporting/analytics_engine.py` imports `numpy` and `scipy` at module level
+      (line 18-19). Both are declared in `pyproject.toml` under `[project.dependencies]` but
+      were not installed when the venv was created. Just run `pip install numpy scipy` to fix.
+      High (breaks the telemetry reporting subsystem).
       Repro: `.venv/bin/python -c "import src.telemetry.reporting.analytics_engine"`.
 - [ ] **Fix import-time crash: dataclass arg order in `route_visualization`** (added 2026-07-12 by Claude Code) —
       `src/navigation/route_visualization.py` raises `TypeError: non-default argument
@@ -72,12 +73,10 @@ don't remove the line.
       `@pytest.mark.integration`/`network` and deselect by default, and fix the fixture
       teardown deadlocks. High (blocks any real baseline). Repro:
       `.venv/bin/python -m pytest --no-cov --continue-on-collection-errors --timeout=60 --timeout-method=signal -q`.
-- [ ] **`pytest.ini` config is silently ignored (wrong section header)** (added 2026-07-12 by Claude Code) —
-      `pytest.ini` uses `[tool:pytest]` (the setup.cfg-style header) instead of `[pytest]`,
-      so pytest does not read it — markers, `addopts` (incl. `--cov=src` and
-      `--strict-markers`), `testpaths`, `asyncio_mode=auto`, and `filterwarnings` are all
-      dropped. Evidence: declared marks (`unit`, `integration`) warn as "unknown," and
-      coverage doesn't run despite the addopts. Fix: rename the section to `[pytest]` (or
+- [x] **`pytest.ini` config is silently ignored (wrong section header)** (added 2026-07-12 by Claude Code; fixed 2026-07-20, `d8f4a55`) —
+      `pytest.ini` used `[tool:pytest]` (the setup.cfg-style header) instead of `[pytest]`,
+      so pytest did not read it — markers, `addopts`, `testpaths`, `asyncio_mode`,
+      `filterwarnings` all silently dropped. Fixed by renaming to `[pytest]`.
       move config into pyproject's `[tool.pytest.ini_options]`, which also exists — pick one
       source). NOTE: fixing this activates `--strict-markers`, which will then ERROR on the
       undeclared `quality_control` marker (10 tests) until it's registered. Medium.
