@@ -40,6 +40,7 @@ from .models import (
     EventStatus,
     Market,
     MarketType,
+    PeriodScore,
     Selection,
     Sport,
 )
@@ -348,6 +349,8 @@ class BetB2BExtractionRules:
         score_home, score_away = self._extract_score(sc)
         markets = self._extract_markets(ev, is_live=is_live)
 
+        period_scores = self._extract_period_scores(sc)
+
         return Event(
             event_id=event_id,
             sport=sport_enum,
@@ -360,6 +363,7 @@ class BetB2BExtractionRules:
             score_away=score_away,
             minute=minute,
             period=period,
+            period_scores=period_scores,
             time_remaining=time_remaining,
             is_live=is_live,
             country=country if isinstance(country, str) else None,
@@ -410,6 +414,38 @@ class BetB2BExtractionRules:
         if isinstance(fs, dict):
             return _coerce_int(fs.get("S1")), _coerce_int(fs.get("S2"))
         return None, None
+
+    def _extract_period_scores(self, sc: Dict[str, Any]) -> List[PeriodScore]:
+        """Extract ``SC.PS[]`` into a list of :class:`PeriodScore`.
+
+        Each element is ``{"Key": 1, "Value": {"S1": 19, "S2": 20, "NF": "1st quarter"}}``.
+        Returns empty list if absent.
+        """
+        if not sc:
+            return []
+        ps_list = sc.get("PS")
+        if not isinstance(ps_list, list):
+            return []
+        scores: List[PeriodScore] = []
+        for item in ps_list:
+            if not isinstance(item, dict):
+                continue
+            key = _coerce_int(item.get("Key"))
+            val = item.get("Value")
+            if not isinstance(val, dict):
+                continue
+            s1 = _coerce_int(val.get("S1"))
+            s2 = _coerce_int(val.get("S2"))
+            name = val.get("NF") or val.get("N") or ""
+            if not isinstance(name, str):
+                name = str(name) if name is not None else ""
+            scores.append(PeriodScore(
+                period_name=name,
+                home_score=s1 or 0,
+                away_score=s2 or 0,
+                period_key=key or 0,
+            ))
+        return scores
 
     # ----- markets -----
     def _extract_markets(self, ev: Dict[str, Any], *, is_live: bool) -> List[Market]:

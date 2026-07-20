@@ -74,6 +74,29 @@ class MarketType(str, Enum):
 # Core dataclasses
 # ---------------------------------------------------------------------------
 @dataclass
+class PeriodScore:
+    """Score for one period (quarter, half, set, etc.).
+
+    Extracted from the ``SC.PS[]`` array in the BetB2B feed::
+
+        {"Key": 1, "Value": {"S1": 19, "S2": 20, "NF": "1st quarter"}}
+    """
+
+    period_name: str      # e.g. "1st quarter", "2nd half", "1 Overtime"
+    home_score: int       # ``S1`` field
+    away_score: int       # ``S2`` field
+    period_key: int = 0   # ``Key`` — ordinal (1=first period)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "period_name": self.period_name,
+            "home_score": self.home_score,
+            "away_score": self.away_score,
+            "period_key": self.period_key,
+        }
+
+
+@dataclass
 class Selection:
     """A single priced outcome inside a market (e.g. "Home win @ 1.85")."""
 
@@ -132,9 +155,11 @@ class Event:
     score_away: Optional[int] = None
     minute: Optional[int] = None          # live minute for football etc.
     period: Optional[str] = None          # e.g. "1st quarter", "1 Overtime"
+    period_scores: List[PeriodScore] = field(default_factory=list)  # ``SC.PS[]``
     time_remaining: Optional[str] = None  # ``SLS`` field — text
     is_live: bool = False
     country: Optional[str] = None         # event country (``CN``)
+    statistics: List[Dict[str, Any]] = field(default_factory=list)  # ``SC.ST`` or statisticfeed
     markets: List[Market] = field(default_factory=list)
     source_url: str = ""
     raw_endpoint: str = ""                # which feed endpoint produced this
@@ -154,9 +179,11 @@ class Event:
             "score_away": self.score_away,
             "minute": self.minute,
             "period": self.period,
+            "period_scores": [p.to_dict() for p in self.period_scores],
             "time_remaining": self.time_remaining,
             "is_live": self.is_live,
             "country": self.country,
+            "statistics": self.statistics,
             "markets": [m.to_dict() for m in self.markets],
             "source_url": self.source_url,
             "raw_endpoint": self.raw_endpoint,

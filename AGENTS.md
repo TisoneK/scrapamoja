@@ -182,6 +182,91 @@ Browser state capture for debugging and drift detection:
 All snapshot paths are controlled by `snapshot_on_error` (default True) and
 `snapshot_on_success` (default True) flags on `BetB2BTelemetry`.
 
+### Match Detail Extraction (`src/sites/betb2b/extraction/match_detail.py`) — 🩺 Diagnostic Tool (2026-07-20)
+
+**⛔ NOT the production data path.** This is a diagnostic/validation tool that
+extracts rendered UI data from the BetB2B SPA match page via JS injection.
+It exists to cross-check that our API extraction matches what the UI shows.
+
+The **real production data pipeline** extracts all match data from API
+endpoints (`GetGameZip`, `Get1x2_VZip`, etc.) — see `rules.py`:
+
+| Category | Production Source | Status |
+|----------|-----------------|--------|
+| **Teams, scores, competition, status** | `GetGameZip` (`O1/O2`, `FS`, `L`, `SC`) | ✅ `rules.py` |
+| **Period scores** | `GetGameZip` (`SC.PS[]`) | ✅ `_extract_period_scores()` in `rules.py` |
+| **Markets/odds** | `GetGameZip` (`E[]/AE[]`) | ✅ `_extract_markets()` in `rules.py` |
+| **Statistics** | statisticfeed API or `SC.ST` | ⏳ Optional enrichment (minor leagues return 404) |
+| **H2H** | statisticfeed API | ✅ `discover_h2h.py` (separate script) |
+
+**What the diagnostic tool extracts from the UI (for cross-checking):**
+
+| Category | Items | BetB2B DOM classes |
+|----------|-------|-------------------|
+| **Scoreboard** | Teams, scores, competition, status, minute, event ID | `.scoreboard-intro__team .scoreboard-team-name__text`, `.scoreboard-scores__score`, `.scoreboard-scores__score--team-2`, `.scoreboard-status`, `.ui-game-timer__label` |
+| **Period scores** | Quarter/half/set scores with labels | `--team-0` = home, `--team-1` = away, TH captions = period names |
+| **Statistics** | Stats table rows (fouls, FG%, etc.) | `.scoreboard-stats-table-view-row`, `.scoreboard-stats-table-view-row__name` |
+| **Market groups** | ❌ Lazy-loaded by SPA — not at page-ready | Vue component fetches via API after mount |
+| **H2H sections** | ❌ Triggered by hover — not at page-ready | statisticfeed API popup |
+
+**Key DOM analysis findings (discovered 2026-07-20):**
+- BetB2B Vue SPA uses scoped CSS (`data-v-*`) that varies per build — cannot rely on data attributes
+- Scoreboard is div-based (no `<table>` elements for scores). Structure: `scoreboard-intro__team` (home) → `scoreboard-intro__content` (scores) → `scoreboard-intro__team` (away)
+- Home score uses bare `.scoreboard-scores__score` (no `--team-1` on home). Away uses `.scoreboard-scores__score--team-2`
+- Period table: `--team-0` = home period scores, `--team-1` = away period scores. TH captions = period names (1st corner cell is empty)
+- Competition names in `.scoreboard-section-block__title` or `.scoreboard-header__label`
+- Team names may be duplicated in DOM across multiple scoreboard sections — MUST scope to `.scoreboard-intro__team` parent
+
+**Usage:**
+```python
+from src.sites.betb2b.extraction.match_detail import extract_match_page
+data = await extract_match_page(page)
+# data.scoreboard, data.period_scores, data.statistics
+```
+
+**Limitations:**
+- Markets and H2H are SPA-lazy-loaded — not available at `page-ready`. Need API call or interaction (hover).
+- `scoreboard-intro__team` contains text nodes inside complex component hierarchy — `textContent` works but `innerText` differs slightly.
+
+### Match UI vs API Comparison System (`src/sites/betb2b/scripts/compare_match.py`) — 🆕 Created 2026-07-20
+
+Detects data gaps between what the match page UI renders and what our API
+endpoints return. Produces a structured comparison report identifying what
+data we are NOT collecting.
+
+**Architecture:**
+1. Bootstrap browser session → navigate to match page → JS extraction (same as `match_detail.py`)
+2. Bootstrap a SECOND session with cookie harvest → poll 7 API endpoints for the same match
+3. Gap analysis: compare UI categories vs API capability flags vs current collection status
+
+**API endpoints polled:**
+
+| Endpoint | Path | Purpose |
+|----------|------|---------|
+| GetGameZip (line) | `/service-api/LineFeed/GetGameZip?id=X` | Prematch game data + period scores |
+| GetGameZip (live) | `/service-api/LiveFeed/GetGameZip?id=X` | Live game data + period scores |
+| GetSubsOptionsForGame | `.../GetSubsOptionsForGame?id=X` | Sub-game options (usually empty) |
+| H2H | `/service-api/statisticfeed/api/v1/Game/h2h` | Head-to-head statistics (204 if N/A) |
+| GameStatistics | `.../statisticfeed/api/v1/Game/statistics` | Match statistics (404 for minor leagues) |
+| GameTimeline | `.../statisticfeed/api/v1/Game/timeline` | Match timeline events (404 for minor leagues) |
+| Get1x2_VZip | `.../LiveFeed/Get1x2_VZip?id=X` | Market odds (406 auth-header rotation) |
+
+**CLI:**
+```bash
+python -m src.sites.betb2b.cli.main compare-match --skin linebet --sport basketball --live
+python -m src.sites.betb2b.cli.main compare-match --skin linebet --event-id 737759221 --live
+python -m src.sites.betb2b.cli.main compare-match --skin linebet --sport basketball --live -v
+```
+
+**Known observations (2026-07-20 testing):**
+- Women's Chinese basketball (linebet, Kenya egress): statisticfeed APIs return 404 for statistics/timeline, 204 (empty) for H2H. NBA major league matches expected to return data.
+- Get1x2_VZip consistently returns 406 (auth-header rotation per ADR-4) — markets from GetGameZip/E[]/AE[] paths.
+- GetGameZip (live) reliably returns ~24KB+ data with scores, periods, markets. GetGameZip (line) for live events returns only ~100 bytes.
+- **Period scores gap RESOLVED 2026-07-20:** `SC.PS[]` is now extracted via `_extract_period_scores()` in `rules.py` and populated into `Event.period_scores`.
+- GetSubsOptionsForGame returns ~100 bytes — not useful.
+
+**Output structure:** `data/telemetry/betb2b/match_comparison/<timestamp>_<skin>_<event>/` with `comparison_report.json`, screenshot, HTML, API response captures.
+
 ## Rules (beyond the .context protocol)
 
 1. **Start at `.context/kickoff.md`.** Do not grep the codebase for "context" — the protocol lives in `.context/`.
@@ -271,14 +356,17 @@ python -m src.sites.betb2b.cli.main probe --skin linebet
 | `src/sites/betb2b/extraction/rules.py` | `BetB2BExtractionRules` — terse-key JSON → Event/Market/Selection |
 | `src/sites/betb2b/extraction/dom.py` | DOM extraction fallback — reads rendered odds from page |
 | `src/sites/betb2b/extraction/models.py` | `Event`, `Market`, `Selection`, `CapturedFeedResponse`, `BetB2BScrapeResult` |
+| `src/sites/betb2b/extraction/match_detail.py` | 🆕 Match page extraction (JS injection, scoreboard/periods/stats) |
+| `src/sites/betb2b/scripts/compare_match.py` | 🆕 UI vs API gap detection (comparison report generator) |
 | `src/sites/betb2b/markets.py` | Market group/type lookup tables |
 | `src/sites/betb2b/sports.py` | Sport ID → name mapping |
 | `src/sites/betb2b/skins/` | Per-bookmaker YAML skin configs |
 | `src/sites/betb2b/scripts/validate_live.py` | E2E validation script |
 | `src/sites/betb2b/scripts/discover_h2h.py` | H2H endpoint discovery script |
-| `src/sites/betb2b/cli/main.py` | CLI entry point |
+| `src/sites/betb2b/cli/main.py` | CLI entry point (includes `compare-match` subcommand) |
 | `docs/H2H_DISCOVERY.md` | H2H endpoint full specification + integration guide |
 | `src/network/proxy/` | ProxyManager, ProxyEndpoint, proxy verification |
 | `src/network/session.py` | SessionHarvester, SessionPackage, SessionValidator |
 | `src/telemetry/` | Full telemetry system (collectors, processors, storage, reporting) |
 | `src/core/snapshot/` | Snapshot capture system (browser state, HTML, screenshots) |
+| `tools/analyze_match_html.py` | 🛠 DOM analysis tool — discovers BetB2B CSS class names from captured HTML |

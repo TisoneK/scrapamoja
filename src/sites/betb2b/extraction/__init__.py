@@ -7,6 +7,7 @@ from .models import (
     EventStatus,
     Market,
     MarketType,
+    PeriodScore,
     Selection,
     Sport,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "BetB2BExtractionRules",
     "Event",
     "Market",
+    "PeriodScore",
     "Selection",
     "Sport",
     "EventStatus",

@@ -148,6 +148,26 @@ class BetB2BCLI:
         probe.add_argument("--output", "-o", default=None,
                            help="Write JSON probe result to this file")
 
+        # compare-match
+        cm = sub.add_parser("compare-match", help="Compare match page UI data vs API endpoints")
+        cm.add_argument("--skin", "-s", default="linebet", help="Skin name (default: linebet)")
+        cm.add_argument("--sport", default="basketball",
+                        help="Sport slug (basketball, football, etc.)")
+        cm.add_argument("--event-id", default=None,
+                        help="Target event ID (numeric). Auto-discovers if not set.")
+        cm.add_argument("--match-url", default=None,
+                        help="Explicit match page URL (overrides auto-construction)")
+        cm.add_argument("--live", action="store_true",
+                        help="Use live path instead of prematch (line)")
+        cm.add_argument("--settle", type=float, default=12.0,
+                        help="SPA settle seconds (default: 12)")
+        cm.add_argument("--output", default=None,
+                        help="Output directory for report + artifacts")
+        cm.add_argument("--headless", action="store_true", default=True,
+                        help="Headless browser (default: True)")
+        cm.add_argument("--hover", action="store_true", default=True,
+                        help="Hover team names to trigger H2H popups")
+
         return parser
 
     async def run(self, argv: Optional[List[str]] = None) -> int:
@@ -164,6 +184,8 @@ class BetB2BCLI:
             return self._cmd_sports(args)
         if args.command == "probe":
             return await self._cmd_probe(args)
+        if args.command == "compare-match":
+            return await self._cmd_compare_match(args)
 
         self.parser.print_help()
         return 2
@@ -325,6 +347,36 @@ class BetB2BCLI:
         else:
             print(json.dumps(probe_result, indent=2))
         return 0
+
+    async def _cmd_compare_match(self, args: argparse.Namespace) -> int:
+        from src.sites.betb2b.scripts.compare_match import main as compare_main
+
+        # Reconstruct sys.argv for the script's own parser.
+        script_argv = [
+            "--skin", args.skin,
+            "--sport", args.sport,
+            "--settle", str(args.settle),
+        ]
+        if args.event_id:
+            script_argv += ["--event-id", args.event_id]
+        if args.match_url:
+            script_argv += ["--match-url", args.match_url]
+        if args.live:
+            script_argv.append("--live")
+        if args.output:
+            script_argv += ["--output", args.output]
+        if args.hover:
+            script_argv.append("--hover")
+        if getattr(args, "verbose", False):
+            script_argv.append("--verbose")
+
+        import sys as _sys
+        old_argv = _sys.argv
+        try:
+            _sys.argv = ["compare-match"] + script_argv
+            return await compare_main()
+        finally:
+            _sys.argv = old_argv
 
     # ------------------------------------------------------------------ #
     def _emit(self, payload: Dict[str, Any], args: argparse.Namespace, always_pretty: bool = False) -> int:

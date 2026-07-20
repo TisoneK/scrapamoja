@@ -559,3 +559,61 @@ def test_basketball_market_overrides() -> None:
     )
     b.enrich_event(e)
     assert e.minute == 2
+
+
+def test_extract_period_scores_from_sc(rules: BetB2BExtractionRules) -> None:
+    """``SC.PS[]`` should be extracted into ``Event.period_scores``."""
+    event = dict(SAMPLE_LIVE_EVENT)
+    # Give it real period scores.
+    event["SC"] = {
+        "FS": {"S1": 118, "S2": 126},
+        "PS": [
+            {"Key": 1, "Value": {"S1": 19, "S2": 20, "NF": "1st quarter"}},
+            {"Key": 2, "Value": {"S1": 21, "S2": 38, "NF": "2nd quarter"}},
+            {"Key": 3, "Value": {"S1": 33, "S2": 34, "NF": "3rd quarter"}},
+            {"Key": 4, "Value": {"S1": 42, "S2": 23, "NF": "4th quarter"}},
+        ],
+        "CP": 4,
+        "CPS": "4th quarter",
+        "TS": 1800,
+        "SLS": "2 min remaining",
+    }
+    feed = {"Success": True, "Value": [event]}
+    cap = rules.decode_response(
+        url="https://linebet.com/service-api/LiveFeed/Get1x2_VZip",
+        status=200,
+        content_type="application/json",
+        raw_bytes=json.dumps(feed).encode(),
+    )
+    events = rules.extract_from_captured(cap)
+    assert len(events) == 1
+    ev = events[0]
+    assert len(ev.period_scores) == 4
+    # Verify each period.
+    assert ev.period_scores[0].period_name == "1st quarter"
+    assert ev.period_scores[0].home_score == 19
+    assert ev.period_scores[0].away_score == 20
+    assert ev.period_scores[0].period_key == 1
+    assert ev.period_scores[2].period_name == "3rd quarter"
+    assert ev.period_scores[2].home_score == 33
+    # Verify empty PS yields empty list.
+    ev2_ps = rules._extract_period_scores({"PS": []})
+    assert ev2_ps == []
+
+
+def test_extract_period_scores_handles_malformed(rules: BetB2BExtractionRules) -> None:
+    """Malformed PS[] should degrade gracefully — no crashes, no spam."""
+    # None SC
+    assert rules._extract_period_scores(None) == []
+    # Empty dict
+    assert rules._extract_period_scores({}) == []
+    # PS not a list
+    assert rules._extract_period_scores({"PS": "string"}) == []
+    # Item missing Value
+    ps = rules._extract_period_scores({"PS": [{"Key": 1, "Value": None}]})
+    assert ps == []
+    # Item with missing NF — falls back to empty string
+    ps2 = rules._extract_period_scores({"PS": [{"Key": 1, "Value": {"S1": 10, "S2": 20}}]})
+    assert len(ps2) == 1
+    assert ps2[0].period_name == ""
+    assert ps2[0].home_score == 10
