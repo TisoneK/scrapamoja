@@ -13,7 +13,11 @@ async def main():
     """Main entry point for the CLI."""
     from .main import FlashscoreCLI
     cli = FlashscoreCLI()
-    return await cli.run(sys.argv[1:])
+    # run() expects a parsed argparse.Namespace, not the raw argv list —
+    # build the parser and parse first (mirrors src/main.py's dispatcher).
+    parser = cli.create_parser()
+    args = parser.parse_args(sys.argv[1:])
+    return await cli.run(args)
 
 
 if __name__ == "__main__":
