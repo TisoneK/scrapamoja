@@ -502,3 +502,22 @@ don't remove the line.
       betwinner.ke) but preserved the path so they worked — leaving their
       `domain` as `.com` means feed/GetGameZip URLs still target `.com`
       (worked in this session, but the KE domain would be more correct). LOW-MED.
+
+---
+- [ ] **Unify + smoke-test the per-site CLI entry points** (added 2026-07-21 by Claude Code, Session 25) —
+      Session 25 hit THREE entry-point defects of the same class: (1) betb2b
+      `python -m src.sites.betb2b.cli.main` silently no-ops (no `__main__`
+      guard — real path is `-m src.sites.betb2b.cli`); (2) the Session-25
+      handoff recommended that wrong betb2b command; (3) flashscore
+      `python -m src.sites.flashscore.cli` crashed passing raw argv to a
+      Namespace-expecting `run()` (fixed `6b5ae82`). Root pattern: each site's
+      `cli/__main__.py` is hand-written differently and `run()` signatures
+      diverge, and only the `src.main <site>` dispatcher is reliably wired.
+      Actions: (a) add a parametrized smoke test — `subprocess python -m
+      src.main <site> --help` (and the package `-m <site>.cli --help`) asserting
+      exit 0 — over all sites (flashscore/wikipedia/direct/linebet + betb2b);
+      (b) **register betb2b in `src/main.py::SITE_CLIS`** so it runs through the
+      one documented entry point (needs a thin adapter — betb2b's CLI has a
+      different `run()` signature than the `FlashscoreCLI`/`DirectCLI` shape);
+      (c) consider standardizing every `cli/__main__.py` on create_parser →
+      parse_args → run(args). MED — devex + prevents silent breakage.

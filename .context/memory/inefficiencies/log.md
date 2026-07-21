@@ -190,3 +190,25 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Problem 3 — bore proxy dropped mid-session.** `bore.pub:50670` was up for the captures + GetGameZip fetches, then dropped to HTTP 000 and did not recover, blocking the *integrated* end-to-end run. Consistent with the standing "tunnels rotate" warning.
 - **Cost:** ~5 min of retries; the integrated confirmation is now backlogged.
 - **Prevent next time:** Capture all live artifacts you'll need (HTML + a few real GetGameZip responses) in ONE proxy window early, so later code validation doesn't depend on the tunnel staying up. (Did this — every fix was validated from the early captures.)
+
+---
+## 2026-07-21 — Claude Code / claude-opus-4-8 (Session 25 addendum — CLI entry points)
+- **Problem:** Third CLI entry-point defect of the session. flashscore's
+  `python -m src.sites.flashscore.cli` crashed (`'list' has no attribute
+  'config'`) — `__main__.py` passed raw argv to a `run()` that wanted a parsed
+  Namespace. Earlier: betb2b `.cli.main` silently no-ops (no `__main__` guard),
+  and the handoff recommended that wrong command. A pattern: the per-site CLI
+  packages have inconsistent, partly-broken `-m` entry points, and only the
+  `src.main <site>` dispatcher is reliably wired.
+- **Cost:** ~5 min each to discover (they fail in different ways — silent
+  no-op vs AttributeError vs works-only-via-dispatcher).
+- **Cause:** No CLI smoke tests across sites; each site's `cli/__main__.py`
+  was hand-written differently. `run()` signatures differ (some take argv,
+  some take a Namespace), so a copy-paste entry point breaks.
+- **Workaround / fix:** Fixed flashscore (`6b5ae82`) + added an AST regression
+  test. betb2b's real entry point is `-m src.sites.betb2b.cli`.
+- **Prevent next time:** Add a parametrized smoke test over every site CLI —
+  `subprocess: python -m <site.cli> --help` (or `src.main <site> --help`)
+  asserting exit 0. Would catch all three at once. Backlog candidate. And:
+  standardize on ONE invocation convention (`python -m src.main <site>`) +
+  register betb2b there so there's a single documented path.

@@ -458,3 +458,20 @@ past entries — append corrections instead.
 - All working skins returned the SAME event ids again (Phoenix 738047045,
   Caixa 738062773, University of Zagreb 738069557) — shared BetB2B backend.
 - No code changes — validation only.
+
+### Session 25 addendum 4 (2026-07-21) — fix flashscore CLI entry point
+- User pivoted to "real scraper + data processing"; asked how flashscore is
+  wired to the main program. Traced it: registered in `src/main.py::SITE_CLIS`
+  (`{'flashscore': ('src.sites.flashscore.cli.main','FlashscoreCLI'), …}`),
+  invoked as `python -m src.main flashscore scrape <sport> <status>`; the
+  dispatcher does create_parser → parse_args → run(args) inside the app's
+  shutdown/interrupt harness. 4 sites wired: flashscore, wikipedia, direct,
+  linebet. **betb2b is NOT wired into src.main** (only its own `-m
+  src.sites.betb2b.cli`) — backlog candidate for unification.
+- **Found + fixed a bug** (`6b5ae82`): the package entry point
+  `python -m src.sites.flashscore.cli` crashed with `AttributeError: 'list'
+  object has no attribute 'config'` — `cli/__main__.py` passed raw
+  `sys.argv[1:]` (a list) to `run()`, which expects a parsed Namespace. Fixed
+  to create_parser → parse_args → run(args). +4 tests (incl. an AST guard).
+  This is the THIRD entry-point bug of the same class this session
+  (betb2b `.cli.main` no-op, wrong CLI command in handoff, now this).
