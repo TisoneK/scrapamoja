@@ -520,3 +520,19 @@ past entries — append corrections instead.
 - This delivers the per-site "friendly grammar" for betb2b specifically. The
   cross-site grammar-unification (make flashscore/wikipedia/etc. speak one
   grammar) is still the open backlog item; this is betb2b's local version.
+
+### Session 25 addendum 8 (2026-07-21) — odds store → full relational betb2b DB
+- Operator: "does it scrape odds only??? … we need one db … a well thought db
+  tables plan for sports, tournaments, countries, leagues, h2h etc — odds is
+  just its own table but you are treating it as the db." Correct — the first
+  store.py (`961f569`) was odds-first and dropped the rich match data the
+  scraper already captures.
+- Rewrote `store.py` (`ebfbf30`, ADR-6 revision) into a normalized 12-table
+  model, ONE db, skin as a column: dims sports/countries/leagues/teams/events/
+  markets + facts scrape_runs/event_states/period_scores/odds_snapshots/
+  h2h_games/statistics. Teams enriched with H2H backend ids. Validated on the
+  real 5-skin captures (46 teams, 12 leagues, 8 countries, 376 h2h_games,
+  113 period_scores, 5505 odds). Store tests → 11; betb2b suite → 118.
+- Grounded the schema by inspecting a real event end-to-end first (event
+  738047045 carries sport/league/country/period_scores/h2h with team backend
+  ids + countries; statistics[] usually empty).
