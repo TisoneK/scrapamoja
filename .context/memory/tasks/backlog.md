@@ -609,3 +609,19 @@ don't remove the line.
       / a `betb2b ingest` command reusing multi-skin+poll. ENGINE_URL + token in
       `.context/memory/secrets/` (never tracked). The store now keeps h2h periods
       (`d0117eb`) so FULL is buildable now; scoped waits on the G-map above. HIGH.
+
+---
+- [ ] **Map ALL basketball modes: (G,GS,T) taxonomy + sub-game fetching** (added 2026-07-21 by Claude Code, Session 26; supersedes the earlier "map quarter/half/team G ids" item) —
+      The operator wants every mode mapped: full-match BOTH-teams total + full-match
+      SINGLE-team totals, and the same for each half + each quarter (combined +
+      individual). Structure (ADR-7 addendum): FULL markets in the main event;
+      QUARTER/HALF markets are `SG[]` sub-games fetched by their own id. Market
+      identity = `(G, GS, T)` — the current T-only `lookup_market` mislabels total
+      variants. CONFIRMED so far: G=17/T=9,10=combined total; G=2/T=7,8=AsianHcp;
+      G=14/T=182,183=Moneyline-2way; G=101/T=401-403=Moneyline-3way; G=4=individual_total.
+      TODO: (1) capture ONE full 5v5 game (NBA/EuroLeague) with sub-games from a
+      STABLE session; (2) enumerate (G,GS,T)→(scope,market,selection,side) for main
+      + each sub-game via line magnitude + Over/Under + sub-game PN; (3) extend
+      markets.py + rewrite lookup_market to (G,GS,T); (4) add SG sub-game fetching to
+      the scraper, tagging each scoped market with its PredictionScope. Do NOT guess —
+      a mislabelled total = wrong odds to the engine. HIGH (unblocks scoped ingestion).
