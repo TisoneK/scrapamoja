@@ -187,6 +187,37 @@ class BetB2BCLI:
                                  "Opt-in; JSON output is unaffected. "
                                  "Default: data/betb2b/odds.db if flag given without value.",
                             nargs="?", const="data/betb2b/odds.db")
+
+        # poll — scrape + persist on a loop so line-movement accumulates
+        poll = sub.add_parser(
+            "poll", help="Scrape + persist to the odds store on an interval",
+            description="Repeatedly scrape a skin and persist to the SQLite odds "
+                        "store so line movement accumulates. `poll linebet live` "
+                        "is the easy form. Ctrl-C stops cleanly.",
+        )
+        poll.add_argument("skin_pos", nargs="?", default=None, metavar="skin",
+                          help="Skin name (positional). Default: linebet.")
+        poll.add_argument("status_pos", nargs="?", default=None, metavar="status",
+                          help="live | scheduled | all (positional). Default: live.")
+        poll.add_argument("--skin", "-s", default="linebet", help="Skin name (default: linebet)")
+        poll.add_argument("--action", "-a", default="list_live",
+                          help="live/scheduled/all or the canonical list_* action")
+        poll.add_argument("--sport", default=None, help="Sport slug. Default: all sports.")
+        poll.add_argument("--sport-id", type=int, default=None, help="Sport SI id (overrides --sport)")
+        poll.add_argument("--interval", type=float, default=60.0,
+                          help="Target seconds between cycle starts (default: 60). "
+                               "If a scrape overruns it, the next starts immediately.")
+        poll.add_argument("--cycles", type=int, default=0,
+                          help="Stop after this many cycles (0 = unlimited)")
+        poll.add_argument("--for", dest="for_seconds", type=float, default=0.0,
+                          help="Stop after this many wall-clock seconds (0 = unlimited)")
+        poll.add_argument("--db", default="data/betb2b/odds.db",
+                          help="SQLite odds store path (default: data/betb2b/odds.db)")
+        poll.add_argument("--count", type=int, default=50, help="events `count=` param")
+        poll.add_argument("--timeout", type=float, default=120.0, help="per-scrape hard cap (s)")
+        poll.add_argument("--settle", type=float, default=12.0, help="SPA settle seconds")
+        poll.add_argument("--rate", type=int, default=30, help="feed rate limit per minute")
+
         # info
         info = sub.add_parser("info", help="Print skin config + scraper state")
         info.add_argument("--skin", "-s", default="linebet", help="Skin name")
@@ -258,6 +289,8 @@ class BetB2BCLI:
 
         if args.command == "scrape":
             return await self._cmd_scrape(args)
+        if args.command == "poll":
+            return await self._cmd_poll(args)
         if args.command == "info":
             return self._cmd_info(args)
         if args.command == "skins":
@@ -340,6 +373,74 @@ class BetB2BCLI:
                 print(f"WARNING: --db persist failed: {exc}", file=sys.stderr)
 
         return self._emit(result, args)
+
+    # ------------------------------------------------------------------ #
+    async def _cmd_poll(self, args: argparse.Namespace) -> int:
+        # Same friendly grammar as scrape.
+        try:
+            args.skin, args.action = _reconcile_scrape_target(
+                getattr(args, "skin_pos", None), getattr(args, "status_pos", None),
+                args.skin, args.action,
+            )
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+
+        skin = _load_skin(args.skin)
+        pm_and_id = _build_proxy_manager_from_env()
+        proxy_manager = pm_and_id[0] if pm_and_id else None
+        proxy_endpoint_id = pm_and_id[1] if pm_and_id else None
+
+        from src.sites.betb2b import BetB2BScraper
+        from src.sites.betb2b.poll import poll_loop
+        from src.sites.betb2b.store import counts, init_db, persist_result
+
+        conn = init_db(args.db)
+        stop = {"flag": False}
+
+        def _on_cycle(n: int, result: Dict[str, Any], run_id: Any) -> None:
+            odds = counts(conn)["odds_snapshots"]
+            print(
+                f"[cycle {n}] run {run_id}: {result.get('event_count', 0)} events, "
+                f"{result.get('scrape_duration_seconds', 0):.0f}s | odds_snapshots total={odds}",
+                file=sys.stderr, flush=True,
+            )
+
+        def _on_error(n: int, exc: Exception) -> None:
+            print(f"[cycle {n}] ERROR: {exc}", file=sys.stderr, flush=True)
+
+        print(
+            f"Polling skin={args.skin} action={args.action} every {args.interval:.0f}s "
+            f"→ {args.db}  (Ctrl-C to stop)",
+            file=sys.stderr, flush=True,
+        )
+        try:
+            async with BetB2BScraper(
+                skin, proxy_manager=proxy_manager, proxy_endpoint_id=proxy_endpoint_id,
+                rate_limit_per_minute=args.rate, settle_seconds=args.settle,
+                sport=args.sport,
+            ) as scraper:
+                async def _scrape_once() -> Dict[str, Any]:
+                    return await scraper.scrape(
+                        action=args.action, sport_id=args.sport_id,
+                        count=args.count, timeout_seconds=args.timeout,
+                    )
+
+                done = await poll_loop(
+                    scrape_once=_scrape_once,
+                    persist=lambda r: persist_result(r, args.db, conn=conn),
+                    interval=args.interval, cycles=args.cycles,
+                    max_seconds=args.for_seconds,
+                    on_cycle=_on_cycle, on_error=_on_error,
+                    should_stop=lambda: stop["flag"],
+                )
+            print(f"Poll finished: {done} cycle(s). Store: {args.db}", file=sys.stderr)
+            return 0
+        except KeyboardInterrupt:
+            print("\nPoll interrupted — stopping cleanly.", file=sys.stderr)
+            return 0
+        finally:
+            conn.close()
 
     def _cmd_info(self, args: argparse.Namespace) -> int:
         skin = _load_skin(args.skin)
