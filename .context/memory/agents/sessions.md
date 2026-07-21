@@ -607,3 +607,16 @@ past entries — append corrections instead.
 - Handoff → Session 26 (see tasks/current.md): investigate fetching from the
   betb2b odds DB and producing engine ingest requests per prediction SCOPE
   (full match / half / per quarter / per team).
+
+---
+## 2026-07-21 — Session 26 (investigation: betb2b DB → engine ingest, per prediction scope)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS 15.7.7) | **Role:** engineer | **Core:** 0.3.0
+- **Task:** Investigate fetching from the betb2b odds DB and producing scorewise-engine ingest requests where a match passes in multiple SCOPES (full-time / half / per-quarter / per-team).
+- **Commits:** 1 product (`d0117eb`) + this context.
+- **Outcome:** design done (ADR-7) + enabling store fix shipped.
+  - Engine `PredictionScope` = 9 modes: FULL_MATCH, FIRST/SECOND_HALF, QUARTER_1..4, HOME/AWAY_TEAM_TOTAL. Scope is metadata to the pipeline; the INPUT differs per scope — `odds.match_total` (rung with Over-odds nearest 1.85) + H2H scores matching the scope.
+  - **Verified data availability:** H2H per-scope scores ARE in the feed (43/43 played `game_shorts` carry `periods[]` per-quarter home/away). Full-match odds mapped ("Total Over/Under"). Quarter/half/team-total odds present but UNMAPPED (`G=NNNN`).
+  - **Enabling fix (`d0117eb`):** store now captures h2h `periods[]` (new `h2h_period_scores` table) + sub_scores — 52 games → 172 period rows on a real capture; FIRST_HALF/QUARTER H2H now derivable.
+  - **Two remaining blockers (backlogged):** (1) map basketball quarter/half/team-total G ids in `markets.py`; (2) build the exporter+ingest client (ADR-7). FULL_MATCH is buildable now.
+- **Open items:** the two backlog items above.
+- **Report:** this log + ADR-7 (no separate review file — investigation session).

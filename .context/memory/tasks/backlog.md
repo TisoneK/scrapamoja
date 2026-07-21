@@ -581,3 +581,31 @@ don't remove the line.
       Validate live: a full live-basketball scrape should return >=16 events
       (all championships), not 10. MED–HIGH — without it the product misses most
       of every card.
+
+---
+- [ ] **Map basketball quarter/half/individual-total market groups (G ids)** (added 2026-07-21 by Claude Code, Session 26; ADR-7 blocker) —
+      Scoped ingestion (QUARTER_n / FIRST_HALF / SECOND_HALF / HOME_/AWAY_TEAM_TOTAL)
+      needs the scope's total line, but those markets extract as unmapped
+      `G=NNNN` (a live event had 40 markets, only 4 name-mapped). `markets.py::
+      DEFAULT_MARKET_GROUPS` maps only full total (groups 3/17), BTTS (9), etc.
+      Identify the 1xbet/BetB2B basketball group ids for: 1st/2nd/3rd/4th-quarter
+      total, 1st/2nd-half total, individual (home/away) total — from a real
+      GetGameZip market tree (the `G`/`T` ids + their `.5` lines disambiguate:
+      quarter totals ~36, half ~73, full ~146, team ~half of full) — and add
+      them to DEFAULT_MARKET_GROUPS. Then the store's `markets` table gets real
+      names and the exporter can select each scope's line. MED — blocks non-full
+      scopes. FULL_MATCH works today.
+- [ ] **Build the scorewise-engine ingest exporter (ADR-7)** (added 2026-07-21 by Claude Code, Session 26) —
+      `src/sites/betb2b/export/scorewise.py`: `event_to_predict_requests(event)
+      -> List[PredictRequest]` (one per available scope) + an httpx ingest client
+      that POSTs `{source:"betb2b-scraper", scraped_at, matches:[...]}` to
+      `POST {ENGINE_URL}/api/ingest` (chunk ≤100). Read from the store via a
+      scope-aware query. Rules: `match_total` = the totals rung whose OVER-odds
+      is nearest 1.85 (engine's calculation line); H2H per scope — FULL=score1/2,
+      QUARTER_n=h2h_period_scores[n], FIRST_HALF=Q1+Q2, SECOND_HALF=Q3+Q4,
+      HOME/AWAY_TEAM_TOTAL=home/away across games; filter out future fixtures
+      (score 0-0, status=1); resolve team ids→names via teams. Cross-skin: send
+      ONE consensus/best line per match. Wire as `betb2b scrape … --ingest $URL`
+      / a `betb2b ingest` command reusing multi-skin+poll. ENGINE_URL + token in
+      `.context/memory/secrets/` (never tracked). The store now keeps h2h periods
+      (`d0117eb`) so FULL is buildable now; scoped waits on the G-map above. HIGH.
