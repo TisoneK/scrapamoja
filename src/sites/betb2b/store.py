@@ -1,27 +1,27 @@
-"""SQLite persistence for BetB2B scrape results — a real home for odds data.
+"""SQLite store for BetB2B scrape results — the full match model, not just odds.
 
-Until now a scrape produced a standalone JSON blob (see :mod:`.storage`): it
-overwrote nothing, deduped nothing, and was never queried. This module gives
-the harvested events/odds a structured, time-series store so the downstream
-odds-comparison use case is a query, not a JSON diff.
+One database for all of betb2b (``skin`` is a column, never a separate DB). The
+match universe (sports, countries, leagues, teams, events, markets) is shared
+across skins — every skin reports the same backend ``event_id`` (verified
+Session 25) — so those are **dimension** tables with no ``skin`` column, UPSERT-ed
+to one row per real entity. Everything a *skin observed at a moment* (scores,
+odds, period breakdowns, H2H, stats) is a **fact** table carrying ``skin`` +
+``captured_at``, appended as a time-series.
 
-Design (see ADR-6):
+Schema (ADR-6, revised):
 
-* ``scrape_runs``    — one row per :func:`persist_result` call (provenance).
-* ``events``         — one row per match, UPSERT-ed on ``event_id``. Because
-  every BetB2B skin shares the same backend event ids (verified Session 25),
-  one match is one row regardless of how many skins report it.
-* ``event_states``   — time-series of an event's live state per run
-  (status / score / minute / period).
-* ``odds_snapshots`` — time-series of prices: one row per selection per run.
-  This is where **line movement** and **cross-skin comparison** live.
+  dimensions          facts (skin-scoped, time-series)
+  ----------          -------------------------------
+  sports              scrape_runs      one row per persist_result()
+  countries           event_states     status/score/minute/period per run
+  leagues             period_scores    per-quarter breakdown per run
+  teams               odds_snapshots   one price per selection per run
+  events              h2h_games        historical head-to-head matches
+  markets             statistics       flattened stat rows
 
-The input is the plain dict from ``BetB2BScrapeResult.to_dict()`` (the same
-JSON the CLI already emits), so this works on any saved output too.
-
-SQLite is the first backend (stdlib, zero deps, one file). The schema avoids
-SQLite-only types (TEXT/INTEGER/REAL only; timestamps are ISO-8601 TEXT) so
-it ports to Postgres with only the id-column type changing.
+Input is the plain ``BetB2BScrapeResult.to_dict()`` dict, so it works on live
+scrapes and on saved JSON alike. SQLite first (stdlib, one file); the schema is
+Postgres-portable (TEXT/INTEGER/REAL, ISO-8601 timestamps, explicit FKs).
 """
 
 from __future__ import annotations
@@ -36,11 +36,66 @@ __all__ = [
     "latest_odds",
     "line_movement",
     "cross_skin_odds",
+    "counts",
 ]
 
 PathLike = str | Path
 
 SCHEMA = """
+-- ------------------------------------------------------------------ --
+-- Dimensions (skin-agnostic — one row per real entity, UPSERT-ed)     --
+-- ------------------------------------------------------------------ --
+CREATE TABLE IF NOT EXISTS sports (
+    sport_id  INTEGER PRIMARY KEY,          -- the backend SI (3=basketball)
+    name      TEXT,
+    slug      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS countries (
+    country_id  INTEGER PRIMARY KEY,        -- surrogate
+    name        TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS leagues (
+    league_id   INTEGER PRIMARY KEY,        -- the backend LI
+    name        TEXT,
+    sport_id    INTEGER REFERENCES sports(sport_id),
+    country_id  INTEGER REFERENCES countries(country_id)
+);
+
+CREATE TABLE IF NOT EXISTS teams (
+    team_id     INTEGER PRIMARY KEY,        -- surrogate
+    backend_id  TEXT UNIQUE,                -- the h2h hash id when known
+    name        TEXT NOT NULL,
+    sport_id    INTEGER REFERENCES sports(sport_id),
+    country_id  INTEGER REFERENCES countries(country_id),
+    UNIQUE(name, sport_id)
+);
+
+CREATE TABLE IF NOT EXISTS events (
+    event_id      TEXT PRIMARY KEY,         -- the backend event id (shared across skins)
+    sport_id      INTEGER REFERENCES sports(sport_id),
+    league_id     INTEGER REFERENCES leagues(league_id),
+    country_id    INTEGER REFERENCES countries(country_id),
+    home_team_id  INTEGER REFERENCES teams(team_id),
+    away_team_id  INTEGER REFERENCES teams(team_id),
+    home_name     TEXT,                     -- denormalized for convenience
+    away_name     TEXT,
+    start_time    TEXT,
+    first_seen    TEXT,
+    last_seen     TEXT
+);
+
+CREATE TABLE IF NOT EXISTS markets (
+    market_id    INTEGER PRIMARY KEY,       -- surrogate
+    name         TEXT,
+    market_type  TEXT,
+    raw_g        INTEGER
+);
+
+-- ------------------------------------------------------------------ --
+-- Facts (skin-scoped time-series, append-only)                        --
+-- ------------------------------------------------------------------ --
 CREATE TABLE IF NOT EXISTS scrape_runs (
     run_id            INTEGER PRIMARY KEY,
     skin              TEXT NOT NULL,
@@ -53,20 +108,6 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
     success           INTEGER,
     error             TEXT,
     template_version  TEXT
-);
-
-CREATE TABLE IF NOT EXISTS events (
-    event_id     TEXT PRIMARY KEY,
-    sport        TEXT,
-    sport_id     INTEGER,
-    competition  TEXT,
-    league_id    INTEGER,
-    home         TEXT,
-    away         TEXT,
-    country      TEXT,
-    start_time   TEXT,
-    first_seen   TEXT,
-    last_seen    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS event_states (
@@ -84,31 +125,71 @@ CREATE TABLE IF NOT EXISTS event_states (
     captured_at     TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS period_scores (
+    id           INTEGER PRIMARY KEY,
+    run_id       INTEGER NOT NULL REFERENCES scrape_runs(run_id),
+    event_id     TEXT NOT NULL REFERENCES events(event_id),
+    skin         TEXT NOT NULL,
+    period_key   INTEGER,
+    period_name  TEXT,
+    home_score   INTEGER,
+    away_score   INTEGER,
+    captured_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS odds_snapshots (
     snap_id         INTEGER PRIMARY KEY,
     run_id          INTEGER NOT NULL REFERENCES scrape_runs(run_id),
     event_id        TEXT NOT NULL REFERENCES events(event_id),
     skin            TEXT NOT NULL,
-    market_name     TEXT,
-    market_type     TEXT,
-    market_raw_g    INTEGER,
+    market_id       INTEGER REFERENCES markets(market_id),
     selection_name  TEXT,
     line            REAL,
     price           REAL NOT NULL,
     is_suspended    INTEGER,
     raw_t           INTEGER,
-    raw_g           INTEGER,
     captured_at     TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS ix_states_event   ON event_states(event_id, captured_at);
-CREATE INDEX IF NOT EXISTS ix_odds_event     ON odds_snapshots(event_id, skin, captured_at);
-CREATE INDEX IF NOT EXISTS ix_odds_selection ON odds_snapshots(event_id, skin, market_name, selection_name, captured_at);
+CREATE TABLE IF NOT EXISTS h2h_games (
+    id                 INTEGER PRIMARY KEY,
+    run_id             INTEGER NOT NULL REFERENCES scrape_runs(run_id),
+    event_id           TEXT NOT NULL REFERENCES events(event_id),
+    skin               TEXT NOT NULL,
+    game_id            TEXT,
+    sport_id           INTEGER,
+    team1_backend_id   TEXT,
+    team2_backend_id   TEXT,
+    date_start         TEXT,
+    score1             INTEGER,
+    score2             INTEGER,
+    winner             INTEGER,
+    status             INTEGER,
+    captured_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS statistics (
+    id           INTEGER PRIMARY KEY,
+    run_id       INTEGER NOT NULL REFERENCES scrape_runs(run_id),
+    event_id     TEXT NOT NULL REFERENCES events(event_id),
+    skin         TEXT NOT NULL,
+    name         TEXT,
+    value        TEXT,
+    captured_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_events_league   ON events(league_id);
+CREATE INDEX IF NOT EXISTS ix_events_sport     ON events(sport_id);
+CREATE INDEX IF NOT EXISTS ix_states_event     ON event_states(event_id, captured_at);
+CREATE INDEX IF NOT EXISTS ix_periods_event    ON period_scores(event_id, captured_at);
+CREATE INDEX IF NOT EXISTS ix_odds_event       ON odds_snapshots(event_id, skin, captured_at);
+CREATE INDEX IF NOT EXISTS ix_odds_market      ON odds_snapshots(event_id, skin, market_id, selection_name, captured_at);
+CREATE INDEX IF NOT EXISTS ix_h2h_event        ON h2h_games(event_id);
 """
 
 
 def init_db(path: PathLike) -> sqlite3.Connection:
-    """Open (creating if needed) the SQLite store and ensure the schema."""
+    """Open (creating if needed) the store and ensure the schema."""
     p = Path(path)
     if p.parent and not p.parent.exists():
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -127,103 +208,219 @@ def _as_int(v: Any) -> Optional[int]:
         return None
 
 
+# --------------------------------------------------------------------------- #
+# Dimension get-or-create helpers (SELECT-then-INSERT — NULL-safe UPSERT)
+# --------------------------------------------------------------------------- #
+def _upsert_sport(conn, sport_id: Optional[int], name: Optional[str]) -> Optional[int]:
+    if sport_id is None:
+        return None
+    conn.execute(
+        "INSERT INTO sports (sport_id, name, slug) VALUES (?,?,?) "
+        "ON CONFLICT(sport_id) DO UPDATE SET name=COALESCE(excluded.name, sports.name), "
+        "slug=COALESCE(excluded.slug, sports.slug)",
+        (sport_id, name, (name or "").lower() or None),
+    )
+    return sport_id
+
+
+def _get_or_create_country(conn, name: Optional[str]) -> Optional[int]:
+    if not name:
+        return None
+    row = conn.execute("SELECT country_id FROM countries WHERE name=?", (name,)).fetchone()
+    if row:
+        return row["country_id"]
+    return int(conn.execute("INSERT INTO countries (name) VALUES (?)", (name,)).lastrowid)
+
+
+def _upsert_league(conn, league_id, name, sport_id, country_id) -> Optional[int]:
+    league_id = _as_int(league_id)
+    if league_id is None:
+        return None
+    conn.execute(
+        "INSERT INTO leagues (league_id, name, sport_id, country_id) VALUES (?,?,?,?) "
+        "ON CONFLICT(league_id) DO UPDATE SET "
+        "name=COALESCE(excluded.name, leagues.name), "
+        "sport_id=COALESCE(excluded.sport_id, leagues.sport_id), "
+        "country_id=COALESCE(excluded.country_id, leagues.country_id)",
+        (league_id, name, sport_id, country_id),
+    )
+    return league_id
+
+
+def _get_or_create_team(
+    conn, name: Optional[str], sport_id: Optional[int],
+    *, backend_id: Optional[str] = None, country_id: Optional[int] = None,
+) -> Optional[int]:
+    if backend_id:
+        row = conn.execute("SELECT team_id FROM teams WHERE backend_id=?", (backend_id,)).fetchone()
+        if row:
+            if name:  # enrich name/country if we now know them
+                conn.execute(
+                    "UPDATE teams SET name=COALESCE(?, name), country_id=COALESCE(?, country_id) "
+                    "WHERE team_id=?", (name, country_id, row["team_id"]),
+                )
+            return row["team_id"]
+    if not name:
+        return None
+    row = conn.execute(
+        "SELECT team_id, backend_id FROM teams WHERE name=? AND sport_id IS ?",
+        (name, sport_id),
+    ).fetchone()
+    if row:
+        if backend_id and not row["backend_id"]:  # backfill backend id/country
+            conn.execute(
+                "UPDATE teams SET backend_id=?, country_id=COALESCE(?, country_id) WHERE team_id=?",
+                (backend_id, country_id, row["team_id"]),
+            )
+        return row["team_id"]
+    return int(conn.execute(
+        "INSERT INTO teams (backend_id, name, sport_id, country_id) VALUES (?,?,?,?)",
+        (backend_id, name, sport_id, country_id),
+    ).lastrowid)
+
+
+def _get_or_create_market(conn, name, market_type, raw_g) -> int:
+    raw_g = _as_int(raw_g)
+    row = conn.execute(
+        "SELECT market_id FROM markets WHERE name IS ? AND market_type IS ? AND raw_g IS ?",
+        (name, market_type, raw_g),
+    ).fetchone()
+    if row:
+        return row["market_id"]
+    return int(conn.execute(
+        "INSERT INTO markets (name, market_type, raw_g) VALUES (?,?,?)",
+        (name, market_type, raw_g),
+    ).lastrowid)
+
+
+# --------------------------------------------------------------------------- #
+# Persist
+# --------------------------------------------------------------------------- #
 def persist_result(
-    result: Dict[str, Any],
-    path: PathLike,
-    *,
+    result: Dict[str, Any], path: PathLike, *,
     conn: Optional[sqlite3.Connection] = None,
 ) -> int:
     """Persist one ``BetB2BScrapeResult.to_dict()`` payload; return the run_id.
 
-    Idempotent on the event dimension (``events`` is UPSERT-ed); the state and
-    odds rows are append-only time-series (one snapshot per run). Pass an open
-    ``conn`` to reuse a connection (tests); otherwise one is opened + closed.
+    Dimensions (sports/countries/leagues/teams/events/markets) are UPSERT-ed to
+    one row per entity; the fact tables are appended (time-series per run). Pass
+    an open ``conn`` to reuse a connection; otherwise one is opened + closed.
     """
     owns = conn is None
     conn = conn or init_db(path)
     try:
         skin = result.get("skin") or ""
-        captured_at = result.get("extracted_at") or ""
+        at = result.get("extracted_at") or ""
         events: List[Dict[str, Any]] = result.get("events") or []
-        # Infer sport from the first event (the CLI filters one sport per run).
-        sport = next((e.get("sport") for e in events if e.get("sport")), None)
+        sport_name = next((e.get("sport") for e in events if e.get("sport")), None)
 
-        cur = conn.execute(
+        run_id = int(conn.execute(
             "INSERT INTO scrape_runs "
             "(skin, action, sport, url, extracted_at, duration_seconds, "
-            " event_count, success, error, template_version) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (
-                skin, result.get("action"), sport, result.get("url"),
-                captured_at, result.get("scrape_duration_seconds"),
-                result.get("event_count", len(events)),
-                1 if result.get("success") else 0,
-                result.get("error"), result.get("template_version"),
-            ),
-        )
-        run_id = int(cur.lastrowid)
+            " event_count, success, error, template_version) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (skin, result.get("action"), sport_name, result.get("url"), at,
+             result.get("scrape_duration_seconds"), result.get("event_count", len(events)),
+             1 if result.get("success") else 0, result.get("error"),
+             result.get("template_version")),
+        ).lastrowid)
 
         for ev in events:
             event_id = str(ev.get("event_id") or "").strip()
             if not event_id:
                 continue
 
-            # UPSERT the match row (first_seen kept, last_seen bumped).
+            # --- dimensions ---
+            sport_id = _upsert_sport(conn, _as_int(ev.get("sport_id")), ev.get("sport"))
+            country_id = _get_or_create_country(conn, ev.get("country"))
+            league_id = _upsert_league(
+                conn, ev.get("league_id"), ev.get("competition"), sport_id, country_id)
+            home_id = _get_or_create_team(conn, ev.get("home"), sport_id, country_id=country_id)
+            away_id = _get_or_create_team(conn, ev.get("away"), sport_id, country_id=country_id)
+
             conn.execute(
                 "INSERT INTO events "
-                "(event_id, sport, sport_id, competition, league_id, home, away, "
-                " country, start_time, first_seen, last_seen) "
+                "(event_id, sport_id, league_id, country_id, home_team_id, away_team_id, "
+                " home_name, away_name, start_time, first_seen, last_seen) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?) "
                 "ON CONFLICT(event_id) DO UPDATE SET "
-                "  sport=excluded.sport, competition=excluded.competition, "
-                "  home=excluded.home, away=excluded.away, "
-                "  country=COALESCE(excluded.country, events.country), "
+                "  sport_id=COALESCE(excluded.sport_id, events.sport_id), "
+                "  league_id=COALESCE(excluded.league_id, events.league_id), "
+                "  country_id=COALESCE(excluded.country_id, events.country_id), "
+                "  home_team_id=COALESCE(excluded.home_team_id, events.home_team_id), "
+                "  away_team_id=COALESCE(excluded.away_team_id, events.away_team_id), "
                 "  start_time=COALESCE(excluded.start_time, events.start_time), "
                 "  last_seen=excluded.last_seen",
-                (
-                    event_id, ev.get("sport"), _as_int(ev.get("sport_id")),
-                    ev.get("competition"), _as_int(ev.get("league_id")),
-                    ev.get("home"), ev.get("away"), ev.get("country"),
-                    ev.get("start_time"), captured_at, captured_at,
-                ),
+                (event_id, sport_id, league_id, country_id, home_id, away_id,
+                 ev.get("home"), ev.get("away"), ev.get("start_time"), at, at),
             )
 
-            # Time-series: live state this run.
+            # --- facts: live state ---
             conn.execute(
                 "INSERT INTO event_states "
                 "(run_id, event_id, skin, status, is_live, score_home, score_away, "
-                " minute, period, time_remaining, captured_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    run_id, event_id, skin, ev.get("status"),
-                    1 if ev.get("is_live") else 0,
-                    _as_int(ev.get("score_home")), _as_int(ev.get("score_away")),
-                    _as_int(ev.get("minute")), ev.get("period"),
-                    ev.get("time_remaining"), captured_at,
-                ),
+                " minute, period, time_remaining, captured_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (run_id, event_id, skin, ev.get("status"), 1 if ev.get("is_live") else 0,
+                 _as_int(ev.get("score_home")), _as_int(ev.get("score_away")),
+                 _as_int(ev.get("minute")), ev.get("period"), ev.get("time_remaining"), at),
             )
 
-            # Time-series: one odds row per selection.
+            # --- facts: per-period scores ---
+            for ps in ev.get("period_scores") or []:
+                conn.execute(
+                    "INSERT INTO period_scores "
+                    "(run_id, event_id, skin, period_key, period_name, home_score, away_score, captured_at) "
+                    "VALUES (?,?,?,?,?,?,?,?)",
+                    (run_id, event_id, skin, _as_int(ps.get("period_key")), ps.get("period_name"),
+                     _as_int(ps.get("home_score")), _as_int(ps.get("away_score")), at),
+                )
+
+            # --- facts: odds ---
             for m in ev.get("markets") or []:
+                market_id = _get_or_create_market(conn, m.get("name"), m.get("market_type"), m.get("raw_g"))
                 for s in m.get("selections") or []:
                     price = s.get("price")
                     if price is None:
                         continue
                     conn.execute(
                         "INSERT INTO odds_snapshots "
-                        "(run_id, event_id, skin, market_name, market_type, "
-                        " market_raw_g, selection_name, line, price, is_suspended, "
-                        " raw_t, raw_g, captured_at) "
-                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (
-                            run_id, event_id, skin, m.get("name"),
-                            m.get("market_type"), _as_int(m.get("raw_g")),
-                            s.get("name"), s.get("line"), float(price),
-                            1 if s.get("is_suspended") else 0,
-                            _as_int(s.get("raw_t")), _as_int(s.get("raw_g")),
-                            captured_at,
-                        ),
+                        "(run_id, event_id, skin, market_id, selection_name, line, price, "
+                        " is_suspended, raw_t, captured_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        (run_id, event_id, skin, market_id, s.get("name"), s.get("line"),
+                         float(price), 1 if s.get("is_suspended") else 0,
+                         _as_int(s.get("raw_t")), at),
                     )
+
+            # --- facts: H2H (+ enrich teams dim from h2h team metadata) ---
+            h2h = ev.get("h2h_data")
+            if h2h:
+                for t in h2h.get("teams") or []:
+                    tc = t.get("country") or {}
+                    _get_or_create_team(
+                        conn, t.get("title"), _as_int(h2h.get("sport_id")) or sport_id,
+                        backend_id=str(t.get("id")) if t.get("id") else None,
+                        country_id=_get_or_create_country(conn, tc.get("title")),
+                    )
+                for g in h2h.get("game_shorts") or []:
+                    conn.execute(
+                        "INSERT INTO h2h_games "
+                        "(run_id, event_id, skin, game_id, sport_id, team1_backend_id, "
+                        " team2_backend_id, date_start, score1, score2, winner, status, captured_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (run_id, event_id, skin, g.get("game_id"), _as_int(h2h.get("sport_id")),
+                         g.get("team1_id"), g.get("team2_id"), g.get("date_start"),
+                         _as_int(g.get("score1")), _as_int(g.get("score2")),
+                         _as_int(g.get("winner")), _as_int(g.get("status")), at),
+                    )
+
+            # --- facts: statistics (flatten name/value dicts) ---
+            for st in ev.get("statistics") or []:
+                if isinstance(st, dict):
+                    for k, v in st.items():
+                        conn.execute(
+                            "INSERT INTO statistics (run_id, event_id, skin, name, value, captured_at) "
+                            "VALUES (?,?,?,?,?,?)",
+                            (run_id, event_id, skin, str(k), str(v), at),
+                        )
         conn.commit()
         return run_id
     finally:
@@ -232,49 +429,48 @@ def persist_result(
 
 
 # --------------------------------------------------------------------------- #
-# Read helpers — the queries loose JSON couldn't answer
+# Read helpers
 # --------------------------------------------------------------------------- #
-def latest_odds(
-    conn: sqlite3.Connection, event_id: str, *, skin: Optional[str] = None,
-) -> List[sqlite3.Row]:
+def latest_odds(conn, event_id: str, *, skin: Optional[str] = None) -> List[sqlite3.Row]:
     """Most recent price per (skin, market, selection) for one event."""
     sql = (
-        "SELECT skin, market_name, selection_name, line, price, is_suspended, "
-        "       MAX(captured_at) AS captured_at "
-        "FROM odds_snapshots WHERE event_id = ? "
-        + ("AND skin = ? " if skin else "")
-        + "GROUP BY skin, market_name, selection_name, line "
-        "ORDER BY skin, market_name, selection_name"
+        "SELECT o.skin, m.name AS market_name, o.selection_name, o.line, o.price, "
+        "       o.is_suspended, MAX(o.captured_at) AS captured_at "
+        "FROM odds_snapshots o JOIN markets m ON m.market_id=o.market_id "
+        "WHERE o.event_id=? " + ("AND o.skin=? " if skin else "")
+        + "GROUP BY o.skin, m.name, o.selection_name, o.line "
+        "ORDER BY o.skin, m.name, o.selection_name"
     )
-    params = (event_id, skin) if skin else (event_id,)
-    return conn.execute(sql, params).fetchall()
+    return conn.execute(sql, (event_id, skin) if skin else (event_id,)).fetchall()
 
 
-def line_movement(
-    conn: sqlite3.Connection, event_id: str, skin: str,
-    market_name: str, selection_name: str,
-) -> List[sqlite3.Row]:
+def line_movement(conn, event_id, skin, market_name, selection_name) -> List[sqlite3.Row]:
     """Full price history for one selection — the line-movement series."""
     return conn.execute(
-        "SELECT captured_at, price, is_suspended FROM odds_snapshots "
-        "WHERE event_id=? AND skin=? AND market_name=? AND selection_name=? "
-        "ORDER BY captured_at",
+        "SELECT o.captured_at, o.price, o.is_suspended FROM odds_snapshots o "
+        "JOIN markets m ON m.market_id=o.market_id "
+        "WHERE o.event_id=? AND o.skin=? AND m.name=? AND o.selection_name=? "
+        "ORDER BY o.captured_at",
         (event_id, skin, market_name, selection_name),
     ).fetchall()
 
 
-def cross_skin_odds(
-    conn: sqlite3.Connection, event_id: str,
-    market_name: str, selection_name: str,
-) -> List[sqlite3.Row]:
-    """Latest price for one selection across every skin — the comparison query.
-
-    Returns the best (highest) price last, so the caller can pick the top line.
-    """
+def cross_skin_odds(conn, event_id, market_name, selection_name) -> List[sqlite3.Row]:
+    """Latest price for one selection across every skin — ascending, best last."""
     return conn.execute(
-        "SELECT skin, price, line, MAX(captured_at) AS captured_at "
-        "FROM odds_snapshots "
-        "WHERE event_id=? AND market_name=? AND selection_name=? "
-        "GROUP BY skin ORDER BY price",
+        "SELECT o.skin, o.price, o.line, MAX(o.captured_at) AS captured_at "
+        "FROM odds_snapshots o JOIN markets m ON m.market_id=o.market_id "
+        "WHERE o.event_id=? AND m.name=? AND o.selection_name=? "
+        "GROUP BY o.skin ORDER BY o.price",
         (event_id, market_name, selection_name),
     ).fetchall()
+
+
+def counts(conn) -> Dict[str, int]:
+    """Row counts per table — a quick health/coverage summary."""
+    tables = [
+        "sports", "countries", "leagues", "teams", "events", "markets",
+        "scrape_runs", "event_states", "period_scores", "odds_snapshots",
+        "h2h_games", "statistics",
+    ]
+    return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
