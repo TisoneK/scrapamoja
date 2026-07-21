@@ -346,18 +346,25 @@ class BetB2BScraper:
     ) -> List[Event]:
         """Fill odds into DOM event stubs via per-match ``GetGameZip?id=``.
 
-        DOM grids render event stubs (teams/league) but no odds; the per-match
-        ``GetGameZip`` returns the full nested ``E[]``/``AE[]`` markets and is not
-        SW-gated (RECON.md "SOLVED markets=0"). Best-effort and capped by
-        ``skin.max_odds_fetch`` (default 20) so a big list doesn't fan out to
-        hundreds of requests.
+        DOM grids render event stubs with at most the single main market the
+        grid shows ("To Win Match" / "1x2"); the per-match ``GetGameZip``
+        returns the full nested ``E[]``/``AE[]`` market tree (handicaps,
+        totals, double-chance, …) and is not SW-gated (RECON.md
+        "SOLVED markets=0"). Best-effort and capped by ``skin.max_odds_fetch``
+        (default 20) so a big list doesn't fan out to hundreds of requests.
+
+        A DOM event carries **exactly 0 or 1** market (the shallow grid stub),
+        so we enrich whenever the market tree is that shallow. Guarding on
+        ``e.markets`` (truthy) instead skips every event that has the 1-market
+        stub — the reason Session 24 fetched 0 GetGameZip despite 28 events.
         """
         limit = int(getattr(self.skin, "max_odds_fetch", 20) or 20)
         out: List[Event] = []
         fetched = 0
         for e in dom_events:
             eid = str(e.event_id)
-            if e.markets or not eid.isdigit() or fetched >= limit:
+            # Already has a deep tree, non-numeric id, or over budget → keep.
+            if len(e.markets) > 1 or not eid.isdigit() or fetched >= limit:
                 out.append(e)
                 continue
             try:
