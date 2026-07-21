@@ -22,6 +22,13 @@ Report: `reviews/2026-07-21-review-2.md`.
 events, 100% clean teams + scores, 8/10 with GetGameZip markets (133 total),
 76s. All fixes verified composing in the real pipeline.
 
-**Next agent:** pick up from `tasks/backlog.md` — remaining betb2b items are
-`G=NN` market-group name mapping (cosmetic) and cross-skin proxy validation.
+**Cross-skin validated (stronger proxy, port 38217):** live `list_live`
+confirmed on linebet (133 markets), melbet (89), helabet (114 — previously
+BLOCKED) — 10 events each, clean teams + scores + GetGameZip markets. 6/8
+skins reachable via proxy (megapari timeout, 888starz 203-blocked). Same
+event ids across skins = shared BetB2B backend.
+
+**Next agent:** remaining betb2b items in `tasks/backlog.md` — confirm 22bet/
+betwinner/paripesa `list_live`; integrated `list_prematch` run; `G=NN`
+market-group name mapping (cosmetic); `max_odds_fetch` cap/concurrency.
 Entry point is `python -m src.sites.betb2b.cli` (NOT `.cli.main`).

@@ -344,6 +344,15 @@ don't remove the line.
       per-skin `partner`/`gr` placeholders may need the real values (see the
       existing per-skin partner/gr backlog item). Run `validate_live --skin <x>`
       through the proxy for each. Medium.
+      **UPDATE 2026-07-21 (Session 25):** markets>0 confirmed live on 3 skins
+      via `cli scrape ... --action list_live`: linebet (133 markets/10 events),
+      **melbet** (89, real partner/gr 61/6), **helabet** (114 — and enrichment
+      worked DESPITE its placeholder partner/gr=1, so GetGameZip does NOT
+      strictly require exact per-skin partner/gr). All three returned the SAME
+      event ids (shared BetB2B backend). Remaining to confirm: 22bet,
+      betwinner, paripesa (reachable via proxy — see cross-skin item);
+      megapari (proxy timeout) + 888starz (203 /en/block) still unreachable.
+      The `max_odds_fetch` cap + concurrency follow-up (1) is still open.
 
 ---
 - [ ] **Run + confirm betb2b live e2e — all endpoints collect data** (added 2026-07-20 by Claude Code, Session 23) —
@@ -359,6 +368,14 @@ don't remove the line.
       odds-fetch cap + confirm markets across 8 skins" item. JSON output now
       supports `--compress` (gzip) + `betb2b view <file>` to read back — see
       `src/sites/betb2b/storage.py` + README "Saving & viewing output". HIGH.
+      **UPDATE 2026-07-21 (Session 25):** `list_live` confirmed collecting data
+      end-to-end on linebet + melbet + helabet (10 events each, clean teams +
+      scores + GetGameZip markets). The 2026-07-18 "0 events" was the
+      fixed-settle render extracting before the grid rendered (fixed `d173c6a`
+      grid-wait) — NOT a feed/extraction gap. Still open: `list_prematch`
+      integrated confirmation + `sports_short`/`top_champs` actions (the API
+      feeds those hit are still 406 per ADR-4; prematch DOM fallback validated
+      against captured HTML but not yet via the integrated CLI this session).
 
 ---
 - [x] **Rework live DOM selectors for in-play state (linebet)** (added 2026-07-21 by Super Z, Session 25 setup; **DONE 2026-07-21 Session 25**, commits `58f9a46`+`26b08d5`) —

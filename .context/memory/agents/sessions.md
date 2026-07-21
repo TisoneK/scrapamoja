@@ -417,3 +417,26 @@ past entries — append corrections instead.
   (tunnel flapping). Hardened: proxy verification now retries transient errors
   with backoff, fails fast only on a definitive country mismatch — new commit
   `7f59edc` (+4 tests). Total session product commits now 6; betb2b suite 79.
+
+### Session 25 addendum 2 (2026-07-21) — cross-skin validation (stronger network, port 38217)
+- Operator moved to a stronger network + new tunnel port. Ran cross-skin live
+  validation — the whole family pipeline generalizes beyond linebet:
+  - **Reachability (via proxy):** linebet, melbet, helabet(→helabetke.com),
+    22bet(→22bet.co.ke), betwinner(→betwinner.ke), paripesa = HTTP 200 (6/8).
+    megapari = timeout (000); 888starz = 203 /en/block. The 3 skins that
+    TIMED OUT from Kenya-direct in Session 24 (helabet/22bet/betwinner) now
+    load 200 through this proxy — they redirect to KE-specific domains.
+  - **Integrated `list_live` scrapes:** linebet 133 markets/10 events,
+    **melbet** 89 markets/10 (real partner/gr 61/6), **helabet** 114
+    markets/10 (previously BLOCKED; placeholder partner/gr=1 — yet GetGameZip
+    enrichment still worked, so it does NOT strictly require exact per-skin
+    partner/gr). All three: 10/10 clean teams + scores, `proxy OK (attempt 1)`,
+    `10 GetGameZip fetched`. All returned the SAME event ids (Phoenix
+    738047045, …) — proof of the shared BetB2B backend / family thesis.
+  - Finding: KE-redirect skins (helabet→helabetke.com) render + DOM-extract
+    fine (browser follows the redirect), but their `feed`/`GetGameZip` URLs
+    are built from `skin.base_url` (helabet.com). helabet enrichment worked
+    anyway; if a future skin's GetGameZip needs the redirected host, set the
+    skin `domain` to the KE domain. Logged in backlog.
+- No code changes this addendum — validation only. Backlog items "confirm
+  markets across 8 skins" + "run + confirm live e2e" updated with results.
