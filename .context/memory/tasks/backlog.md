@@ -359,3 +359,55 @@ don't remove the line.
       odds-fetch cap + confirm markets across 8 skins" item. JSON output now
       supports `--compress` (gzip) + `betb2b view <file>` to read back — see
       `src/sites/betb2b/storage.py` + README "Saving & viewing output". HIGH.
+
+---
+- [ ] **Rework live DOM selectors for in-play state (linebet)** (added 2026-07-21 by Super Z, Session 25 setup) —
+      Session 24 confirmed prematch DOM extraction works (28 events, 100%
+      teams/competition/market, 50% H2H), but live DOM extraction is broken:
+      70 events returned with garbled team names (duplicate/truncated
+      `"Ajax  Olympiacus Piraeus  0000-Ajax  Olympiacus Piraeus  0000"`),
+      0 markets, 0 scores. The in-play page renders through a different Vue
+      subtree than the prematch `dashboard-champ` grid; the selectors in
+      `src/sites/betb2b/sports/base.py::DOMSelectors` don't match.
+      Concrete plan:
+        1. Capture `/en/live/basketball` HTML via `tools/analyze_match_html.py`
+           or a fresh probe; enumerate actual live class names for game row,
+           team names, scores, odds cells.
+        2. Extend `DOMSelectors` with `live_*` family OR a separate
+           `LiveDOMSelectors`; branch `_build_page_script()` in
+           `extraction/dom.py` on `is_live`.
+        3. Tighten `_is_plausible_team_name()` (dom.py:67) — the 80-char cap
+           let the duplicated string through; add a duplication detector.
+        4. Add a unit test under `src/sites/betb2b/tests/` with a captured
+           live HTML fixture.
+      HIGH — operator-blocker; without live coverage the scraper is
+      prematch-only. See `tasks/current.md` Session 25 Phase 1.
+
+---
+- [ ] **Wire `GetGameZip` market enrichment into DOM-extracted events** (added 2026-07-21 by Super Z, Session 25 setup) —
+      Session 24 found DOM extraction yields only 1 market per event (the
+      main "To Win Match" / "1x2" — that's all the grid renders).
+      `GetGameZip` enrichment is NOT running for DOM events (0 fetched in
+      Session 24). `Get1x2_VZip` still 406 per ADR-4. But `GetGameZip`
+      reliably returns ~24 KB with the full `E[]/AE[]` market tree
+      (handicaps, totals, BTTS, etc.) — confirmed Session 19/20. The
+      numeric event id is already captured by `dom.py:189-195` from the
+      match link `href`.
+      Concrete plan:
+        1. Mirror `_enrich_with_h2h()` (Session 21) — add
+           `_enrich_with_markets()` in `scraper.py`: iterate DOM events,
+           poll `/service-api/{Line,Live}Feed/GetGameZip?id=<eventId>` via
+           direct `httpx` with harvested cookies, parse via
+           `rules._extract_markets()`, replace shallow DOM market with full
+           tree.
+        2. Cap & rate-limit via `skin.max_odds_fetch` (default 20) +
+           bounded `asyncio.gather` with semaphore.
+        3. 406 / non-2xx → silent fallback to DOM market + warning log.
+           Do NOT chase auth-header contract (ADR-4).
+        4. Add `"markets_enrich": True` to default `features` dict in
+           `config.py`.
+        5. Unit test with captured `GetGameZip` fixture; assert ≥ 5 markets
+           per basketball prematch event.
+      HIGH — operator-blocker; without market depth the scraper cannot
+      feed the downstream odds-comparison use case. See
+      `tasks/current.md` Session 25 Phase 2.

@@ -373,3 +373,19 @@ past entries — append corrections instead.
 - **Outcome:** done — major discovery: **direct mode works from Kenya** for linebet (no proxy needed — all `allowed_countries: ["KE"]` skins accessible directly). Fixed CLI argparse `%` formatting bug that blocked all commands. Ran prematch scrape — 28 events with 100% team/competition/market coverage (1 market/event "To Win Match"), 50% H2H coverage (14/28 with 26 historical matches each). Live DOM extraction poor — 70 events with garbled names, 0 markets, 0 scores. Cross-skin: helabet/22bet/betwinner timed out or had 0 events from Kenya.
 - **Open items:** live DOM selector rework; GetGameZip/wider market depth; statistics/timeline enrichment (needs NBA match); cross-skin proxy validation.
 - **Report:** .context/memory/reviews/2026-07-21-review.md
+
+---
+## 2026-07-21 - Session 25 setup (betb2b kickoff for HIGH-priority gaps)
+- **Agent:** Super Z | **Model:** GLM | **Platform:** Z.ai cloud sandbox (Linux x86_64) | **Role:** engineer | **Core:** 0.2.0
+- **Task:** User: "Understand .context E2E then initialize AGENTS.md or kickoff.md. Target: betb2b." Session 24 complete - initialize the next session's kickoff handoff for the two HIGH-priority gaps (Live DOM selectors + Market depth).
+- **Commits:** 0 product (handoff only); 1 .context/ commit pending push.
+- **Outcome:** setup-only session - no product code touched.
+  - Read the full .context/ E2E chain: kickoff.md, then README.md, then core/templates/kickoff.md, then memory/workflows/active.md, then memory/agents/sessions.md (last 5 entries), then memory/tasks/current.md + backlog.md, then memory/reviews/2026-07-21-review.md, then memory/user/identity.md, then AGENTS.md, then relevant product code (extraction/dom.py, sports/base.py, cli/main.py).
+  - Confirmed kickoff.md already correctly populated at bootstrap (Project Facts all current); not regenerated - no drift detected.
+  - Confirmed AGENTS.md already documents Session 24 direct-mode discovery (rules #13/#14); refreshed two stale hardcoded proxy-port examples (bore.pub:37582 and bore.pub:55068) to a port-rotates placeholder pattern + added a Session 24 status paragraph under the live-validation block.
+  - Wrote the Session 25 kickoff to memory/tasks/current.md - four-phase plan (Live DOM selectors, then GetGameZip market enrichment, then optional statistics/timeline, then cross-skin proxy test), with concrete file/line entry points, definition-of-done per phase, and an exit checklist.
+  - Appended two HIGH-priority items to memory/tasks/backlog.md: (1) live DOM selector rework for in-play state, (2) wire GetGameZip market enrichment into DOM-extracted events. Each is self-contained enough for a fresh agent to act on without chat history.
+  - Did NOT touch product code - Phases 1-4 are Session 25's job. Did NOT run context-sync verify (sandbox cannot reach the package upstream); noted here per protocol never-fatal-over-sync rule.
+- **Open items:** Session 25 picks up at memory/tasks/current.md Phase 1. Proxy (bore.pub:50670) + PAT credentials for that session are pointer-referenced in current.md (never written into tracked product code or YAML).
+- **Report:** this log entry IS the setup report - no separate review file (no product work to review).
+
