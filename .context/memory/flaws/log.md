@@ -79,3 +79,56 @@ Friction caused by the `.context/` system or the protocol itself. See
 `Get-FileHash -Algorithm SHA256` exists but is never called), and no documentation of the gap. The script's own header says "POSIX sh; runs on macOS and Linux."
 - **Suggested fix:** Add a Windows shim in `context-sync` (or a sibling `.ps1`) that detects `$env:OS` and uses `Get-FileHash` for integrity verification. At minimum, document the gap and provide an override in `overrides/rules.md`.
 - **Status:** open
+
+---
+## 2026-07-21 - Super Z / GLM (cloud sandbox) - Session 25 setup cont. (refines Session 12 entry)
+
+- **Flaw:** Refines the 2026-07-18 Session 12 entry. Session 12 found that
+  batching Bash steps into one shell script finishes the job when a Bash
+  window briefly opens, but did NOT capture the more specific failure mode
+  and workaround that recurred in Session 25 setup: Bash heredocs and
+  shell-quoting of multi-line commit messages silently fail when the
+  command string contains `<`, `>`, `&`, backticks, or `"`. The 403 outage
+  itself also does not respect session boundaries - it recurred across 3
+  separate user-initiated restarts in this session alone.
+- **Symptom:** Two distinct failure shapes during Session 25 setup:
+  (1) `cat >> file <<'EOF' ... EOF` heredocs to append the sessions.md
+  entry failed with `tool call failed: Bash` even when a bare `echo ok`
+  succeeded moments before - because the heredoc body contained `<email>`
+  and `TisoneK:Taalib01@bore.pub:50670` (the `:` / `@` are fine, but the
+  surrounding `403 Forbidden` from the tool router was triggered
+  inconsistently).
+  (2) The 403 outage hit right before the `git commit + push` step on
+  the first attempt, then again mid-commit on the second attempt - same
+  pattern as Session 12, "outage always clusters around the outward
+  action."
+- **Root cause:** Two compounding issues:
+  (a) The Bash tool's JSON-args -> shell-string path is fragile for
+  multi-line content with shell metacharacters; the failure mode is
+  indistinguishable from the 403 router outage.
+  (b) Session 12's workaround ("batch into ONE shell script") was
+  under-specified - it did not say to write the script via the `Write`
+  tool (which has no shell-quoting issues) and to use Python's
+  `subprocess.run(cmd_list)` (no shell at all) instead of a bash script.
+- **Suggested fix (concretely, for the next agent + for the package):**
+  1. When Bash is flaky OR the command contains multi-line strings,
+  shell metacharacters, or credentials: write a Python script to
+  /home/z/my-project/scripts/<name>.py via the `Write` tool, then
+  execute it with `python3 /path/to/script.py` in a single Bash call.
+  Python's `subprocess.run(list_of_args)` never touches a shell, so
+  quoting is a non-issue.
+  2. Make every such script IDEMPOTENT (check a marker string before
+  appending; check `git diff --cached --quiet` before committing). This
+  means a restart mid-script is safe - re-running picks up where it
+  left off.
+  3. For git commits specifically, pass the message as a list element
+  to `subprocess.run(["git", "commit", "-m", msg])` - never as a
+  shell-quoted string. The whole two-surface commit + push + PAT-strip
+  sequence in Session 25 setup was done this way and succeeded on the
+  first clean Bash window.
+  4. Package-level: add a "tool-flakiness playbook" section to the
+  protocol (or to `core/roles/`) that codifies the
+  Write-script-then-execute pattern. Session 12 hinted at it; Session
+  25 proved it. It should not require re-discovery.
+- **Status:** open (workaround proven; package-level codification pending)
+
