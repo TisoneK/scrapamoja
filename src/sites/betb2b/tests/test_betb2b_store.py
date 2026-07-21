@@ -257,3 +257,27 @@ def test_state_change_stores_a_new_row(db, tmp_path):
                            at="2026-07-21T12:00:05+00:00"), tmp_path / "odds.db", conn=db)
     assert db.execute("SELECT COUNT(*) FROM event_states").fetchone()[0] == 2  # score changed
     assert db.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0] == 2  # odds didn't
+
+
+def test_h2h_period_scores_captured_for_scoped_ingestion(db, tmp_path):
+    # A played H2H game with a per-quarter breakdown (ADR-7: scoped ingestion).
+    r = _rich_result()
+    r["events"][0]["h2h_data"]["game_shorts"][0].update({
+        "score1": 107, "score2": 122,
+        "periods": [
+            {"period_key": 18, "period_name": "1st quarter", "home_score": 33, "away_score": 31},
+            {"period_key": 19, "period_name": "2nd quarter", "home_score": 24, "away_score": 33},
+            {"period_key": 20, "period_name": "3rd quarter", "home_score": 28, "away_score": 23},
+            {"period_key": 21, "period_name": "4th quarter", "home_score": 22, "away_score": 35},
+        ],
+    })
+    persist_result(r, tmp_path / "odds.db", conn=db)
+    assert counts(db)["h2h_period_scores"] == 4
+    rows = db.execute(
+        "SELECT period_name, home_score, away_score FROM h2h_period_scores ORDER BY period_key"
+    ).fetchall()
+    assert rows[0]["period_name"] == "1st quarter"
+    assert (rows[0]["home_score"], rows[0]["away_score"]) == (33, 31)
+    # FIRST_HALF H2H = Q1 + Q2 (what QUARTER/HALF-scope ingestion derives).
+    fh_home = rows[0]["home_score"] + rows[1]["home_score"]
+    assert fh_home == 57

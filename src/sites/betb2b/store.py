@@ -166,9 +166,25 @@ CREATE TABLE IF NOT EXISTS h2h_games (
     date_start         TEXT,
     score1             INTEGER,
     score2             INTEGER,
+    sub_score1         INTEGER,
+    sub_score2         INTEGER,
     winner             INTEGER,
     status             INTEGER,
     captured_at        TEXT NOT NULL
+);
+
+-- Per-quarter breakdown of a historical H2H game — the raw material for
+-- scoped ingestion (QUARTER_n / FIRST_HALF / SECOND_HALF H2H scores). The
+-- feed's game_shorts[].periods[] carries this; the pipeline needs H2H scores
+-- that match the prediction scope (ADR-7).
+CREATE TABLE IF NOT EXISTS h2h_period_scores (
+    id           INTEGER PRIMARY KEY,
+    h2h_game_id  INTEGER NOT NULL REFERENCES h2h_games(id),
+    event_id     TEXT,
+    period_key   INTEGER,
+    period_name  TEXT,
+    home_score   INTEGER,
+    away_score   INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS statistics (
@@ -456,16 +472,28 @@ def persist_result(
                         country_id=_get_or_create_country(conn, tc.get("title")),
                     )
                 for g in h2h.get("game_shorts") or []:
-                    conn.execute(
+                    h2h_game_id = int(conn.execute(
                         "INSERT INTO h2h_games "
                         "(run_id, event_id, skin, game_id, sport_id, team1_backend_id, "
-                        " team2_backend_id, date_start, score1, score2, winner, status, captured_at) "
-                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        " team2_backend_id, date_start, score1, score2, sub_score1, "
+                        " sub_score2, winner, status, captured_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (run_id, event_id, skin, g.get("game_id"), _as_int(h2h.get("sport_id")),
                          g.get("team1_id"), g.get("team2_id"), g.get("date_start"),
                          _as_int(g.get("score1")), _as_int(g.get("score2")),
+                         _as_int(g.get("sub_score1")), _as_int(g.get("sub_score2")),
                          _as_int(g.get("winner")), _as_int(g.get("status")), at),
-                    )
+                    ).lastrowid)
+                    # Per-quarter H2H breakdown → scoped ingestion (ADR-7).
+                    for ps in g.get("periods") or []:
+                        conn.execute(
+                            "INSERT INTO h2h_period_scores "
+                            "(h2h_game_id, event_id, period_key, period_name, home_score, away_score) "
+                            "VALUES (?,?,?,?,?,?)",
+                            (h2h_game_id, event_id, _as_int(ps.get("period_key")),
+                             ps.get("period_name"), _as_int(ps.get("home_score")),
+                             _as_int(ps.get("away_score"))),
+                        )
 
             # --- facts: statistics (flatten name/value dicts) ---
             for st in ev.get("statistics") or []:
@@ -530,6 +558,6 @@ def counts(conn) -> Dict[str, int]:
     tables = [
         "sports", "countries", "leagues", "teams", "events", "markets",
         "scrape_runs", "event_states", "period_scores", "odds_snapshots",
-        "h2h_games", "statistics",
+        "h2h_games", "h2h_period_scores", "statistics",
     ]
     return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
