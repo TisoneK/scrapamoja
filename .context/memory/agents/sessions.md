@@ -492,3 +492,18 @@ past entries — append corrections instead.
   grammar. Unifying the grammar across sites is a separate (bigger) decision,
   still open in the "unify + smoke-test the per-site CLI entry points" backlog
   item (parts a + c).
+
+### Session 25 addendum 6 (2026-07-21) — odds data gets a real store
+- User: "how is data stored" → mapped it: scraped events/odds had NO structured
+  home — both scrapers dump loose JSON (betb2b `storage.py` gzip-JSON,
+  flashscore `OutputFormatter`); the SQLite DBs (`adaptive.db`/`audit_log.db`)
+  are the Selector Engine subsystem, not sports data.
+- Built `src/sites/betb2b/store.py` (`961f569`, ADR-6): a SQLite time-series
+  odds store — scrape_runs / events (UPSERT dedup) / event_states / odds_snapshots.
+  Opt-in `--db [PATH]` on the scrape CLI; JSON output unchanged. Read helpers:
+  latest_odds, line_movement, cross_skin_odds. +7 tests (betb2b suite → 90).
+- Validated on REAL Session-25 captures: persisted 5 skins → 16 deduped events,
+  5505 odds snapshots; cross_skin_odds for Phoenix (738047045) Asian-Handicap
+  W1(+10.5) returned betwinner=1.26 helabet=1.265 paripesa=1.33 melbet=1.62
+  linebet=2.22 — a real 5-bookmaker odds comparison, exactly the downstream
+  product. Follow-ups (dedup/retention/flashscore/Postgres) backlogged.

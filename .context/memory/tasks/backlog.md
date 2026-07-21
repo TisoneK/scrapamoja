@@ -526,3 +526,21 @@ don't remove the line.
       test; (c) standardize every `cli/__main__.py`;
       (c) consider standardizing every `cli/__main__.py` on create_parser →
       parse_args → run(args). MED — devex + prevents silent breakage.
+
+---
+- [ ] **Grow the betb2b odds store: dedup, retention, flashscore, Postgres** (added 2026-07-21 by Claude Code, Session 25) —
+      `src/sites/betb2b/store.py` (SQLite, opt-in `--db`) shipped Session 25
+      (`961f569`, ADR-6). Follow-ups: (1) **odds dedup** — only INSERT an
+      `odds_snapshots` row when a selection's price actually changed since its
+      last snapshot (a live poll every few seconds otherwise writes thousands
+      of identical rows); keep the time-series but drop no-op duplicates.
+      (2) **retention/rollup** — a policy to prune or downsample old snapshots.
+      (3) **flashscore + other sites** — map their models onto the same schema
+      (or lift store.py into a shared `src/storage/odds/`) so one store holds
+      all sites. (4) **Postgres backend** — the schema is already
+      TEXT/INTEGER/REAL + ISO timestamps (portable); add a connection
+      abstraction when file-SQLite stops scaling. (5) a small `betb2b odds`
+      CLI subcommand wrapping `latest_odds`/`cross_skin_odds`/`line_movement`
+      for operators. (6) a scheduled/loop poller that persists on an interval
+      so line-movement history actually accumulates. MED — this is the
+      "data processing" layer the odds-comparison product needs.
