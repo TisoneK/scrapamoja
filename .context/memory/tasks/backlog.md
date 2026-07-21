@@ -361,7 +361,19 @@ don't remove the line.
       `src/sites/betb2b/storage.py` + README "Saving & viewing output". HIGH.
 
 ---
-- [ ] **Rework live DOM selectors for in-play state (linebet)** (added 2026-07-21 by Super Z, Session 25 setup) —
+- [x] **Rework live DOM selectors for in-play state (linebet)** (added 2026-07-21 by Super Z, Session 25 setup; **DONE 2026-07-21 Session 25**, commits `58f9a46`+`26b08d5`) —
+      Root cause differed from the handoff: on a fresh live capture (via Kenya
+      proxy) the current `dashboard-champ`/`dashboard-game-block__team`
+      selectors already extract 10 clean events with numeric IDs — the Session
+      24 garble was a loading-state snapshot, not a wrong subtree. The real
+      gaps were (a) **scores** — live totals live in
+      `.ui-game-scores__item--total .ui-game-scores__num` (two adjacent spans),
+      which the old score selectors missed; fixed by adding that selector +
+      teaching `_score_pair` to parse the "46 57" whitespace pair; and (b) the
+      garbled-name guard, hardened (reject `0000` anywhere + duplication
+      detector). Verified: 10 live events, 100% clean teams + IDs + scores.
+      Original entry below.
+- [ ] ~~**Rework live DOM selectors for in-play state (linebet)**~~ (superseded by the checked item above) —
       Session 24 confirmed prematch DOM extraction works (28 events, 100%
       teams/competition/market, 50% H2H), but live DOM extraction is broken:
       70 events returned with garbled team names (duplicate/truncated
@@ -384,7 +396,18 @@ don't remove the line.
       prematch-only. See `tasks/current.md` Session 25 Phase 1.
 
 ---
-- [ ] **Wire `GetGameZip` market enrichment into DOM-extracted events** (added 2026-07-21 by Super Z, Session 25 setup) —
+- [x] **Wire `GetGameZip` market enrichment into DOM-extracted events** (added 2026-07-21 by Super Z, Session 25 setup; **DONE 2026-07-21 Session 25**, commit `99be8ac`) —
+      Correction to the handoff: the enrichment was NOT missing — it already
+      existed as `scraper._enrich_dom_events_with_odds` (wired into `scrape()`,
+      default-on via `skin.enrich_dom_with_odds`). It fetched 0 in Session 24
+      because of a skip-condition bug: the guard `if e.markets: skip` skipped
+      every DOM event, since the DOM extractor always attaches a shallow
+      1-market stub. Fixed to skip only already-deep events (`len(markets) >
+      1`). Verified against real captures: 1 stub → 10 markets (prematch);
+      live IDs → 40/9/7 markets via `LiveFeed/GetGameZip`. (Did not add a
+      parallel `features["markets_enrich"]` flag — kept the existing
+      `enrich_dom_with_odds` getattr-default pattern.) Original entry below.
+- [ ] ~~**Wire `GetGameZip` market enrichment into DOM-extracted events**~~ (superseded by the checked item above) —
       Session 24 found DOM extraction yields only 1 market per event (the
       main "To Win Match" / "1x2" — that's all the grid renders).
       `GetGameZip` enrichment is NOT running for DOM events (0 fetched in
@@ -411,3 +434,25 @@ don't remove the line.
       HIGH — operator-blocker; without market depth the scraper cannot
       feed the downstream odds-comparison use case. See
       `tasks/current.md` Session 25 Phase 2.
+
+---
+- [ ] **Confirm integrated live `scrape` end-to-end through the proxy** (added 2026-07-21 by Claude Code, Session 25) —
+      Session 25 validated every stage of the live pipeline independently
+      against real data (DOM extraction, score parse, GetGameZip enrichment)
+      and fixed a fragile fixed-settle render (`d173c6a` — now waits for the
+      game grid). But the *integrated* `scrape(list_live)` run through the
+      Kenya bore proxy was NOT confirmed green — the tunnel (`bore.pub:50670`)
+      dropped (HTTP 000) before the grid-wait fix could be re-run. When the
+      proxy is up: `export BETB2B_PROXY_URL=http://bore.pub:<port>
+      BETB2B_PROXY_USER=TisoneK BETB2B_PROXY_PASS=<pass> BETB2B_PROXY_COUNTRY=KE
+      BETB2B_PROXY_ID=kenya` then `python -m src.sites.betb2b.cli scrape --skin
+      linebet --sport basketball --action list_live --count 30 -o out.json`.
+      Expect ≥1 live event with clean teams + score + ≥1 market. NOTE the
+      entry point is `python -m src.sites.betb2b.cli` (NOT `.cli.main` — that
+      has no `__main__` guard and silently no-ops). MED.
+- [ ] **Map remaining GetGameZip market-group ids to names** (added 2026-07-21 by Claude Code, Session 25) —
+      A few markets from `GetGameZip` extract with placeholder names like
+      `G=14`, `G=91`, `G=92` (unmapped group id → display name) — odds/lines
+      are still captured correctly, only the market label is generic. Extend
+      the `G`(group)→name lookup (basketball) in
+      `src/sites/betb2b/markets.py` / sport overrides. Cosmetic. LOW.

@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Claude Code | claude-opus-4-8 | 2026-07-12 | 2026-07-20 | 4 |
+| Claude Code | claude-opus-4-8 | 2026-07-12 | 2026-07-21 | 5 |
 | Claude Code | claude-fable-5 | 2026-07-12 | 2026-07-12 | 1 |
 | Super Z | unknown | 2026-07-14 | 2026-07-14 | 1 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-19 | 2026-07-20 | 2 |
@@ -31,3 +31,4 @@ Update in place when a newer session contradicts an old observation.
 - **GitHub Copilot / DeepSeek V4 Flash Free:** Cross-skin H2H investigation completed (5/8 skins working). Found and fixed paripesa wrong domain (`paripesa.bet` → `paripesa.cool`). The agent needed 2 user corrections for protocol compliance (mid-session protocol re-read caused loss of task context). (2026-07-19)
 - **GitHub Copilot / DeepSeek V4 Flash Free:** Implemented `PeriodScore` extraction from `SC.PS[]` in GetGameZip API responses — added `PeriodScore` dataclass, `_extract_period_scores()` in `rules.py`, wired into `_build_event()`. 29 tests pass. Agent needed correction to update `.context/memory/` files (was updating AGENTS.md instead). (2026-07-20)
 - **Claude Code / claude-opus-4-8:** Session 23 — shipped betb2b gzip storage (`storage.py` + `view` CLI + `--compress`). Correctly diagnosed the live-e2e blocker up front via a TCP probe to the proxy tunnel (bore.pub:1074, refused) rather than blindly running a scrape that would silently WAF-block; did the offline-verifiable slice + the compression feature instead. (2026-07-20)
+- **Claude Code / claude-opus-4-8:** Session 25 — closed both betb2b HIGH gaps by root-causing rather than rebuilding: the "missing" GetGameZip enrichment was a one-line skip-condition bug, and the "broken" live DOM only needed a score selector + guard hardening (garble didn't reproduce). Validated every fix against real linebet data captured in a single early proxy window, so later code work survived the tunnel dropping. Discovered `GetGameZip` returns 200 direct from a WAF-blocked datacenter IP while the SPA + list feeds don't. (2026-07-21)

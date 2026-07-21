@@ -389,3 +389,18 @@ past entries — append corrections instead.
 - **Open items:** Session 25 picks up at memory/tasks/current.md Phase 1. Proxy (bore.pub:50670) + PAT credentials for that session are pointer-referenced in current.md (never written into tracked product code or YAML).
 - **Report:** this log entry IS the setup report - no separate review file (no product work to review).
 
+
+---
+## 2026-07-21 — Session 25 (betb2b: live DOM + market depth — the two HIGH gaps)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS 15.7.7) | **Role:** engineer | **Core:** 0.3.0
+- **Task:** Target=betb2b. Close the two Session-24 HIGH gaps: live DOM extraction (garbled names/0 scores) + market depth (1 market/event).
+- **Commits:** 5 product/context (`409aae0` core-update, `99be8ac`, `58f9a46`, `26b08d5`, `d173c6a`) + this bookkeeping.
+- **Outcome:** done — both gaps fixed and validated against real linebet data (captured via the Kenya bore proxy while up).
+  - **Core** 0.2.0 → 0.3.0 (harvest release; additive, no migration) `409aae0`.
+  - **F1 market depth** `99be8ac` — root cause was a skip-condition bug, not a missing feature: `_enrich_dom_events_with_odds` guarded `if e.markets` and the DOM extractor always attaches a shallow 1-market stub, so every event was skipped (0 GetGameZip in Session 24). Fixed to skip only deep events (`len>1`). Real capture: 1 stub → 10 markets; live ids → 40/9/7. +6 tests + real GetGameZip fixture.
+  - **F2 name guard** `58f9a46` — the garble didn't reproduce on a fresh capture, but hardened `_is_plausible_team_name` (reject `0000` anywhere + duplication detector). +20 tests.
+  - **F3 live scores** `26b08d5` — live totals live in `.ui-game-scores__item--total .ui-game-scores__num`; added the selector + taught `_score_pair` the "46 57" pair. Verified 10 live events, 100% scores.
+  - **F4 render** `d173c6a` — replaced fragile fixed-settle with an active `wait_for_selector` on the game grid (`grid_wait_ms`); found via an integrated run that got 0 rows through the slow proxy.
+  - Full betb2b suite green: 75 tests (+26). Key discovery: `GetGameZip` returns 200 direct from this WAF-blocked Mac; SPA + list feeds don't (SPA loads via proxy; list feeds 406 everywhere = auth rotation, not geo). ADR-5 records the GetGameZip market path.
+- **Open items:** confirm the *integrated* live `scrape` end-to-end when the proxy is back (bore dropped mid-session); map remaining `G=NN` market-group ids; cross-skin proxy validation. See `tasks/backlog.md`.
+- **Report:** `.context/memory/reviews/2026-07-21-review-2.md`

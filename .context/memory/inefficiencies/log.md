@@ -176,3 +176,17 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** No test exercises the CLI entry point. The `%` literal needs `%%` in argparse help strings — a known Python pitfall.
 - **Workaround / fix:** Changed to `"~85-90%%"`. All CLI commands now work.
 - **Prevent next time:** Add a CLI smoke test that calls `parser.parse_args(["--help"])` or similar for each subcommand. Better yet, add a single integration test that runs `python -m src.sites.betb2b.cli.main --help` and verifies exit code 0.
+
+---
+## 2026-07-21 — Claude Code / claude-opus-4-8 (Session 25 — betb2b live DOM + markets)
+- **Problem 1 — wrong CLI entry point in the handoff (silent no-op).** Both `tasks/current.md` (Session 25 setup) and the Session 24 inefficiency "prevent next time" recommend `python -m src.sites.betb2b.cli.main`. But `cli/main.py` has NO `if __name__ == "__main__"` guard — running it as a module executes nothing and exits 0 with zero output. The real entry point is `python -m src.sites.betb2b.cli` (the package `__main__.py`). Ran the "correct-looking" command 3× getting empty output + exit 0 before checking for `__main__`.
+- **Cost:** ~10 min chasing "why does the CLI print nothing?" across three invocations + reading argparse/dispatch/footer.
+- **Cause:** A wrong invocation got written into project memory (current.md + an inefficiency's prevent-next-time) and propagated. `.cli.main` *looks* right (it's where `BetB2BCLI` lives) but isn't runnable as `-m`.
+- **Workaround / fix:** Use `python -m src.sites.betb2b.cli`. Corrected the command in `tasks/current.md` + backlog. Left a NOTE in the new backlog items.
+- **Prevent next time:** When a `-m` module invocation exits 0 with NO output, suspect a missing `__main__` guard — check `python -c "import runpy"`-style or just `grep __main__`. And: a console-script entry in `pyproject.toml` would remove the ambiguity entirely (backlog candidate).
+- **Problem 2 — handoff over-scoped the GetGameZip work.** `current.md` Phase 2 said enrichment "is NOT running... add `_enrich_with_markets()` mirroring `_enrich_with_h2h()`." It already existed (`_enrich_dom_events_with_odds`, wired + default-on) — the real issue was a one-line skip-condition bug. Reading the code (Phase 1) surfaced this quickly, so low cost, but the plan would have had me build a duplicate method.
+- **Cost:** ~0 (caught during mandatory code-read) — noted so future handoffs verify "missing feature" claims against the code before scoping a rebuild.
+- **Prevent next time:** A handoff claiming a feature is missing should cite the grep that proves absence; "0 fetched" is a symptom, not proof the code path doesn't exist.
+- **Problem 3 — bore proxy dropped mid-session.** `bore.pub:50670` was up for the captures + GetGameZip fetches, then dropped to HTTP 000 and did not recover, blocking the *integrated* end-to-end run. Consistent with the standing "tunnels rotate" warning.
+- **Cost:** ~5 min of retries; the integrated confirmation is now backlogged.
+- **Prevent next time:** Capture all live artifacts you'll need (HTML + a few real GetGameZip responses) in ONE proxy window early, so later code validation doesn't depend on the tunnel staying up. (Did this — every fix was validated from the early captures.)
