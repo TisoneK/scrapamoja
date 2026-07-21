@@ -507,3 +507,16 @@ past entries — append corrections instead.
   W1(+10.5) returned betwinner=1.26 helabet=1.265 paripesa=1.33 melbet=1.62
   linebet=2.22 — a real 5-bookmaker odds comparison, exactly the downstream
   product. Follow-ups (dedup/retention/flashscore/Postgres) backlogged.
+
+### Session 25 addendum 7 (2026-07-21) — friendly betb2b scrape grammar
+- User pushed back on the verbose `--skin X --action list_live` form. Added the
+  easy positional grammar (`ef163e8`): `betb2b scrape linebet live` /
+  `scrape linebet scheduled` / `scrape linebet all` / `scrape live` /
+  `scrape` (all defaults) — betting vocabulary, sport still optional. The
+  `--skin`/`--action` flags keep working (non-breaking), and `--action` now
+  accepts the friendly words too. Reconciliation is a pure, tested helper
+  (`_reconcile_scrape_target`). +13 tests, betb2b suite → 114. Verified e2e via
+  `python -m src.main betb2b scrape linebet scheduled`.
+- This delivers the per-site "friendly grammar" for betb2b specifically. The
+  cross-site grammar-unification (make flashscore/wikipedia/etc. speak one
+  grammar) is still the open backlog item; this is betb2b's local version.
