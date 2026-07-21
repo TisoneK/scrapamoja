@@ -1,5 +1,8 @@
 # Idle — no session in progress
 
-Last session (23, 2026-07-20) shipped betb2b gzip storage + `view` CLI and
-verified the offline slice. Live e2e is blocked on the operator's Kenya proxy
-tunnel — see `tasks/backlog.md` "Run + confirm betb2b live e2e".
+Last session (24, 2026-07-21) completed betb2b E2E validation for linebet from
+Kenya in direct mode (no proxy needed — confirmed working). Prematch DOM
+extraction works well (28 events, 100% teams/competition, 1 market each, 50%
+H2H). Live DOM extraction produces garbled data (70 events, 0 markets, 0
+scores). Fixed argparse `%` formatting bug blocking all CLI commands. See
+`reviews/2026-07-21-review.md` for full report.

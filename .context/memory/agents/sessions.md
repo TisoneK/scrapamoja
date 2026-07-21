@@ -364,3 +364,12 @@ past entries — append corrections instead.
 - **Outcome:** partial — shipped `feat(betb2b)` gzip storage (`storage.py`: dump_json/load_json/compress_file/decompress_file) + `scrape --compress`, `validate_live --compress`, new `view` CLI subcommand, README, 9 tests. Verified offline: 43 betb2b tests pass, CLI JSON output OK, compression 97.9% on a synthetic full card. LIVE e2e BLOCKED: Kenya proxy tunnel (bore.pub:1074) down (conn refused) — all feeds are geo/WAF-gated. Last live run (07-18) also extracted 0 events from the list feeds.
 - **Open items:** live e2e / all-endpoints confirmation (blocked on proxy); list_live/list_prematch 0-event diagnosis; pre-existing ruff typing debt in cli/main.py + validate_live.py.
 - **Report:** .context/memory/reviews/2026-07-20-review-2.md
+
+---
+## 2026-07-21 — Session 24 (betb2b E2E validation — direct mode discovery)
+- **Agent:** GitHub Copilot | **Model:** DeepSeek V4 Flash Free | **Platform:** Windows 11 (TisoneK local) | **Role:** engineer | **Core:** 0.2.0
+- **Task:** Target=betb2b. Get linebet scraper running E2E — validate all data endpoints, assess data quality, scale to 3-5 matches.
+- **Commits:** 1 fix (`5741040`) + `.context` bookkeeping (pending push)
+- **Outcome:** done — major discovery: **direct mode works from Kenya** for linebet (no proxy needed — all `allowed_countries: ["KE"]` skins accessible directly). Fixed CLI argparse `%` formatting bug that blocked all commands. Ran prematch scrape — 28 events with 100% team/competition/market coverage (1 market/event "To Win Match"), 50% H2H coverage (14/28 with 26 historical matches each). Live DOM extraction poor — 70 events with garbled names, 0 markets, 0 scores. Cross-skin: helabet/22bet/betwinner timed out or had 0 events from Kenya.
+- **Open items:** live DOM selector rework; GetGameZip/wider market depth; statistics/timeline enrichment (needs NBA match); cross-skin proxy validation.
+- **Report:** .context/memory/reviews/2026-07-21-review.md
