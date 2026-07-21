@@ -596,3 +596,14 @@ past entries — append corrections instead.
   738083173) returned the AH ladder per skin — e.g. W1(-3.5) linebet=1.575
   vs melbet=1.91 — the best-line-per-selection query the product needs.
   (helabet 0 this run = no live card at that moment; handled gracefully.)
+
+### Session 25 CLOSED (2026-07-21)
+- 39 commits (`5e1dfc3`..`1b41311`). Closed both HIGH betb2b gaps (review-2) AND
+  built the data-collection product: CLI unification, 12-table relational odds
+  store, change-only dedup, interval poller, browser-free HTML harvest,
+  multi-skin collection — all live-validated. betb2b suite 43 → 141. Mapped the
+  scorewise-engine integration path. Reports: reviews/2026-07-21-review-2.md
+  (gaps) + review-3.md (data layer). Tree clean, all pushed.
+- Handoff → Session 26 (see tasks/current.md): investigate fetching from the
+  betb2b odds DB and producing engine ingest requests per prediction SCOPE
+  (full match / half / per quarter / per team).
