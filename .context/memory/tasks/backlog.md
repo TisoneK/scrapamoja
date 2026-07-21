@@ -516,8 +516,13 @@ don't remove the line.
       Actions: (a) add a parametrized smoke test — `subprocess python -m
       src.main <site> --help` (and the package `-m <site>.cli --help`) asserting
       exit 0 — over all sites (flashscore/wikipedia/direct/linebet + betb2b);
-      (b) **register betb2b in `src/main.py::SITE_CLIS`** so it runs through the
-      one documented entry point (needs a thin adapter — betb2b's CLI has a
-      different `run()` signature than the `FlashscoreCLI`/`DirectCLI` shape);
+      (b) **register betb2b in `src/main.py::SITE_CLIS`** — DONE 2026-07-21
+      (Session 25, `011969d`): added a `BetB2BMainCLI` adapter (create_parser +
+      run(args, interrupt_handler=, shutdown_coordinator=)) and split
+      `BetB2BCLI.run` into parse + `run_args`. `python -m src.main betb2b scrape
+      --skin linebet --sport basketball --action list_prematch` verified live
+      (10 events, 86 markets, 67s, clean graceful-shutdown). Standalone `-m
+      src.sites.betb2b.cli` still works. Remaining: (a) cross-site --help smoke
+      test; (c) standardize every `cli/__main__.py`;
       (c) consider standardizing every `cli/__main__.py` on create_parser →
       parse_args → run(args). MED — devex + prevents silent breakage.

@@ -475,3 +475,20 @@ past entries — append corrections instead.
   to create_parser → parse_args → run(args). +4 tests (incl. an AST guard).
   This is the THIRD entry-point bug of the same class this session
   (betb2b `.cli.main` no-op, wrong CLI command in handoff, now this).
+
+### Session 25 addendum 5 (2026-07-21) — wire betb2b into src.main
+- User wants `python -m src.main betb2b scrape …` (one dispatcher for all
+  sites). Done (`011969d`): betb2b registered in `SITE_CLIS` via a
+  `BetB2BMainCLI` adapter matching the dispatcher contract (create_parser +
+  run(args, interrupt_handler=, shutdown_coordinator=)); `BetB2BCLI.run` split
+  into `run(argv)` [parse] → `run_args(args)` [dispatch] so both entry points
+  work. Also fixed flashscore's broken package entry point earlier (`6b5ae82`).
+- Verified live end-to-end through the new path:
+  `python -m src.main betb2b scrape --skin linebet --sport basketball --action
+  list_prematch` → 10 prematch events, 10/10 clean teams + markets, 86 total
+  markets, 67s, clean graceful-shutdown. +5 adapter tests. betb2b suite 84.
+- NOTE the flag shape: betb2b keeps its OWN flags (`--skin linebet`,
+  `--action list_prematch`), NOT flashscore's positional `sport status`
+  grammar. Unifying the grammar across sites is a separate (bigger) decision,
+  still open in the "unify + smoke-test the per-site CLI entry points" backlog
+  item (parts a + c).
