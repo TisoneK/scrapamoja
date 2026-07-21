@@ -417,7 +417,7 @@ class BetB2BScraper:
             )
             captured.append(cap)
             if self._capture_failed(cap):
-                dom_events.extend(await self._dom_fallback(is_live=True))
+                dom_events.extend(await self._discover_events(is_live=True))
             return captured, cap.url, dom_events
 
         if action == "list_prematch":
@@ -426,7 +426,7 @@ class BetB2BScraper:
             )
             captured.append(cap)
             if self._capture_failed(cap):
-                dom_events.extend(await self._dom_fallback(is_live=False))
+                dom_events.extend(await self._discover_events(is_live=False))
             return captured, cap.url, dom_events
 
         if action == "list_all":
@@ -438,9 +438,9 @@ class BetB2BScraper:
             )
             captured.extend([live_cap, line_cap])
             if self._capture_failed(live_cap):
-                dom_events.extend(await self._dom_fallback(is_live=True))
+                dom_events.extend(await self._discover_events(is_live=True))
             if self._capture_failed(line_cap):
-                dom_events.extend(await self._dom_fallback(is_live=False))
+                dom_events.extend(await self._discover_events(is_live=False))
             return captured, live_cap.url, dom_events
 
         if action == "raw_capture":
@@ -475,6 +475,73 @@ class BetB2BScraper:
     def _capture_failed(cap: CapturedFeedResponse) -> bool:
         """True if the API capture didn't yield usable data."""
         return cap.status == 0 or cap.status >= 400 or not cap.decoded
+
+    async def _harvest_events(self, *, is_live: bool) -> List[Event]:
+        """Browser-free discovery: harvest event ids from the page HTML, then
+        ``GetGameZip`` each. Drift-proof and complete — the raw HTML carries the
+        whole card's match links (Session 25: 36 ids vs the DOM's virtualized
+        10), and the per-match endpoint returns full markets/scores. Best-effort:
+        returns [] on any trouble so the caller can fall back to DOM.
+        """
+        from .harvest import extract_event_ids
+
+        if is_live:
+            path = self.sport_ctx.live_bootstrap_path or self.skin.bootstrap_paths.get("live")
+        else:
+            path = self.sport_ctx.bootstrap_path or self.skin.bootstrap_paths.get("line")
+        url = f"{self.skin.base_url}{path or ''}"
+
+        proxy_url = (
+            self.proxy_endpoint.to_httpx_proxy()
+            if self.proxy_endpoint is not None else None
+        )
+        headers = {
+            "user-agent": self.skin.stealth_profile.get(
+                "user_agent",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            ),
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "accept-language": "en-US,en;q=0.9",
+        }
+        try:
+            async with httpx.AsyncClient(
+                proxy=proxy_url, timeout=30.0, follow_redirects=True, headers=headers,
+            ) as client:
+                resp = await client.get(url)
+                html = resp.text if resp.status_code == 200 else ""
+        except httpx.HTTPError as exc:
+            logger.warning("skin=%s HTML harvest GET %s failed: %s", self.skin.name, url, exc)
+            return []
+
+        ids = extract_event_ids(html)
+        if not ids:
+            logger.info("skin=%s HTML harvest: 0 ids from %s", self.skin.name, url)
+            return []
+
+        limit = int(getattr(self.skin, "max_harvest", 40) or 40)
+        root = "live" if is_live else "line"
+        events: List[Event] = []
+        for eid in ids[:limit]:
+            try:
+                cap = await self.feed_client.fetch_game(eid, root=root)
+                events.extend(self.extraction_rules.extract_from_captured(cap))
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("skin=%s harvest GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
+        logger.info(
+            "skin=%s HTML harvest: %d ids → %d events (root=%s, cap=%d)",
+            self.skin.name, len(ids), len(events), root, limit,
+        )
+        return events
+
+    async def _discover_events(self, *, is_live: bool) -> List[Event]:
+        """Primary discovery = HTML harvest (full card); DOM render is the
+        fallback if the harvest yields nothing (flag: ``html_harvest``)."""
+        if self.skin.features.get("html_harvest", True):
+            harvested = await self._harvest_events(is_live=is_live)
+            if harvested:
+                return harvested
+        return await self._dom_fallback(is_live=is_live)
 
     async def _dom_fallback(self, *, is_live: bool) -> List[Event]:
         """Render the corresponding live/line page and extract via DOM.

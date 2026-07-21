@@ -214,6 +214,7 @@ class BetB2BSkinConfig:
             "odds": True,
             "raw_capture": True,
             "h2h": True,
+            "html_harvest": True,   # browser-free event-id discovery from page HTML
         }
     )
 
