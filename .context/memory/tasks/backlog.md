@@ -530,10 +530,10 @@ don't remove the line.
 ---
 - [ ] **Grow the betb2b odds store: dedup, retention, flashscore, Postgres** (added 2026-07-21 by Claude Code, Session 25) —
       `src/sites/betb2b/store.py` (SQLite, opt-in `--db`) shipped Session 25
-      (`961f569`, ADR-6). Follow-ups: (1) **odds dedup** — only INSERT an
-      `odds_snapshots` row when a selection's price actually changed since its
-      last snapshot (a live poll every few seconds otherwise writes thousands
-      of identical rows); keep the time-series but drop no-op duplicates.
+      (`961f569`, ADR-6). Follow-ups: (1) **odds dedup** — DONE 2026-07-21 (`9b72f0e`): change-only
+      inserts for odds_snapshots/event_states/period_scores — an unchanged poll
+      stores 0 rows, only movement is recorded (verified: identical poll +0,
+      one price move +1). REMAINING follow-ups:
       (2) **retention/rollup** — a policy to prune or downsample old snapshots.
       (3) **flashscore + other sites** — map their models onto the same schema
       (or lift store.py into a shared `src/storage/odds/`) so one store holds

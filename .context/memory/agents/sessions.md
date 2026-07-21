@@ -536,3 +536,14 @@ past entries — append corrections instead.
 - Grounded the schema by inspecting a real event end-to-end first (event
   738047045 carries sport/league/country/period_scores/h2h with team backend
   ids + countries; statistics[] usually empty).
+
+### Session 25 addendum 9 (2026-07-21) — change-only odds dedup
+- Operator: do the dedup. `persist_result` now records movement, not heartbeats
+  (`9b72f0e`): odds_snapshots/event_states/period_scores insert only when the
+  value changed vs the last stored row for that key. scrape_runs still logs
+  every poll; events.last_seen still bumped. Verified on a real capture: poll 1
+  → 1075 odds, identical poll 2 → +0, one price moved → +1, event_states 10
+  across 3 polls; line_movement returns clean change-points (3.82→4.32). +3
+  tests; betb2b suite → 121. Remaining data-layer follow-ups (retention/rollup,
+  flashscore onto the schema, Postgres, `betb2b odds` query subcommand, and an
+  interval poller to accumulate history) stay backlogged.
