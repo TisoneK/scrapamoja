@@ -43,6 +43,7 @@ correction twice.
 ## Context protocol compliance
 - `.context/` is the primary workflow, not a backup — internalize it as the source of truth over built-in agent workflows (correction, 2026-07-20)
 - Record every user correction as a preference in this file immediately — never let corrections pile up unrecorded across sessions (correction, 2026-07-20)
+- Before investigating/probing a known problem (e.g. the betb2b feed 406), READ the context first (ADRs, RECON.md, backlog) — much is already solved and documented; don't re-derive it. The 406 root cause + decision is ADR-4 (rotating SW-injected `x-dt` header; don't chase it — use DOM/HTML-harvest) (correction, 2026-07-21)
 
 ## Code style
 
