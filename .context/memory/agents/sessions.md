@@ -563,3 +563,22 @@ past entries — append corrections instead.
   floor interval is the scrape duration. Sub-minute resolution needs a
   bootstrap-once + httpx GetGameZip fast-poll (ADR-3 hybrid) — backlogged as
   follow-up (7).
+
+### Session 25 addendum 11 (2026-07-21) — browser-free HTML event-id harvest
+- Operator: implement scroll, but "aren't we supposed to use the endpoint
+  instead of the UI?" — correct. Investigated: the live-basketball page's raw
+  HTML (plain httpx, no browser) carries 36-42 nine-digit event ids across 16
+  championships, but the rendered DOM virtualizes to only 10. Scroll didn't
+  help (measured live: stayed at 10 — window scroll doesn't drive the
+  virtualized inner list), so REVERTED the scroll attempt.
+- Built the endpoint path (`6150884`): `harvest.py::extract_event_ids` (pure,
+  6 tests) + `scraper._harvest_events` (httpx GET the public page HTML through
+  the proxy → GetGameZip each) + `_discover_events` (harvest primary, DOM
+  fallback, flag `html_harvest`). No browser for discovery when harvest
+  succeeds — the basis for a real fast-poll. Verified live: 38 ids → 16 events
+  (vs the DOM's 10), 16/16 clean teams, 154 markets, browser-free. betb2b
+  suite → 133.
+- Architecture note: list feeds are 406 (ADR-4) so we can't API the list
+  directly, but the page HTML IS httpx-reachable and has the full id set — so
+  discovery = HTML harvest, per-match data = GetGameZip endpoint. Both
+  endpoint/HTTP, no rendered UI. Yield-improvement (38→16) backlogged.

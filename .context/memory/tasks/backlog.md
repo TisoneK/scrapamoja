@@ -553,7 +553,17 @@ don't remove the line.
       re-rendering the DOM every cycle. MED.
 
 ---
-- [ ] **DOM extractor under-captures: virtual scroll renders only ~1 screenful** (added 2026-07-21 by Claude Code, Session 25) —
+- [x] **DOM extractor under-captures: virtual scroll renders only ~1 screenful** (added 2026-07-21 by Claude Code, Session 25; **RESOLVED 2026-07-21 via HTML harvest, not scroll** — `6150884`) —
+      Fix was NOT scroll (measured live: window-scroll doesn't move the SPA's
+      virtualized inner list — stayed at 10). Instead, browser-free HTML
+      harvest: httpx GET the sport page, extract event ids from the raw HTML
+      (which carries the WHOLE card — 36-42 ids vs the DOM's 10), GetGameZip
+      each. Now the primary discovery path (`_discover_events`, flag
+      `html_harvest`), DOM is fallback. Verified live: 38 ids → 16 events
+      (vs 10), browser-free. See harvest.py + scraper._harvest_events.
+      FOLLOW-UP: improve yield (38 ids → 16 events) — retry root=line for ids
+      the live root drops (prematch games listed on the live page), and tighten
+      the id regex to match-link hrefs to cut false positives. Original entry:
       HIGH-ish coverage bug. The linebet live/prematch SPA VIRTUALIZES the game
       grid: the captured `/en/live/basketball` HTML had 16 championship headers
       (`dashboard-champ-name__label`) but only 10 rendered game rows
