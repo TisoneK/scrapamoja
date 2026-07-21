@@ -58,10 +58,36 @@ _GARBAGE_TEAM_PATTERNS = [
     re.compile(r"^0000$"),                          # the placeholder bug
     re.compile(r"^\d{4}$"),                         # 4-digit year/code
 ]
+# The `0000` score placeholder leaks into concatenated live-DOM text (the
+# in-play scoreboard renders it before scores arrive). A real team name never
+# contains it, so reject it *anywhere* in the string — not just as the whole
+# value (the `^0000$` pattern above missed the Session 24 garbled names like
+# "Ajax Olympiacos Piraeus 0000-Ajax Olympiacus Piraeus 0000").
+_PLACEHOLDER_TOKEN = re.compile(r"(?<!\d)0000(?!\d)")
 # Reject team names that are too long (real team names are < 80 chars).
 _MAX_TEAM_NAME_LEN = 80
 # Reject team names that are too short (1 char is not a team).
 _MIN_TEAM_NAME_LEN = 2
+# Shortest repeated chunk that flags a concatenation/duplication artifact.
+_MIN_DUP_CHUNK = 8
+
+
+def _looks_duplicated(name: str) -> bool:
+    """True if the name looks like two DOM text nodes concatenated together.
+
+    The broken live selectors matched a container holding *both* teams, so
+    a single "team" field came back as the whole row's text twice over
+    (``"<A> 0000-<A> 0000"``). A genuine team name never repeats an 8+ char
+    run, so a repeated significant chunk is a reliable garbage signal.
+    """
+    s = re.sub(r"\s+", " ", name).strip().lower()
+    if len(s) < 2 * _MIN_DUP_CHUNK:
+        return False
+    # Longest-first: any prefix chunk that reappears later ⇒ duplicated.
+    for size in range(len(s) // 2, _MIN_DUP_CHUNK - 1, -1):
+        if s.count(s[:size]) >= 2:
+            return True
+    return False
 
 
 def _is_plausible_team_name(name: str) -> bool:
@@ -71,9 +97,13 @@ def _is_plausible_team_name(name: str) -> bool:
     n = name.strip()
     if not ( _MIN_TEAM_NAME_LEN <= len(n) <= _MAX_TEAM_NAME_LEN):
         return False
+    if _PLACEHOLDER_TOKEN.search(n):
+        return False
     for pat in _GARBAGE_TEAM_PATTERNS:
         if pat.match(n):
             return False
+    if _looks_duplicated(n):
+        return False
     return True
 
 
