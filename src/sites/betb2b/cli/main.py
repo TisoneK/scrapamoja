@@ -23,6 +23,48 @@ logger = logging.getLogger(__name__)
 
 _VALID_ACTIONS = ("list_live", "list_prematch", "list_all", "raw_capture", "sports_short", "top_champs")
 
+# Friendly betting-vocabulary words → canonical action. Both the positional
+# ``status`` and ``--action`` accept either form (e.g. ``scrape linebet live``
+# or ``--action list_live``).
+_STATUS_ALIASES = {
+    "live": "list_live", "inplay": "list_live", "in-play": "list_live",
+    "scheduled": "list_prematch", "prematch": "list_prematch", "pre": "list_prematch",
+    "all": "list_all", "both": "list_all",
+    # canonical forms pass straight through
+    **{a: a for a in _VALID_ACTIONS},
+}
+# The words a positional first-arg could be if the user gave only a status
+# (``scrape live``) rather than a skin.
+_STATUS_WORDS = frozenset(_STATUS_ALIASES)
+
+
+def _resolve_action(word: str) -> str:
+    """Map a friendly/canonical status word to a canonical action, or raise."""
+    key = (word or "").strip().lower()
+    if key not in _STATUS_ALIASES:
+        raise ValueError(
+            f"unknown status {word!r} — use one of: "
+            f"live, scheduled, all (or {', '.join(_VALID_ACTIONS)})"
+        )
+    return _STATUS_ALIASES[key]
+
+
+def _reconcile_scrape_target(
+    skin_pos: Optional[str], status_pos: Optional[str],
+    skin_flag: str, action_flag: str,
+) -> "tuple[str, str]":
+    """Fold the easy positional form into effective (skin, action).
+
+    Positionals win over flags. A lone status word (``scrape live``) lands in
+    ``skin_pos`` — shift it to the status slot. Raises ``ValueError`` on an
+    unknown status word.
+    """
+    if skin_pos and status_pos is None and skin_pos.lower() in _STATUS_WORDS:
+        skin_pos, status_pos = None, skin_pos
+    skin = skin_pos or skin_flag
+    action = _resolve_action(status_pos if status_pos else action_flag)
+    return skin, action
+
 
 def _skins_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "skins"
@@ -100,10 +142,22 @@ class BetB2BCLI:
         sub = parser.add_subparsers(dest="command", required=True)
 
         # scrape
-        scrape = sub.add_parser("scrape", help="Live hybrid scrape through proxy")
+        scrape = sub.add_parser(
+            "scrape", help="Live hybrid scrape through proxy",
+            description="Scrape a skin. Easy form: `scrape <skin> <live|scheduled|all>` "
+                        "(e.g. `scrape linebet live`). The --skin/--action flags still work.",
+        )
+        # Easy positional form: `scrape linebet live`. Both optional; a lone
+        # status word (`scrape live`) is understood too. These override the
+        # --skin/--action flags below when given.
+        scrape.add_argument("skin_pos", nargs="?", default=None, metavar="skin",
+                            help="Skin name (positional). Default: linebet.")
+        scrape.add_argument("status_pos", nargs="?", default=None, metavar="status",
+                            help="live | scheduled | all (positional). Default: live.")
         scrape.add_argument("--skin", "-s", default="linebet", help="Skin name (default: linebet)")
-        scrape.add_argument("--action", "-a", choices=_VALID_ACTIONS, default="list_live",
-                            help="Scrape action (default: list_live)")
+        scrape.add_argument("--action", "-a", default="list_live",
+                            help="Scrape action — live/scheduled/all or "
+                                 f"{'/'.join(_VALID_ACTIONS)} (default: list_live)")
         scrape.add_argument("--sport", default=None,
                             help="Sport slug (e.g. basketball, football, ice-hockey, tennis, esports). "
                                  "Default: all sports.")
@@ -222,6 +276,17 @@ class BetB2BCLI:
 
     # ------------------------------------------------------------------ #
     async def _cmd_scrape(self, args: argparse.Namespace) -> int:
+        # Reconcile the easy positional form (`scrape linebet live`) with the
+        # --skin/--action flags. Positionals win when given.
+        try:
+            args.skin, args.action = _reconcile_scrape_target(
+                getattr(args, "skin_pos", None), getattr(args, "status_pos", None),
+                args.skin, args.action,
+            )
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+
         skin = _load_skin(args.skin)
         pm_and_id = _build_proxy_manager_from_env()
         proxy_manager = pm_and_id[0] if pm_and_id else None
