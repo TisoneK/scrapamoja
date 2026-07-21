@@ -66,6 +66,21 @@ def _reconcile_scrape_target(
     return skin, action
 
 
+def _resolve_skins(skin_token: str, *, all_skins: bool = False) -> List[str]:
+    """Expand a skin token into a list. ``--all-skins`` → every available skin;
+    otherwise a comma-separated list (``linebet,melbet``) → one entry each.
+    Order preserved, de-duplicated. Running several skins into one ``--db``
+    is what powers cross-skin odds comparison (they share event ids)."""
+    if all_skins:
+        return _list_skins()
+    seen: dict[str, None] = {}
+    for s in (skin_token or "").split(","):
+        s = s.strip()
+        if s:
+            seen.setdefault(s, None)
+    return list(seen) or ["linebet"]
+
+
 def _skins_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "skins"
 
@@ -151,10 +166,15 @@ class BetB2BCLI:
         # status word (`scrape live`) is understood too. These override the
         # --skin/--action flags below when given.
         scrape.add_argument("skin_pos", nargs="?", default=None, metavar="skin",
-                            help="Skin name (positional). Default: linebet.")
+                            help="Skin name, or comma-list for several "
+                                 "(linebet,melbet,helabet). Default: linebet.")
         scrape.add_argument("status_pos", nargs="?", default=None, metavar="status",
                             help="live | scheduled | all (positional). Default: live.")
-        scrape.add_argument("--skin", "-s", default="linebet", help="Skin name (default: linebet)")
+        scrape.add_argument("--skin", "-s", default="linebet",
+                            help="Skin name, or comma-list (default: linebet)")
+        scrape.add_argument("--all-skins", action="store_true",
+                            help="Scrape every available skin (into one --db for "
+                                 "cross-skin comparison)")
         scrape.add_argument("--action", "-a", default="list_live",
                             help="Scrape action — live/scheduled/all or "
                                  f"{'/'.join(_VALID_ACTIONS)} (default: list_live)")
@@ -196,10 +216,12 @@ class BetB2BCLI:
                         "is the easy form. Ctrl-C stops cleanly.",
         )
         poll.add_argument("skin_pos", nargs="?", default=None, metavar="skin",
-                          help="Skin name (positional). Default: linebet.")
+                          help="Skin name or comma-list (linebet,melbet). Default: linebet.")
         poll.add_argument("status_pos", nargs="?", default=None, metavar="status",
                           help="live | scheduled | all (positional). Default: live.")
-        poll.add_argument("--skin", "-s", default="linebet", help="Skin name (default: linebet)")
+        poll.add_argument("--skin", "-s", default="linebet", help="Skin name or comma-list")
+        poll.add_argument("--all-skins", action="store_true",
+                          help="Poll every available skin each cycle (one shared --db)")
         poll.add_argument("--action", "-a", default="list_live",
                           help="live/scheduled/all or the canonical list_* action")
         poll.add_argument("--sport", default=None, help="Sport slug. Default: all sports.")
@@ -308,77 +330,40 @@ class BetB2BCLI:
         return 2
 
     # ------------------------------------------------------------------ #
-    async def _cmd_scrape(self, args: argparse.Namespace) -> int:
-        # Reconcile the easy positional form (`scrape linebet live`) with the
-        # --skin/--action flags. Positionals win when given.
-        try:
-            args.skin, args.action = _reconcile_scrape_target(
-                getattr(args, "skin_pos", None), getattr(args, "status_pos", None),
-                args.skin, args.action,
-            )
-        except ValueError as exc:
-            print(f"ERROR: {exc}", file=sys.stderr)
-            return 2
-
-        skin = _load_skin(args.skin)
-        pm_and_id = _build_proxy_manager_from_env()
-        proxy_manager = pm_and_id[0] if pm_and_id else None
-        proxy_endpoint_id = pm_and_id[1] if pm_and_id else None
-
+    async def _scrape_one(self, skin_name, args, proxy_manager, proxy_endpoint_id):
+        """Scrape one skin and (if --db) persist it. Returns the result dict."""
         from src.sites.betb2b import BetB2BScraper
 
-        if args.no_live:
-            print(json.dumps({
-                "skin": skin.to_dict(),
-                "action": args.action,
-                "sport": args.sport,
-                "sport_id": args.sport_id,
-                "count": args.count,
-                "would_run": True,
-                "note": "--no-live set; skipping the live scrape.",
-            }, indent=2))
-            return 0
+        skin = _load_skin(skin_name)
+        async with BetB2BScraper(
+            skin, proxy_manager=proxy_manager, proxy_endpoint_id=proxy_endpoint_id,
+            rate_limit_per_minute=args.rate, settle_seconds=args.settle,
+            sport=args.sport,
+        ) as scraper:
+            result = await scraper.scrape(
+                action=args.action, sport_id=args.sport_id,
+                count=args.count, timeout_seconds=args.timeout,
+            )
 
-        try:
-            async with BetB2BScraper(
-                skin,
-                proxy_manager=proxy_manager,
-                proxy_endpoint_id=proxy_endpoint_id,
-                rate_limit_per_minute=args.rate,
-                settle_seconds=args.settle,
-                sport=args.sport,
-            ) as scraper:
-                result = await scraper.scrape(
-                    action=args.action,
-                    sport_id=args.sport_id,
-                    count=args.count,
-                    timeout_seconds=args.timeout,
-                )
-        except Exception as exc:  # noqa: BLE001
-            print(f"ERROR: scrape failed: {exc}", file=sys.stderr)
-            return 1
-
-        # Opt-in structured persistence (JSON output is unaffected).
         if getattr(args, "db", None):
             try:
                 from src.sites.betb2b.store import persist_result
 
                 run_id = persist_result(result, args.db)
                 print(
-                    f"Persisted run {run_id} "
-                    f"({result.get('event_count', 0)} events) to {args.db}",
+                    f"  [{skin_name}] persisted run {run_id} "
+                    f"({result.get('event_count', 0)} events) → {args.db}",
                     file=sys.stderr,
                 )
             except Exception as exc:  # noqa: BLE001
-                print(f"WARNING: --db persist failed: {exc}", file=sys.stderr)
+                print(f"  [{skin_name}] WARNING: --db persist failed: {exc}", file=sys.stderr)
+        return result
 
-        return self._emit(result, args)
-
-    # ------------------------------------------------------------------ #
-    async def _cmd_poll(self, args: argparse.Namespace) -> int:
-        # Same friendly grammar as scrape.
+    async def _cmd_scrape(self, args: argparse.Namespace) -> int:
+        # Reconcile the easy positional form (`scrape linebet live`) with the
+        # --skin/--action flags. Positionals win when given.
         try:
-            args.skin, args.action = _reconcile_scrape_target(
+            skin_token, args.action = _reconcile_scrape_target(
                 getattr(args, "skin_pos", None), getattr(args, "status_pos", None),
                 args.skin, args.action,
             )
@@ -386,23 +371,89 @@ class BetB2BCLI:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 2
 
-        skin = _load_skin(args.skin)
+        skins = _resolve_skins(skin_token, all_skins=getattr(args, "all_skins", False))
         pm_and_id = _build_proxy_manager_from_env()
         proxy_manager = pm_and_id[0] if pm_and_id else None
         proxy_endpoint_id = pm_and_id[1] if pm_and_id else None
 
-        from src.sites.betb2b import BetB2BScraper
+        if args.no_live:
+            print(json.dumps({
+                "skins": skins, "action": args.action, "sport": args.sport,
+                "count": args.count, "would_run": True,
+                "note": "--no-live set; skipping the live scrape.",
+            }, indent=2))
+            return 0
+
+        # One skin: keep the classic single-result JSON on stdout.
+        if len(skins) == 1:
+            try:
+                result = await self._scrape_one(
+                    skins[0], args, proxy_manager, proxy_endpoint_id)
+            except Exception as exc:  # noqa: BLE001
+                print(f"ERROR: scrape failed: {exc}", file=sys.stderr)
+                return 1
+            return self._emit(result, args)
+
+        # Multiple skins: scrape each (sequentially — one tunnel), persist to the
+        # shared --db, emit a combined summary. This is the cross-skin
+        # collection path — all skins land in one store keyed by event_id.
+        print(f"Scraping {len(skins)} skins: {', '.join(skins)} "
+              f"(action={args.action})", file=sys.stderr)
+        results = []
+        for name in skins:
+            try:
+                results.append(await self._scrape_one(
+                    name, args, proxy_manager, proxy_endpoint_id))
+            except Exception as exc:  # noqa: BLE001
+                print(f"  [{name}] ERROR: {exc}", file=sys.stderr)
+                results.append({"skin": name, "error": str(exc), "event_count": 0})
+        combined = {
+            "skins": skins, "action": args.action,
+            "results": results,
+            "total_events": sum(r.get("event_count", 0) for r in results),
+        }
+        return self._emit(combined, args)
+
+    # ------------------------------------------------------------------ #
+    async def _cmd_poll(self, args: argparse.Namespace) -> int:
+        # Same friendly grammar as scrape (skin may be a comma-list / --all-skins).
+        try:
+            skin_token, args.action = _reconcile_scrape_target(
+                getattr(args, "skin_pos", None), getattr(args, "status_pos", None),
+                args.skin, args.action,
+            )
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+
+        skins = _resolve_skins(skin_token, all_skins=getattr(args, "all_skins", False))
+        pm_and_id = _build_proxy_manager_from_env()
+        proxy_manager = pm_and_id[0] if pm_and_id else None
+        proxy_endpoint_id = pm_and_id[1] if pm_and_id else None
+
         from src.sites.betb2b.poll import poll_loop
-        from src.sites.betb2b.store import counts, init_db, persist_result
+        from src.sites.betb2b.store import counts, init_db
 
         conn = init_db(args.db)
-        stop = {"flag": False}
 
-        def _on_cycle(n: int, result: Dict[str, Any], run_id: Any) -> None:
-            odds = counts(conn)["odds_snapshots"]
+        # One cycle = scrape + persist EVERY skin (into the one shared store).
+        async def _scrape_once() -> List[Dict[str, Any]]:
+            out: List[Dict[str, Any]] = []
+            for name in skins:
+                try:
+                    out.append(await self._scrape_one(
+                        name, args, proxy_manager, proxy_endpoint_id))
+                except Exception as exc:  # noqa: BLE001
+                    print(f"  [{name}] ERROR: {exc}", file=sys.stderr, flush=True)
+                    out.append({"skin": name, "event_count": 0, "error": str(exc)})
+            return out
+
+        def _on_cycle(n: int, results: List[Dict[str, Any]], _: Any) -> None:
+            c = counts(conn)
+            ev = sum(r.get("event_count", 0) for r in results)
             print(
-                f"[cycle {n}] run {run_id}: {result.get('event_count', 0)} events, "
-                f"{result.get('scrape_duration_seconds', 0):.0f}s | odds_snapshots total={odds}",
+                f"[cycle {n}] {len(skins)} skin(s), {ev} events | store: "
+                f"{c['events']} events, {c['odds_snapshots']} odds rows",
                 file=sys.stderr, flush=True,
             )
 
@@ -410,30 +461,18 @@ class BetB2BCLI:
             print(f"[cycle {n}] ERROR: {exc}", file=sys.stderr, flush=True)
 
         print(
-            f"Polling skin={args.skin} action={args.action} every {args.interval:.0f}s "
-            f"→ {args.db}  (Ctrl-C to stop)",
+            f"Polling {len(skins)} skin(s) [{', '.join(skins)}] action={args.action} "
+            f"every {args.interval:.0f}s → {args.db}  (Ctrl-C to stop)",
             file=sys.stderr, flush=True,
         )
         try:
-            async with BetB2BScraper(
-                skin, proxy_manager=proxy_manager, proxy_endpoint_id=proxy_endpoint_id,
-                rate_limit_per_minute=args.rate, settle_seconds=args.settle,
-                sport=args.sport,
-            ) as scraper:
-                async def _scrape_once() -> Dict[str, Any]:
-                    return await scraper.scrape(
-                        action=args.action, sport_id=args.sport_id,
-                        count=args.count, timeout_seconds=args.timeout,
-                    )
-
-                done = await poll_loop(
-                    scrape_once=_scrape_once,
-                    persist=lambda r: persist_result(r, args.db, conn=conn),
-                    interval=args.interval, cycles=args.cycles,
-                    max_seconds=args.for_seconds,
-                    on_cycle=_on_cycle, on_error=_on_error,
-                    should_stop=lambda: stop["flag"],
-                )
+            done = await poll_loop(
+                scrape_once=_scrape_once,
+                persist=lambda _results: None,  # persistence happens per-skin in _scrape_one
+                interval=args.interval, cycles=args.cycles,
+                max_seconds=args.for_seconds,
+                on_cycle=_on_cycle, on_error=_on_error,
+            )
             print(f"Poll finished: {done} cycle(s). Store: {args.db}", file=sys.stderr)
             return 0
         except KeyboardInterrupt:

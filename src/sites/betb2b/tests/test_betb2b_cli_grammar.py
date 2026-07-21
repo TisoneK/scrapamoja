@@ -95,3 +95,49 @@ class TestParserAcceptsBothForms:
         assert a.status_pos == "all"
         assert a.sport == "basketball"
         assert a.db == "x.db"
+
+
+# ---------------------------------------------------------------------------
+# Multi-skin resolution (one command, several skins → one shared --db)
+# ---------------------------------------------------------------------------
+from src.sites.betb2b.cli.main import _resolve_skins
+
+
+def test_resolve_single_skin():
+    assert _resolve_skins("linebet") == ["linebet"]
+
+
+def test_resolve_comma_list_preserves_order_dedupes():
+    assert _resolve_skins("linebet,melbet,helabet,linebet") == ["linebet", "melbet", "helabet"]
+
+
+def test_resolve_strips_whitespace():
+    assert _resolve_skins(" linebet , melbet ") == ["linebet", "melbet"]
+
+
+def test_resolve_empty_defaults_to_linebet():
+    assert _resolve_skins("") == ["linebet"]
+
+
+def test_all_skins_lists_every_skin():
+    skins = _resolve_skins("linebet", all_skins=True)
+    assert "linebet" in skins and "melbet" in skins
+    assert len(skins) >= 5  # 8 skins ship
+
+
+class TestMultiSkinParsing:
+    def setup_method(self):
+        self.parser = BetB2BCLI().create_parser()
+
+    def test_scrape_comma_list_parses(self):
+        a = self.parser.parse_args(["scrape", "linebet,melbet", "live"])
+        assert a.skin_pos == "linebet,melbet"
+
+    def test_scrape_all_skins_flag(self):
+        a = self.parser.parse_args(["scrape", "live", "--all-skins"])
+        assert a.all_skins is True
+
+    def test_poll_comma_list_parses(self):
+        a = self.parser.parse_args(["poll", "linebet,melbet", "live", "--interval", "30"])
+        assert a.skin_pos == "linebet,melbet"
+        assert a.all_skins is False
