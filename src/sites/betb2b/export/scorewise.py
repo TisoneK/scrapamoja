@@ -143,9 +143,10 @@ async def post_ingest(
     """
     import httpx
 
+    # The engine authenticates ingest with an `x-api-key` header.
     headers = {"content-type": "application/json"}
     if token:
-        headers["authorization"] = f"Bearer {token}"
+        headers["x-api-key"] = token
     url = f"{engine_url.rstrip('/')}/api/ingest"
     out: List[Dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=45.0) as c:

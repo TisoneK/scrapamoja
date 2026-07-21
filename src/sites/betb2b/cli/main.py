@@ -210,7 +210,7 @@ class BetB2BCLI:
         scrape.add_argument("--ingest", nargs="?", const="env", default=None,
                             help="POST results to scorewise-engine /api/ingest "
                                  "(one PredictRequest per scope). Value = engine URL, "
-                                 "or omit for $SCOREWISE_ENGINE_URL. Token: $SCOREWISE_TOKEN.")
+                                 "or omit for $SCOREWISE_ENGINE_URL. Auth: $SCOREWISE_API_KEY (x-api-key).")
 
         # poll — scrape + persist on a loop so line-movement accumulates
         poll = sub.add_parser(
@@ -376,7 +376,7 @@ class BetB2BCLI:
                     )
                     matches = build_ingest_matches(result.get("events") or [])
                     summ = await post_ingest(
-                        matches, url, token=os.environ.get("SCOREWISE_TOKEN"),
+                        matches, url, token=os.environ.get("SCOREWISE_API_KEY") or os.environ.get("SCOREWISE_TOKEN"),
                         scraped_at=result.get("extracted_at"),
                     )
                     print(f"  [{skin_name}] ingest → {len(matches)} matches: {summ}",
