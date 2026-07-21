@@ -50,11 +50,13 @@ class BetB2BSessionManager:
         *,
         settle_seconds: float = 12.0,
         bootstrap_timeout_ms: int = 45_000,
+        grid_wait_ms: int = 20_000,
     ) -> None:
         self.skin = skin
         self.proxy = proxy
         self.settle_seconds = settle_seconds
         self.bootstrap_timeout_ms = bootstrap_timeout_ms
+        self.grid_wait_ms = grid_wait_ms
 
         self._harvester = SessionHarvester()
         self._validator = SessionValidator(
@@ -365,6 +367,28 @@ class BetB2BSessionManager:
 
                     await self._dismiss_consent(page)
                     await asyncio.sleep(wait_s)
+
+                    # A fixed settle is fragile across proxy speeds — the in-play
+                    # Vue grid can take >10s to render through a slow tunnel,
+                    # leaving extraction to run on a still-empty page (the
+                    # Session 25 integration finding: 0 raw rows despite a live
+                    # card). Actively wait for the game grid to attach. Best-
+                    # effort: a genuinely empty card (no live games) just falls
+                    # through to extraction, which returns [].
+                    game_sel = (
+                        dom_selectors.game if dom_selectors is not None
+                        else ".dashboard-champ__game"
+                    )
+                    try:
+                        await page.wait_for_selector(
+                            game_sel, timeout=self.grid_wait_ms, state="attached",
+                        )
+                    except Exception:  # noqa: BLE001
+                        logger.debug(
+                            "skin=%s game grid %r not present after settle "
+                            "(empty card or still loading)",
+                            self.skin.name, game_sel,
+                        )
 
                     # Invoke the page-ready callback (e.g. for snapshot capture)
                     # while the page is still alive.
