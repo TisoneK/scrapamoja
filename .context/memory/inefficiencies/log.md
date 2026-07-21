@@ -212,3 +212,10 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
   asserting exit 0. Would catch all three at once. Backlog candidate. And:
   standardize on ONE invocation convention (`python -m src.main <site>`) +
   register betb2b there so there's a single documented path.
+
+---
+## 2026-07-21 — Claude Code / claude-opus-4-8 (Session 25 — re-probing the feed 406)
+- **Problem:** Re-investigated the list-feed 406 (can we bypass it via browser+endpoint?) before fully absorbing that ADR-4 already answers it. The operator corrected me: "read the context — the hidden headers + 406 are documented." ADR-4: the feed moved into the `ivpn-sw.js` service-worker context; it injects a rotating `x-dt` header; decision = don't chase it, use DOM/HTML extraction.
+- **Cost:** ~30 min of live proxy probes re-confirming known facts.
+- **Extra finding (worth keeping so nobody repeats it):** attempted ADR-4's suggested capture (Playwright `context.new_cdp_session` + `Target.setAutoAttach{flatten:true}` + `Network.enable`) to grab the SW feed request/headers. It captured **0** — Playwright Python does NOT surface flattened child-session (service-worker) Network events on the parent CDPSession, and `context.on("response")` / in-page fetch hooks also see nothing. Truly tapping the feed needs **raw CDP over the DevTools websocket** with manual sessionId routing (outside Playwright). Given ADR-4 says don't chase it, this is not worth building. The raw page HTML (browser-free) carries the full card (~38 live-basketball ids) and is the practical equivalent of the feed's output.
+- **Prevent next time:** For any betb2b feed/406/header question, read ADR-3 → ADR-4 + RECON.md FIRST. The `x-dt`-rotation dead-end is settled; the supported path is HTML-harvest (discovery) + GetGameZip (per-match).
