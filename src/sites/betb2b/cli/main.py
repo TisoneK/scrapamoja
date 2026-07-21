@@ -126,8 +126,7 @@ class BetB2BCLI:
         scrape.add_argument("--compress", action="store_true",
                             help="gzip the --output file (a .gz suffix is added). "
                                  "Read it back with `betb2b view <file>`. Large "
-                                 "results (full odds) compress ~85-90%.")
-
+                             "results (full odds) compress ~85-90%%.")
         # info
         info = sub.add_parser("info", help="Print skin config + scraper state")
         info.add_argument("--skin", "-s", default="linebet", help="Skin name")
