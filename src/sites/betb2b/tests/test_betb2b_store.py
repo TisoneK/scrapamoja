@@ -281,3 +281,20 @@ def test_h2h_period_scores_captured_for_scoped_ingestion(db, tmp_path):
     # FIRST_HALF H2H = Q1 + Q2 (what QUARTER/HALF-scope ingestion derives).
     fh_home = rows[0]["home_score"] + rows[1]["home_score"]
     assert fh_home == 57
+
+
+def test_scoped_odds_stored_and_deduped_per_scope(db, tmp_path):
+    # Same market name at two scopes must NOT dedup-collide (ADR-7).
+    r = _result("linebet", price_1x2=(1.5, 2.5))
+    ev = r["events"][0]
+    ev["markets"] = [
+        {"name": "Total", "market_type": "total", "raw_g": 17, "scope": "FULL_MATCH",
+         "selections": [{"name": "Over", "price": 1.85, "line": 216.5}]},
+        {"name": "Total", "market_type": "total", "raw_g": 17, "scope": "QUARTER_1",
+         "selections": [{"name": "Over", "price": 1.85, "line": 52.5}]},
+    ]
+    persist_result(r, tmp_path / "odds.db", conn=db)
+    rows = db.execute(
+        "SELECT scope, line FROM odds_snapshots ORDER BY scope").fetchall()
+    assert {(x["scope"], x["line"]) for x in rows} == {
+        ("FULL_MATCH", 216.5), ("QUARTER_1", 52.5)}

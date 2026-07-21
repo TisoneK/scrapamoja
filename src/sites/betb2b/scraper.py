@@ -372,6 +372,8 @@ class BetB2BScraper:
                 cap = await self.feed_client.fetch_game(eid, root=root)
                 game_events = self.extraction_rules.extract_from_captured(cap)
                 fetched += 1
+                for ge in game_events:
+                    await self._enrich_with_subgames(ge, cap, root=root)
                 # The GetGameZip event carries teams + all markets, so it
                 # supersedes the DOM stub.
                 out.extend(game_events if game_events else [e])
@@ -525,7 +527,10 @@ class BetB2BScraper:
         for eid in ids[:limit]:
             try:
                 cap = await self.feed_client.fetch_game(eid, root=root)
-                events.extend(self.extraction_rules.extract_from_captured(cap))
+                game_events = self.extraction_rules.extract_from_captured(cap)
+                for ge in game_events:
+                    await self._enrich_with_subgames(ge, cap, root=root)
+                events.extend(game_events)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("skin=%s harvest GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
         logger.info(
@@ -533,6 +538,36 @@ class BetB2BScraper:
             self.skin.name, len(ids), len(events), root, limit,
         )
         return events
+
+    async def _enrich_with_subgames(self, event: Event, cap: Any, *, root: str) -> None:
+        """Fetch the event's per-quarter/half sub-games and append their markets,
+        tagged with the PredictionScope (ADR-7). Opt-in (``subgames`` flag) —
+        each sub-game is an extra GetGameZip. Best-effort.
+        """
+        if not self.skin.features.get("subgames", False):
+            return
+        from .extraction.rules import scope_from_period_name
+
+        value = (getattr(cap, "decoded", None) or {}).get("Value") or {}
+        limit = int(getattr(self.skin, "max_subgames", 8) or 8)
+        fetched = 0
+        for sg in value.get("SG") or []:
+            scope = scope_from_period_name(sg.get("PN"))
+            sub_id = sg.get("I")
+            if not scope or not sub_id or fetched >= limit:
+                continue
+            try:
+                sub_cap = await self.feed_client.fetch_game(str(sub_id), root=root)
+                event.markets.extend(
+                    self.extraction_rules.extract_markets_scoped(sub_cap, scope)
+                )
+                fetched += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("skin=%s subgame %s (%s) failed: %s",
+                             self.skin.name, sub_id, scope, exc)
+        if fetched:
+            logger.info("skin=%s event=%s: +%d scoped sub-games",
+                        self.skin.name, event.event_id, fetched)
 
     async def _discover_events(self, *, is_live: bool) -> List[Event]:
         """Primary discovery = HTML harvest (full card); DOM render is the

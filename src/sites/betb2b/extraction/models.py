@@ -128,6 +128,10 @@ class Market:
     is_live: bool = False
     is_suspended: bool = False
     raw_g: Optional[int] = None
+    # Prediction scope this market covers — "FULL_MATCH" for the main event,
+    # "QUARTER_1".."QUARTER_4"/"FIRST_HALF"/"SECOND_HALF" for sub-game markets
+    # (mirrors the engine's PredictionScope; see ADR-7).
+    scope: str = "FULL_MATCH"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -137,6 +141,7 @@ class Market:
             "is_live": self.is_live,
             "is_suspended": self.is_suspended,
             "raw_g": self.raw_g,
+            "scope": self.scope,
         }
 
 

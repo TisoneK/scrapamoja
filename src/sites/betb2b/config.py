@@ -215,6 +215,7 @@ class BetB2BSkinConfig:
             "raw_capture": True,
             "h2h": True,
             "html_harvest": True,   # browser-free event-id discovery from page HTML
+            "subgames": False,      # fetch per-quarter/half sub-games (ADR-7 scoped ingestion; costs extra requests)
         }
     )
 
