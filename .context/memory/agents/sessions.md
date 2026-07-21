@@ -404,3 +404,16 @@ past entries — append corrections instead.
   - Full betb2b suite green: 75 tests (+26). Key discovery: `GetGameZip` returns 200 direct from this WAF-blocked Mac; SPA + list feeds don't (SPA loads via proxy; list feeds 406 everywhere = auth rotation, not geo). ADR-5 records the GetGameZip market path.
 - **Open items:** confirm the *integrated* live `scrape` end-to-end when the proxy is back (bore dropped mid-session); map remaining `G=NN` market-group ids; cross-skin proxy validation. See `tasks/backlog.md`.
 - **Report:** `.context/memory/reviews/2026-07-21-review-2.md`
+
+### Session 25 addendum (2026-07-21, same session) — integrated live run CONFIRMED
+- Operator restarted the Kenya bore tunnel (port 52147). Ran the *integrated*
+  `python -m src.sites.betb2b.cli scrape --skin linebet --sport basketball
+  --action list_live` end-to-end through the proxy — **confirmed green:**
+  10 live events, 10/10 clean team names (0 rejected), 10/10 with live scores,
+  8/10 with GetGameZip markets (133 total; Phoenix=40, Botafogo=39), 76s. Logs
+  show all fixes composing: `proxy OK (attempt 1)`, `raw_rows=10` (grid-wait
+  F4), `10 GetGameZip fetched` (enrichment F1).
+- The first two integrated attempts died on transient proxy-verify `ReadError`
+  (tunnel flapping). Hardened: proxy verification now retries transient errors
+  with backoff, fails fast only on a definitive country mismatch — new commit
+  `7f59edc` (+4 tests). Total session product commits now 6; betb2b suite 79.

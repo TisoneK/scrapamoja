@@ -436,7 +436,18 @@ don't remove the line.
       `tasks/current.md` Session 25 Phase 2.
 
 ---
-- [ ] **Confirm integrated live `scrape` end-to-end through the proxy** (added 2026-07-21 by Claude Code, Session 25) —
+- [x] **Confirm integrated live `scrape` end-to-end through the proxy** (added 2026-07-21 by Claude Code, Session 25; **DONE 2026-07-21** same session — operator restarted the tunnel on port 52147) —
+      **Confirmed green:** `python -m src.sites.betb2b.cli scrape --skin linebet
+      --sport basketball --action list_live` through the Kenya proxy →
+      **10 live events, 10/10 clean team names (0 rejected), 10/10 with live
+      scores, 8/10 with GetGameZip markets (133 total; Phoenix=40, Botafogo=39),
+      76s.** Logs confirm all fixes composing: `proxy OK (attempt 1)`,
+      `raw_rows=10` (grid-wait), `10 GetGameZip fetched` (enrichment). The
+      tunnel flakiness that blocked the first two attempts was also hardened —
+      proxy verification now retries transient errors (`7f59edc`). Two events
+      returned 0 markets (women's Chinese basketball with no open live markets)
+      — best-effort GetGameZip miss, not a defect. Original entry:
+- [ ] ~~**Confirm integrated live `scrape` end-to-end through the proxy**~~ (superseded — done above) —
       Session 25 validated every stage of the live pipeline independently
       against real data (DOM extraction, score parse, GetGameZip enrichment)
       and fixed a fragile fixed-settle render (`d173c6a` — now waits for the
