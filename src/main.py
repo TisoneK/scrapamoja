@@ -71,6 +71,7 @@ SITE_CLIS = {
     'wikipedia': ('src.sites.wikipedia.cli.main', 'WikipediaCLI'),
     'direct': ('src.sites.direct.cli.main', 'DirectCLI'),
     'linebet': ('src.sites.linebet.cli.main', 'LinebetCLI'),
+    'betb2b': ('src.sites.betb2b.cli.main', 'BetB2BMainCLI'),
 }
 
 

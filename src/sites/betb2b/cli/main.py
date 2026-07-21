@@ -180,8 +180,20 @@ class BetB2BCLI:
 
         return parser
 
+    def create_parser(self) -> argparse.ArgumentParser:
+        """Return the argument parser (for the ``src.main`` dispatcher, which
+        parses argv itself then calls :meth:`run_args`)."""
+        return self.parser
+
     async def run(self, argv: Optional[List[str]] = None) -> int:
+        """Parse ``argv`` and dispatch. Used by the standalone entry point
+        (``python -m src.sites.betb2b.cli``)."""
         args = self.parser.parse_args(argv)
+        return await self.run_args(args)
+
+    async def run_args(self, args: argparse.Namespace) -> int:
+        """Dispatch already-parsed args. Used by the ``src.main`` dispatcher
+        (which calls ``create_parser().parse_args()`` before ``run_args``)."""
         self._configure_logging(verbose=args.verbose, quiet=args.quiet)
 
         if args.command == "scrape":
@@ -441,3 +453,29 @@ class BetB2BCLI:
             format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
             stream=sys.stderr,
         )
+
+
+class BetB2BMainCLI:
+    """Adapter that exposes :class:`BetB2BCLI` through the ``src.main``
+    dispatcher contract (``create_parser()`` + ``run(args, interrupt_handler=,
+    shutdown_coordinator=)``), so betb2b runs via
+    ``python -m src.main betb2b …`` alongside the other sites.
+
+    betb2b's own flags are unchanged — only the invocation path differs.
+    The interrupt/shutdown kwargs are accepted for signature compatibility;
+    the scraper manages its own async lifecycle via ``async with``.
+    """
+
+    def __init__(self) -> None:
+        self._cli = BetB2BCLI()
+
+    def create_parser(self) -> argparse.ArgumentParser:
+        return self._cli.create_parser()
+
+    async def run(
+        self,
+        args: argparse.Namespace,
+        interrupt_handler: Any = None,
+        shutdown_coordinator: Any = None,
+    ) -> int:
+        return await self._cli.run_args(args)
