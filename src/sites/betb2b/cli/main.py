@@ -127,6 +127,12 @@ class BetB2BCLI:
                             help="gzip the --output file (a .gz suffix is added). "
                                  "Read it back with `betb2b view <file>`. Large "
                              "results (full odds) compress ~85-90%%.")
+        scrape.add_argument("--db", default=None,
+                            help="Also persist the result into a SQLite odds store "
+                                 "at this path (events/odds_snapshots time-series). "
+                                 "Opt-in; JSON output is unaffected. "
+                                 "Default: data/betb2b/odds.db if flag given without value.",
+                            nargs="?", const="data/betb2b/odds.db")
         # info
         info = sub.add_parser("info", help="Print skin config + scraper state")
         info.add_argument("--skin", "-s", default="linebet", help="Skin name")
@@ -253,6 +259,20 @@ class BetB2BCLI:
         except Exception as exc:  # noqa: BLE001
             print(f"ERROR: scrape failed: {exc}", file=sys.stderr)
             return 1
+
+        # Opt-in structured persistence (JSON output is unaffected).
+        if getattr(args, "db", None):
+            try:
+                from src.sites.betb2b.store import persist_result
+
+                run_id = persist_result(result, args.db)
+                print(
+                    f"Persisted run {run_id} "
+                    f"({result.get('event_count', 0)} events) to {args.db}",
+                    file=sys.stderr,
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"WARNING: --db persist failed: {exc}", file=sys.stderr)
 
         return self._emit(result, args)
 
