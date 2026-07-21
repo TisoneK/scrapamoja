@@ -551,3 +551,23 @@ don't remove the line.
       scrape duration. For sub-minute line-movement resolution, harvest cookies
       once then httpx-poll GetGameZip per event (ADR-3 hybrid) instead of
       re-rendering the DOM every cycle. MED.
+
+---
+- [ ] **DOM extractor under-captures: virtual scroll renders only ~1 screenful** (added 2026-07-21 by Claude Code, Session 25) —
+      HIGH-ish coverage bug. The linebet live/prematch SPA VIRTUALIZES the game
+      grid: the captured `/en/live/basketball` HTML had 16 championship headers
+      (`dashboard-champ-name__label`) but only 10 rendered game rows
+      (`dashboard-champ__game`), plus `virtual` scroll markers + 66 `skeleton`
+      placeholders. So every scrape/poll captures only the first ~10 games of a
+      card that is genuinely larger (>=16 here). `--count` is an API-feed param
+      and doesn't help (feed is 406 → DOM fallback). The odds store + poller are
+      therefore only tracking the top ~10 events per skin/sport.
+      Fix: in `src/sites/betb2b/session.py::render_dom_events`, after the grid
+      appears and before extraction, defeat virtualization — repeatedly
+      `window.scrollTo(0, document.body.scrollHeight)` (or scroll the grid
+      container) until `document.querySelectorAll('.dashboard-champ__game').length`
+      stops growing (bounded by a max_scrolls cap + a short pause per scroll so
+      lazy rows render). Then extract. Add `max_scrolls`/`scroll_pause` config.
+      Validate live: a full live-basketball scrape should return >=16 events
+      (all championships), not 10. MED–HIGH — without it the product misses most
+      of every card.
