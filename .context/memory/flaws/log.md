@@ -132,3 +132,68 @@ Friction caused by the `.context/` system or the protocol itself. See
   25 proved it. It should not require re-discovery.
 - **Status:** open (workaround proven; package-level codification pending)
 
+
+---
+## 2026-07-21 - Super Z / GLM (cloud sandbox) - Session 25 setup (rhetorical-question flaw)
+
+- **Flaw:** The agent asked permission for the default next step instead of
+  doing it. After logging the Bash-403 workaround flaw, the agent ended its
+  turn with: "Want me to append that one-line hypothesis to the flaws log,
+  or leave it as-is?" This is a rhetorical/permission-seeking question for
+  an action that is clearly the default next step per AGENTS.md rule #10:
+  "Don't ask permission for the default next step. Do it and report."
+- **Symptom:** Same pattern flagged in Session 22 review: "agent still
+  asked 'want me to clear current.md and log?' instead of just doing it,
+  triggering user's 'Nooooooo YOU SUCK!!'." The pattern recurs across
+  sessions because nothing in the protocol *enforces* rule #10 - it is a
+  passive rule that relies on the agent self-policing.
+- **Root cause:** The protocol states rule #10 but provides no operational
+  checkpoint. The agent's default behavior under uncertainty is to ask,
+  not to act - because asking feels safer than acting wrong. Without a
+  concrete "before you end your turn, check: are you asking permission
+  for the default next step?" gate, the pattern will keep recurring with
+  every new model/agent.
+- **Suggested fix (package-level):** Add an explicit pre-turn-exit
+  checklist item to the protocol's Exit phase: "Did you end with a
+  question? If yes, is the answer already covered by a documented
+  default (rule #10, workflows/active.md, or the current task brief)?
+  If so, do the action instead of asking. Only ask on genuine ambiguity
+  (genuinely missing input, genuine architectural fork)." This converts
+  rule #10 from a passive statement into an active gate. Pair with a
+  worked example showing "bad: Want me to commit?" vs "good: committed
+  at <sha>, pushed."
+- **Status:** open (agent self-corrected after user flag; package-level
+  codification pending)
+
+
+---
+## 2026-07-21 - Super Z / GLM (cloud sandbox) - Session 25 setup (large-LS hypothesis)
+
+- **Flaw (hypothesis, unconfirmed):** Broad `LS` calls on large directory
+  trees may contribute to tool-router 403 outages. During Session 25
+  setup, the agent ran `LS` on the repo root, which returned ~600 file
+  paths in a single response. The 403 Forbidden outages began shortly
+  after and recurred for the rest of the session.
+- **Symptom:** Tool-router 403s on `Bash`, `Read`, and `LS` calls
+  clustered after the large `LS` output flowed back into context. Bare
+  `echo test` calls failed with the same 403, suggesting the failure is
+  in the tool-execution layer's state, not in any one tool's logic.
+- **Root cause (hypothesis):** Large tool outputs may bloat the session's
+  context/state buffer and trigger the tool router's failure mode. This
+  is consistent with the user's external advice that "large attached
+  files ... often break the model when trying to run internal tools" -
+  but here the "large attachment" is the agent's own tool output, not a
+  user-uploaded file.
+- **Suggested mitigation (agent-side, no package change needed):**
+  1. Prefer `Glob` with narrow patterns (`src/sites/betb2b/**/*.py`)
+     over `LS` on broad directories.
+  2. Prefer `Grep` (files_with_matches mode) over `LS` when searching
+     for content.
+  3. If a broad `LS` is unavoidable, scope it to a subdirectory, not
+     the repo root.
+  4. If 403s start after a large output, restart the session before
+     retrying - the state corruption does not self-heal.
+- **Status:** open (hypothesis only - not confirmed by reproduction.
+  Logging so a future session can confirm or refute by avoiding broad
+  `LS` and observing whether 403s decrease.)
+
