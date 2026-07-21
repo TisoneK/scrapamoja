@@ -582,3 +582,17 @@ past entries — append corrections instead.
   directly, but the page HTML IS httpx-reachable and has the full id set — so
   discovery = HTML harvest, per-match data = GetGameZip endpoint. Both
   endpoint/HTTP, no rendered UI. Yield-improvement (38→16) backlogged.
+
+### Session 25 addendum 12 (2026-07-21) — multi-skin scrape/poll for cross-skin collection
+- Operator: run multiple skins at once for better collection + comparison.
+  Added comma-list + `--all-skins` to `scrape` and `poll` (`9d64f6e`):
+  `betb2b scrape linebet,melbet,helabet live --db one.db`. `_resolve_skins`
+  (comma-split/dedup or all-skins); `_scrape_one` shared helper; single-skin
+  keeps classic JSON, multi-skin emits a combined summary; poll persists every
+  skin into the one store each cycle. +11 tests, betb2b suite → 141.
+- Verified live: `scrape linebet,melbet,helabet live --db multi.db` → linebet 15
+  / melbet 10 / helabet 0 events, all into ONE store (17 deduped events, 1150
+  odds, 2 skins). cross_skin_odds for a shared match (IPBL Cats v Wolves,
+  738083173) returned the AH ladder per skin — e.g. W1(-3.5) linebet=1.575
+  vs melbet=1.91 — the best-line-per-selection query the product needs.
+  (helabet 0 this run = no live card at that moment; handled gracefully.)
