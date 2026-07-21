@@ -119,16 +119,30 @@ python -m src.sites.betb2b.cli.main sports                # list registered spor
 python -m src.sites.betb2b.cli.main info --skin linebet --sport basketball
 ```
 
-Live validation against linebet basketball:
+Live validation against linebet basketball — **direct mode works from Kenya**
+(Session 24 discovery: `allowed_countries: ["KE"]` skins need no proxy):
 
 ```bash
-export BETB2B_PROXY_URL=http://bore.pub:37582
-export BETB2B_PROXY_USER=TisoneK
-export BETB2B_PROXY_PASS=Taalib01
+# Direct mode (no proxy) — works for linebet from Kenya egress:
+python -m src.sites.betb2b.scripts.validate_live --skin linebet --sport basketball
+
+# Cross-skin proxy fallback (helabet/22bet/betwinner blocked from KE direct).
+# Bore tunnels rotate — set these ONLY when the skin is geo-blocked for you:
+export BETB2B_PROXY_URL=http://bore.pub:<current-port>
+export BETB2B_PROXY_USER=<user>
+export BETB2B_PROXY_PASS=<pass>
 export BETB2B_PROXY_COUNTRY=KE
 export BETB2B_PROXY_ID=kenya
-python -m src.sites.betb2b.scripts.validate_live --skin linebet --sport basketball
+python -m src.sites.betb2b.scripts.validate_live --skin <skin> --sport basketball
 ```
+
+**Session 24 status (2026-07-21):** prematch DOM extraction solid (28 events,
+100% teams / competition / market coverage, 50% H2H, 63.6 s scrape). Live DOM
+extraction broken (70 events, garbled names, 0 markets, 0 scores). Only the
+main "To Win Match" / "1x2" market is captured per event — `GetGameZip`
+enrichment for the full market tree is the next HIGH-priority gap. CLI
+argparse `%`-escape bug fixed (`5e1dfc3`) — was blocking all CLI commands.
+See `reviews/2026-07-21-review.md` + `tasks/current.md` Session 25 plan.
 
 **BetB2B platform infrastructure (researched 2026-07-18, H2H solved 2026-07-19):**
 - White-label platform provider (Curaçao), powers 18+ betting brands
@@ -317,16 +331,17 @@ pytest tests/ -x
 # BetB2B-specific tests
 pytest tests/ -k "betb2b" -v
 
-# BetB2B live validation (proxy optional — omit if egress is in allowed country)
-# With proxy:
-BETB2B_PROXY_URL=http://bore.pub:55068 \
-BETB2B_PROXY_USER=TisoneK \
-BETB2B_PROXY_PASS=Taalib01 \
+# BetB2B live validation — direct mode is the default for KE-allowed skins (linebet)
+# Direct mode (preferred when egress is in allowed_countries):
+python -m src.sites.betb2b.scripts.validate_live --skin linebet
+
+# Proxy mode (only for geo-blocked skins; bore.pub port rotates per session):
+BETB2B_PROXY_URL=http://bore.pub:<port> \
+BETB2B_PROXY_USER=<user> \
+BETB2B_PROXY_PASS=<pass> \
 BETB2B_PROXY_COUNTRY=KE \
 BETB2B_PROXY_ID=kenya \
-python -m src.sites.betb2b.scripts.validate_live --skin linebet
-# Without proxy (direct mode):
-python -m src.sites.betb2b.scripts.validate_live --skin linebet
+python -m src.sites.betb2b.scripts.validate_live --skin <blocked-skin>
 ```
 
 ### BetB2B CLI
