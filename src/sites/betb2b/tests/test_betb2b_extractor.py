@@ -755,3 +755,14 @@ def test_extract_h2h_data_bad_periods(rules: BetB2BExtractionRules) -> None:
     # Second game: skips None item, parses the dict item
     assert len(result.game_shorts[1].periods) == 1
     assert result.game_shorts[1].periods[0].home_score == 10
+
+
+def test_lookup_market_gt_verified(skin) -> None:
+    """(G,T) verified map fixes the total variants (ADR-7, real PBA game)."""
+    from src.sites.betb2b.markets import lookup_market
+    mg, mt = skin.market_groups, skin.market_types
+    assert lookup_market(17, 9, mg, mt) == ("Total", "Over")
+    assert lookup_market(15, 11, mg, mt) == ("Individual Total Home", "Over")
+    # The old T-only map wrongly called (62,13) "Double Chance".
+    assert lookup_market(62, 13, mg, mt) == ("Individual Total Away", "Over")
+    assert lookup_market(14, 182, mg, mt) == ("To Win Match", "1")

@@ -148,6 +148,40 @@ DEFAULT_MARKET_TYPES: Dict[int, MarketTypeMap] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# (G, T) → (market_name, selection) — VERIFIED against a real PBA game
+# (GetGameZip id=352961836, ADR-7 verified mapping). (G,T) is stable across
+# every scope; the scope comes from which (sub-)game the market is in. This
+# map takes precedence over the T-only table (which mislabels total variants
+# across sports — e.g. T=13/14 is the AWAY individual total in basketball,
+# not "Double Chance").
+# ---------------------------------------------------------------------------
+DEFAULT_MARKET_GT: Dict["tuple[int, int]", "tuple[str, str]"] = {
+    # Combined total (both teams)
+    (17, 9): ("Total", "Over"),
+    (17, 10): ("Total", "Under"),
+    # Individual totals — HOME (team 1) / AWAY (team 2)
+    (15, 11): ("Individual Total Home", "Over"),
+    (15, 12): ("Individual Total Home", "Under"),
+    (62, 13): ("Individual Total Away", "Over"),
+    (62, 14): ("Individual Total Away", "Under"),
+    # Asian handicap
+    (2, 7): ("Asian Handicap", "W1"),
+    (2, 8): ("Asian Handicap", "W2"),
+    # To Win Match (moneyline 2-way, no line)
+    (14, 182): ("To Win Match", "1"),
+    (14, 183): ("To Win Match", "2"),
+    # 1x2 (3-way, seen in sub-games)
+    (1, 1): ("Match Result 1x2", "1"),
+    (1, 2): ("Match Result 1x2", "X"),
+    (1, 3): ("Match Result 1x2", "2"),
+    # Moneyline 3-way
+    (101, 401): ("Moneyline 3-way", "1"),
+    (101, 402): ("Moneyline 3-way", "2"),
+    (101, 403): ("Moneyline 3-way", "X"),
+}
+
+
 def lookup_market(
     g_id: int,
     t_id: int,
@@ -156,9 +190,13 @@ def lookup_market(
 ) -> "tuple[str | None, str | None]":
     """Look up a market's (market_name, selection_label) from ``G`` + ``T``.
 
+    Order: verified (G,T) map → T-only map → G-only group name → placeholder.
     Falls back to ``f"G={g_id}"`` / ``f"T={t_id}"`` if unknown — the
     extractor degrades gracefully rather than dropping the market.
     """
+    gt = DEFAULT_MARKET_GT.get((g_id, t_id))
+    if gt is not None:
+        return gt
     mt = market_types.get(t_id)
     if mt is not None:
         return mt.market_name, mt.selection_label
