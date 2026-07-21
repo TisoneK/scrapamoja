@@ -595,7 +595,7 @@ don't remove the line.
       them to DEFAULT_MARKET_GROUPS. Then the store's `markets` table gets real
       names and the exporter can select each scope's line. MED — blocks non-full
       scopes. FULL_MATCH works today.
-- [ ] **Build the scorewise-engine ingest exporter (ADR-7)** (added 2026-07-21 by Claude Code, Session 26) —
+- [x] **Build the scorewise-engine ingest exporter (ADR-7)** — DONE 2026-07-21 (fb4b41d exporter + d94d74f ingest client/CLI + 5bd38cc sub-games; engine Pydantic schema accepts all 9 scopes). Remaining: live POST against the running engine (needs URL+token in secrets/). Original: (added 2026-07-21 by Claude Code, Session 26) —
       `src/sites/betb2b/export/scorewise.py`: `event_to_predict_requests(event)
       -> List[PredictRequest]` (one per available scope) + an httpx ingest client
       that POSTs `{source:"betb2b-scraper", scraped_at, matches:[...]}` to

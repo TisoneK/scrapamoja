@@ -620,3 +620,23 @@ past entries — append corrections instead.
   - **Two remaining blockers (backlogged):** (1) map basketball quarter/half/team-total G ids in `markets.py`; (2) build the exporter+ingest client (ADR-7). FULL_MATCH is buildable now.
 - **Open items:** the two backlog items above.
 - **Report:** this log + ADR-7 (no separate review file — investigation session).
+
+### Session 26 continued (2026-07-21) — scoped ingestion pipeline BUILT + engine-schema verified
+- Continued from the ADR-7 design → shipped the whole scoped-ingestion pipeline:
+  1. `(G,T)` market map verified from a real PBA game (`f321319`): combined
+     total, home/away individual totals, handicap, moneyline, 1x2.
+  2. Sub-game fetching (`5bd38cc`): Market.scope + rules.extract_markets_scoped
+     + scraper._enrich_with_subgames (flag `subgames`) + odds_snapshots.scope.
+     Verified: combined Total per scope FULL 216.5 / Q1 52.5 / … / 2H 110.5.
+  3. Exporter (`fb4b41d`): export/scorewise.py::event_to_predict_requests — one
+     betb2b event → up to 9 engine PredictRequests, match_total=Over-odds≈1.85
+     per scope, H2H scores scope-matched (FULL 107-122, Q1 33-31, 1H 57-64).
+  4. Ingest client + `scrape --ingest` (`d94d74f`): POST scopes to
+     {engine}/api/ingest (chunk ≤100, env URL+token).
+- **VERIFIED against the engine's real Pydantic schema:** `IngestRequest(**payload)`
+  from a real PBA event ACCEPTED all 9 matches/scopes. Contract proven end-to-end
+  (scrape → sub-games → store → exporter → engine-valid ingest) without the live
+  engine. betb2b suite → 152.
+- Remaining: live end-to-end (`scrape --ingest $URL` against the running engine —
+  needs the engine URL + token in secrets/); map remaining `G=NNNN` prop groups;
+  ignored-field mapping (O1I/O2I team ids etc., backlogged).
