@@ -547,3 +547,19 @@ past entries — append corrections instead.
   tests; betb2b suite → 121. Remaining data-layer follow-ups (retention/rollup,
   flashscore onto the schema, Postgres, `betb2b odds` query subcommand, and an
   interval poller to accumulate history) stay backlogged.
+
+### Session 25 addendum 10 (2026-07-21) — interval poller (the running system)
+- Operator: wire up the poller. Added `betb2b poll` (`a1b9e08`): scrape + persist
+  on a loop so line movement accumulates. `poll.py::poll_loop` is a pure,
+  injected-clock/sleep control loop (6 tests: cycle/time/should_stop stops,
+  interval pacing, overrun-no-negative-sleep, error resilience). CLI subcommand
+  reuses one scraper across cycles, same friendly grammar (`poll linebet live`),
+  --interval/--cycles/--for/--db, Ctrl-C clean stop.
+- Verified LIVE (2-cycle poll through the proxy): cycle1 stored 1247 odds,
+  cycle2 stored 1020 (movement only — dedup skipped the ~227 unchanged);
+  667 selections captured >=2 price points = real line movement
+  (2.045->2.575, 1.656->1.42, …). betb2b suite → 127.
+- Known limit logged: each cycle re-bootstraps the browser (~70-90s), so the
+  floor interval is the scrape duration. Sub-minute resolution needs a
+  bootstrap-once + httpx GetGameZip fast-poll (ADR-3 hybrid) — backlogged as
+  follow-up (7).

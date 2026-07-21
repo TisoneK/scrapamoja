@@ -541,6 +541,13 @@ don't remove the line.
       TEXT/INTEGER/REAL + ISO timestamps (portable); add a connection
       abstraction when file-SQLite stops scaling. (5) a small `betb2b odds`
       CLI subcommand wrapping `latest_odds`/`cross_skin_odds`/`line_movement`
-      for operators. (6) a scheduled/loop poller that persists on an interval
-      so line-movement history actually accumulates. MED — this is the
+      for operators. (6) a scheduled/loop poller — DONE 2026-07-21
+      (`a1b9e08`): `betb2b poll <skin> <status> --interval N --db ...` loops
+      scrape+persist; verified live — a 2-cycle poll captured 667 selections
+      with >=2 price points (real line movement). MED — this is the
       "data processing" layer the odds-comparison product needs.
+      NEW follow-up (7): **bootstrap-once fast-poll** — each poll cycle
+      currently re-launches the browser (~70-90s), so the floor interval is the
+      scrape duration. For sub-minute line-movement resolution, harvest cookies
+      once then httpx-poll GetGameZip per event (ADR-3 hybrid) instead of
+      re-rendering the DOM every cycle. MED.
