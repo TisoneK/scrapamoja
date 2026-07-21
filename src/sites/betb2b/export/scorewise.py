@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-__all__ = ["event_to_predict_requests"]
+__all__ = ["event_to_predict_requests", "build_ingest_matches", "post_ingest"]
 
 # period_key (1xbet ``periods[].period_key``) → quarter index, per Session-21
 # _PERIOD_TYPE_NAMES (18=1st quarter … 21=4th quarter).
@@ -122,3 +122,40 @@ def event_to_predict_requests(ev: Dict[str, Any]) -> List[Dict[str, Any]]:
     add("HOME_TEAM_TOTAL", _nearest_185_total(markets, "FULL_MATCH", "Individual Total Home"))
     add("AWAY_TEAM_TOTAL", _nearest_185_total(markets, "FULL_MATCH", "Individual Total Away"))
     return reqs
+
+
+def build_ingest_matches(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Flatten a list of event dicts into engine PredictRequest matches."""
+    matches: List[Dict[str, Any]] = []
+    for ev in events:
+        matches.extend(event_to_predict_requests(ev))
+    return matches
+
+
+async def post_ingest(
+    matches: List[Dict[str, Any]], engine_url: str, *,
+    source: str = "betb2b-scraper", token: Optional[str] = None,
+    scraped_at: Optional[str] = None, chunk: int = 100,
+) -> List[Dict[str, Any]]:
+    """POST matches to ``{engine_url}/api/ingest`` in chunks of ≤100.
+
+    Returns one summary dict per chunk. ``token`` (if given) → Bearer auth.
+    """
+    import httpx
+
+    headers = {"content-type": "application/json"}
+    if token:
+        headers["authorization"] = f"Bearer {token}"
+    url = f"{engine_url.rstrip('/')}/api/ingest"
+    out: List[Dict[str, Any]] = []
+    async with httpx.AsyncClient(timeout=45.0) as c:
+        for i in range(0, len(matches), chunk):
+            payload = {"source": source, "scraped_at": scraped_at,
+                       "matches": matches[i:i + chunk]}
+            try:
+                r = await c.post(url, json=payload, headers=headers)
+                out.append({"status": r.status_code, "sent": len(payload["matches"]),
+                            "body": r.text[:200]})
+            except Exception as exc:  # noqa: BLE001
+                out.append({"status": 0, "sent": len(payload["matches"]), "error": str(exc)[:200]})
+    return out
