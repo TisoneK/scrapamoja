@@ -640,3 +640,21 @@ past entries — append corrections instead.
 - Remaining: live end-to-end (`scrape --ingest $URL` against the running engine —
   needs the engine URL + token in secrets/); map remaining `G=NNNN` prop groups;
   ignored-field mapping (O1I/O2I team ids etc., backlogged).
+
+### Session 26 — LIVE end-to-end to scorewise-engine CONFIRMED (2026-07-21)
+- Operator supplied the engine URL (scorewise-engine.up.railway.app) + x-api-key
+  (stored in secrets/scorewise-api-key, gitignored, never committed).
+- LIVE POST /api/ingest with x-api-key → HTTP 200; engine ingested + ran its
+  10-step pipeline. Fixes found live: (1) auth is `x-api-key` not Bearer
+  (`7859088`); (2) engine requires STRICT head-to-head — betb2b's h2h feed
+  includes each team's games vs OTHER opponents, so `_h2h_for_scope` now filters
+  to games between the two event teams + orients to home/away (`dc37694`).
+- **REAL PREDICTIONS returned:** 3/3 succeeded — e.g. Phoenix v Rain or Shine
+  FULL_MATCH → recommendation=NO_BET, winner=NO_WINNER_PREDICTION, conf=LOW,
+  bookmaker_line=210.5, average_rate=-5.83. THE WHOLE PIPELINE WORKS: betb2b
+  scrape → sub-games → export (9 scopes) → POST → engine pipeline → predictions.
+- Notes: predictions need STRICT h2h (games between the two teams) — many events
+  have little/none, yielding empty h2h → engine "fail" on those; a real scrape's
+  `_enrich_with_h2h` provides it. Scoped (Q/half) predictions need a scrape that
+  has BOTH sub-games AND h2h (the offline test paired PBA markets / live_e2e h2h
+  separately). betb2b suite 152 → 156.
