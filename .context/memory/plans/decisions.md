@@ -116,3 +116,28 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 - **Market identity = (G, GS, T), not T alone.** `GS` is the group-specifier; the current `lookup_market` keys on `T` only and MISLABELS total variants (e.g. `G=62/T=13` → wrongly "Double Chance"; it has a line, so it's a total not a double-chance). Fix: key the lookup on `(G, GS, T)`.
 - **Mapping method (do with ONE clean 5v5 capture — NBA/EuroLeague, has sub-games):** GetGameZip the main event + every `SG` sub-game; for each, enumerate `(G, GS, T)` → (scope, market_name, selection, is_individual, side) using: line magnitude (full~146 / half~73 / quarter~36 / individual~half-of-combined), Over/Under structure, and the sub-game `PN` for the period. Then extend `markets.py::DEFAULT_MARKET_GROUPS`/types and rewrite `lookup_market` to `(G,GS,T)`. Also add SG sub-game fetching to the scraper enrichment so scoped markets are captured + tagged with their `PredictionScope`.
 - **Decision:** do NOT commit a guessed map — a mislabelled total feeds wrong odds to the engine (wrong predictions), which is worse than the `G=NNNN` placeholder. Blocked on a clean quartered-game capture (proxy was flapping + card was 3x3-heavy on 2026-07-21).
+
+---
+## ADR-7 VERIFIED MAPPING (2026-07-21) — betb2b basketball market (G,T) → mode, from a real PBA game
+Ground truth: `GetGameZip id=352961836` San Miguel Beermen(HOME/O1) v Converge Fiberxers(AWAY/O2), PBA, + all 11 sub-games (raw saved). Handicap G=2/T=7 P=-5.5 → home favored (scores more → higher individual total). **(G,T) is stable across ALL scopes; the SCOPE = which (sub-)game the market is in.**
+
+**CONFIRMED (G,T) → (market_name, selection):**
+| G | T | market | selection | note |
+|---|---|--------|-----------|------|
+| 17 | 9 / 10 | **Total** (combined, both teams) | Over / Under | line=full total (~216 full, ~104 half, ~52 quarter) |
+| 15 | 11 / 12 | **Individual Total — HOME** | Over / Under | ~half of combined; HOME=team1 (T=11/12) |
+| 62 | 13 / 14 | **Individual Total — AWAY** | Over / Under | AWAY=team2 (T=13/14). **FIXES current bug: T=13,14 wrongly mapped to "Double Chance"** |
+| 2 | 7 / 8 | **Asian Handicap** | W1(home) / W2(away) | P=handicap line |
+| 14 | 182 / 183 | **To Win Match** (moneyline 2-way) | 1(home) / 2(away) | no line |
+| 1 | 1 / 2 / 3 | **1x2** | 1 / X / 2 | seen in sub-games |
+| 101 | 401 / 402 / 403 | **Moneyline 3-way** | 1 / 2 / X | no line |
+
+**SCOPE ← sub-game:** main event = FULL_MATCH. Fetch each `main.Value.SG[].I` via GetGameZip; `PN` → scope: "1st/2nd/3rd/4th quarter"=QUARTER_1..4, "1 Half"=FIRST_HALF, "2 Half"=SECOND_HALF. Each sub-game repeats the SAME (G,T) groups scoped to its period. HOME/AWAY_TEAM_TOTAL scopes = main-event G=15 / G=62.
+
+**UNCERTAIN (do NOT guess, left as G=NN):** G=8/T=4,6; G=91/T=755,757; G=92/T=766,767; G=27/T=424-426; and the many no-line prop groups (G=176,228,230,232,234,236,238,920,922,930,934,936,1144,1148,2663,2665,2766,2768,3017-3023,7733,7735,9854,10487-10489).
+
+**IMPLEMENTATION TODO (was cut for tokens — NOT yet coded):**
+1. `markets.py`: add a `(G,T)` keyed lookup that takes precedence over the T-only map; add the CONFIRMED rows above; the T-only map's `T=11/12→"Total"` and `T=13/14→"Double Chance"` are WRONG for basketball — (G,T) overrides fix them.
+2. `rules.py::lookup_market`: check `(G,T)` first, fall back to T-only, then G-only.
+3. Scraper: fetch `SG[]` sub-games per event, tag each scoped market with its `PredictionScope`; store needs a `scope`/`period` column on `markets` or `odds_snapshots` (or a `scoped_markets` table). Then scoped ingestion (ADR-7) has real per-scope totals.
+Raw captures were in scratchpad (pba/main.json + sub_*.json) — re-fetch id=352961836 to reproduce.
