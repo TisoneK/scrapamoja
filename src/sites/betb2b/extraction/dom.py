@@ -250,9 +250,18 @@ _H2H_LABELS = {0: "1", 1: "2"}
 
 
 def _score_pair(s: str):
+    # Separated form first: "88:90", "88 - 90".
     m = re.search(r"(\d+)\s*[:\-]\s*(\d+)", s or "")
     if m:
         return int(m.group(1)), int(m.group(2))
+    # Live grid form: the two total-score cells render as adjacent
+    # `.ui-game-scores__num` spans with no separator, so the score selector
+    # yields "46 57" (whitespace-joined). Take the first two integers as
+    # home/away — the score selectors only ever match score cells, and the
+    # `--total` pair sorts first in DOM order.
+    nums = re.findall(r"\d+", s or "")
+    if len(nums) >= 2:
+        return int(nums[0]), int(nums[1])
     return None, None
 
 

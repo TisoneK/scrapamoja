@@ -66,7 +66,13 @@ class DOMSelectors:
     )
 
     # Live-score elements. Optional — prematch games have none.
+    # The in-play grid renders the running total as two adjacent
+    # ``.ui-game-scores__num`` spans inside ``.ui-game-scores__item--total``
+    # (home first, away second); per-quarter items follow. Targeting the
+    # ``--total`` pair keeps us off the period scores. The legacy selectors
+    # remain as fallbacks for older/other skins.
     team_scores: Tuple[str, ...] = (
+        ".ui-game-scores__item--total .ui-game-scores__num",
         ".ui-team-scores__scores",
         ".dashboard-game-block__score",
     )

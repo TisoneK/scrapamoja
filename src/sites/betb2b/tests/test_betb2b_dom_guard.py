@@ -20,6 +20,7 @@ import pytest
 from src.sites.betb2b.extraction.dom import (
     _is_plausible_team_name,
     _looks_duplicated,
+    _score_pair,
     extract_events_from_page,
 )
 from src.sites.betb2b.extraction.models import Sport
@@ -73,6 +74,21 @@ def test_duplication_detector():
     assert _looks_duplicated("Real Madrid Real Madrid") is True
     assert _looks_duplicated("Olympiacos Piraeus") is False
     assert _looks_duplicated("Los Angeles Lakers") is False
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("88:90", (88, 90)),        # separated
+        ("88 - 90", (88, 90)),      # dash separated
+        ("46 57", (46, 57)),        # live grid: two adjacent __num spans, no separator
+        ("46 57 25 30 21 27", (46, 57)),  # total pair sorts first; ignore periods
+        ("", (None, None)),         # prematch — no score
+        ("5", (None, None)),        # a lone number isn't a pair
+    ],
+)
+def test_score_pair(text, expected):
+    assert _score_pair(text) == expected
 
 
 class _FakePage:
