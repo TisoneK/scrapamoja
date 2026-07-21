@@ -163,3 +163,16 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** Live validation is inherently operator-gated (residential/allowed-country egress). The proxy is an ephemeral tunnel, up only when the operator runs it on their Windows box.
 - **Workaround / fix:** Verify everything offline (tests, CLI JSON shape, compression); ship the compression feature; report the live blocker with the exact resume command. Left `tasks/current.md` pointing at the blocker.
 - **Prevent next time:** Before promising a live betb2b run, TCP-probe bore.pub:1074 first (`socket.connect`); if refused, the tunnel is down — do the offline slice and hand the live step back to the operator with env vars + command.
+
+---
+## 2026-07-21 — GitHub Copilot / DeepSeek V4 Flash Free (Session 24)
+- **Problem 1 — Proxy assumption was wrong.** Sessions 9–23 all assumed linebet needed a proxy tunnel (bore.pub:1074) from Kenya. Session 23 was blocked entirely because "proxy tunnel down." Session 24 discovered that running *without* the proxy (`BETB2B_PROXY_URL` unset) works perfectly from Kenya — linebet's `allowed_countries: ["KE"]` allows direct Kenya egress. The proxy assumption persisted unexamined for 15 sessions.
+- **Cost:** At minimum Session 23's entire live e2e goal was abandoned (~30 min). Prior sessions may have been slowed by proxy setup/teardown overhead. Unknown sessions where the operator was asked to start a tunnel unnecessarily.
+- **Cause:** The proxy was declared in the original skin YAML config as the default, and "linebet needs proxy" became accepted truth. No one tried running without it — the env vars were always set, so the code never exercised the direct path. Also, no test/doc explicitly said "try without proxy if your egress is in an allowed country."
+- **Workaround / fix:** This session ran without any proxy env vars. Scrape succeeded (28 prematch events, 63.6s). Added `BETB2B_PROXY_URL` docs in AGENTS.md saying it's optional.
+- **Prevent next time:** Before declaring a site unreachable, try direct mode first — especially for `allowed_countries` skins. The proxy is a fallback, not a requirement. Document in `AGENTS.md` for each skin whether direct mode works from which egress.
+- **Problem 2 — CLI argparse `%` formatting bug.** The `--compress` help string `"~85-90%"` causes `ValueError: badly formed help string` because Python argparse interprets `%` as format specifiers. This bug was shipping since the compress feature was added (Session 23), blocking ALL CLI commands. Not caught by tests (no CLI smoke tests).
+- **Cost:** ~5 min to diagnose + fix once a CLI command was actually run. Could have been caught by a single integration test.
+- **Cause:** No test exercises the CLI entry point. The `%` literal needs `%%` in argparse help strings — a known Python pitfall.
+- **Workaround / fix:** Changed to `"~85-90%%"`. All CLI commands now work.
+- **Prevent next time:** Add a CLI smoke test that calls `parser.parse_args(["--help"])` or similar for each subcommand. Better yet, add a single integration test that runs `python -m src.sites.betb2b.cli.main --help` and verifies exit code 0.
