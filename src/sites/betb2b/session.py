@@ -51,12 +51,16 @@ class BetB2BSessionManager:
         settle_seconds: float = 12.0,
         bootstrap_timeout_ms: int = 45_000,
         grid_wait_ms: int = 20_000,
+        proxy_verify_attempts: int = 3,
+        proxy_verify_backoff: float = 3.0,
     ) -> None:
         self.skin = skin
         self.proxy = proxy
         self.settle_seconds = settle_seconds
         self.bootstrap_timeout_ms = bootstrap_timeout_ms
         self.grid_wait_ms = grid_wait_ms
+        self.proxy_verify_attempts = proxy_verify_attempts
+        self.proxy_verify_backoff = proxy_verify_backoff
 
         self._harvester = SessionHarvester()
         self._validator = SessionValidator(
@@ -251,37 +255,63 @@ class BetB2BSessionManager:
                 await browser.close()
 
     async def _verify_proxy_country(self) -> bool:
-        """Verify the proxy's egress country is in the skin's allowed list."""
+        """Verify the proxy's egress country is in the skin's allowed list.
+
+        Ephemeral tunnels (bore/gost) drop connections intermittently, so a
+        single ``ReadError`` on the pre-flight check would otherwise abort a
+        multi-minute scrape even though the tunnel works on the next request.
+        Retry transient reachability failures with backoff; a *definitive*
+        country mismatch (the tunnel answered, wrong country) fails fast — no
+        amount of retrying moves the egress IP.
+        """
         if not self.skin.allowed_countries:
             return True  # no allow-list = allow all
-        try:
-            result = await verify_proxy(self.proxy, timeout=20.0, with_geo=True)  # type: ignore[arg-type]
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "skin=%s proxy verification failed: %s", self.skin.name, exc,
-            )
-            return False
 
-        if not result.ok:
-            logger.warning(
-                "skin=%s proxy %s unreachable: %s",
-                self.skin.name, self.proxy.id, result.error,  # type: ignore[union-attr]
-            )
-            return False
+        attempts = max(1, self.proxy_verify_attempts)
+        for attempt in range(1, attempts + 1):
+            try:
+                result = await verify_proxy(self.proxy, timeout=20.0, with_geo=True)  # type: ignore[arg-type]
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "skin=%s proxy verification error (attempt %d/%d): %s",
+                    self.skin.name, attempt, attempts, exc,
+                )
+                result = None
 
-        if result.country_code and result.country_code not in self.skin.allowed_countries:
-            logger.warning(
-                "skin=%s proxy egress country=%s not in allowed=%s",
-                self.skin.name, result.country_code, self.skin.allowed_countries,
-            )
-            return False
+            if result is not None and not result.ok:
+                logger.warning(
+                    "skin=%s proxy %s unreachable (attempt %d/%d): %s",
+                    self.skin.name, self.proxy.id, attempt, attempts,  # type: ignore[union-attr]
+                    result.error,
+                )
+                result = None
 
-        logger.info(
-            "skin=%s proxy OK: egress=%s country=%s latency=%.0fms",
-            self.skin.name, result.egress_ip, result.country_code,
-            result.latency_ms or 0.0,
+            if result is None:
+                # Transient — back off and retry unless this was the last try.
+                if attempt < attempts:
+                    await asyncio.sleep(self.proxy_verify_backoff * attempt)
+                continue
+
+            # The tunnel answered — a country mismatch is definitive, not transient.
+            if result.country_code and result.country_code not in self.skin.allowed_countries:
+                logger.warning(
+                    "skin=%s proxy egress country=%s not in allowed=%s",
+                    self.skin.name, result.country_code, self.skin.allowed_countries,
+                )
+                return False
+
+            logger.info(
+                "skin=%s proxy OK: egress=%s country=%s latency=%.0fms (attempt %d)",
+                self.skin.name, result.egress_ip, result.country_code,
+                result.latency_ms or 0.0, attempt,
+            )
+            return True
+
+        logger.warning(
+            "skin=%s proxy %s unreachable after %d attempts — giving up",
+            self.skin.name, self.proxy.id, attempts,  # type: ignore[union-attr]
         )
-        return True
+        return False
 
     async def render_dom_events(
         self,
