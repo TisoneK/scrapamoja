@@ -440,3 +440,21 @@ past entries — append corrections instead.
     skin `domain` to the KE domain. Logged in backlog.
 - No code changes this addendum — validation only. Backlog items "confirm
   markets across 8 skins" + "run + confirm live e2e" updated with results.
+
+### Session 25 addendum 3 (2026-07-21) — remaining cross-skin scrapes
+- Ran the 3 remaining reachable skins. **Final cross-skin tally: 5/8 fully
+  working** (10 live events each, 10/10 clean teams + scores + GetGameZip
+  markets):
+  - **betwinner** — 185 markets/10 events (redirects betwinner.com→betwinner.ke, path preserved; works).
+  - **paripesa** — 184 markets/10 (paripesa.cool, no redirect).
+  - (+ linebet 133, melbet 89, helabet 114 from addendum 2.)
+  - **22bet — 0 events** (`raw_rows=0`). Root cause: 22bet.com/en/live/basketball
+    redirects to **22bet.co.ke/live/basketball** — the KE domain DROPS the
+    `/en` locale prefix, so the scraper's bootstrap path lands on a route that
+    doesn't render the grid. Fix = per-skin config (set `domain: 22bet.co.ke`
+    + strip `/en` from bootstrap paths), mirroring the Session 19 paripesa
+    domain fix. Backlogged.
+  - megapari (proxy timeout) + 888starz (203 block) remain unreachable.
+- All working skins returned the SAME event ids again (Phoenix 738047045,
+  Caixa 738062773, University of Zagreb 738069557) — shared BetB2B backend.
+- No code changes — validation only.

@@ -484,3 +484,21 @@ don't remove the line.
       are still captured correctly, only the market label is generic. Extend
       the `G`(group)→name lookup (basketball) in
       `src/sites/betb2b/markets.py` / sport overrides. Cosmetic. LOW.
+
+---
+- [ ] **Fix 22bet skin: KE-redirect domain drops the `/en` prefix (0 live events)** (added 2026-07-21 by Claude Code, Session 25) —
+      Cross-skin validation (Session 25) got 0 events from 22bet
+      (`raw_rows=0`) while linebet/melbet/helabet/betwinner/paripesa all
+      returned 10. Root cause: `22bet.com/en/live/basketball` redirects (via
+      the Kenya proxy) to **`22bet.co.ke/live/basketball`** — the KE domain
+      uses NO `/en` locale prefix, so the scraper's bootstrap path
+      (`/en/live/basketball`) lands on a route that never renders the
+      `.dashboard-champ__game` grid. Fix: in `src/sites/betb2b/skins/22bet.yaml`
+      set `domain: 22bet.co.ke` and strip `/en` from `bootstrap_paths`
+      (mirrors the Session 19 paripesa `paripesa.bet`→`paripesa.cool` domain
+      fix, commit `7d676e8`). Then re-run `python -m src.sites.betb2b.cli
+      scrape --skin 22bet --sport basketball --action list_live` through the
+      proxy. Also re-check helabet/betwinner: they redirect too (helabetke.com,
+      betwinner.ke) but preserved the path so they worked — leaving their
+      `domain` as `.com` means feed/GetGameZip URLs still target `.com`
+      (worked in this session, but the KE domain would be more correct). LOW-MED.
