@@ -218,3 +218,42 @@ def test_league_shared_across_skins_is_one_row(db, tmp_path):
     assert c["events"] == 1           # shared event_id → one row
     assert c["scrape_runs"] == 3      # three observations
     assert c["h2h_games"] == 3        # one per skin's observation
+
+
+# ---------------------------------------------------------------------------
+# Change-only dedup: record movement, not heartbeats
+# ---------------------------------------------------------------------------
+def test_unchanged_poll_stores_no_new_rows(db, tmp_path):
+    r1 = _result("linebet", price_1x2=(1.5, 2.5), at="2026-07-21T12:00:00+00:00")
+    r2 = _result("linebet", price_1x2=(1.5, 2.5), at="2026-07-21T12:00:05+00:00")  # identical odds
+    persist_result(r1, tmp_path / "odds.db", conn=db)
+    n1 = db.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0]
+    persist_result(r2, tmp_path / "odds.db", conn=db)
+    n2 = db.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0]
+    assert n1 == 2
+    assert n2 == 2                      # nothing new — unchanged prices skipped
+    # event_states deduped too (same status/score): still one row.
+    assert db.execute("SELECT COUNT(*) FROM event_states").fetchone()[0] == 1
+    assert db.execute("SELECT COUNT(*) FROM scrape_runs").fetchone()[0] == 2  # runs still logged
+
+
+def test_only_changed_selection_is_stored(db, tmp_path):
+    persist_result(_result("linebet", price_1x2=(1.5, 2.5),
+                           at="2026-07-21T12:00:00+00:00"), tmp_path / "odds.db", conn=db)
+    # One of the two selections moves; the other is unchanged.
+    persist_result(_result("linebet", price_1x2=(1.7, 2.5),
+                           at="2026-07-21T12:00:05+00:00"), tmp_path / "odds.db", conn=db)
+    assert db.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0] == 3  # 2 + 1 change
+    moves = line_movement(db, "738047045", "linebet", "To Win Match", "1")
+    assert [m["price"] for m in moves] == [1.5, 1.7]      # the mover: two points
+    unchanged = line_movement(db, "738047045", "linebet", "To Win Match", "2")
+    assert [m["price"] for m in unchanged] == [2.5]        # unchanged: still one point
+
+
+def test_state_change_stores_a_new_row(db, tmp_path):
+    persist_result(_result("linebet", price_1x2=(1.5, 2.5), score=(10, 8),
+                           at="2026-07-21T12:00:00+00:00"), tmp_path / "odds.db", conn=db)
+    persist_result(_result("linebet", price_1x2=(1.5, 2.5), score=(12, 8),  # score moved
+                           at="2026-07-21T12:00:05+00:00"), tmp_path / "odds.db", conn=db)
+    assert db.execute("SELECT COUNT(*) FROM event_states").fetchone()[0] == 2  # score changed
+    assert db.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0] == 2  # odds didn't

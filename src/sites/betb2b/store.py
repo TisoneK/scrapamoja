@@ -26,9 +26,12 @@ Postgres-portable (TEXT/INTEGER/REAL, ISO-8601 timestamps, explicit FKs).
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "init_db",
@@ -294,6 +297,42 @@ def _get_or_create_market(conn, name, market_type, raw_g) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# "Last stored value" lookups — for change-only dedup (record movement, not
+# heartbeats: a fast poll otherwise writes thousands of identical rows).
+# --------------------------------------------------------------------------- #
+def _last_odds(conn, event_id: str, skin: str) -> Dict[tuple, tuple]:
+    """Latest (price, is_suspended) per (market_id, selection, line) for a skin."""
+    rows = conn.execute(
+        "SELECT market_id, selection_name, line, price, is_suspended, MAX(snap_id) "
+        "FROM odds_snapshots WHERE event_id=? AND skin=? "
+        "GROUP BY market_id, selection_name, line",
+        (event_id, skin),
+    ).fetchall()
+    return {(r["market_id"], r["selection_name"], r["line"]): (r["price"], r["is_suspended"])
+            for r in rows}
+
+
+def _last_state(conn, event_id: str, skin: str) -> Optional[tuple]:
+    """The most recent observable state tuple for a skin (None if never seen)."""
+    r = conn.execute(
+        "SELECT status, is_live, score_home, score_away, minute, period, time_remaining "
+        "FROM event_states WHERE event_id=? AND skin=? ORDER BY state_id DESC LIMIT 1",
+        (event_id, skin),
+    ).fetchone()
+    return tuple(r) if r else None
+
+
+def _last_periods(conn, event_id: str, skin: str) -> Dict[Any, tuple]:
+    """Latest (period_name, home, away) per period_key for a skin."""
+    rows = conn.execute(
+        "SELECT period_key, period_name, home_score, away_score, MAX(id) "
+        "FROM period_scores WHERE event_id=? AND skin=? GROUP BY period_key",
+        (event_id, skin),
+    ).fetchall()
+    return {r["period_key"]: (r["period_name"], r["home_score"], r["away_score"]) for r in rows}
+
+
+# --------------------------------------------------------------------------- #
 # Persist
 # --------------------------------------------------------------------------- #
 def persist_result(
@@ -313,6 +352,7 @@ def persist_result(
         at = result.get("extracted_at") or ""
         events: List[Dict[str, Any]] = result.get("events") or []
         sport_name = next((e.get("sport") for e in events if e.get("sport")), None)
+        odds_ins = odds_skip = 0  # change-only dedup counters
 
         run_id = int(conn.execute(
             "INSERT INTO scrape_runs "
@@ -354,41 +394,56 @@ def persist_result(
                  ev.get("home"), ev.get("away"), ev.get("start_time"), at, at),
             )
 
-            # --- facts: live state ---
-            conn.execute(
-                "INSERT INTO event_states "
-                "(run_id, event_id, skin, status, is_live, score_home, score_away, "
-                " minute, period, time_remaining, captured_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (run_id, event_id, skin, ev.get("status"), 1 if ev.get("is_live") else 0,
-                 _as_int(ev.get("score_home")), _as_int(ev.get("score_away")),
-                 _as_int(ev.get("minute")), ev.get("period"), ev.get("time_remaining"), at),
-            )
+            # --- facts: live state (only when it changed) ---
+            state = (ev.get("status"), 1 if ev.get("is_live") else 0,
+                     _as_int(ev.get("score_home")), _as_int(ev.get("score_away")),
+                     _as_int(ev.get("minute")), ev.get("period"), ev.get("time_remaining"))
+            if _last_state(conn, event_id, skin) != state:
+                conn.execute(
+                    "INSERT INTO event_states "
+                    "(run_id, event_id, skin, status, is_live, score_home, score_away, "
+                    " minute, period, time_remaining, captured_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (run_id, event_id, skin, *state, at),
+                )
 
-            # --- facts: per-period scores ---
+            # --- facts: per-period scores (only changed periods) ---
+            last_periods = _last_periods(conn, event_id, skin)
             for ps in ev.get("period_scores") or []:
+                pk = _as_int(ps.get("period_key"))
+                row = (ps.get("period_name"), _as_int(ps.get("home_score")), _as_int(ps.get("away_score")))
+                if last_periods.get(pk) == row:
+                    continue
                 conn.execute(
                     "INSERT INTO period_scores "
                     "(run_id, event_id, skin, period_key, period_name, home_score, away_score, captured_at) "
                     "VALUES (?,?,?,?,?,?,?,?)",
-                    (run_id, event_id, skin, _as_int(ps.get("period_key")), ps.get("period_name"),
-                     _as_int(ps.get("home_score")), _as_int(ps.get("away_score")), at),
+                    (run_id, event_id, skin, pk, *row, at),
                 )
+                last_periods[pk] = row
 
-            # --- facts: odds ---
+            # --- facts: odds (only when a selection's price/suspension changed) ---
+            last_odds = _last_odds(conn, event_id, skin)
             for m in ev.get("markets") or []:
                 market_id = _get_or_create_market(conn, m.get("name"), m.get("market_type"), m.get("raw_g"))
                 for s in m.get("selections") or []:
                     price = s.get("price")
                     if price is None:
                         continue
+                    price = float(price)
+                    susp = 1 if s.get("is_suspended") else 0
+                    key = (market_id, s.get("name"), s.get("line"))
+                    if last_odds.get(key) == (price, susp):
+                        odds_skip += 1
+                        continue
                     conn.execute(
                         "INSERT INTO odds_snapshots "
                         "(run_id, event_id, skin, market_id, selection_name, line, price, "
                         " is_suspended, raw_t, captured_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
                         (run_id, event_id, skin, market_id, s.get("name"), s.get("line"),
-                         float(price), 1 if s.get("is_suspended") else 0,
-                         _as_int(s.get("raw_t")), at),
+                         price, susp, _as_int(s.get("raw_t")), at),
                     )
+                    last_odds[key] = (price, susp)
+                    odds_ins += 1
 
             # --- facts: H2H (+ enrich teams dim from h2h team metadata) ---
             h2h = ev.get("h2h_data")
@@ -422,6 +477,10 @@ def persist_result(
                             (run_id, event_id, skin, str(k), str(v), at),
                         )
         conn.commit()
+        logger.info(
+            "persist run %d (skin=%s): %d odds changes stored, %d unchanged skipped",
+            run_id, skin, odds_ins, odds_skip,
+        )
         return run_id
     finally:
         if owns:
