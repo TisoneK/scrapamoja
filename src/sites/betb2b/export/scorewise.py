@@ -62,34 +62,40 @@ def _team_names(h2h: Dict[str, Any]) -> Dict[str, str]:
     return {str(t.get("id")): t.get("title", "") for t in (h2h.get("teams") or [])}
 
 
-def _h2h_for_scope(ev: Dict[str, Any], scope: str) -> List[Dict[str, Any]]:
-    """H2H matches with scores matching the scope (ADR-7)."""
+def _h2h_for_scope(ev: Dict[str, Any], scope: str, home: str, away: str) -> List[Dict[str, Any]]:
+    """Strict head-to-head matches (both event teams only), scores matching the
+    scope, normalized to the event's home/away orientation (ADR-7). The engine
+    rejects H2H that involves any other opponent, so we filter + orient."""
     h2h = ev.get("h2h_data") or {}
     names = _team_names(h2h)
+    hset = {home.strip().lower(), away.strip().lower()}
     out: List[Dict[str, Any]] = []
     for g in h2h.get("game_shorts") or []:
-        # Skip future fixtures (not played yet).
         if g.get("status") == 1 and not (g.get("score1") or g.get("score2")):
+            continue  # future fixture
+        n1 = names.get(str(g.get("team1_id")), "")
+        n2 = names.get(str(g.get("team2_id")), "")
+        # Keep ONLY games between exactly the two event teams.
+        if {n1.strip().lower(), n2.strip().lower()} != hset:
             continue
-        date = str(g.get("date_start") or "")[:10]
-        home = names.get(str(g.get("team1_id")), "?")
-        away = names.get(str(g.get("team2_id")), "?")
         if scope in ("FULL_MATCH", "HOME_TEAM_TOTAL", "AWAY_TEAM_TOTAL"):
-            hs, as_ = g.get("score1"), g.get("score2")
+            s1, s2 = g.get("score1"), g.get("score2")
         else:
             qidx = _QUARTER_SCOPES.get(scope)
-            if not qidx:
-                continue
             by_q = {_QKEY.get(p.get("period_key")): (p.get("home_score"), p.get("away_score"))
                     for p in g.get("periods") or []}
-            if not all(q in by_q for q in qidx):
+            if not qidx or not all(q in by_q for q in qidx):
                 continue
-            hs = sum(by_q[q][0] or 0 for q in qidx)
-            as_ = sum(by_q[q][1] or 0 for q in qidx)
-        if hs is None or as_ is None:
+            s1 = sum(by_q[q][0] or 0 for q in qidx)
+            s2 = sum(by_q[q][1] or 0 for q in qidx)
+        if s1 is None or s2 is None:
             continue
+        # Orient to the event's home/away (swap scores if the game was reversed).
+        team1_is_home = n1.strip().lower() == home.strip().lower()
+        hs, as_ = (s1, s2) if team1_is_home else (s2, s1)
         out.append({"home_team": home, "away_team": away,
-                    "home_score": int(hs), "away_score": int(as_), "date": date})
+                    "home_score": int(hs), "away_score": int(as_),
+                    "date": str(g.get("date_start") or "")[:10]})
     return out
 
 
@@ -107,7 +113,7 @@ def event_to_predict_requests(ev: Dict[str, Any]) -> List[Dict[str, Any]]:
             return
         reqs.append({
             "match_id": match_id, "home_team": home, "away_team": away, "scope": scope,
-            "odds": odds, "h2h_matches": _h2h_for_scope(ev, scope),
+            "odds": odds, "h2h_matches": _h2h_for_scope(ev, scope, home, away),
         })
 
     # Combined-total scopes (full + halves + quarters) present in the markets.

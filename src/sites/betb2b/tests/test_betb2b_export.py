@@ -54,13 +54,13 @@ def test_scopes_present():
 
 def test_h2h_scores_match_scope():
     ev = _event()
-    full = _h2h_for_scope(ev, "FULL_MATCH")
+    full = _h2h_for_scope(ev, "FULL_MATCH", "Phoenix", "Rain or Shine")
     assert len(full) == 1                        # future fixture filtered out
     assert (full[0]["home_score"], full[0]["away_score"]) == (107, 122)
     assert full[0]["home_team"] == "Phoenix" and full[0]["date"] == "2024-09-10"
-    q1 = _h2h_for_scope(ev, "QUARTER_1")
+    q1 = _h2h_for_scope(ev, "QUARTER_1", "Phoenix", "Rain or Shine")
     assert (q1[0]["home_score"], q1[0]["away_score"]) == (33, 31)
-    fh = _h2h_for_scope(ev, "FIRST_HALF")
+    fh = _h2h_for_scope(ev, "FIRST_HALF", "Phoenix", "Rain or Shine")
     assert (fh[0]["home_score"], fh[0]["away_score"]) == (57, 64)   # Q1+Q2
 
 
