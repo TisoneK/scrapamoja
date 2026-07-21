@@ -42,7 +42,7 @@ def skin() -> BetB2BSkinConfig:
 
 @pytest.fixture
 def getgamezip_payload() -> dict:
-    return json.loads(_FIXTURE.read_text())
+    return json.loads(_FIXTURE.read_text(encoding="utf-8"))
 
 
 @pytest.fixture
