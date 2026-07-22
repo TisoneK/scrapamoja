@@ -257,6 +257,11 @@ class BetB2BSkinConfig:
         mgroups_raw = data.pop("market_groups", None) or {}
         mtypes_raw = data.pop("market_types", None) or {}
         sports_raw = data.pop("sport_map", None) or {}
+        # Feature flags merge onto the family defaults, exactly like the lookup
+        # tables above: a skin that names one flag keeps every other default.
+        # (Assigning the dict wholesale would leave the rest to whatever
+        # default each call site happens to pass to `features.get`.)
+        features_raw = data.pop("features", None) or {}
 
         # Pull known field names so we can pass the rest as kwargs and
         # detect unknown keys cleanly.
@@ -276,6 +281,9 @@ class BetB2BSkinConfig:
                 kwargs[k] = data[k]
 
         cfg = cls(**kwargs)
+
+        if features_raw:
+            cfg.features = {**cfg.features, **{str(k): bool(v) for k, v in features_raw.items()}}
 
         # Merge nested lookup overrides on top of the family defaults.
         if mgroups_raw:
