@@ -745,3 +745,9 @@ class BetB2BMainCLI:
         shutdown_coordinator: Any = None,
     ) -> int:
         return await self._cli.run_args(args)
+
+# `python -m src.sites.betb2b.cli.main <cmd>` is the form documented in
+# AGENTS.md. Without this guard it imports and exits 0 in silence — the
+# package entry point lives in `cli/__main__.py`, which runs the same CLI.
+if __name__ == "__main__":
+    sys.exit(asyncio.run(BetB2BCLI().run()))

@@ -82,3 +82,21 @@ async def test_standalone_run_still_parses_argv(monkeypatch):
     rc = await cli.run(["skins"])
     assert rc == 0
     assert seen["cmd"] == "skins"
+
+
+@pytest.mark.parametrize("module", ["src.sites.betb2b.cli",
+                                    "src.sites.betb2b.cli.main"])
+def test_documented_module_entry_points_actually_run(module):
+    """AGENTS.md documents `python -m src.sites.betb2b.cli.main <cmd>`. Without
+    a __main__ guard that form imports the module and exits 0 in silence — a
+    no-op that reads as success. Both spellings must dispatch."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[4]
+    proc = subprocess.run([sys.executable, "-m", module, "skins"],
+                          cwd=repo, capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["count"] > 0
