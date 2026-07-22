@@ -1,24 +1,29 @@
-# Current Task — Session 28 (in progress)
+# Current Task — Idle
 
-**Agent:** Claude Code / claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS 15.7.7)
-**Started:** 2026-07-22
+**Status:** Idle — no session in progress.
 
-**Target:** Work the Session 27 handoff — close the regression-test gap left by
-the `_h2h_for_scope` team-total fix (`20eda23`, shipped with no test), and
-reconcile the stale backlog items in the prior `current.md` against what
-Session 26 already shipped.
+Session 28 (2026-07-22, Claude Code / claude-opus-4-8) closed the regression-test
+gap left by Session 27's H2H fix, then found — while building a fixture that
+exercised all 9 scopes — that **6 of the 9 ADR-7 scopes had never actually run**.
+`_enrich_with_subgames` was gated on `skin.features["subgames"]`: default False,
+set by no skin YAML, and no CLI flag existed to turn it on. `scrape --ingest`
+emitted 3 of 9 scopes and reported success. Fixed by `5f6e6db` (`--subgames`).
 
-**Plan:**
-1. Semantic validation test for the exporter — parametrize all 9 scopes and
-   assert `home_score + away_score` equals the scope-relevant number (the
-   engine's `s02_h2h_totals` computation), including the orient-then-zero
-   ordering for reversed H2H games.
-2. Verify handoff items 2–5 (market `(G,T)` map, `lookup_market` fallback
-   chain, sub-game scope wiring) — all appear already shipped in Session 26.
-3. Review the exporter for other instances of the same bug class
-   (structurally-valid output that the engine computes wrongly).
+**Read before trusting the record:** Session 27's per-scope request counts are
+not reproducible from the code at that commit, and the ADR-7 capability matrix
+(`db3046c`) is stale in 4 of 7 rows. Corrections are appended to
+`plans/decisions.md` — the originals stay (append-only), so check the correction
+before quoting either.
 
-**Baseline:** `.venv/bin/python -m pytest src/sites/betb2b/tests/ --no-cov`
-→ 148 passed in 3.51s. `ruff check src/sites/betb2b/` → 563 pre-existing errors
-(not introduced by this session; the `[tool.ruff] select` key is deprecated in
-the installed ruff, so the project's ignore list is not being applied).
+**Lesson (ADR-9):** when every test for a component builds that component's
+input by hand, ask what builds it in production. All three High findings this
+session lived in seams between individually-green components. And a regression
+test must be seen red — mutate the fix, confirm failure, restore.
+
+**Next session should start here:** run
+`python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --subgames --ingest`
+and record the true per-scope counts. Nothing has ever exercised half/quarter
+ingestion end-to-end. Full list in `tasks/backlog.md` (4 items appended).
+
+References: `reviews/2026-07-22-review-2.md`, `plans/decisions.md` (ADR-9 + the
+ADR-7 correction).

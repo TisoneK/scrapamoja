@@ -279,3 +279,27 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
   exempt from the protocol. Add a personal reminder: if I'm about to edit
   `.context/memory/`, the FIRST thing to do is run the entry steps — NOT read
   the files I plan to edit.
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28)
+- **Problem:** The betb2b test suite is not where any documentation says it is. AGENTS.md gives `pytest tests/ -k "betb2b"`; the Session 27 handoff said "add to the existing betb2b test suite" and its write-up referenced `tests/unit/betb2b/`. Neither exists — the suite is `src/sites/betb2b/tests/`, next to the code. The documented command collects nothing AND dies on 15 unrelated pre-existing collection errors under `tests/`, which reads like the suite is broken rather than absent.
+- **Cost:** ~10 min of `ls`/`find` across three wrong locations before grepping the filesystem for `test_*betb2b*`.
+- **Cause:** Tests were placed next to the code (a reasonable choice) and no doc was updated to match.
+- **Workaround / fix:** `.venv/bin/python -m pytest src/sites/betb2b/tests/ --no-cov` — 173 tests, 3.5s, no hangs. Corrected AGENTS.md (`9942014`) and recorded it in `system/environments.md`.
+- **Prevent next time:** When a suite lives outside `tests/`, the path belongs in the environment block's verified commands, not only in prose. Done.
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28, second entry)
+- **Problem:** A feature can be fully implemented, mapped, unit-tested and documented in an ADR while being impossible to execute. `_enrich_with_subgames` (ADR-7 sub-games) had all four and had never run once: its feature flag defaulted off, no skin set it, no flag exposed it. Two sessions reported per-scope results that the code could not have produced.
+- **Cost:** Not this session's — Session 27 spent an entire investigation (7 throwaway scripts, a full re-scrape, a re-ingest) on an asymmetry inside data that never contained the scopes it was reasoning about.
+- **Cause:** Each layer was verified against the layer it was written next to. Nobody ran the composition. The unit tests construct market dicts with `scope` already set, which is exactly the value production never produced.
+- **Workaround / fix:** `--subgames` on `scrape`/`poll` (`5f6e6db`), plus a stderr note when `--ingest` runs without it stating which scopes are actually going.
+- **Prevent next time:** ADR-9 — every pipeline gets at least one assertion over its composition, not only its parts. And the tell to watch for: **when every test for a component builds that component's input by hand, ask what builds it in production.** That question is what found this.
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28, third entry)
+- **Problem:** `timeout 300 <cmd>` — reflex habit from Linux — fails on this Mac with "command not found" (no coreutils, no Homebrew).
+- **Cost:** One wasted tool call.
+- **Cause:** macOS ships no GNU `timeout`; the environment block didn't say so.
+- **Workaround / fix:** pytest's own `--timeout=`, or the harness's per-call timeout.
+- **Prevent next time:** Added to the Baos-Mac-mini quirks in `system/environments.md`.

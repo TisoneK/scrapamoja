@@ -635,3 +635,31 @@ don't remove the line.
         * **O1C/O2C, COI, CID** = country ids (196); **CI** = champ id; **N** = fixture number; **SmI** = betradar/stats id — useful for cross-source joins.
         * **TN/TNS** = "Quarter"/"Quarters" (period type — confirms quartered game); **V/VE** = "Including Overtime" (total scope note); **SS/SST/SSI/STI/SGI** = stage/sub-game ids; **WP** = dict (winning probabilities — verify, could feed the engine); **B** = bet/betradar id; **HHTHS/HSI/HSI** = has-stats flags.
       Also: **31 of 37 markets on this event are still `G=NNNN`** (player props + uncertain group ids: G=27,91,92,176,228,230,232,234,236,238,920,922,930,934,936,1144,1148,2663,2665,2766,2768,3017-3023,7733,7735,9854,10487-10489). Identify per-group from the raw (line/selection structure) — do NOT guess; several are player-prop / exotic markets not needed by the engine. The engine-critical total family is already mapped (`f321319`). MED.
+
+---
+- [ ] **Run a real scrape with `--subgames --ingest` and record the true per-scope counts** (added 2026-07-22 by Claude Code, Session 28) —
+      The half and quarter scopes have NEVER been exercised end-to-end against live
+      data: `_enrich_with_subgames` was gated on a feature flag nothing could turn
+      on until `5f6e6db`. Command:
+      `python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --subgames --ingest`
+      (needs `$SCOREWISE_ENGINE_URL` + `$SCOREWISE_API_KEY` — values in
+      `.context/memory/secrets/`). Record the actual scope histogram; every
+      per-scope count in the Session 27 record is unreproducible (see the
+      CORRECTION appended to `plans/decisions.md`). High — it is the first
+      unblocked step for ADR-7.
+- [ ] **Re-investigate the HOME/AWAY_TEAM_TOTAL storage asymmetry — but only after the `--subgames` run** (added 2026-07-22 by Claude Code, Session 28) —
+      Session 27 saw 10 HOME_TEAM_TOTAL ingested but 1 stored (vs 9 AWAY) and
+      concluded "engine state". The exporter is symmetric and the code side is now
+      test-covered (`test_betb2b_export.py`), so if it recurs on a clean run the
+      next place to look is the engine's own storage keying — a different repo.
+      Medium.
+- [ ] **Map the remaining uncertain `(G,T)` market groups** (added 2026-07-22 by Claude Code, Session 28; carried from the Session 27 handoff item 3, the only one of items 2-5 not already shipped) —
+      G=8/T=4,6; G=91/T=755,757; G=92/T=766,767; G=27/T=424-426. Add to
+      `DEFAULT_MARKET_GT` in `src/sites/betb2b/markets.py` once identified from a
+      real `GetGameZip` capture. Low-Medium — they are props, not totals, so no
+      ADR-7 scope depends on them.
+- [ ] **`pyproject.toml`: move `[tool.ruff] select/ignore/per-file-ignores` under `[tool.ruff.lint]`** (added 2026-07-22 by Claude Code, Session 28) —
+      The installed ruff warns these keys are deprecated at the top level, so the
+      project's `ignore` list (E501, B008, C901) is NOT being applied. That is part
+      of why `ruff check src/sites/betb2b/` reports 563 errors. Mechanical fix, but
+      re-baseline the count afterwards before anyone treats it as a target. Low.

@@ -254,3 +254,19 @@ Friction caused by the `.context/` system or the protocol itself. See
   substitute for the protocol.
 - **Status:** closed (acknowledged, logged, committed).
 
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28)
+- **Flaw:** The protocol tells an agent to write a session entry and a review, but never to check whether the *previous* session's recorded numbers are reproducible. Step 3 says "verify before trusting" (`.context/` Rules #5), yet its remedy is scoped to "if it contradicts the codebase, the codebase wins" — a contradiction you notice only if you happen to look. Nothing prompts the check.
+- **Symptom:** Session 27 recorded a per-scope request breakdown that the code at that commit could not produce, plus a capability matrix stale in 4 of 7 rows — both committed the same day, both read by me as fact at session start. I only caught them because the feature I was testing turned out to be unreachable, which made the numbers impossible. Had I not touched that code path, I would have inherited and repeated them.
+- **Root cause:** `.context/` is trusted by construction — it is the shared brain, and Step 3 frames reading it as loading context, not auditing it. The one guard (Rule #5) fires on contradiction, and a plausible wrong number contradicts nothing visible.
+- **Suggested fix:** Add to Step 3, after reading the last session entry: *"pick the previous session's most load-bearing quantitative claim — a count, a benchmark, a 'verified' — and confirm the code path that would have to produce it exists and is reachable. If it is not, append a correction before starting your own work."* One check, bounded, aimed at the claims that propagate. Pairs with Pitfall #42 ("don't claim verification without the evidence"), which governs what an agent *writes* but not what it *inherits* — this closes the read side of that loop.
+- **Status:** open
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28, second entry)
+- **Flaw:** Nothing in the protocol says a regression test must be observed failing. Step 10 requires a regression test for a `fix <bug>` target and the Quality Gates require the suite to pass — so a test that asserts nothing about the bug satisfies both, green from birth.
+- **Symptom:** Not a failure this session — the opposite. I mutated the fix three ways (removed the zeroing, moved it before the orientation swap) to confirm the new tests went red, and that step is what proved the orientation guard was real rather than incidentally satisfied. It was my own habit, not the protocol's instruction; a different agent following the same steps would skip it and be fully compliant.
+- **Root cause:** The protocol specifies test *existence* and suite *greenness*. Neither implies the test can distinguish fixed from broken — the only property that makes it a regression test.
+- **Suggested fix:** Add a Quality Gate under Step 11: *"A regression test must be seen red. Revert the fix (or mutate it), run the test, confirm it fails, restore. A regression test that has never failed is a claim, not a guard."* Cheap, mechanical, and it catches the common case of a test that asserts around the bug instead of on it.
+- **Status:** open

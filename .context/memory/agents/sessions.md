@@ -714,3 +714,39 @@ past entries — append corrections instead.
   host). country=87/gr=650/partner=189 stay — platform identifiers, not egress.
 - Consequence for hosting: Railway (or anywhere) works; a proxy is needed ONLY
   if the host's IP is on betb2b's WAF blocklist — check with the probe.
+
+---
+## 2026-07-22 — Session 28 (close the ADR-8 test gap; found the ADR-7 path never ran)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS 15.7.7, Darwin 24.6.0) | **Role:** engineer | **Core:** 0.3.0
+- **Task:** Session 27 handoff — item 1 (semantic validation test for the scoped exporter); verify items 2–5.
+- **Commits:** 7 (`d26ed4c`..`48dc688`) + this context.
+- **Outcome:** done — and the assigned task turned up a bigger one.
+  1. **Semantic per-scope tests** (`fe79cdb`): assert what the engine's `s02_h2h_totals`
+     computes (`home_score + away_score`) equals each scope's own quantity, all 9 scopes.
+     Pins the orient-then-zero ordering too. **Verified by mutation:** removing the
+     `20eda23` zeroing fails 6; moving it before the orientation swap fails 3.
+  2. **F1 (High) — the ADR-7 half/quarter scopes had never run.** `_enrich_with_subgames`
+     is gated on `skin.features["subgames"]`: default False, set by no skin YAML, and
+     **no CLI flag existed to turn it on**. So `scrape --ingest` emitted 3 of 9 scopes
+     (FULL_MATCH + the two team totals) and reported success. Fixed by `5f6e6db`
+     (`--subgames` on `scrape` and `poll`, + a stderr note when `--ingest` runs without it).
+  3. **F2 (High)** — `python -m src.sites.betb2b.cli.main <cmd>`, the form AGENTS.md gives
+     11×, had no `__main__` guard: imported, ran nothing, **exited 0**. Fixed `4e6aaec`
+     with a subprocess test over both spellings.
+  4. **F4 (Med)** — skin YAML `features:` replaced the family defaults instead of merging
+     (the tables beside it merge). Latent — until a skin enables `subgames`. Fixed `1ee5fc4`.
+  5. **F7 (Med)** — AGENTS.md documented no part of the ingest pipeline and gave a betb2b
+     test command that collects none of the suite. Fixed `9942014` (+ ADR-5..8 in the table).
+  6. Handoff items 2, 4, 5 verified **already shipped** by Session 26 — not re-implemented.
+     Item 3 (uncertain `(G,T)` prop groups) is genuinely open; re-backlogged.
+- **Correction to the record:** Session 27's reported run_3 breakdown (11 FIRST_HALF,
+  11 SECOND_HALF, 44 quarter requests) **cannot have happened** given F1 — that run
+  yielded ~30 requests, not 96. Its own document notes all 4,115 snapshots were stored
+  with `scope='FULL_MATCH'`, which is exactly why. The HOME_TEAM_TOTAL asymmetry it
+  investigated was chased through variables that were never in play. The ADR-7 capability
+  matrix (`db3046c`) is stale in 4 of 7 rows. Both corrected in `plans/decisions.md`.
+- **Tests:** betb2b suite **148 → 173**, `.venv/bin/python -m pytest src/sites/betb2b/tests/ --no-cov` → 173 passed in 3.46s.
+- **Open items:** backlog — the `--subgames --ingest` live run (do this first; nothing has
+  ever exercised half/quarter ingestion end-to-end), the asymmetry re-check after it, the
+  remaining `(G,T)` props, and the inert `[tool.ruff]` config.
+- **Report:** `.context/memory/reviews/2026-07-22-review-2.md` | **New:** ADR-9.

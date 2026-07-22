@@ -194,3 +194,58 @@ building team-total scopes. Specifically:
   scope-relevant score (engine-visible number).
 - Verify script `scripts/verify_h2h_per_scope.py` displays the engine total
   alongside the line so a human can spot future violations.
+
+---
+
+## CORRECTION (2026-07-22, Session 28) — the ADR-7 capability matrix above is stale
+
+The capability matrix added in `db3046c` (Session 27) contradicts what Sessions
+26–27 actually shipped. Append-only file, so the rows stay — read them with this
+correction. Verified against the code on 2026-07-22:
+
+| Matrix row | It says | Actually |
+|---|---|---|
+| `QUARTER_1..4` ingestion | ❌ Blocked — market group IDs not mapped | Mapped in `f321319`; `DEFAULT_MARKET_GT` in `markets.py` |
+| `FIRST_HALF`/`SECOND_HALF` ingestion | ❌ Blocked — same | Same — mapped |
+| Sub-game (`SG[]`) fetching | ❌ Unimplemented | Shipped in `5bd38cc` (`scraper.py::_enrich_with_subgames`) |
+| Live POST to engine | ⏳ Built, untested | Confirmed live in Session 26 — HTTP 200, real predictions returned |
+
+**But the corrected rows still overstate reality**, for a reason none of those
+sessions noticed: `_enrich_with_subgames` is gated on
+`skin.features["subgames"]`, which defaulted to `False`, was set by no skin YAML,
+and had no CLI flag. It never ran. So the half and quarter scopes were **mapped
+and implemented but unreachable** — `scrape --ingest` emitted 3 of 9 scopes
+(FULL_MATCH + the two team totals) and reported success. Fixed by `5f6e6db`
+(`--subgames` on `scrape` and `poll`).
+
+**Consequence for anyone reading Session 27's numbers:** its reported run_3
+breakdown (11 FIRST_HALF, 11 SECOND_HALF, 44 quarter requests) cannot have
+happened. That document also states, correctly, that all 4,115 odds snapshots
+were stored with `scope='FULL_MATCH'` — which is exactly why. The run yielded
+~30 requests, not 96, and the HOME_TEAM_TOTAL asymmetry investigated there was
+chased through variables that were never in play. **Half/quarter ingestion has
+never been exercised end-to-end against live data.** Do that first, with
+`--subgames`, before trusting any per-scope count in the record.
+
+---
+
+## ADR-9: A pipeline's composition gets one end-to-end assertion, not more unit tests (2026-07-22, Session 28)
+
+- **Status:** accepted
+- **Context:** Three defects found in Session 28 share one shape — a component
+  verified in isolation, a composition never run. The exporter's tests build
+  market dicts with `scope` pre-set, proving it handles scoped markets; nothing
+  proved a scrape ever produces one (F1). The CLI grammar tests proved the
+  parser; nothing proved `python -m …cli.main` runs anything at all (F2). ADR-8
+  itself came from the same shape one level down: fields validated, the sum the
+  engine derives from them never simulated.
+- **Decision:** Every pipeline in this repo carries at least one assertion over
+  its **composition**, not only its parts. For betb2b → engine, that is: a
+  scrape result fed to `build_ingest_matches` and checked for the scope set it
+  should contain. Fixtures may stand in for the network, but the seam between
+  stages must be crossed by the test, not assumed.
+- **Consequences:** Slightly slower suites, and fixtures that must be refreshed
+  when the feed shape moves. Accepted — three High findings in one session all
+  lived in seams that more unit tests could not reach. Corollary: a regression
+  test for a bug must be **seen red** against the unfixed code (mutate the fix,
+  run, confirm failure). An unfalsified regression test is a claim, not a guard.
