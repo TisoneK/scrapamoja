@@ -211,6 +211,11 @@ class BetB2BCLI:
                             help="POST results to scorewise-engine /api/ingest "
                                  "(one PredictRequest per scope). Value = engine URL, "
                                  "or omit for $SCOREWISE_ENGINE_URL. Auth: $SCOREWISE_API_KEY (x-api-key).")
+        scrape.add_argument("--subgames", action="store_true",
+                            help="Fetch each event's per-quarter/half sub-games so the "
+                                 "half and quarter scopes carry their own totals line "
+                                 "(ADR-7). Without it only FULL_MATCH and the two team "
+                                 "totals can be exported. Costs extra requests per event.")
 
         # poll — scrape + persist on a loop so line-movement accumulates
         poll = sub.add_parser(
@@ -243,6 +248,9 @@ class BetB2BCLI:
         poll.add_argument("--timeout", type=float, default=120.0, help="per-scrape hard cap (s)")
         poll.add_argument("--settle", type=float, default=12.0, help="SPA settle seconds")
         poll.add_argument("--rate", type=int, default=30, help="feed rate limit per minute")
+        poll.add_argument("--subgames", action="store_true",
+                          help="Fetch per-quarter/half sub-games each cycle (ADR-7 scoped "
+                               "odds). Costs extra requests per event per cycle.")
 
         # info
         info = sub.add_parser("info", help="Print skin config + scraper state")
@@ -339,6 +347,8 @@ class BetB2BCLI:
         from src.sites.betb2b import BetB2BScraper
 
         skin = _load_skin(skin_name)
+        if getattr(args, "subgames", False):
+            skin = skin.with_overrides(features={**skin.features, "subgames": True})
         async with BetB2BScraper(
             skin, proxy_manager=proxy_manager, proxy_endpoint_id=proxy_endpoint_id,
             rate_limit_per_minute=args.rate, settle_seconds=args.settle,
@@ -375,6 +385,11 @@ class BetB2BCLI:
                         build_ingest_matches, post_ingest,
                     )
                     matches = build_ingest_matches(result.get("events") or [])
+                    if not skin.features.get("subgames", False):
+                        print(f"  [{skin_name}] note: only FULL_MATCH and the two team "
+                              "totals are being ingested — the half and quarter scopes "
+                              "need their own totals line, which comes from --subgames.",
+                              file=sys.stderr)
                     summ = await post_ingest(
                         matches, url, token=os.environ.get("SCOREWISE_API_KEY") or os.environ.get("SCOREWISE_TOKEN"),
                         scraped_at=result.get("extracted_at"),

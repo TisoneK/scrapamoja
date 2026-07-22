@@ -141,3 +141,33 @@ class TestMultiSkinParsing:
         a = self.parser.parse_args(["poll", "linebet,melbet", "live", "--interval", "30"])
         assert a.skin_pos == "linebet,melbet"
         assert a.all_skins is False
+
+
+class TestSubgamesFlag:
+    """ADR-7's half/quarter scopes need sub-game fetching, and the `subgames`
+    feature defaults to off — so the flag is the only thing that can reach the
+    scoped-ingestion path from a command line."""
+
+    def setup_method(self):
+        self.parser = BetB2BCLI().create_parser()
+
+    def test_scrape_accepts_subgames(self):
+        assert self.parser.parse_args(["scrape", "linebet", "live", "--subgames"]).subgames is True
+
+    def test_poll_accepts_subgames(self):
+        assert self.parser.parse_args(["poll", "linebet", "live", "--subgames"]).subgames is True
+
+    def test_subgames_defaults_off(self):
+        assert self.parser.parse_args(["scrape", "linebet", "live"]).subgames is False
+
+    def test_flag_turns_the_skin_feature_on(self):
+        """The flag has to survive into the skin the scraper is built from —
+        `_enrich_with_subgames` reads `skin.features['subgames']`, nothing else."""
+        from src.sites.betb2b.config import DEFAULT_SKIN_CONFIG
+
+        assert DEFAULT_SKIN_CONFIG.features["subgames"] is False
+        overridden = DEFAULT_SKIN_CONFIG.with_overrides(
+            features={**DEFAULT_SKIN_CONFIG.features, "subgames": True}
+        )
+        assert overridden.features["subgames"] is True
+        assert overridden.features["h2h"] is DEFAULT_SKIN_CONFIG.features["h2h"]
