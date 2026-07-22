@@ -663,7 +663,7 @@ don't remove the line.
       project's `ignore` list (E501, B008, C901) is NOT being applied. That is part
       of why `ruff check src/sites/betb2b/` reports 563 errors. Mechanical fix, but
       re-baseline the count afterwards before anyone treats it as a target. Low.
-- [ ] **scorewise-engine: key the prediction store by `(match_id, scope)`, not `match_id`** (added 2026-07-22 by Claude Code, Session 28) —
+- [x] **scorewise-engine: key the prediction store by `(match_id, scope)`, not `match_id`** (added 2026-07-22 by Claude Code, Session 28; **RESOLVED same session**) — The fix (`152bd48`) already existed and was pushed 2h33m before the run that measured the old behaviour; it was not deployed, because the Railway build failed and a failed build leaves the previous deployment serving. Root Directory was the repo root, which has no Python project (the app is at `repos/engine/`). Operator fixed the setting. **Verified end-to-end: 65 requests sent → 65 stored, all 9 scopes, 11 matches carrying 3–9 scopes each.** See the ADR-10 RESOLVED entry. Original text follows. —
       **Different repo — this is the blocker on ADR-7's whole premise.** The scraper
       sends up to 9 scoped predictions per match; the engine keeps only the last one
       written, so 54 of every 65 are discarded on arrival (proven: 11/11 matches
@@ -678,3 +678,14 @@ don't remove the line.
       for 7 of 11 events (minor leagues: Australian NBL1, Philippine BPC, Chinese
       women's). Worth checking whether major leagues fare better before treating
       ~55% rejection as normal. Medium.
+- [ ] **The bore.pub proxy tunnel died mid-session; this machine's IP is WAF-blocked** (added 2026-07-22 by Claude Code, Session 28) —
+      `bore.pub:8542` went to connection-refused about an hour after it was
+      supplied. Direct mode is NOT a fallback from this machine: `probe --skin
+      linebet` without a proxy returns `geo/WAF block detected (status=203,
+      url=https://linebet.com/en/block)`. So a live scrape here needs a working
+      proxy — ask the operator for the current bore.pub port (it rotates per
+      tunnel) rather than debugging the scraper. The verification that mattered
+      did not need one: result snapshots under
+      `data/telemetry/betb2b/result_snapshots/` carry the full event tree
+      including sub-game markets, so a past scrape can be re-exported and
+      re-ingested offline with `build_ingest_matches`. Low — a note, not a bug.

@@ -270,3 +270,46 @@ never been exercised end-to-end against live data.** Do that first, with
   2. **This resolves the "HOME_TEAM_TOTAL asymmetry"** that Session 27 investigated (10 sent, 1 stored, 9 AWAY) — it is the identical signature, not engine state from old runs and not market data. See the CORRECTION above.
   3. The 29 failures are a separate, understood cause: the engine requires strict H2H and only 4 of 11 events had any (the rest returned `204 No Content` from the statisticfeed endpoint). 36 accepted = exactly the 36 requests carrying H2H. Not a defect.
   4. **ADR-8 confirmed on live data:** team-total H2H now sums to 86 / 91 / 109 against lines of 90.5 / 84.5 / 114.5. Pre-fix it would have compared game totals of 175 / 154 / 214 against those same lines — the false-HIGH mechanism, observed directly rather than inferred.
+
+---
+
+## ADR-10 RESOLVED (2026-07-22, Session 28) — the fix was written but never deployed; ADR-7 now works end-to-end
+
+The engine-side fix existed the whole time: `152bd48` in scorewise-engine
+("merge predictions by (match_id, scope) not match_id alone"), authored
+08:35 UTC and pushed — **2h33m before** the run that measured the old
+behaviour. It was not live, because the deploy failed at the build stage and
+**a failed Railway build leaves the previous deployment serving**. Every
+endpoint answered normally while running stale code. Root cause: the service's
+Root Directory was the repo root, which has no Python project (the app is at
+`repos/engine/`); Railpack could not detect a language. Fixed on the Railway
+side by the operator.
+
+**Verified live, then verified end-to-end** (same 11-event scrape, re-ingested
+from `data/telemetry/betb2b/result_snapshots/linebet_list_prematch_20260722_110956_1.json`):
+
+```
+65 requests sent, 65 stored — every scope survives
+FULL_MATCH 11/11 | FIRST_HALF 7/7 | SECOND_HALF 5/5
+QUARTER_1..4 6/6, 5/5, 5/5, 5/5 | HOME_TT 11/11 | AWAY_TT 10/10
+11 matches, 3–9 scopes each (was: 11 matches, exactly 1 scope each)
+added=64 updated=1 — the 1 update was a probe record
+```
+
+**ADR-7's premise is delivered.** `--subgames` is now a production feed, not
+just a validation tool.
+
+**What generalizes (this is the part worth keeping):** a deployment that fails
+is invisible from the outside — the old one keeps serving and every probe
+against the API answers 200. Two sessions attributed stale *deployment*
+behaviour to the scraper's data and the engine's code. Neither was wrong about
+what they measured; both were wrong about what they were measuring. **A green
+push is not a live fix.** Assert the new behaviour against the deployed
+service before drawing any conclusion from its output — for this contract the
+one-line probe is: POST a `(match_id, scope)` pair whose `match_id` exists but
+whose scope does not; `added: 1` means the fix is live, `added: 0` means it is
+not.
+
+**Still open:** the 29 of 65 failures are unchanged and understood — the engine
+requires strict H2H and only 4 of 11 events had any (statisticfeed returns 204
+for minor leagues). Backlogged separately as a coverage question, not a defect.

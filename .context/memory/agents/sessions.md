@@ -766,3 +766,19 @@ past entries — append corrections instead.
   - **This resolves Session 27's HOME_TEAM_TOTAL asymmetry** (10 sent / 1 stored / 9 AWAY) — identical signature. All three hypotheses that session tested (code, market data, engine state from old runs) were the wrong variable.
 - **Open items:** the engine must key by `(match_id, scope)` before `--subgames` is worth running in production — a **scorewise-engine** change, different repo, nothing on this side can work around it. Plus the H2H coverage question. Both backlogged; items 1 and 2 checked off.
 - **Report:** `.context/memory/reviews/2026-07-22-review-2.md` §8 | **New:** ADR-10.
+
+---
+## 2026-07-22 — Session 28 continued (2) — ADR-7 delivered end-to-end
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini | **Role:** engineer | **Core:** 0.3.0
+- **Task:** Operator fixed the Railway Root Directory; verify the engine keying fix is live and prove the scoped pipeline.
+- **Commits:** context only here; 4 in the sister repo (`9f1258a`..`dbe22ec` in scorewise-engine).
+- **Outcome:** **ADR-7 works end-to-end. ADR-10 resolved.**
+  - Probe first: `added=1` → `(match_id, scope)` keying is live.
+  - Re-ingested the 11:07 scrape **from its result snapshot** (no new scrape needed — see below): **65 requests sent, 65 stored, all 9 scopes**, 11 matches carrying 3–9 scopes each. Previously every match collapsed to exactly 1 record.
+  - The blocker was never the code. `152bd48` was pushed 2h33m before the run that measured the old behaviour; the deploy failed at the build stage and **a failed Railway build leaves the previous deployment serving**, so the API answered 200 the whole time while running stale code.
+- **Cross-repo work (scorewise-engine, its own `.context` protocol followed):** core 0.2.0→0.3.0; untracked the root `.env` + `.next/` (tracked since the sandbox import; `.env` held only a dead sandbox `DATABASE_URL` path); added 6 regression tests for the merge key, **verified red before green** (reverting to `match_id`-only fails 5 of 6). Backlogged there: the Railway root directory, a pre-existing `TestS04AverageRate` failure stale since 2026-07-01, and the tracked `download/`+`tool-results/`.
+- **Two things worth carrying forward:**
+  1. **A green push is not a live fix.** Assert new behaviour against the deployed service. For this contract: POST a `(match_id, scope)` pair whose `match_id` exists but whose scope does not — `added: 1` = live.
+  2. **Result snapshots are a real asset.** `data/telemetry/betb2b/result_snapshots/*.json` carries the full event tree including sub-game markets, so a past scrape can be re-exported and re-ingested offline. That is what let this verification finish after the proxy tunnel died — no scrape, no proxy.
+- **Open items:** H2H coverage (29 of 65 requests still rejected — only 4 of 11 events had strict H2H); the dead bore.pub tunnel (this IP is WAF-blocked, so direct is not a fallback); the engine's prediction store came back empty after the redeploy (`ingestion_count=0`) — worth confirming `PREDICTIONS_DIR` points at a mounted volume, else predictions vanish on every deploy.
+- **Report:** `.context/memory/reviews/2026-07-22-review-2.md` (§8) + ADR-10 RESOLVED in `plans/decisions.md`.
