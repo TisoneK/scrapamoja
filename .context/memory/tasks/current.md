@@ -1,32 +1,24 @@
-# Current Task — Idle
+# Current Task — Session 28 (in progress)
 
-**Status:** Idle — no session in progress.
+**Agent:** Claude Code / claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS 15.7.7)
+**Started:** 2026-07-22
 
-Session 27 (2026-07-22, GitHub Copilot / DeepSeek V4 Flash Free) fixed a
-data-quality bug in the exporter: `_h2h_for_scope()` was sending full match
-scores for HOME/AWAY_TEAM_TOTAL scopes, causing the engine to compute wrong
-totals (full game vs individual line) → false HIGH predictions. Fix was 4
-lines (zero-out non-relevant team's score). Committed at `20eda23`.
+**Target:** Work the Session 27 handoff — close the regression-test gap left by
+the `_h2h_for_scope` team-total fix (`20eda23`, shipped with no test), and
+reconcile the stale backlog items in the prior `current.md` against what
+Session 26 already shipped.
 
-**Lesson for all future sessions:** Structured validation (fields present,
-types correct) is NOT enough — you must simulate the downstream computation.
-The engine always sums home+away. For team-total scopes, the sum must equal
-only the relevant team's score. See ADR-8 for the H2H scope contract rule.
+**Plan:**
+1. Semantic validation test for the exporter — parametrize all 9 scopes and
+   assert `home_score + away_score` equals the scope-relevant number (the
+   engine's `s02_h2h_totals` computation), including the orient-then-zero
+   ordering for reversed H2H games.
+2. Verify handoff items 2–5 (market `(G,T)` map, `lookup_market` fallback
+   chain, sub-game scope wiring) — all appear already shipped in Session 26.
+3. Review the exporter for other instances of the same bug class
+   (structurally-valid output that the engine computes wrongly).
 
-**Backlog items for the next agent:**
-
-1. **Add semantic validation test for exporter** — parametrize over all 9
-   scopes, asserting `home_score + away_score` equals the scope-relevant
-   number. Add to the existing betb2b test suite.
-2. **Map basketball quarter/half/individual-total market groups (G ids) in
-   `markets.py`** — unblocks non-full scopes for the scoped ingestion path.
-3. **Map the uncertain (G,T) market groups** — G=8/T=4,6; G=91/T=755,757;
-   G=92/T=766,767; G=27/T=424-426 (from ADR-7 implementation notes).
-4. **Build the `(G,T)` keyed lookup** in `rules.py::lookup_market` with
-   fallback chain: `(G,T)` → T-only → G-only (from ADR-7 implementation notes).
-5. **Wire the scoped sub-game fetching into the scraper** — `SG[]` enrichment
-   with PredictionScope tags (from ADR-7 implementation notes).
-6. **Re-ingest with `--ingest`** now that the team-total H2H bug is fixed,
-   to refresh the engine's database with correct scores.
-
-References: `reviews/2026-07-22-review.md`, `plans/decisions.md` ADR-7 + ADR-8.
+**Baseline:** `.venv/bin/python -m pytest src/sites/betb2b/tests/ --no-cov`
+→ 148 passed in 3.51s. `ruff check src/sites/betb2b/` → 563 pre-existing errors
+(not introduced by this session; the `[tool.ruff] select` key is deprecated in
+the installed ruff, so the project's ignore list is not being applied).
