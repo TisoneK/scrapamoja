@@ -658,3 +658,18 @@ past entries — append corrections instead.
   `_enrich_with_h2h` provides it. Scoped (Q/half) predictions need a scrape that
   has BOTH sub-games AND h2h (the offline test paired PBA markets / live_e2e h2h
   separately). betb2b suite 152 → 156.
+
+### Session 26 — de-Kenya-fied betb2b (2026-07-21)
+- Operator: the codebase wrongly framed betb2b as Kenya-only; direct mode works
+  out of the box anywhere. Proven: a South African proxy (169.239.208.70:8080)
+  reached BOTH discovery (SPA 200, 29 event ids) AND data (GetGameZip 200) —
+  where a flagged IP is blocked. The block is datacenter/ASN reputation, NOT geo
+  (matches Session-11 RECON).
+- Fix (`9447c0a` + AGENTS.md): `allowed_countries` default → [] (empty = allow
+  any egress; the proxy-country gate short-circuits, so direct/any-country
+  works). Removed `allowed_countries: ["KE"]` from all 8 skins. Neutralized CLI
+  proxy defaults (no country baked in). Softened Kenya framing in config +
+  AGENTS.md. Added `scripts/railway_geo_probe.py` (discovery/data verdict per
+  host). country=87/gr=650/partner=189 stay — platform identifiers, not egress.
+- Consequence for hosting: Railway (or anywhere) works; a proxy is needed ONLY
+  if the host's IP is on betb2b's WAF blocklist — check with the probe.
