@@ -62,6 +62,44 @@ src/
 | ADR-2 | AccessProfile axis | Separate transport/access concerns (geo-gating, proxy, SW) from extraction mode |
 | ADR-3 | Linebet hybrid mode | Cookie-harvest → direct httpx polling of `/service-api/LiveFeed/` endpoints |
 | ADR-4 | DOM-primary extraction | BetB2B direct-API auth-header contract rotates (406); DOM extraction is the reliable primary path |
+| ADR-5 | `GetGameZip` market depth | Per-match `GetGameZip` is the reliable market-depth path for DOM-extracted events — refines ADR-4 |
+| ADR-6 | Structured odds store | Scraped odds go into a time-series SQLite store (the full match model), not loose JSON |
+| ADR-7 | Scoped engine ingestion | One betb2b match → up to 9 scorewise-engine prediction scopes, each with its own totals line + scope-matched H2H |
+| ADR-8 | H2H scope contract | Team-total scopes zero the non-relevant team's H2H score — the engine always sums `home_score + away_score` |
+
+### Scorewise-Engine Ingestion (ADR-7 / ADR-8)
+
+`src/sites/betb2b/export/scorewise.py` turns one scraped event into up to **9**
+engine `PredictRequest`s — one per `PredictionScope`. Each carries that scope's
+own totals line (the rung whose **Over** price is nearest 1.85, and whose line
+**must end in .5** — an engine rule) plus H2H matches whose scores match the
+scope.
+
+```bash
+# FULL_MATCH + HOME/AWAY_TEAM_TOTAL only (3 scopes):
+python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --ingest
+
+# All 9 scopes — --subgames fetches each event's per-quarter/half sub-games,
+# which is where the half and quarter totals lines come from:
+python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --subgames --ingest
+```
+
+**Without `--subgames` the half and quarter scopes are silently absent** — every
+market a plain scrape extracts is tagged `FULL_MATCH`, so `_nearest_185_total`
+finds no line for them. The flag flips `skin.features["subgames"]`, which is
+what `BetB2BScraper._enrich_with_subgames` gates on. It costs one extra
+`GetGameZip` per sub-game per event.
+
+Auth: `$SCOREWISE_ENGINE_URL` + `$SCOREWISE_API_KEY` (sent as `x-api-key`, not
+Bearer). Values live in `.context/memory/secrets/` — never in tracked files.
+
+**The contract that is easy to break (ADR-8):** the engine's `s02_h2h_totals`
+always computes `home_score + away_score`, whatever the scope. So a team-total
+request must zero the other team's score, or the engine compares a ~229-point
+game total against a ~109.5 individual line and calls everything OVER. Output
+that is structurally perfect can still be semantically wrong here — the guard is
+`src/sites/betb2b/tests/test_betb2b_export.py`, which simulates the engine's sum
+per scope rather than inspecting fields.
 
 ### The BetB2B Family Scraper
 
@@ -330,8 +368,10 @@ pytest tests/unit/ -m "not integration"
 # All tests
 pytest tests/ -x
 
-# BetB2B-specific tests
-pytest tests/ -k "betb2b" -v
+# BetB2B-specific tests — they live NEXT TO the code, not under tests/.
+# (`pytest tests/ -k betb2b` collects none of them and errors out on
+# pre-existing collection failures elsewhere in tests/.)
+pytest src/sites/betb2b/tests/ --no-cov
 
 # BetB2B live validation — direct mode is the default for KE-allowed skins (linebet)
 # Direct mode (preferred when egress is in allowed_countries):
@@ -378,6 +418,9 @@ python -m src.sites.betb2b.cli.main probe --skin linebet
 | `src/sites/betb2b/markets.py` | Market group/type lookup tables |
 | `src/sites/betb2b/sports.py` | Sport ID → name mapping |
 | `src/sites/betb2b/skins/` | Per-bookmaker YAML skin configs |
+| `src/sites/betb2b/export/scorewise.py` | Event → scorewise-engine `PredictRequest` per scope + `post_ingest` (ADR-7/8) |
+| `src/sites/betb2b/store.py` | SQLite odds store (`persist_result`) — the `--db` target (ADR-6) |
+| `src/sites/betb2b/tests/` | The betb2b test suite (next to the code, NOT under `tests/`) |
 | `src/sites/betb2b/scripts/validate_live.py` | E2E validation script |
 | `src/sites/betb2b/scripts/discover_h2h.py` | H2H endpoint discovery script |
 | `src/sites/betb2b/cli/main.py` | CLI entry point (includes `compare-match` subcommand) |
