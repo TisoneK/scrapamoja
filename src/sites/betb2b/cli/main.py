@@ -124,8 +124,8 @@ def _build_proxy_manager_from_env():
             netloc += f":{p.port}"
         proxy_url = urlunparse(p._replace(netloc=netloc))
 
-    country = os.environ.get("BETB2B_PROXY_COUNTRY", "KE")
-    endpoint_id = os.environ.get("BETB2B_PROXY_ID", "kenya")
+    country = os.environ.get("BETB2B_PROXY_COUNTRY", "")  # optional; no gate by default
+    endpoint_id = os.environ.get("BETB2B_PROXY_ID", "proxy")
     skin_domain_hint = os.environ.get("BETB2B_PROXY_DOMAIN", "*")
 
     return build_proxy_manager({

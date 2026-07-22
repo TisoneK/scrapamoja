@@ -14,7 +14,6 @@ geo: KE                 # ISO country for proxy routing / config API
 language: en
 enabled: true
 proxy_endpoint_id: kenya
-allowed_countries: ["KE"]
 notes: |
   Default skin — linebet.com (Kenya-confirmed 2026-07-18).
   Same backend as melbet/betwinner/22bet/megapari/888starz/helabet/paripesa.

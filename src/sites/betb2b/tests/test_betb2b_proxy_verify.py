@@ -30,8 +30,12 @@ def _unreachable():
 
 def _manager():
     proxy = SimpleNamespace(id="kenya", is_direct=False)
+    # These tests exercise the egress-country GATE, which only runs when the
+    # skin has a non-empty allow-list (the default is now empty = allow any).
+    from dataclasses import replace
+    skin = replace(DEFAULT_SKIN_CONFIG, allowed_countries=["KE"])
     return BetB2BSessionManager(
-        DEFAULT_SKIN_CONFIG, proxy=proxy,  # type: ignore[arg-type]
+        skin, proxy=proxy,  # type: ignore[arg-type]
         proxy_verify_backoff=0.0,  # no real sleeping in tests
     )
 
