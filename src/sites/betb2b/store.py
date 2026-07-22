@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS odds_snapshots (
     price           REAL NOT NULL,
     is_suspended    INTEGER,
     raw_t           INTEGER,
+    scope           TEXT DEFAULT 'FULL_MATCH',
     captured_at     TEXT NOT NULL
 );
 
@@ -317,14 +318,14 @@ def _get_or_create_market(conn, name, market_type, raw_g) -> int:
 # heartbeats: a fast poll otherwise writes thousands of identical rows).
 # --------------------------------------------------------------------------- #
 def _last_odds(conn, event_id: str, skin: str) -> Dict[tuple, tuple]:
-    """Latest (price, is_suspended) per (market_id, selection, line) for a skin."""
+    """Latest (price, is_suspended) per (scope, market_id, selection, line) for a skin."""
     rows = conn.execute(
-        "SELECT market_id, selection_name, line, price, is_suspended, MAX(snap_id) "
+        "SELECT scope, market_id, selection_name, line, price, is_suspended, MAX(snap_id) "
         "FROM odds_snapshots WHERE event_id=? AND skin=? "
-        "GROUP BY market_id, selection_name, line",
+        "GROUP BY scope, market_id, selection_name, line",
         (event_id, skin),
     ).fetchall()
-    return {(r["market_id"], r["selection_name"], r["line"]): (r["price"], r["is_suspended"])
+    return {(r["scope"], r["market_id"], r["selection_name"], r["line"]): (r["price"], r["is_suspended"])
             for r in rows}
 
 
@@ -441,22 +442,23 @@ def persist_result(
             last_odds = _last_odds(conn, event_id, skin)
             for m in ev.get("markets") or []:
                 market_id = _get_or_create_market(conn, m.get("name"), m.get("market_type"), m.get("raw_g"))
+                scope = m.get("scope") or "FULL_MATCH"
                 for s in m.get("selections") or []:
                     price = s.get("price")
                     if price is None:
                         continue
                     price = float(price)
                     susp = 1 if s.get("is_suspended") else 0
-                    key = (market_id, s.get("name"), s.get("line"))
+                    key = (scope, market_id, s.get("name"), s.get("line"))
                     if last_odds.get(key) == (price, susp):
                         odds_skip += 1
                         continue
                     conn.execute(
                         "INSERT INTO odds_snapshots "
                         "(run_id, event_id, skin, market_id, selection_name, line, price, "
-                        " is_suspended, raw_t, captured_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        " is_suspended, raw_t, scope, captured_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                         (run_id, event_id, skin, market_id, s.get("name"), s.get("line"),
-                         price, susp, _as_int(s.get("raw_t")), at),
+                         price, susp, _as_int(s.get("raw_t")), scope, at),
                     )
                     last_odds[key] = (price, susp)
                     odds_ins += 1

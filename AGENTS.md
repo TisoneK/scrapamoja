@@ -119,20 +119,22 @@ python -m src.sites.betb2b.cli.main sports                # list registered spor
 python -m src.sites.betb2b.cli.main info --skin linebet --sport basketball
 ```
 
-Live validation against linebet basketball — **direct mode works from Kenya**
-(Session 24 discovery: `allowed_countries: ["KE"]` skins need no proxy):
+Live validation against linebet basketball — **direct mode works out of the box**
+from any non-flagged IP. betb2b/1xbet is multi-country; there is NO Kenya (or any
+country) requirement — `allowed_countries` is empty by default (allow any egress).
+A proxy is needed ONLY if your specific IP is on betb2b's WAF blocklist (datacenter/
+ASN reputation, not geography — run `scripts/railway_geo_probe.py` to check). The
+per-match data endpoint (`GetGameZip`) works even from many datacenter IPs:
 
 ```bash
-# Direct mode (no proxy) — works for linebet from Kenya egress:
+# Direct mode (no proxy) — works from any non-flagged IP:
 python -m src.sites.betb2b.scripts.validate_live --skin linebet --sport basketball
 
-# Cross-skin proxy fallback (helabet/22bet/betwinner blocked from KE direct).
-# Bore tunnels rotate — set these ONLY when the skin is geo-blocked for you:
-export BETB2B_PROXY_URL=http://bore.pub:<current-port>
-export BETB2B_PROXY_USER=<user>
+# Proxy fallback — ONLY if your IP is WAF-blocked. Any supported-country
+# residential/other proxy works (Kenya, South Africa, …). Bore tunnels rotate:
+export BETB2B_PROXY_URL=http://<host>:<port>
+export BETB2B_PROXY_USER=<user>      # if the proxy needs auth
 export BETB2B_PROXY_PASS=<pass>
-export BETB2B_PROXY_COUNTRY=KE
-export BETB2B_PROXY_ID=kenya
 python -m src.sites.betb2b.scripts.validate_live --skin <skin> --sport basketball
 ```
 

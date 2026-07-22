@@ -124,8 +124,8 @@ def _build_proxy_manager_from_env():
             netloc += f":{p.port}"
         proxy_url = urlunparse(p._replace(netloc=netloc))
 
-    country = os.environ.get("BETB2B_PROXY_COUNTRY", "KE")
-    endpoint_id = os.environ.get("BETB2B_PROXY_ID", "kenya")
+    country = os.environ.get("BETB2B_PROXY_COUNTRY", "")  # optional; no gate by default
+    endpoint_id = os.environ.get("BETB2B_PROXY_ID", "proxy")
     skin_domain_hint = os.environ.get("BETB2B_PROXY_DOMAIN", "*")
 
     return build_proxy_manager({
@@ -207,6 +207,10 @@ class BetB2BCLI:
                                  "Opt-in; JSON output is unaffected. "
                                  "Default: data/betb2b/odds.db if flag given without value.",
                             nargs="?", const="data/betb2b/odds.db")
+        scrape.add_argument("--ingest", nargs="?", const="env", default=None,
+                            help="POST results to scorewise-engine /api/ingest "
+                                 "(one PredictRequest per scope). Value = engine URL, "
+                                 "or omit for $SCOREWISE_ENGINE_URL. Auth: $SCOREWISE_API_KEY (x-api-key).")
 
         # poll — scrape + persist on a loop so line-movement accumulates
         poll = sub.add_parser(
@@ -357,6 +361,28 @@ class BetB2BCLI:
                 )
             except Exception as exc:  # noqa: BLE001
                 print(f"  [{skin_name}] WARNING: --db persist failed: {exc}", file=sys.stderr)
+
+        # Opt-in ingest to the scorewise-engine (one PredictRequest per scope).
+        ingest = getattr(args, "ingest", None)
+        if ingest:
+            url = os.environ.get("SCOREWISE_ENGINE_URL") if ingest == "env" else ingest
+            if not url:
+                print(f"  [{skin_name}] ingest skipped: no engine URL "
+                      "(--ingest URL or $SCOREWISE_ENGINE_URL)", file=sys.stderr)
+            else:
+                try:
+                    from src.sites.betb2b.export.scorewise import (
+                        build_ingest_matches, post_ingest,
+                    )
+                    matches = build_ingest_matches(result.get("events") or [])
+                    summ = await post_ingest(
+                        matches, url, token=os.environ.get("SCOREWISE_API_KEY") or os.environ.get("SCOREWISE_TOKEN"),
+                        scraped_at=result.get("extracted_at"),
+                    )
+                    print(f"  [{skin_name}] ingest → {len(matches)} matches: {summ}",
+                          file=sys.stderr)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"  [{skin_name}] WARNING: ingest failed: {exc}", file=sys.stderr)
         return result
 
     async def _cmd_scrape(self, args: argparse.Namespace) -> int:

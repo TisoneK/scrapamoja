@@ -22,7 +22,7 @@ Example skin YAML (``skins/linebet.yaml``)::
     geo: KE                 # ISO country for proxy routing / config API
     language: en
     enabled: true
-    notes: Kenya-confirmed skin of the BetB2B platform.
+    notes: a BetB2B/1xbet skin. Multi-country; direct mode works from any non-flagged IP.
 
 See :data:`DEFAULT_SKIN_CONFIG` for the full field list and
 :meth:`BetB2BSkinConfig.from_yaml` for the loader.
@@ -150,7 +150,8 @@ class BetB2BSkinConfig:
         proxy_endpoint_id: the ProxyManager endpoint id this skin should
             route through. The operator wires the endpoint into
             ProxyManager separately and only names it here.
-        allowed_countries: list of ISO codes this skin accepts traffic
+        allowed_countries: OPTIONAL egress ISO-code allow-list. Empty (default)
+            = allow any egress; direct mode works anywhere. list of ISO codes this skin accepts traffic
             from. Used to validate the proxy's egress country before
             bootstrapping.
     """
@@ -203,7 +204,11 @@ class BetB2BSkinConfig:
 
     # ----- proxy -----
     proxy_endpoint_id: Optional[str] = None
-    allowed_countries: List[str] = field(default_factory=lambda: ["KE"])
+    # Empty = allow any egress (the default): betb2b/1xbet is multi-country and
+    # DIRECT mode works out of the box from any non-flagged IP — no proxy and no
+    # country needed. Only set this to gate a proxy to specific ISO codes when a
+    # deployment genuinely requires it; otherwise leave it empty.
+    allowed_countries: List[str] = field(default_factory=list)
 
     # ----- feature flags -----
     features: Dict[str, bool] = field(
@@ -215,6 +220,7 @@ class BetB2BSkinConfig:
             "raw_capture": True,
             "h2h": True,
             "html_harvest": True,   # browser-free event-id discovery from page HTML
+            "subgames": False,      # fetch per-quarter/half sub-games (ADR-7 scoped ingestion; costs extra requests)
         }
     )
 
@@ -442,7 +448,7 @@ DEFAULT_SKIN_CONFIG = BetB2BSkinConfig(
     language="en",
     enabled=True,
     notes=(
-        "Default skin — linebet.com (Kenya-confirmed 2026-07-18). "
+        "Default skin — linebet.com. Multi-country; direct mode works out of the box. "
         "Same backend as melbet/betwinner/22bet/megapari/888starz/"
         "helabet/paripesa. See src/sites/linebet/RECON.md."
     ),

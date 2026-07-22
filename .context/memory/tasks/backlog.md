@@ -595,7 +595,7 @@ don't remove the line.
       them to DEFAULT_MARKET_GROUPS. Then the store's `markets` table gets real
       names and the exporter can select each scope's line. MED — blocks non-full
       scopes. FULL_MATCH works today.
-- [ ] **Build the scorewise-engine ingest exporter (ADR-7)** (added 2026-07-21 by Claude Code, Session 26) —
+- [x] **Build the scorewise-engine ingest exporter (ADR-7)** — DONE 2026-07-21 (fb4b41d exporter + d94d74f ingest client/CLI + 5bd38cc sub-games; engine Pydantic schema accepts all 9 scopes). Remaining: live POST against the running engine (needs URL+token in secrets/). Original: (added 2026-07-21 by Claude Code, Session 26) —
       `src/sites/betb2b/export/scorewise.py`: `event_to_predict_requests(event)
       -> List[PredictRequest]` (one per available scope) + an httpx ingest client
       that POSTs `{source:"betb2b-scraper", scraped_at, matches:[...]}` to
@@ -625,3 +625,13 @@ don't remove the line.
       markets.py + rewrite lookup_market to (G,GS,T); (4) add SG sub-game fetching to
       the scraper, tagging each scoped market with its PredictionScope. Do NOT guess —
       a mislabelled total = wrong odds to the engine. HIGH (unblocks scoped ingestion).
+
+---
+- [ ] **Map ignored GetGameZip fields into Event/store** (added 2026-07-21 by Claude Code, Session 26; from real PBA capture 352961836) —
+      Fields present in the feed but NOT extracted today (map the HIGH-value ones):
+        * **O1I / O2I** = numeric team backend ids (7694 / 7690) — HIGH: gives events real team ids (today teams dim only gets ids from h2h). Map → Event.home_team_id/away_team_id → store teams.backend_id.
+        * **O1IMG/O2IMG, O1IS/O2IS** = team logo/image ids (list) — team crests for the website.
+        * **LE** = clean English league name ("Philippines. Governors Cup"); **LR** = localized. Use LE over L.
+        * **O1C/O2C, COI, CID** = country ids (196); **CI** = champ id; **N** = fixture number; **SmI** = betradar/stats id — useful for cross-source joins.
+        * **TN/TNS** = "Quarter"/"Quarters" (period type — confirms quartered game); **V/VE** = "Including Overtime" (total scope note); **SS/SST/SSI/STI/SGI** = stage/sub-game ids; **WP** = dict (winning probabilities — verify, could feed the engine); **B** = bet/betradar id; **HHTHS/HSI/HSI** = has-stats flags.
+      Also: **31 of 37 markets on this event are still `G=NNNN`** (player props + uncertain group ids: G=27,91,92,176,228,230,232,234,236,238,920,922,930,934,936,1144,1148,2663,2665,2766,2768,3017-3023,7733,7735,9854,10487-10489). Identify per-group from the raw (line/selection structure) — do NOT guess; several are player-prop / exotic markets not needed by the engine. The engine-critical total family is already mapped (`f321319`). MED.

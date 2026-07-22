@@ -168,6 +168,20 @@ _SPORT_NAME_ALIASES: Dict[str, Sport] = {
 }
 
 
+# Sub-game period name (``SG[].PN``) → engine PredictionScope (ADR-7).
+_SUBGAME_SCOPES: Dict[str, str] = {
+    "1st quarter": "QUARTER_1", "2nd quarter": "QUARTER_2",
+    "3rd quarter": "QUARTER_3", "4th quarter": "QUARTER_4",
+    "1 half": "FIRST_HALF", "1st half": "FIRST_HALF",
+    "2 half": "SECOND_HALF", "2nd half": "SECOND_HALF",
+}
+
+
+def scope_from_period_name(pn: Any) -> Optional[str]:
+    """Map a sub-game period name to an engine PredictionScope, or None."""
+    return _SUBGAME_SCOPES.get(str(pn or "").strip().lower())
+
+
 def _coerce_sport(sport_name: Any, sport_id: Optional[int], skin: BetB2BSkinConfig) -> Tuple[Sport, str]:
     """Return (Sport enum, display name).
 
@@ -317,6 +331,26 @@ class BetB2BExtractionRules:
             len(events), captured.url, self.skin.name,
         )
         return events
+
+    def extract_markets_scoped(self, captured: "CapturedFeedResponse", scope: str) -> List[Market]:
+        """Extract a sub-game's markets, tagged with a PredictionScope (ADR-7).
+
+        A ``GetGameZip`` sub-game (1st quarter / 1 Half / …) is a single game;
+        we pull its markets and stamp ``scope`` so scoped ingestion can select
+        the right total line per mode.
+        """
+        payload = captured.decoded
+        if not isinstance(payload, dict) or payload.get("Success") is False:
+            return []
+        value = payload.get("Value")
+        if isinstance(value, list):
+            value = value[0] if value else None
+        if not isinstance(value, dict):
+            return []
+        markets = self._extract_markets(value, is_live=self._infer_is_live(value, value.get("SC") or {}))
+        for m in markets:
+            m.scope = scope
+        return markets
 
     # ----- event building -----
     def _flatten_value(self, value: Any) -> List[Dict[str, Any]]:

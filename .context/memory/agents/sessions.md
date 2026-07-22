@@ -620,3 +620,56 @@ past entries — append corrections instead.
   - **Two remaining blockers (backlogged):** (1) map basketball quarter/half/team-total G ids in `markets.py`; (2) build the exporter+ingest client (ADR-7). FULL_MATCH is buildable now.
 - **Open items:** the two backlog items above.
 - **Report:** this log + ADR-7 (no separate review file — investigation session).
+
+### Session 26 continued (2026-07-21) — scoped ingestion pipeline BUILT + engine-schema verified
+- Continued from the ADR-7 design → shipped the whole scoped-ingestion pipeline:
+  1. `(G,T)` market map verified from a real PBA game (`f321319`): combined
+     total, home/away individual totals, handicap, moneyline, 1x2.
+  2. Sub-game fetching (`5bd38cc`): Market.scope + rules.extract_markets_scoped
+     + scraper._enrich_with_subgames (flag `subgames`) + odds_snapshots.scope.
+     Verified: combined Total per scope FULL 216.5 / Q1 52.5 / … / 2H 110.5.
+  3. Exporter (`fb4b41d`): export/scorewise.py::event_to_predict_requests — one
+     betb2b event → up to 9 engine PredictRequests, match_total=Over-odds≈1.85
+     per scope, H2H scores scope-matched (FULL 107-122, Q1 33-31, 1H 57-64).
+  4. Ingest client + `scrape --ingest` (`d94d74f`): POST scopes to
+     {engine}/api/ingest (chunk ≤100, env URL+token).
+- **VERIFIED against the engine's real Pydantic schema:** `IngestRequest(**payload)`
+  from a real PBA event ACCEPTED all 9 matches/scopes. Contract proven end-to-end
+  (scrape → sub-games → store → exporter → engine-valid ingest) without the live
+  engine. betb2b suite → 152.
+- Remaining: live end-to-end (`scrape --ingest $URL` against the running engine —
+  needs the engine URL + token in secrets/); map remaining `G=NNNN` prop groups;
+  ignored-field mapping (O1I/O2I team ids etc., backlogged).
+
+### Session 26 — LIVE end-to-end to scorewise-engine CONFIRMED (2026-07-21)
+- Operator supplied the engine URL (scorewise-engine.up.railway.app) + x-api-key
+  (stored in secrets/scorewise-api-key, gitignored, never committed).
+- LIVE POST /api/ingest with x-api-key → HTTP 200; engine ingested + ran its
+  10-step pipeline. Fixes found live: (1) auth is `x-api-key` not Bearer
+  (`7859088`); (2) engine requires STRICT head-to-head — betb2b's h2h feed
+  includes each team's games vs OTHER opponents, so `_h2h_for_scope` now filters
+  to games between the two event teams + orients to home/away (`dc37694`).
+- **REAL PREDICTIONS returned:** 3/3 succeeded — e.g. Phoenix v Rain or Shine
+  FULL_MATCH → recommendation=NO_BET, winner=NO_WINNER_PREDICTION, conf=LOW,
+  bookmaker_line=210.5, average_rate=-5.83. THE WHOLE PIPELINE WORKS: betb2b
+  scrape → sub-games → export (9 scopes) → POST → engine pipeline → predictions.
+- Notes: predictions need STRICT h2h (games between the two teams) — many events
+  have little/none, yielding empty h2h → engine "fail" on those; a real scrape's
+  `_enrich_with_h2h` provides it. Scoped (Q/half) predictions need a scrape that
+  has BOTH sub-games AND h2h (the offline test paired PBA markets / live_e2e h2h
+  separately). betb2b suite 152 → 156.
+
+### Session 26 — de-Kenya-fied betb2b (2026-07-21)
+- Operator: the codebase wrongly framed betb2b as Kenya-only; direct mode works
+  out of the box anywhere. Proven: a South African proxy (169.239.208.70:8080)
+  reached BOTH discovery (SPA 200, 29 event ids) AND data (GetGameZip 200) —
+  where a flagged IP is blocked. The block is datacenter/ASN reputation, NOT geo
+  (matches Session-11 RECON).
+- Fix (`9447c0a` + AGENTS.md): `allowed_countries` default → [] (empty = allow
+  any egress; the proxy-country gate short-circuits, so direct/any-country
+  works). Removed `allowed_countries: ["KE"]` from all 8 skins. Neutralized CLI
+  proxy defaults (no country baked in). Softened Kenya framing in config +
+  AGENTS.md. Added `scripts/railway_geo_probe.py` (discovery/data verdict per
+  host). country=87/gr=650/partner=189 stay — platform identifiers, not egress.
+- Consequence for hosting: Railway (or anywhere) works; a proxy is needed ONLY
+  if the host's IP is on betb2b's WAF blocklist — check with the probe.
