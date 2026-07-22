@@ -93,6 +93,13 @@ def _h2h_for_scope(ev: Dict[str, Any], scope: str, home: str, away: str) -> List
         # Orient to the event's home/away (swap scores if the game was reversed).
         team1_is_home = n1.strip().lower() == home.strip().lower()
         hs, as_ = (s1, s2) if team1_is_home else (s2, s1)
+        # For team-total scopes, only the relevant team's score counts —
+        # the other is zeroed so the engine's home_score+away_score sum
+        # yields exactly the individual team total (s02 contract).
+        if scope == "HOME_TEAM_TOTAL":
+            as_ = 0
+        elif scope == "AWAY_TEAM_TOTAL":
+            hs = 0
         out.append({"home_team": home, "away_team": away,
                     "home_score": int(hs), "away_score": int(as_),
                     "date": str(g.get("date_start") or "")[:10]})
