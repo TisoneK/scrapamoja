@@ -140,6 +140,21 @@ Ground truth: `GetGameZip id=352961836` San Miguel Beermen(HOME/O1) v Converge F
 1. `markets.py`: add a `(G,T)` keyed lookup that takes precedence over the T-only map; add the CONFIRMED rows above; the T-only map's `T=11/12→"Total"` and `T=13/14→"Double Chance"` are WRONG for basketball — (G,T) overrides fix them.
 2. `rules.py::lookup_market`: check `(G,T)` first, fall back to T-only, then G-only.
 3. Scraper: fetch `SG[]` sub-games per event, tag each scoped market with its `PredictionScope`; store needs a `scope`/`period` column on `markets` or `odds_snapshots` (or a `scoped_markets` table). Then scoped ingestion (ADR-7) has real per-scope totals.
+4. Add the `BETB2B_ENGINE_URL` + `BETB2B_ENGINE_TOKEN` to `.context/memory/secrets/` and test a live POST.
+
+### Capability Matrix (current status, 2026-07-22)
+
+| Capability | Status | Why |
+|-----------|--------|-----|
+| `FULL_MATCH` ingestion | ✅ **Buildable** | Market mapped (G=17/T=9,10), H2H scores flowing, team-total H2H bug fixed (`20eda23`) |
+| H2H period scores in DB | ✅ **Done** | `h2h_period_scores` table (`d0117eb`), 172 period rows on a real capture |
+| H2H per scope (code) | ✅ **Implemented** | `_h2h_for_scope()` aggregates periods for QUARTER_1..4, FIRST/SECOND_HALF; zeroes non-relevant team for HOME/AWAY_TEAM_TOTAL. See ADR-8 for contract. |
+| `QUARTER_1..4` ingestion | ❌ **Blocked** | Market group IDs for quarter combined totals not yet mapped. H2H works. |
+| `FIRST_HALF` / `SECOND_HALF` ingestion | ❌ **Blocked** | Same blocker — half combined totals not mapped. H2H works (period aggregation). |
+| `HOME_TEAM_TOTAL` / `AWAY_TEAM_TOTAL` ingestion | ✅ **Buildable** | Markets mapped (G=15/T=11,12 home, G=62/T=13,14 away). H2H bug fixed in Session 27. |
+| Live POST to engine | ⏳ **Built, untested** | `post_ingest()` in `scorewise.py` + `scrape --ingest` flag. Needs `BETB2B_ENGINE_URL` + `BETB2B_ENGINE_TOKEN` in secrets to test. |
+| Cross-skin consensus | 📝 **Design only** | Send ONE best line per match across skins. The store makes this a query (`cross_skin_odds`) but no ingest flow built for it yet. |
+| Sub-game (`SG[]`) fetching | ❌ **Unimplemented** | Scraper doesn't fetch sub-games per event. ADR-7 addendum describes the method; not yet coded. |
 Raw captures were in scratchpad (pba/main.json + sub_*.json) — re-fetch id=352961836 to reproduce.
 
 ---
