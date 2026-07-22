@@ -637,7 +637,7 @@ don't remove the line.
       Also: **31 of 37 markets on this event are still `G=NNNN`** (player props + uncertain group ids: G=27,91,92,176,228,230,232,234,236,238,920,922,930,934,936,1144,1148,2663,2665,2766,2768,3017-3023,7733,7735,9854,10487-10489). Identify per-group from the raw (line/selection structure) — do NOT guess; several are player-prop / exotic markets not needed by the engine. The engine-critical total family is already mapped (`f321319`). MED.
 
 ---
-- [ ] **Run a real scrape with `--subgames --ingest` and record the true per-scope counts** (added 2026-07-22 by Claude Code, Session 28) —
+- [x] **Run a real scrape with `--subgames --ingest` and record the true per-scope counts** (added 2026-07-22 by Claude Code, Session 28; **done same session**, via the user's bore.pub proxy) — **RESULT: 65 requests from 11 events, all 9 scopes** (11 FULL_MATCH, 7 FIRST_HALF, 5 SECOND_HALF, 6/5/5/5 quarters, 11 HOME_TEAM_TOTAL, 10 AWAY_TEAM_TOTAL); 721 non-FULL_MATCH markets extracted where every prior run had zero. Ingest → HTTP 200, 36 succeeded / 29 failed (the 29 are the requests with no H2H — only 4 of 11 events had any). But only 11 records stored — see ADR-10. Original text follows. —
       The half and quarter scopes have NEVER been exercised end-to-end against live
       data: `_enrich_with_subgames` was gated on a feature flag nothing could turn
       on until `5f6e6db`. Command:
@@ -647,7 +647,7 @@ don't remove the line.
       per-scope count in the Session 27 record is unreproducible (see the
       CORRECTION appended to `plans/decisions.md`). High — it is the first
       unblocked step for ADR-7.
-- [ ] **Re-investigate the HOME/AWAY_TEAM_TOTAL storage asymmetry — but only after the `--subgames` run** (added 2026-07-22 by Claude Code, Session 28) —
+- [x] **Re-investigate the HOME/AWAY_TEAM_TOTAL storage asymmetry** (added 2026-07-22 by Claude Code, Session 28; **RESOLVED same session**) — Cause found: the engine keys its prediction store by `match_id` alone, so every scope overwrites the last. 11/11 matches stored exactly one record and it was the last scope sent. Session 27's 1-HOME/9-AWAY is that exact signature. Not engine state, not market data, not the exporter. See ADR-10. Original text follows. —
       Session 27 saw 10 HOME_TEAM_TOTAL ingested but 1 stored (vs 9 AWAY) and
       concluded "engine state". The exporter is symmetric and the code side is now
       test-covered (`test_betb2b_export.py`), so if it recurs on a clean run the
@@ -663,3 +663,18 @@ don't remove the line.
       project's `ignore` list (E501, B008, C901) is NOT being applied. That is part
       of why `ruff check src/sites/betb2b/` reports 563 errors. Mechanical fix, but
       re-baseline the count afterwards before anyone treats it as a target. Low.
+- [ ] **scorewise-engine: key the prediction store by `(match_id, scope)`, not `match_id`** (added 2026-07-22 by Claude Code, Session 28) —
+      **Different repo — this is the blocker on ADR-7's whole premise.** The scraper
+      sends up to 9 scoped predictions per match; the engine keeps only the last one
+      written, so 54 of every 65 are discarded on arrival (proven: 11/11 matches
+      stored exactly one record, always the last scope sent — ADR-10). Until this
+      changes, `--subgames` is a pipeline-validation tool, not a production feed:
+      it costs ~6 extra requests per event for data the engine throws away. Nothing
+      on the scraper side can work around it. High — it decides whether ADR-7 ships.
+- [ ] **Raise H2H coverage — only 4 of 11 events had any** (added 2026-07-22 by Claude Code, Session 28) —
+      The engine requires strict head-to-head (games between exactly the two event
+      teams) and rejects requests without it — that is the entire cause of the 29/65
+      ingest failures, not a bug. The statisticfeed endpoint returned `204 No Content`
+      for 7 of 11 events (minor leagues: Australian NBL1, Philippine BPC, Chinese
+      women's). Worth checking whether major leagues fare better before treating
+      ~55% rejection as normal. Medium.

@@ -750,3 +750,19 @@ past entries — append corrections instead.
   ever exercised half/quarter ingestion end-to-end), the asymmetry re-check after it, the
   remaining `(G,T)` props, and the inert `[tool.ruff]` config.
 - **Report:** `.context/memory/reviews/2026-07-22-review-2.md` | **New:** ADR-9.
+
+---
+## 2026-07-22 — Session 28 continued (live `--subgames --ingest` run through the user's proxy)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini | **Role:** engineer | **Core:** 0.3.0
+- **Task:** The user supplied a bore.pub proxy, so backlog item 1 (the first-ever scoped run) was executed rather than handed off.
+- **Commits:** context only — no product change; the finding is upstream.
+- **Outcome:** the scraper side of ADR-7 is **proven end-to-end**, and ADR-7 is **blocked downstream**.
+  - Proxy stored at `secrets/betb2b-proxy` (gitignored, chmod 600; bore.pub port rotates per tunnel — ask the user for the current one, don't debug the scraper).
+  - Scrape: 11 events, 161s, **6953 odds changes** (vs 4115 without sub-games). **721 non-FULL_MATCH markets** extracted — that count had been zero in every prior run in this repo's history.
+  - Built **65 requests from 11 events across all 9 scopes**. Ingest → HTTP 200, `succeeded=36 failed=29 added=3 updated=62`.
+  - The 29 failures = exactly the 29 requests with no H2H (7 of 11 events got `204 No Content` from statisticfeed — minor leagues). Understood, not a defect; backlogged as a coverage question.
+  - **ADR-8 confirmed on live data:** team totals now sum to 86 / 91 / 109 against lines of 90.5 / 84.5 / 114.5. Pre-fix those same requests carried 175 / 154 / 214 — the false-HIGH mechanism, observed rather than inferred.
+  - **F8 / ADR-10 (High, upstream):** `added=3` gave it away — 28 brand-new `(match_id, scope)` pairs should have added ≥28. `/api/predictions` confirms **11 of 11 matches store exactly one record, and it is the last scope sent**. The engine keys by `match_id` alone, so 54 of 65 scoped predictions are overwritten on arrival; zero half/quarter records survive.
+  - **This resolves Session 27's HOME_TEAM_TOTAL asymmetry** (10 sent / 1 stored / 9 AWAY) — identical signature. All three hypotheses that session tested (code, market data, engine state from old runs) were the wrong variable.
+- **Open items:** the engine must key by `(match_id, scope)` before `--subgames` is worth running in production — a **scorewise-engine** change, different repo, nothing on this side can work around it. Plus the H2H coverage question. Both backlogged; items 1 and 2 checked off.
+- **Report:** `.context/memory/reviews/2026-07-22-review-2.md` §8 | **New:** ADR-10.

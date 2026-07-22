@@ -249,3 +249,24 @@ never been exercised end-to-end against live data.** Do that first, with
   lived in seams that more unit tests could not reach. Corollary: a regression
   test for a bug must be **seen red** against the unfixed code (mutate the fix,
   run, confirm failure). An unfalsified regression test is a claim, not a guard.
+
+---
+
+## ADR-10: ADR-7 is blocked downstream — the engine stores one prediction per match_id, not per (match_id, scope) (2026-07-22, Session 28)
+
+- **Status:** accepted (finding); ADR-7 remains correct on the scraper side but cannot be realized until the engine changes
+- **Context:** The first-ever `--subgames --ingest` run (2026-07-22, linebet basketball prematch, via the user's bore.pub proxy) produced **65 requests from 11 events across all 9 scopes** — the half and quarter scopes had never been generated before (`5f6e6db`). POST → HTTP 200, `succeeded=36 failed=29 added=3 updated=62`.
+
+  `added=3` was the tell: 28 half/quarter requests were entirely new `(match_id, scope)` pairs, so a scope-keyed store would have added at least 28. Querying `/api/predictions` afterwards:
+
+  **11 of 11 matches store exactly one record, and it is the LAST scope sent.**
+
+  Send order per event is FULL_MATCH → halves → quarters → HOME_TEAM_TOTAL → AWAY_TEAM_TOTAL, so every match ends up stored as `AWAY_TEAM_TOTAL` — except the one event with no away-total market, stored as `HOME_TEAM_TOTAL`. Observed: 10 AWAY + 1 HOME from this run. Zero half or quarter records stored, despite 16 of them being accepted.
+
+- **Decision:** Record this as a downstream blocker and stop attributing it to scraper-side causes. The scraper's job — one match → N scoped `PredictRequest`s with scope-matched lines and H2H — is done and now verified against live data. Realizing it requires **scorewise-engine** (a different repo) to key its prediction store by `(match_id, scope)`.
+
+- **Consequences:**
+  1. Until the engine changes, `--subgames` costs ~6 extra requests per event and 54 of every 65 scoped predictions are discarded on arrival. Use it to validate the pipeline, not to feed production.
+  2. **This resolves the "HOME_TEAM_TOTAL asymmetry"** that Session 27 investigated (10 sent, 1 stored, 9 AWAY) — it is the identical signature, not engine state from old runs and not market data. See the CORRECTION above.
+  3. The 29 failures are a separate, understood cause: the engine requires strict H2H and only 4 of 11 events had any (the rest returned `204 No Content` from the statisticfeed endpoint). 36 accepted = exactly the 36 requests carrying H2H. Not a defect.
+  4. **ADR-8 confirmed on live data:** team-total H2H now sums to 86 / 91 / 109 against lines of 90.5 / 84.5 / 114.5. Pre-fix it would have compared game totals of 175 / 154 / 214 against those same lines — the false-HIGH mechanism, observed directly rather than inferred.

@@ -303,3 +303,11 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** macOS ships no GNU `timeout`; the environment block didn't say so.
 - **Workaround / fix:** pytest's own `--timeout=`, or the harness's per-call timeout.
 - **Prevent next time:** Added to the Baos-Mac-mini quirks in `system/environments.md`.
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28, fourth entry — live run)
+- **Problem:** Two sessions spent real effort on the "HOME_TEAM_TOTAL asymmetry" (Session 27: 7 throwaway scripts, a full re-scrape, a re-ingest; this session: the re-check it backlogged) when the answer was one field in the ingest response. `added=3` alongside 28 brand-new `(match_id, scope)` pairs says immediately that the store is not keyed by scope.
+- **Cost:** Session 27's investigation, effectively in full.
+- **Cause:** The ingest response summary (`total/succeeded/failed/added/updated/store_total`) was being read for pass/fail only. `added` vs `updated` describes the store's *keying*, which is exactly what "why did only 1 of 10 survive?" is asking about — and it was in the response body the whole time.
+- **Workaround / fix:** Read `added`/`updated` against the number of genuinely-new `(match_id, scope)` pairs you sent, then confirm with `/api/predictions`. Two minutes, conclusive: 11/11 matches store one record, always the last scope sent.
+- **Prevent next time:** When a downstream store "loses" records, compare what you sent against what its own write summary claims it did, before hypothesizing about the sender. Cheapest possible discriminator — and it points at the key, which is usually the answer.
