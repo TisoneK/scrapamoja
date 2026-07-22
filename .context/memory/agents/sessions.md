@@ -782,3 +782,16 @@ past entries — append corrections instead.
   2. **Result snapshots are a real asset.** `data/telemetry/betb2b/result_snapshots/*.json` carries the full event tree including sub-game markets, so a past scrape can be re-exported and re-ingested offline. That is what let this verification finish after the proxy tunnel died — no scrape, no proxy.
 - **Open items:** H2H coverage (29 of 65 requests still rejected — only 4 of 11 events had strict H2H); the dead bore.pub tunnel (this IP is WAF-blocked, so direct is not a fallback); the engine's prediction store came back empty after the redeploy (`ingestion_count=0`) — worth confirming `PREDICTIONS_DIR` points at a mounted volume, else predictions vanish on every deploy.
 - **Report:** `.context/memory/reviews/2026-07-22-review-2.md` (§8) + ADR-10 RESOLVED in `plans/decisions.md`.
+
+---
+## 2026-07-22 — Session 28 continued (3) — first production scoped run
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini | **Core:** 0.3.0
+- **Task:** New proxy port supplied (bore.pub rotates); run the real scoped scrape → ingest against the now-live engine.
+- **Commits:** context here; `7957e76` + context in scorewise-engine.
+- **Outcome:** **ADR-7 in production.** Fresh scrape (11 events, 194s, 18 sub-game fetches) → 71 requests → **71 of 71 stored, all 9 scopes**, 11 matches carrying 2–9 scopes each.
+  - `FULL_MATCH 11 | FIRST_HALF 9 | SECOND_HALF 6 | Q1 8 | Q2 6 | Q3 6 | Q4 6 | HOME_TT 10 | AWAY_TT 9`
+  - 45 succeeded / 26 failed — better H2H coverage than the morning run (36/65). Failures remain the no-strict-H2H events.
+  - Recommendations: NO_BET 41, UNDER 4, None 26. Four actionable calls, spread across FULL_MATCH / FIRST_HALF / SECOND_HALF / QUARTER_2 — scopes that could not previously produce a prediction at all.
+- **Found: the engine's prediction store does not persist.** `ingestion_count=1` after three ingests — the process restarted twice in ~6 minutes and loaded nothing from disk. Invisible until now because a missing store and an empty store both serve `[]`. Fixed the *visibility* in the engine repo (`7957e76`, logs resolved path + `PREDICTIONS_DIR` + CWD at WARNING); whether a volume is mounted is backlogged there. Consequence for us: the website can show nothing between a restart and the next scrape, so **scrape cadence is now also a data-availability question**, not just freshness.
+- **Proxy note:** the bore.pub port rotated twice in one session (8542 → dead → 28802). This IP is WAF-blocked so direct is not a fallback. `secrets/betb2b-proxy` holds the current one; swap the port there, never debug the scraper.
+- **Open items:** H2H coverage (26 of 71 still rejected); engine store persistence (engine repo backlog).
