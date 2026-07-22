@@ -219,3 +219,39 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cost:** ~30 min of live proxy probes re-confirming known facts.
 - **Extra finding (worth keeping so nobody repeats it):** attempted ADR-4's suggested capture (Playwright `context.new_cdp_session` + `Target.setAutoAttach{flatten:true}` + `Network.enable`) to grab the SW feed request/headers. It captured **0** — Playwright Python does NOT surface flattened child-session (service-worker) Network events on the parent CDPSession, and `context.on("response")` / in-page fetch hooks also see nothing. Truly tapping the feed needs **raw CDP over the DevTools websocket** with manual sessionId routing (outside Playwright). Given ADR-4 says don't chase it, this is not worth building. The raw page HTML (browser-free) carries the full card (~38 live-basketball ids) and is the practical equivalent of the feed's output.
 - **Prevent next time:** For any betb2b feed/406/header question, read ADR-3 → ADR-4 + RECON.md FIRST. The `x-dt`-rotation dead-end is settled; the supported path is HTML-harvest (discovery) + GetGameZip (per-match).
+
+
+---
+## 2026-07-22 — GitHub Copilot / DeepSeek V4 Flash Free (Session 27 — H2H scope bug)
+
+- **Problem:** Validated the exporter's data format, field presence, and
+  individual score correctness — but NEVER simulated what the engine would
+  compute from that data. The engine's s02 always sums home+away. For team-total
+  scopes, the exporter sent both teams' full match scores, producing full game
+  totals vs individual lines. The verify script showed "3 above, 3 below" for
+  AWAY_TEAM_TOTAL (correct human reading), but the engine saw full match totals
+  and returned OVER HIGH.
+- **Cost:** ~45 min of tracing the cross-repo pipeline (engine s01→s10, exporter
+  code, verify script) before finding the root cause. Plus the wasted session
+  time before the user challenged the predictions — the bug existed since the
+  exporter was built (Session 26 continued, commit `fb4b41d`).
+- **Cause:** Verification was structural, not semantic. I checked: is the field
+  present? Is it a number? Does the H2H count match? Does the line look right?
+  But I never checked: "What would the engine compute from this?" The engine's
+  sum-invariant was invisible in the verification pipeline.
+- **Workaround / fix:** Zero-out logic in `_h2h_for_scope()` (`20eda23`).
+  The fix is 4 lines. The bug took 45 minutes to find because the mental model
+  was "exporter produces correct-looking data" → "engine must be wrong" —
+  but it was the exporter violating an invariant the engine assumes.
+- **Prevent next time:**
+  1. When building a pipeline where data crosses repo boundaries, ALWAYS
+     simulate the downstream computation in the verification step. For the
+     exporter, that means: produce a PredictRequest, compute home+away, and
+     assert the sum equals the scope-relevant score.
+  2. Add a "data contract" test file that parametrizes over all 9 scopes and
+     asserts the engine-visible invariant for each.
+  3. When the user challenges a prediction, trace the full pipeline starting
+     from the RAW database values, not from the exporter output. The raw DB
+     values were correct — the bug was in the transformation layer. If I had
+     started from "what scores are in the DB for this event?" rather than
+     "what does the exporter output look like?", I'd have found it faster.

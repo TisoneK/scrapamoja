@@ -141,3 +141,41 @@ Ground truth: `GetGameZip id=352961836` San Miguel Beermen(HOME/O1) v Converge F
 2. `rules.py::lookup_market`: check `(G,T)` first, fall back to T-only, then G-only.
 3. Scraper: fetch `SG[]` sub-games per event, tag each scoped market with its `PredictionScope`; store needs a `scope`/`period` column on `markets` or `odds_snapshots` (or a `scoped_markets` table). Then scoped ingestion (ADR-7) has real per-scope totals.
 Raw captures were in scratchpad (pba/main.json + sub_*.json) — re-fetch id=352961836 to reproduce.
+
+---
+
+## ADR-8 — H2H scope contract rule (exporter)
+
+**Date:** 2026-07-22  
+**Status:** adopted  
+**Context:** Session 27 discovered that `_h2h_for_scope()` was sending full match
+scores for HOME_TEAM_TOTAL and AWAY_TEAM_TOTAL scopes. The engine's
+`H2HMatch` docstring says *"Scores must correspond to the same scope as the
+prediction"*, and `s02_h2h_totals.py` always computes `total = home_score +
+away_score`. Violating this contract produces false HIGH predictions because
+full match totals (~180) are compared against individual team lines (~89).
+
+**Decision:** The exporter MUST zero out the non-relevant team's H2H score when
+building team-total scopes. Specifically:
+
+| Scope | home_score | away_score | Engine sum | Meaning |
+|-------|-----------|-----------|------------|---------|
+| FULL_MATCH | O1 (full match) | O2 (full match) | game total | Total points |
+| HOME_TEAM_TOTAL | O1 (full match) | **0** | O1 | Home team's points |
+| AWAY_TEAM_TOTAL | **0** | O2 (full match) | O2 | Away team's points |
+| QUARTER_1..4 / HALF | period home | period away | period total | Period total points |
+
+**Rationale:**
+1. The engine pipeline always sums — it does not inspect scope to decide
+   whether to sum. This is by design (s02 is generic).
+2. Team-total predictions are about ONE team's output — the other team's
+   score is noise. Zeroing it makes the sum represent only the relevant team.
+3. This matches betting semantics: "Home Team Total Over 89.5" means "will
+   the home team score ≥90?" — only the home team's points matter.
+
+**Enforcement:**
+- `_h2h_for_scope()` in `export/scorewise.py` applies the zero-out logic.
+- Add unit tests that assert: for each scope, the home+away sum matches the
+  scope-relevant score (engine-visible number).
+- Verify script `scripts/verify_h2h_per_scope.py` displays the engine total
+  alongside the line so a human can spot future violations.

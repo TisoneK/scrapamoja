@@ -633,6 +633,44 @@ past entries — append corrections instead.
      per scope, H2H scores scope-matched (FULL 107-122, Q1 33-31, 1H 57-64).
   4. Ingest client + `scrape --ingest` (`d94d74f`): POST scopes to
      {engine}/api/ingest (chunk ≤100, env URL+token).
+
+---
+## 2026-07-22 — Session 27 (H2H team-total scope bug: fix + re-ingest)
+- **Agent:** GitHub Copilot | **Model:** DeepSeek V4 Flash Free | **Platform:** Windows 11 (TisoneK local) | **Role:** engineer
+- **Task:** Cross-repo integration testing — trace engine HIGH predictions back to
+  the exporter and fix the data-quality bug that caused false HIGHs for team-total scopes.
+- **Commits:** 1 product (`20eda23`).
+- **Outcome:** done. Bug found + fixed, re-ingested, 3 scopes now NO_BET.
+  - **Bug:** `_h2h_for_scope()` returned BOTH teams' full match scores for
+    `HOME_TEAM_TOTAL` and `AWAY_TEAM_TOTAL`. Engine s02 sums home+away → full game
+    totals (~180) vs individual lines (~89) → all trivially OVER → false HIGH confidence.
+  - **Fix +4 lines:** zero out the non-relevant team's score per team-total scope.
+  - **Created:** `scripts/test_ingest_engine.py` (e2e: DB → exporter → POST engine),
+    `scripts/verify_h2h_per_scope.py` (match-by-match H2H per scope with engine total).
+  - **Deleted:** 11 throwaway probe scripts (`check_*.py`, `explore_api.py`).
+  - **Before/After:**
+    | Scope | Before | After |
+    |-------|--------|-------|
+    | FULL_MATCH (178.5) | NO_BET LOW ✓ | NO_BET LOW ✓ (unchanged) |
+    | HOME_TEAM_TOTAL (89.5) | OVER HIGH ❌ | NO_BET ✓ (2 above, 4 below) |
+    | AWAY_TEAM_TOTAL (88.5) | OVER HIGH ❌ | NO_BET ✓ (3 above, 3 below) |
+  - **Lesson:** Verified exporter output format and individual field correctness but
+    NOT the semantic computation the engine performs (home+away sum). The engine
+    algorithm was correct — it was receiving wrong data. H2HMatch contract violated:
+    "Scores must correspond to the same scope as the prediction."
+- **Reports:** `reviews/2026-07-22-review.md` (this session), ADR-8 added to
+  `plans/decisions.md` (H2H scope contract rule).
+- Continued from the ADR-7 design → shipped the whole scoped-ingestion pipeline:
+  1. `(G,T)` market map verified from a real PBA game (`f321319`): combined
+     total, home/away individual totals, handicap, moneyline, 1x2.
+  2. Sub-game fetching (`5bd38cc`): Market.scope + rules.extract_markets_scoped
+     + scraper._enrich_with_subgames (flag `subgames`) + odds_snapshots.scope.
+     Verified: combined Total per scope FULL 216.5 / Q1 52.5 / … / 2H 110.5.
+  3. Exporter (`fb4b41d`): export/scorewise.py::event_to_predict_requests — one
+     betb2b event → up to 9 engine PredictRequests, match_total=Over-odds≈1.85
+     per scope, H2H scores scope-matched (FULL 107-122, Q1 33-31, 1H 57-64).
+  4. Ingest client + `scrape --ingest` (`d94d74f`): POST scopes to
+     {engine}/api/ingest (chunk ≤100, env URL+token).
 - **VERIFIED against the engine's real Pydantic schema:** `IngestRequest(**payload)`
   from a real PBA event ACCEPTED all 9 matches/scopes. Contract proven end-to-end
   (scrape → sub-games → store → exporter → engine-valid ingest) without the live

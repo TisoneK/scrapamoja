@@ -197,3 +197,34 @@ Friction caused by the `.context/` system or the protocol itself. See
   Logging so a future session can confirm or refute by avoiding broad
   `LS` and observing whether 403s decrease.)
 
+
+---
+## 2026-07-22 — GitHub Copilot / DeepSeek V4 Flash Free (Session 27 — H2H scope bug)
+
+- **Flaw:** Validated exporter output format and individual field correctness
+  but NOT the semantic computation the engine performs. The verify script showed
+  human-readable scores vs lines and looked correct. But the engine's s02 always
+  sums home+away — and for team-total scopes, the exporter was sending BOTH
+  teams' full match scores, so the engine computed full game totals vs individual
+  lines → trivially OVER → false HIGH confidence.
+- **Symptom:** The exporter passed manual inspection (scores look right, lines look
+  right, scope labels correct). The verify script showed "3 above 3 below" for
+  AWAY_TEAM_TOTAL. But the engine returned HIGH because it summed differently.
+- **Root cause:** No step in the verification pipeline simulates what the engine
+  actually computes. The exporter is tested for structure (fields present, types
+  correct) but not for engine-visible semantic correctness (does home+away sum
+  to the scope-relevant number?). The H2HMatch "scores must correspond to the
+  same scope" contract exists in docstrings but has no automated test.
+- **Suggested fix:**
+  1. Add a parametrized test: for each scope, `event_to_predict_requests`
+     produces a PredictRequest whose H2H scores, when summed, equal the
+     scope-relevant number (full match score, period score, or single-team score).
+  2. Add a "simulate engine" check in the verification script: compute
+     `req.home_score + req.away_score` and assert it vs the line context.
+  3. In `test_ingest_engine.py`, after POSTing, confirm the engine's
+     prediction is NO_BET for scopes with <6 matched H2H games (a realistic
+     data sanity check).
+- **Status:** behavior fixed (`20eda23`); automated enforcement is a backlog
+  test item. The 11 throwaway scripts that should have caught this were not
+  examining the right invariant.
+
