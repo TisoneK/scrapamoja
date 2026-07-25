@@ -689,3 +689,28 @@ don't remove the line.
       `data/telemetry/betb2b/result_snapshots/` carry the full event tree
       including sub-game markets, so a past scrape can be re-exported and
       re-ingested offline with `build_ingest_matches`. Low — a note, not a bug.
+
+---
+- [ ] **Migrate betb2b + engine data from file-SQLite to a shared Railway PostgreSQL (ADR-11)** (added 2026-07-25 by Claude Code, spec kickoff) —
+      Per ADR-11: make Postgres the single shared store for scorewise, the scraper,
+      and the apps (all reached through the Python/FastAPI layer — NOT direct-to-DB,
+      so Supabase was rejected). SQLAlchemy 2.0 is already a dep, so this is a
+      connection swap + schema port, not a rewrite. Steps:
+        1. Add the Railway **Postgres plugin**; consume the injected `DATABASE_URL`.
+           Make the store connection env-driven: `DATABASE_URL` → Postgres in
+           deployed envs, SQLite file fallback for local/CI (one SQLAlchemy code path).
+        2. Add **Alembic** (the repo has no migration tool today) and generate the
+           initial schema from the existing models.
+        3. Port SQLite-isms: `INTEGER PRIMARY KEY` → `IDENTITY`/`SERIAL`; `TEXT`
+           timestamps (`start_time`/`first_seen`/`extracted_at`/…) → `timestamptz`;
+           `success INTEGER` (0/1) → `boolean`. Add indexes:
+           `odds_snapshots(event_id, extracted_at)`, `events(start_time)`.
+        4. One-time data copy: dump the three SQLite DBs
+           (`data/betb2b/odds.db`, `data/adaptive.db`, `data/audit_log.db`) → load
+           into the one Postgres instance (SQLAlchemy script over the shared models).
+        5. Retire ADR-1 point 5's Volume mount + `ADAPTIVE_DB_PATH` env var — Postgres
+           persists across redeploys natively, so both become unnecessary.
+        6. Leave **InfluxDB** alone (metrics/observability, not shared business data).
+      Supersedes sub-item (4) "Postgres backend" of the "Grow the betb2b odds store"
+      item above. HIGH — it's the integration foundation the apps depend on.
+      Do the schema/connection abstraction deliberately, tests green, one env at a time.
