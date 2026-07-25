@@ -761,3 +761,28 @@ don't remove the line.
       etc.) won't be created there. Replace with `sqlalchemy.inspect(engine).get_indexes()`
       or declare them as `Index` objects on the model so Alembic manages them.
       Low — performance, not correctness.
+
+---
+- [x] **Feed the empty `statistics` table (ADR-11 verification)** (added 2026-07-25 by Claude Code; **done same day**, `777330b`) —
+      The `statistics` table was schema/model/store-INSERT complete but empty in
+      every DB across all history: the only stats source was `match_detail.py`'s
+      browser-DOM extractor (imported only by `scripts/compare_match.py`, never by
+      the scrape pipeline). Reverse-engineered the real httpx feed live through the
+      proxy — **`GET /service-api/statisticfeed/api/v2/Game/statistic?id=<eventId>&lng&ref&fcountry&gr`**
+      → 200 (note **api/v2** — v1 returns `405 UnsupportedApiVersion` for this
+      resource; 204 = no stats, like H2H). Wired `_enrich_with_stats()` +
+      `extract_statistics_data()` + a `stats` feature flag (default on). The real
+      match stats live in `entity.periodStatistic`; the parser stores its entries
+      verbatim (no guessed labels, per ADR-7).
+- [ ] **Map `entity.periodStatistic` field names against a populated capture** (added 2026-07-25 by Claude Code) —
+      `_enrich_with_stats` now fetches the v2 statistic feed, but `entity.periodStatistic`
+      is **empty for every currently-available event** (minor/amateur basketball; no
+      major league was live at capture time — same coverage reality as H2H's 204s),
+      so its inner field names have not been observed populated. The parser stores
+      entries verbatim rather than guess labels. When a major-league game is live
+      (NBA/EuroLeague) or a finished-game numeric id is available, capture one
+      populated `Game/statistic` response, confirm the periodStatistic item shape,
+      and (if useful) map its keys to clean labels in `extract_statistics_data`.
+      Also worth checking: the v2 response's `teams[]` carries real backend team
+      ids + `countryId` + crests/`clId`, which could fill the `teams.backend_id`/
+      `country_id` nulls that today only H2H populates. Low-Medium.
