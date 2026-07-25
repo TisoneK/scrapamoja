@@ -721,3 +721,58 @@ class BetB2BExtractionRules:
             game_shorts=game_shorts,
             sport_id=sport_id,
         )
+
+    # ------------------------------------------------------------------ #
+    # Match statistics (statisticfeed api/v2/Game/statistic)
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def extract_statistics_data(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Flatten a statisticfeed ``Game/statistic`` (v2) response into stat rows.
+
+        Endpoint (confirmed live, ADR-11 verification):
+        ``GET /service-api/statisticfeed/api/v2/Game/statistic?id=<eventId>``
+        — note **api/v2**, not v1 (v1 returns 405 for this resource). Returns
+        ``204`` (→ ``{}`` here) when a match has no stats, exactly like H2H.
+
+        Envelope (observed)::
+
+            {"teams": [...], "players": [...], "sportId": 3,
+             "entity": {"periodStatistic": [ {...}, ... ]}}
+
+        The real match statistics live in ``entity.periodStatistic``. Its inner
+        field names have **not** been observed populated (every currently-live
+        minor-league event returns it empty), so — per ADR-7's "do not commit a
+        guessed map" rule — this parser does NOT invent labels. It stores each
+        ``periodStatistic`` entry **verbatim** (its own feed keys), coercing any
+        nested value to a JSON string so the store's name/value flattening
+        (``store.py`` ``INSERT INTO statistics``) is lossless and never raises.
+
+        Returns a list of flat ``{name: value}`` dicts (empty when the feed
+        carries no stats). See the backlog item to map the field names once a
+        populated capture from a major-league game is available.
+        """
+        if not raw or not isinstance(raw, dict):
+            return []
+
+        entity = raw.get("entity")
+        if not isinstance(entity, dict):
+            return []
+
+        period_stats = entity.get("periodStatistic")
+        if not isinstance(period_stats, list):
+            return []
+
+        rows: List[Dict[str, Any]] = []
+        for entry in period_stats:
+            if not isinstance(entry, dict) or not entry:
+                continue
+            flat: Dict[str, Any] = {}
+            for key, value in entry.items():
+                if isinstance(value, (dict, list)):
+                    flat[str(key)] = json.dumps(value, separators=(",", ":"))
+                else:
+                    flat[str(key)] = value
+            if flat:
+                rows.append(flat)
+
+        return rows

@@ -766,3 +766,61 @@ def test_lookup_market_gt_verified(skin) -> None:
     # The old T-only map wrongly called (62,13) "Double Chance".
     assert lookup_market(62, 13, mg, mt) == ("Individual Total Away", "Over")
     assert lookup_market(14, 182, mg, mt) == ("To Win Match", "1")
+
+
+# ---------------------------------------------------------------------------
+# Match statistics (statisticfeed api/v2/Game/statistic) — ADR-11 verification
+# ---------------------------------------------------------------------------
+
+# Real envelope captured live (linebet, minor-league basketball): the endpoint
+# returns 200 with team metadata but an EMPTY periodStatistic — the common case
+# for minor leagues, mirroring H2H's 204s.
+SAMPLE_STATS_EMPTY = {
+    "teams": [{"id": "5abc", "countryId": "142", "title": "Panama (Women)"}],
+    "players": [],
+    "sportId": 3,
+    "entity": {"periodStatistic": []},
+}
+
+# Synthesised populated shape: periodStatistic entries are stored VERBATIM (the
+# parser invents no labels — ADR-7), nested values coerced to JSON strings.
+SAMPLE_STATS_POPULATED = {
+    "sportId": 3,
+    "entity": {
+        "periodStatistic": [
+            {"period": 1, "name": "Ball Possession", "home": "55", "away": "45"},
+            {"period": 1, "name": "Fouls", "home": 8, "away": 11,
+             "detail": {"q1": 3}},
+        ]
+    },
+}
+
+
+def test_extract_statistics_empty_period(rules: BetB2BExtractionRules) -> None:
+    """Real 200-with-empty-periodStatistic envelope yields no rows (not a crash)."""
+    assert rules.extract_statistics_data(SAMPLE_STATS_EMPTY) == []
+
+
+def test_extract_statistics_populated(rules: BetB2BExtractionRules) -> None:
+    """Populated periodStatistic is flattened verbatim; nested → JSON string."""
+    rows = rules.extract_statistics_data(SAMPLE_STATS_POPULATED)
+    assert len(rows) == 2
+    assert rows[0] == {"period": 1, "name": "Ball Possession",
+                       "home": "55", "away": "45"}
+    # Nested dict value is JSON-stringified so the store's name/value
+    # flattening (str(v)) is lossless and never raises.
+    assert rows[1]["detail"] == '{"q1":3}'
+    assert rows[1]["home"] == 8
+
+
+def test_extract_statistics_none_and_malformed(rules: BetB2BExtractionRules) -> None:
+    """None / 204 / missing-entity / wrong-types all return [] gracefully."""
+    assert rules.extract_statistics_data(None) == []
+    assert rules.extract_statistics_data({}) == []
+    assert rules.extract_statistics_data({"entity": None}) == []
+    assert rules.extract_statistics_data({"entity": {}}) == []
+    assert rules.extract_statistics_data(
+        {"entity": {"periodStatistic": "not_a_list"}}) == []
+    # Non-dict / empty entries within the list are skipped.
+    assert rules.extract_statistics_data(
+        {"entity": {"periodStatistic": [None, {}, {"a": 1}]}}) == [{"a": 1}]

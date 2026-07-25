@@ -219,6 +219,7 @@ class BetB2BSkinConfig:
             "odds": True,
             "raw_capture": True,
             "h2h": True,
+            "stats": True,          # fetch match statistics (statisticfeed api/v2/Game/statistic)
             "html_harvest": True,   # browser-free event-id discovery from page HTML
             "subgames": False,      # fetch per-quarter/half sub-games (ADR-7 scoped ingestion; costs extra requests)
         }

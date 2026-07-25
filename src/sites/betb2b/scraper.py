@@ -298,6 +298,10 @@ class BetB2BScraper:
         if self.skin.features.get("h2h", True) and events and action != "raw_capture":
             await self._enrich_with_h2h(events)
 
+        # Enrich events with match statistics (best-effort, only if feature is on).
+        if self.skin.features.get("stats", True) and events and action != "raw_capture":
+            await self._enrich_with_stats(events)
+
         # Did the session get harvested?
         session_harvested = self.session_manager.has_session
 
@@ -777,6 +781,87 @@ class BetB2BScraper:
                         "skin=%s H2H parse error for event=%s: %s",
                         self.skin.name, eid, exc,
                     )
+
+    async def _enrich_with_stats(self, events: List[Event]) -> None:
+        """Enrich events with match statistics from the statisticfeed endpoint.
+
+        Best-effort per-event: polls
+        ``/service-api/statisticfeed/api/v2/Game/statistic`` (note **v2** — v1
+        returns 405 for this resource) using the harvested session cookies.
+        Non-fatal on failure (logs a warning and moves on). Controlled by the
+        skin's ``stats`` feature flag. ``204`` means the match has no stats
+        (common for minor leagues, exactly like H2H); we leave
+        ``Event.statistics`` empty in that case.
+        """
+        if not events:
+            return
+
+        session = await self.session_manager.get_session()
+        cookie_header = session.to_cookie_header()
+        headers = self.skin.merged_headers(session_cookies=cookie_header)
+        headers["accept"] = "application/json"
+
+        proxy_url = (
+            self.proxy_endpoint.to_httpx_proxy()
+            if self.proxy_endpoint is not None
+            else None
+        )
+
+        enriched = 0
+        async with httpx.AsyncClient(
+            proxy=proxy_url, timeout=15.0, follow_redirects=True,
+        ) as client:
+            for ev in events:
+                eid = str(ev.event_id)
+                if not eid.isdigit():
+                    continue
+
+                try:
+                    params = {
+                        "id": eid,
+                        "lng": self.skin.language,
+                        "ref": str(self.skin.partner),
+                        "fcountry": str(self.skin.country),
+                        "gr": str(self.skin.gr),
+                    }
+                    url = (
+                        f"{self.skin.base_url}"
+                        f"/service-api/statisticfeed/api/v2/Game/statistic"
+                    )
+                    resp = await client.get(url, params=params, headers=headers)
+
+                    if resp.status_code == 204:
+                        # 204 = no stats for this match (minor league).
+                        continue
+
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "skin=%s stats status=%d for event=%s",
+                            self.skin.name, resp.status_code, eid,
+                        )
+                        continue
+
+                    rows = BetB2BExtractionRules.extract_statistics_data(resp.json())
+                    if rows:
+                        ev.statistics = rows
+                        enriched += 1
+
+                except httpx.HTTPError as exc:
+                    logger.warning(
+                        "skin=%s stats HTTP error for event=%s: %s",
+                        self.skin.name, eid, exc,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "skin=%s stats parse error for event=%s: %s",
+                        self.skin.name, eid, exc,
+                    )
+
+        if enriched:
+            logger.info(
+                "skin=%s stats enrichment: %d/%d events carried statistics",
+                self.skin.name, enriched, len(events),
+            )
 
     # ------------------------------------------------------------------ #
     # Introspection
