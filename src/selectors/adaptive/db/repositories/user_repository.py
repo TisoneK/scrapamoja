@@ -6,10 +6,11 @@ This implements the data access layer for user preferences and view mode managem
 
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from sqlalchemy import create_engine, select, func, desc
+from sqlalchemy import select, func, desc
 from sqlalchemy.orm import Session, sessionmaker
 import os
 
+from src.core.db import get_engine
 from ..models.user_preferences import UserPreference, ViewUsageAnalytics, UserRole, ViewMode
 from ..models.recipe import Base
 
@@ -32,11 +33,8 @@ class UserPreferenceRepository:
             db_path = os.path.join(db_dir, "adaptive.db")
         
         self.db_path = db_path
-        # Create engine with check_same_thread=False for SQLite
-        self.engine = create_engine(
-            f"sqlite:///{db_path}",
-            connect_args={"check_same_thread": False} if db_path != ":memory:" else {}
-        )
+        # ADR-11: shared env-driven engine factory (DATABASE_URL → Postgres).
+        self.engine = get_engine(db_path)
         # Create tables with checkfirst to avoid index conflicts
         Base.metadata.create_all(self.engine, checkfirst=True)
         # Create session factory
@@ -297,11 +295,8 @@ class ViewUsageRepository:
             db_path = os.path.join(db_dir, "adaptive.db")
         
         self.db_path = db_path
-        # Create engine with check_same_thread=False for SQLite
-        self.engine = create_engine(
-            f"sqlite:///{db_path}",
-            connect_args={"check_same_thread": False} if db_path != ":memory:" else {}
-        )
+        # ADR-11: shared env-driven engine factory (DATABASE_URL → Postgres).
+        self.engine = get_engine(db_path)
         # Create tables with checkfirst to avoid index conflicts
         Base.metadata.create_all(self.engine, checkfirst=True)
         # Create session factory

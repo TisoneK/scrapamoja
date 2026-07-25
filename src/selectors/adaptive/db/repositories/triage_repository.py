@@ -12,10 +12,11 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
 
-from sqlalchemy import create_engine, select, func, Index, and_
+from sqlalchemy import select, func, Index, and_
 from sqlalchemy.orm import Session, sessionmaker, load_only
 from sqlalchemy.sql import expression
 
+from src.core.db import get_engine
 from ..models.recipe import Base
 from ..models.failure_event import FailureEvent
 
@@ -55,10 +56,8 @@ class TriageRepository:
             db_path = ":memory:"
         
         self.db_path = db_path
-        self.engine = create_engine(
-            f"sqlite:///{db_path}",
-            connect_args={"check_same_thread": False} if db_path != ":memory:" else {}
-        )
+        # ADR-11: shared env-driven engine factory (DATABASE_URL → Postgres).
+        self.engine = get_engine(db_path)
         Base.metadata.create_all(self.engine, checkfirst=True)
         self.SessionLocal = sessionmaker(bind=self.engine)
         

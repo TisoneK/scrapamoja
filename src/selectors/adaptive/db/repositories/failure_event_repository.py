@@ -5,9 +5,10 @@ Failure Event repository for database CRUD operations.
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import create_engine, select, func
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session, sessionmaker
 
+from src.core.db import get_engine
 from ..models.recipe import Base
 from ..models.failure_event import FailureEvent
 
@@ -31,11 +32,8 @@ class FailureEventRepository:
             db_path = ":memory:"
         
         self.db_path = db_path
-        # Create engine with check_same_thread=False for SQLite
-        self.engine = create_engine(
-            f"sqlite:///{db_path}",
-            connect_args={"check_same_thread": False} if db_path != ":memory:" else {}
-        )
+        # ADR-11: shared env-driven engine factory (DATABASE_URL → Postgres).
+        self.engine = get_engine(db_path)
         # Create tables with checkfirst to avoid index conflicts
         Base.metadata.create_all(self.engine, checkfirst=True)
         # Create session factory

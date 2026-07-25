@@ -9,9 +9,10 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
-from sqlalchemy import create_engine, select, func, desc, and_
+from sqlalchemy import select, func, desc, and_
 from sqlalchemy.orm import sessionmaker, Session
 
+from src.core.db import get_engine
 from ..models.snapshot import Snapshot, compress_html, decompress_html
 from ..models.recipe import Base
 
@@ -31,10 +32,9 @@ class SnapshotRepository:
             db_path = os.path.join(db_dir, "adaptive.db")
 
         self.db_path = db_path
-        self.engine = create_engine(
-            f"sqlite:///{db_path}",
-            connect_args={"check_same_thread": False} if db_path != ":memory:" else {}
-        )
+        # ADR-11: route engine creation through the shared env-driven factory
+        # (DATABASE_URL → Postgres in deployed envs; SQLite fallback here).
+        self.engine = get_engine(db_path)
         Base.metadata.create_all(self.engine, checkfirst=True)
         self.SessionLocal = sessionmaker(bind=self.engine)
 

@@ -6,10 +6,11 @@ This implements the data access layer for audit logging.
 
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from sqlalchemy import create_engine, select, func
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import desc, and_
 
+from src.core.db import get_engine
 from ..models.audit_event import AuditEvent
 from ..models.recipe import Base
 
@@ -28,7 +29,7 @@ class AuditEventRepository:
         if db_path is None:
             db_path = ":memory:"
         
-        self.engine = create_engine(f"sqlite:///{db_path}")
+        self.engine = get_engine(db_path)
         self.SessionLocal = sessionmaker(bind=self.engine)
         
         # Create tables
