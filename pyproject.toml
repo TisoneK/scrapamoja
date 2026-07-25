@@ -51,6 +51,11 @@ dependencies = [
     "cryptography>=41.0.0",
     "influxdb-client>=1.38.0",
     "sqlalchemy>=2.0.0",
+    # ADR-11: shared Railway PostgreSQL is the deployed store, reached through
+    # the Python/FastAPI layer. SQLAlchemy already abstracts the dialect; these
+    # add the Postgres driver and a migration tool (the repo had none).
+    "psycopg[binary]>=3.1.0",
+    "alembic>=1.13.0",
     # Previously imported by src/ but undeclared — a clean install could not
     # import the CLI (python-json-logger), the API layer (fastapi), telemetry
     # analytics (numpy, scipy), alerting (aiohttp, requests), navigation viz
