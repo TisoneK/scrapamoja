@@ -311,3 +311,12 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** The ingest response summary (`total/succeeded/failed/added/updated/store_total`) was being read for pass/fail only. `added` vs `updated` describes the store's *keying*, which is exactly what "why did only 1 of 10 survive?" is asking about — and it was in the response body the whole time.
 - **Workaround / fix:** Read `added`/`updated` against the number of genuinely-new `(match_id, scope)` pairs you sent, then confirm with `/api/predictions`. Two minutes, conclusive: 11/11 matches store one record, always the last scope sent.
 - **Prevent next time:** When a downstream store "loses" records, compare what you sent against what its own write summary claims it did, before hypothesizing about the sender. Cheapest possible discriminator — and it points at the key, which is usually the answer.
+
+---
+
+## 2026-07-25 — Z.ai Code / unknown (Session 29)
+- **Problem:** `tests/integration/test_feature_flag_api.py` and `test_audit_api.py` fail at COLLECTION with `fastapi.exceptions.FastAPIError: Invalid args for response field! ... FailureService is a valid Pydantic field type`. This blocks the entire adaptive/API integration suite from running on this sandbox.
+- **Cost:** Could not run the adaptive/API integration tests as a regression guard for the ADR-11 adaptive-repository refactor (3-b). Fell back to: betb2b suite (173, green) + core_db tests (11, green) + a smoke-test that all 10 refactored repository classes construct on :memory:/file/env-override.
+- **Cause:** Version drift. The installed fastapi is 0.140.0 (project pins only `>=0.110.0`); a newer FastAPI/Pydantic rejects `FailureService` (a service class, not a Pydantic model) as a response-model annotation. **Verified pre-existing via `git stash`** — reproduces on clean HEAD without this session's changes. NOT caused by the ADR-11 work.
+- **Workaround / fix:** None applied this session (out of ADR-11 scope). Fix is either pin fastapi to a version that accepts the annotation, or add `response_model=None` to the routes returning `FailureService`. Backlogged.
+- **Prevent next time:** When a test suite fails at collection (not assertion) on a sandbox, suspect version drift between the loose pins and the freshly-installed versions. `git stash` confirms pre-existing vs. introduced in <1 min.

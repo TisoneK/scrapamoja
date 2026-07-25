@@ -2,46 +2,27 @@
 
 **Status:** Idle — no session in progress.
 
-Session 28 (2026-07-22, Claude Code / claude-opus-4-8) closed the regression-test
-gap left by Session 27's H2H fix, found that **6 of the 9 ADR-7 scopes had never
-run** (`_enrich_with_subgames` was gated on a feature flag nothing could turn on
-— fixed by `5f6e6db`, `--subgames`), then ran the first scoped scrape+ingest
-end-to-end through a proxy the user supplied.
+Session 29 (2026-07-25, Z.ai Code / unknown model, cloud/sandbox) shipped the
+ADR-11 code-layer foundation (4 commits `e03da90`..`c0802a2`): shared env-driven
+db factory, adaptive repository routing, portable betb2b ORM models + indexes,
+Alembic baseline + one-time data-copy script. 189 tests green. The Railway-side
+cutover is operator-side (this sandbox has no Docker/Railway/live Postgres).
 
-**Where ADR-7 now stands:** the scraper side is **done and proven** — 65 requests
-from 11 events across all 9 scopes, 721 non-FULL_MATCH markets, ADR-8's
-team-total contract confirmed on live data (86/91/109 against lines of
-90.5/84.5/114.5, where pre-fix it sent 175/154/214).
+**Where ADR-11 stands:** the code layer is ready — `DATABASE_URL` routing,
+portable schema, migrations, and the copy tool all exist and are verified on the
+SQLite fallback. What remains is (1) the operator cutover on Railway, and (2)
+the betb2b persist-path rewrite from raw sqlite3 to ORM (F2 — the largest
+remaining code piece; high-risk: 13 store tests + CLI depend on the current
+conn API; needs a live Postgres to verify against).
 
-**And it is blocked downstream.** The engine stores one prediction per
-`match_id`, not per `(match_id, scope)` — 11 of 11 matches stored exactly one
-record and it was the last scope sent, so 54 of 65 predictions are overwritten
-on arrival and no half or quarter record survives. That is a **scorewise-engine
-change, a different repo**; nothing on the scraper side can work around it. Until
-then `--subgames` validates the pipeline but should not feed production — it
-costs ~6 extra requests per event for data the engine drops. See ADR-10.
+**Next session (with Railway access):** provision the Postgres plugin, set
+`DATABASE_URL`, `alembic upgrade head`, run `scripts/migrate_sqlite_to_postgres.py`
+against the live DB, verify row counts, then do F2. Until F2 ships the betb2b
+data still writes to `odds.db`.
 
-This also **resolves the HOME_TEAM_TOTAL asymmetry** Session 27 investigated
-(10 sent, 1 stored, 9 AWAY) — the identical signature, not engine state and not
-market data.
+**Pre-existing (not ADR-11):** the adaptive/API integration test suite fails at
+collection under fastapi 0.140.0 (F3, verified via `git stash` to pre-exist).
+Backlogged separately.
 
-**Read before trusting the record:** Session 27's per-scope counts are not
-reproducible, and the ADR-7 capability matrix (`db3046c`) is stale in 4 of 7
-rows. Corrections appended to `plans/decisions.md` (append-only, so the
-originals stay — check the correction before quoting either).
-
-**Lesson (ADR-9):** when every test for a component builds that component's input
-by hand, ask what builds it in production. A regression test must be seen red —
-mutate the fix, confirm failure, restore.
-
-**Next session:** the engine keying change is the only thing that unblocks ADR-7;
-everything else is secondary. Remaining items in `tasks/backlog.md` (4 open):
-engine keying, H2H coverage (only 4 of 11 events had any), the uncertain `(G,T)`
-prop groups, and the inert `[tool.ruff]` config.
-
-**Note:** the bore.pub proxy is in `secrets/betb2b-proxy` (gitignored). Its port
-rotates per tunnel session — if it stops connecting, ask the user for the current
-port rather than debugging the scraper.
-
-References: `reviews/2026-07-22-review-2.md` (§8 = the live run),
-`plans/decisions.md` (ADR-9, ADR-10, and the ADR-7 correction).
+References: `reviews/2026-07-25-review.md`, `plans/decisions.md` (ADR-11 +
+ADR-11 PROGRESS), `tasks/backlog.md` (6 open).

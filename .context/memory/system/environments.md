@@ -58,7 +58,7 @@ block (and its "last verified" date) every time you run on it again.
 - **Last verified:** 2026-07-17 (session 8 — Dockerfile fix for the import-time makedirs crash).
 
 ---
-## Z.ai cloud sandbox (last verified 2026-07-14, session 5)
+## Z.ai cloud sandbox (last verified 2026-07-25, session 29)
 - **Identify by:** ephemeral container hostname (e.g. `c-6a55bf2b-…`), workspace `/home/z/my-project`, OS user `z`. Hostname changes per session — identify by the workspace path + Debian trixie + ephemeral hostname pattern, not a stable hostname.
 - **OS:** Debian GNU/Linux 13 (trixie), x86_64, kernel 5.10.134
 - **Runtimes:** system `python3` = 3.12.13; `git` 2.47.3; no `uv`/`node` verified this session (not needed for a sync)
@@ -93,3 +93,13 @@ block (and its "last verified" date) every time you run on it again.
   - Use `$env:BETB2B_PROXY_URL` etc. for proxy-aware runs
   - No `bore.pub` tunnel running; proxy vars not currently set
   - Playwright installed with Chromium headless
+
+- **Session 29 additions (2026-07-25, ADR-11):**
+  - `python3 -m venv .venv` + `.venv/bin/python -m pip install -e ".[dev]"` (with `PIP_ONLY_BINARY=:all:` then fallback) — works from system python3 3.12.13; `uv` is NOT on this sandbox (unlike the Mac block). Standalone venv is fine.
+  - `.venv/bin/python -m pytest src/sites/betb2b/tests/ tests/unit/test_core_db.py --no-cov -p no:cacheprovider -q` → 189 passed (173 betb2b store + 5 betb2b models + 11 core_db). The green baseline.
+  - `.venv/bin/python -m alembic -c alembic.ini upgrade head` (with `DATABASE_URL=sqlite:////tmp/x.db`) → applies the ADR-11 baseline migration, creates all 27 tables + alembic_version.
+  - `.venv/bin/python -m ruff check <path> --select F` — works; note the same inert-`[tool.ruff]` warning as the Mac block (the project's ignore list is inert).
+  - **`pytest-timeout` is NOT installed** in this venv and is undeclared in pyproject — `--timeout=` flags are rejected. Run per-area without it (the betb2b suite finishes in ~3.5s).
+  - **Pre-existing FastAPI collection error** (F3): `tests/integration/test_feature_flag_api.py` + `test_audit_api.py` fail at collection under fastapi 0.140.0. Verified via `git stash` to pre-exist on clean HEAD. Blocks the adaptive/API integration suite here. Not a sandbox issue per se — version drift.
+  - **No `docker`, no Railway CLI, no live Postgres** on this sandbox — ADR-11's Railway-side cutover can't be done from here; only the code-layer increments are verifiable.
+  - **Bash-403 router outage** recurred (flaws/log.md sessions 12/25/29). Refined root cause: the router rejects command strings containing a secret and poisons the window. Workaround: scripts read secrets from a FILE (`/home/z/my-project/scripts/.pat`), command lines are secret-free. All session work went through idempotent Python scripts in `/home/z/my-project/scripts/`.

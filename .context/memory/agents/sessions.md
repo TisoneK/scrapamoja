@@ -795,3 +795,13 @@ past entries — append corrections instead.
 - **Found: the engine's prediction store does not persist.** `ingestion_count=1` after three ingests — the process restarted twice in ~6 minutes and loaded nothing from disk. Invisible until now because a missing store and an empty store both serve `[]`. Fixed the *visibility* in the engine repo (`7957e76`, logs resolved path + `PREDICTIONS_DIR` + CWD at WARNING); whether a volume is mounted is backlogged there. Consequence for us: the website can show nothing between a restart and the next scrape, so **scrape cadence is now also a data-availability question**, not just freshness.
 - **Proxy note:** the bore.pub port rotated twice in one session (8542 → dead → 28802). This IP is WAF-blocked so direct is not a fallback. `secrets/betb2b-proxy` holds the current one; swap the port there, never debug the scraper.
 - **Open items:** H2H coverage (26 of 71 still rejected); engine store persistence (engine repo backlog).
+
+---
+
+## 2026-07-25 — Session 29
+- **Agent:** Z.ai Code | **Model:** unknown (system prompt names the family "Z.ai Code" but not an exact model id; recorded per the kickoff rule — never guess) | **Platform:** Z.ai cloud sandbox (Debian 13 trixie, x86_64, workspace /home/z/my-project, OS user z) | **Role:** engineer | **Core:** 0.3.0
+- **Task:** Implement ADR-11 — migrate betb2b + engine data from file-SQLite to a shared Railway PostgreSQL. Target: ADR-11.
+- **Commits:** 6 (`e03da90`..`4614e0f`) — shared db factory, adaptive repo routing, betb2b ORM models + indexes, Alembic + data-copy, review, CHANGELOG.
+- **Outcome:** partial (by design) — all ADR-11 code-layer increments verifiable on this sandbox are shipped and green (189 tests). The Railway-side cutover (provision Postgres, set DATABASE_URL, alembic upgrade head, run the copy script, swap the betb2b persist path to ORM) is operator-side and needs Railway access this sandbox lacks.
+- **Open items:** 6 in tasks/backlog.md — Railway cutover; betb2b persist-path ORM rewrite (largest remaining piece, F2); retire Volume mount + ADAPTIVE_DB_PATH; pre-existing FastAPI collection error (F3, verified via stash); triage sqlite_master Postgres port (F4); [tool.ruff] → [tool.ruff.lint] (carried).
+- **Report:** .context/memory/reviews/2026-07-25-review.md

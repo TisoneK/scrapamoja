@@ -714,3 +714,50 @@ don't remove the line.
       Supersedes sub-item (4) "Postgres backend" of the "Grow the betb2b odds store"
       item above. HIGH — it's the integration foundation the apps depend on.
       Do the schema/connection abstraction deliberately, tests green, one env at a time.
+
+
+---
+- [ ] **Railway Postgres cutover for ADR-11** (added 2026-07-25 by Z.ai Code, session 29) —
+      Operator-side (this sandbox has no Docker/Railway/live Postgres). Steps:
+      provision the Railway Postgres plugin; set `DATABASE_URL` to the injected
+      URL; `alembic upgrade head` against it (creates all 27 tables); run
+      `scripts/migrate_sqlite_to_postgres.py` (no --dry-run) to copy the legacy
+      `data/betb2b/odds.db` + `data/adaptive.db` rows; verify row counts match.
+      Then retire ADR-1 point 5's Volume mount + `ADAPTIVE_DB_PATH` env var
+      (ADR-11 point 5; `ADAPTIVE_DB_PATH` stays for local/CI SQLite only).
+      HIGH — it's the production cutover. Do F2 first or alongside so the
+      scraper actually writes to Postgres, not just the schema exists there.
+
+- [ ] **Rewrite the betb2b store persist path from raw sqlite3 to ORM (ADR-11 F2)** (added 2026-07-25 by Z.ai Code, session 29) —
+      The largest remaining ADR-11 code piece. `src/sites/betb2b/store.py` is
+      ~566 lines of raw `sqlite3` + hand-written SQL (`ON CONFLICT(x) DO UPDATE`,
+      `?` placeholders, `lastrowid`, `sqlite3.Row` string-key indexing). The
+      portable ORM models exist (`src/sites/betb2b/models.py`, commit `39e1c02`)
+      but the live scraper still writes via the old path. Rewrite
+      `persist_result` + the read helpers (`latest_odds`, `line_movement`,
+      `cross_skin_odds`, `counts`) to ORM operations that work on both backends.
+      HIGH-RISK: the 13 store tests (`test_betb2b_store.py`) + the CLI
+      (`cli/main.py`) depend on the current `conn`-based API — a transparent
+      connection swap breaks them (SQLAlchemy `text()` wants `:param` not `?`,
+      and `Row` string-indexing differs from `sqlite3.Row`). Do this with a
+      live Postgres to verify against. Until it ships, betb2b data still lands
+      in `odds.db` — the Postgres path exists at the model/migration level only.
+
+- [ ] **Fix the pre-existing FastAPI collection error (F3)** (added 2026-07-25 by Z.ai Code, session 29) —
+      `tests/integration/test_feature_flag_api.py` + `test_audit_api.py` fail at
+      COLLECTION with `fastapi.exceptions.FastAPIError: Invalid args for response
+      field! ... FailureService is a valid Pydantic field type`. Verified
+      pre-existing via `git stash` (reproduces on clean HEAD). Root cause: version
+      drift — installed fastapi 0.140.0 (project pins `>=0.110.0`) rejects
+      `FailureService` (a service class, not a Pydantic model) as a response-model
+      annotation. Fix: pin fastapi to a version that accepts it, or add
+      `response_model=None` to the routes returning `FailureService`. Blocks the
+      adaptive/API integration suite on sandboxes. Medium.
+
+- [ ] **Make `triage_repository._create_indexes` dialect-aware (F4)** (added 2026-07-25 by Z.ai Code, session 29) —
+      `_create_indexes()` queries `sqlite_master` to check index existence —
+      SQLite-specific. It's wrapped in try/except so it won't CRASH on Postgres
+      (skips silently), but the optimized triage indexes (idx_failure_timestamp,
+      etc.) won't be created there. Replace with `sqlalchemy.inspect(engine).get_indexes()`
+      or declare them as `Index` objects on the model so Alembic manages them.
+      Low — performance, not correctness.

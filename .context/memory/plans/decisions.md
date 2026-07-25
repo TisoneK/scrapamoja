@@ -332,3 +332,42 @@ for minor leagues). Backlogged separately as a coverage question, not a defect.
   - Index the hot query paths that back ADR-6's three queries: at minimum `odds_snapshots(event_id, extracted_at)` and `events(start_time)`; the cross-skin join already keys on the shared backend `event_id`.
   - The scorewise-engine ADR-7/ADR-10 pipeline is unaffected by this change — it talks to the engine over HTTP, not to this DB. This ADR is about the scraper/product data store and the services that read it, not the prediction store.
   - Future agents: do NOT reach for Supabase/Firebase/Mongo for this data — the decision is Postgres-relational, and the access path is via the Python API (points 1–2). Do NOT merge InfluxDB into it (point 4). If file-SQLite is still in a deployed path after this ships, that's the migration being incomplete, not a second supported deployment mode.
+
+
+---
+
+## ADR-11 PROGRESS (2026-07-25, Session 29) — code-layer foundation shipped; Railway cutover pending
+
+Session 29 shipped the four code-layer increments that make ADR-11 executable,
+all verified green on the SQLite fallback (189 tests):
+
+1. `e03da90` — shared env-driven engine factory (`src/core/db.py`): `DATABASE_URL`
+   → Postgres (deploy), else SQLite fallback. One SQLAlchemy code path, both
+   backends. Deps: `psycopg[binary]` + `alembic` added.
+2. `3629183` — 9 adaptive repository `create_engine(f"sqlite:///...")` sites →
+   `get_engine(db_path)`. The adaptive/SQLAlchemy half of ADR-11 point 3.
+3. `39e1c02` — portable betb2b ORM models (`src/sites/betb2b/models.py`) + ADR-11
+   hot-path indexes. Ports the SQLite-isms: `SurrogatePK = BigInteger().with_variant(Integer, "sqlite")`
+   (autoincrements on both backends), `Boolean` for success/is_live/is_suspended,
+   `DateTime(timezone=True)` for timestamps (→ timestamptz on Postgres).
+4. `c0802a2` — Alembic baseline (`c7ea08fedb55`, 27 tables) + one-time data-copy
+   script (`scripts/migrate_sqlite_to_postgres.py`, proven to move rows).
+
+**Two premise corrections from discovery** (future agents: read these before
+quoting ADR-11's text):
+- The store is **two SQLite files, not three**: `audit_log` is a *table* in
+  `adaptive.db` (AuditEventRepository uses the adaptive `Base`), not a separate
+  file.
+- ADR-11's "the engine swap is mostly a connection-string change, not a rewrite"
+  holds **only for the adaptive/SQLAlchemy side**. The betb2b store is raw
+  `sqlite3` with hand-written SQL; its schema needed a real port to ORM models
+  (3-c) before it can host on Postgres, and its **persist path is still raw
+  sqlite3** (F2 — the largest remaining piece, backlogged).
+
+**Still open (operator-side, needs Railway access this sandbox lacks):**
+provision the Postgres plugin → set `DATABASE_URL` → `alembic upgrade head` →
+run the copy script → swap the betb2b persist path to ORM (F2) → retire ADR-1
+point 5's Volume mount + `ADAPTIVE_DB_PATH` (ADR-11 point 5; `ADAPTIVE_DB_PATH`
+stays for local/CI SQLite only). Until F2 ships, the betb2b data still lands in
+`odds.db` — the Postgres path exists at the model/migration level but the
+scraper doesn't write through it yet.
