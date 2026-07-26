@@ -171,6 +171,17 @@ class Event:
     raw_endpoint: str = ""                # which feed endpoint produced this
     sport_id: Optional[int] = None        # the raw ``SI``
     league_id: Optional[int] = None       # the raw ``LI``
+    # --- GetGameZip event/team enrichment (ADR-11 field-mapping) ---------- #
+    home_team_feed_id: Optional[int] = None    # ``O1I`` — LineFeed numeric team id
+    away_team_feed_id: Optional[int] = None    # ``O2I``
+    home_team_image: Optional[str] = None      # ``O1IMG[0]`` — crest filename
+    away_team_image: Optional[str] = None       # ``O2IMG[0]``
+    home_team_country_id: Optional[int] = None  # ``O1C`` — feed country id
+    away_team_country_id: Optional[int] = None  # ``O2C``
+    venue: Optional[str] = None            # ``MIO.Loc`` — arena/venue
+    stage: Optional[str] = None            # ``MIO.TSt`` — tournament stage
+    wp_home: Optional[float] = None        # ``WP.P1`` — win probability home
+    wp_away: Optional[float] = None        # ``WP.P2`` — win probability away
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -196,6 +207,16 @@ class Event:
             "raw_endpoint": self.raw_endpoint,
             "sport_id": self.sport_id,
             "league_id": self.league_id,
+            "home_team_feed_id": self.home_team_feed_id,
+            "away_team_feed_id": self.away_team_feed_id,
+            "home_team_image": self.home_team_image,
+            "away_team_image": self.away_team_image,
+            "home_team_country_id": self.home_team_country_id,
+            "away_team_country_id": self.away_team_country_id,
+            "venue": self.venue,
+            "stage": self.stage,
+            "wp_home": self.wp_home,
+            "wp_away": self.wp_away,
         }
 
 

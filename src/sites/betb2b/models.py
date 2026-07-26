@@ -105,6 +105,9 @@ class Team(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     sport_id: Mapped[Optional[int]] = mapped_column(ForeignKey("sports.sport_id"))
     country_id: Mapped[Optional[int]] = mapped_column(ForeignKey("countries.country_id"))
+    feed_id: Mapped[Optional[int]] = mapped_column(Integer)          # O1I/O2I — feed team id
+    image: Mapped[Optional[str]] = mapped_column(Text)              # O1IMG/O2IMG[0] — crest
+    feed_country_id: Mapped[Optional[int]] = mapped_column(Integer)  # O1C/O2C — feed country id
     __table_args__ = (UniqueConstraint("name", "sport_id", name="uq_teams_name_sport"),)
 
 
@@ -119,6 +122,8 @@ class Event(Base):
     home_name: Mapped[Optional[str]] = mapped_column(Text)  # denormalized for convenience
     away_name: Mapped[Optional[str]] = mapped_column(Text)
     start_time: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
+    venue: Mapped[Optional[str]] = mapped_column(Text)   # MIO.Loc — arena/venue
+    stage: Mapped[Optional[str]] = mapped_column(Text)   # MIO.TSt — tournament stage
     first_seen: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
     last_seen: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
     __table_args__ = (
@@ -167,6 +172,8 @@ class EventState(Base):
     minute: Mapped[Optional[int]] = mapped_column(Integer)
     period: Mapped[Optional[str]] = mapped_column(Text)
     time_remaining: Mapped[Optional[str]] = mapped_column(Text)
+    wp_home: Mapped[Optional[float]] = mapped_column(Float)  # WP.P1 — win probability home
+    wp_away: Mapped[Optional[float]] = mapped_column(Float)  # WP.P2 — win probability away
     captured_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
     __table_args__ = (Index("ix_states_event", "event_id", "captured_at"),)
 

@@ -67,11 +67,14 @@ CREATE TABLE IF NOT EXISTS leagues (
 );
 
 CREATE TABLE IF NOT EXISTS teams (
-    team_id     INTEGER PRIMARY KEY,        -- surrogate
-    backend_id  TEXT UNIQUE,                -- the h2h hash id when known
-    name        TEXT NOT NULL,
-    sport_id    INTEGER REFERENCES sports(sport_id),
-    country_id  INTEGER REFERENCES countries(country_id),
+    team_id         INTEGER PRIMARY KEY,    -- surrogate
+    backend_id      TEXT UNIQUE,            -- the h2h hash id when known
+    name            TEXT NOT NULL,
+    sport_id        INTEGER REFERENCES sports(sport_id),
+    country_id      INTEGER REFERENCES countries(country_id),
+    feed_id         INTEGER,                -- O1I/O2I — LineFeed numeric team id
+    image           TEXT,                   -- O1IMG/O2IMG[0] — crest filename
+    feed_country_id INTEGER,                -- O1C/O2C — feed country id
     UNIQUE(name, sport_id)
 );
 
@@ -85,6 +88,8 @@ CREATE TABLE IF NOT EXISTS events (
     home_name     TEXT,                     -- denormalized for convenience
     away_name     TEXT,
     start_time    TEXT,
+    venue         TEXT,                     -- MIO.Loc — arena/venue
+    stage         TEXT,                     -- MIO.TSt — tournament stage
     first_seen    TEXT,
     last_seen     TEXT
 );
@@ -125,6 +130,8 @@ CREATE TABLE IF NOT EXISTS event_states (
     minute          INTEGER,
     period          TEXT,
     time_remaining  TEXT,
+    wp_home         REAL,                   -- WP.P1 — win probability home
+    wp_away         REAL,                   -- WP.P2 — win probability away
     captured_at     TEXT NOT NULL
 );
 
@@ -217,8 +224,30 @@ def init_db(path: PathLike) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _ensure_columns(conn)
     conn.commit()
     return conn
+
+
+# Additive columns introduced after the initial schema. `CREATE TABLE IF NOT
+# EXISTS` never alters an existing table, so backfill any missing column on
+# open (idempotent — SQLite has no `ADD COLUMN IF NOT EXISTS`).
+_ADDED_COLUMNS = [
+    ("teams", "feed_id", "INTEGER"),
+    ("teams", "image", "TEXT"),
+    ("teams", "feed_country_id", "INTEGER"),
+    ("events", "venue", "TEXT"),
+    ("events", "stage", "TEXT"),
+    ("event_states", "wp_home", "REAL"),
+    ("event_states", "wp_away", "REAL"),
+]
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    for table, column, coltype in _ADDED_COLUMNS:
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
 
 
 def _as_int(v: Any) -> Optional[int]:
@@ -270,7 +299,19 @@ def _upsert_league(conn, league_id, name, sport_id, country_id) -> Optional[int]
 def _get_or_create_team(
     conn, name: Optional[str], sport_id: Optional[int],
     *, backend_id: Optional[str] = None, country_id: Optional[int] = None,
+    feed_id: Optional[int] = None, image: Optional[str] = None,
+    feed_country_id: Optional[int] = None,
 ) -> Optional[int]:
+    def _backfill(team_id: int) -> int:
+        # COALESCE-fill the GetGameZip attributes onto an existing row.
+        conn.execute(
+            "UPDATE teams SET feed_id=COALESCE(feed_id, ?), "
+            "image=COALESCE(image, ?), feed_country_id=COALESCE(feed_country_id, ?) "
+            "WHERE team_id=?",
+            (feed_id, image, feed_country_id, team_id),
+        )
+        return team_id
+
     if backend_id:
         row = conn.execute("SELECT team_id FROM teams WHERE backend_id=?", (backend_id,)).fetchone()
         if row:
@@ -279,7 +320,7 @@ def _get_or_create_team(
                     "UPDATE teams SET name=COALESCE(?, name), country_id=COALESCE(?, country_id) "
                     "WHERE team_id=?", (name, country_id, row["team_id"]),
                 )
-            return row["team_id"]
+            return _backfill(row["team_id"])
     if not name:
         return None
     row = conn.execute(
@@ -292,10 +333,11 @@ def _get_or_create_team(
                 "UPDATE teams SET backend_id=?, country_id=COALESCE(?, country_id) WHERE team_id=?",
                 (backend_id, country_id, row["team_id"]),
             )
-        return row["team_id"]
+        return _backfill(row["team_id"])
     return int(conn.execute(
-        "INSERT INTO teams (backend_id, name, sport_id, country_id) VALUES (?,?,?,?)",
-        (backend_id, name, sport_id, country_id),
+        "INSERT INTO teams (backend_id, name, sport_id, country_id, feed_id, image, feed_country_id) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (backend_id, name, sport_id, country_id, feed_id, image, feed_country_id),
     ).lastrowid)
 
 
@@ -391,14 +433,22 @@ def persist_result(
             country_id = _get_or_create_country(conn, ev.get("country"))
             league_id = _upsert_league(
                 conn, ev.get("league_id"), ev.get("competition"), sport_id, country_id)
-            home_id = _get_or_create_team(conn, ev.get("home"), sport_id, country_id=country_id)
-            away_id = _get_or_create_team(conn, ev.get("away"), sport_id, country_id=country_id)
+            home_id = _get_or_create_team(
+                conn, ev.get("home"), sport_id, country_id=country_id,
+                feed_id=_as_int(ev.get("home_team_feed_id")),
+                image=ev.get("home_team_image"),
+                feed_country_id=_as_int(ev.get("home_team_country_id")))
+            away_id = _get_or_create_team(
+                conn, ev.get("away"), sport_id, country_id=country_id,
+                feed_id=_as_int(ev.get("away_team_feed_id")),
+                image=ev.get("away_team_image"),
+                feed_country_id=_as_int(ev.get("away_team_country_id")))
 
             conn.execute(
                 "INSERT INTO events "
                 "(event_id, sport_id, league_id, country_id, home_team_id, away_team_id, "
-                " home_name, away_name, start_time, first_seen, last_seen) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?) "
+                " home_name, away_name, start_time, venue, stage, first_seen, last_seen) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) "
                 "ON CONFLICT(event_id) DO UPDATE SET "
                 "  sport_id=COALESCE(excluded.sport_id, events.sport_id), "
                 "  league_id=COALESCE(excluded.league_id, events.league_id), "
@@ -406,9 +456,12 @@ def persist_result(
                 "  home_team_id=COALESCE(excluded.home_team_id, events.home_team_id), "
                 "  away_team_id=COALESCE(excluded.away_team_id, events.away_team_id), "
                 "  start_time=COALESCE(excluded.start_time, events.start_time), "
+                "  venue=COALESCE(excluded.venue, events.venue), "
+                "  stage=COALESCE(excluded.stage, events.stage), "
                 "  last_seen=excluded.last_seen",
                 (event_id, sport_id, league_id, country_id, home_id, away_id,
-                 ev.get("home"), ev.get("away"), ev.get("start_time"), at, at),
+                 ev.get("home"), ev.get("away"), ev.get("start_time"),
+                 ev.get("venue"), ev.get("stage"), at, at),
             )
 
             # --- facts: live state (only when it changed) ---
@@ -416,11 +469,15 @@ def persist_result(
                      _as_int(ev.get("score_home")), _as_int(ev.get("score_away")),
                      _as_int(ev.get("minute")), ev.get("period"), ev.get("time_remaining"))
             if _last_state(conn, event_id, skin) != state:
+                # WP rides along on the state row (not part of the change key —
+                # it moves with odds, so it's captured whenever state changes).
                 conn.execute(
                     "INSERT INTO event_states "
                     "(run_id, event_id, skin, status, is_live, score_home, score_away, "
-                    " minute, period, time_remaining, captured_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                    (run_id, event_id, skin, *state, at),
+                    " minute, period, time_remaining, wp_home, wp_away, captured_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (run_id, event_id, skin, *state,
+                     ev.get("wp_home"), ev.get("wp_away"), at),
                 )
 
             # --- facts: per-period scores (only changed periods) ---

@@ -298,3 +298,83 @@ def test_scoped_odds_stored_and_deduped_per_scope(db, tmp_path):
         "SELECT scope, line FROM odds_snapshots ORDER BY scope").fetchall()
     assert {(x["scope"], x["line"]) for x in rows} == {
         ("FULL_MATCH", 216.5), ("QUARTER_1", 52.5)}
+
+
+def _result_with_getgamezip_fields(skin="linebet"):
+    r = _result(skin, price_1x2=(1.5, 2.5))
+    r["events"][0].update({
+        "home_team_feed_id": 51775, "away_team_feed_id": 7694,
+        "home_team_image": "51775.png", "away_team_image": "crest2.png",
+        "home_team_country_id": 196, "away_team_country_id": 196,
+        "venue": "Smart Araneta Coliseum", "stage": "Group Stage. Group A",
+        "wp_home": 0.44, "wp_away": 0.56,
+    })
+    return r
+
+
+def test_getgamezip_fields_persist(db, tmp_path):
+    """Team feed id/crest, venue/stage, and WP land in the right columns."""
+    persist_result(_result_with_getgamezip_fields(), tmp_path / "odds.db", conn=db)
+
+    home = db.execute(
+        "SELECT feed_id, image, feed_country_id FROM teams WHERE name='Phoenix'"
+    ).fetchone()
+    assert home["feed_id"] == 51775
+    assert home["image"] == "51775.png"
+    assert home["feed_country_id"] == 196
+
+    evt = db.execute("SELECT venue, stage FROM events").fetchone()
+    assert evt["venue"] == "Smart Araneta Coliseum"
+    assert evt["stage"] == "Group Stage. Group A"
+
+    state = db.execute("SELECT wp_home, wp_away FROM event_states").fetchone()
+    assert state["wp_home"] == 0.44 and state["wp_away"] == 0.56
+
+
+def test_getgamezip_fields_backfilled_on_existing_team(db, tmp_path):
+    """A team first seen without feed meta gets it COALESCE-backfilled later."""
+    persist_result(_result("linebet", price_1x2=(1.5, 2.5)), tmp_path / "odds.db", conn=db)
+    assert db.execute(
+        "SELECT feed_id FROM teams WHERE name='Phoenix'").fetchone()["feed_id"] is None
+    persist_result(_result_with_getgamezip_fields(), tmp_path / "odds.db", conn=db)
+    assert db.execute(
+        "SELECT feed_id FROM teams WHERE name='Phoenix'").fetchone()["feed_id"] == 51775
+    # Still ONE team row (backfill, not a duplicate).
+    assert db.execute(
+        "SELECT COUNT(*) FROM teams WHERE name='Phoenix'").fetchone()[0] == 1
+
+
+def test_init_db_adds_columns_to_legacy_db(tmp_path):
+    """init_db backfills the added columns on a pre-existing old-schema DB."""
+    import sqlite3
+    p = tmp_path / "legacy.db"
+    # Faithful pre-change schema for the affected tables (original columns,
+    # WITHOUT the 7 added ones), so SCHEMA's indexes still apply.
+    c = sqlite3.connect(p)
+    c.executescript(
+        "CREATE TABLE teams (team_id INTEGER PRIMARY KEY, backend_id TEXT UNIQUE, "
+        "name TEXT NOT NULL, sport_id INTEGER, country_id INTEGER, "
+        "UNIQUE(name, sport_id));"
+        "CREATE TABLE events (event_id TEXT PRIMARY KEY, sport_id INTEGER, "
+        "league_id INTEGER, country_id INTEGER, home_team_id INTEGER, "
+        "away_team_id INTEGER, home_name TEXT, away_name TEXT, start_time TEXT, "
+        "first_seen TEXT, last_seen TEXT);"
+        "CREATE TABLE event_states (state_id INTEGER PRIMARY KEY, run_id INTEGER, "
+        "event_id TEXT, skin TEXT, status TEXT, is_live INTEGER, score_home INTEGER, "
+        "score_away INTEGER, minute INTEGER, period TEXT, time_remaining TEXT, "
+        "captured_at TEXT NOT NULL);"
+        "INSERT INTO teams (name) VALUES ('Legacy FC');"
+    )
+    c.commit()
+    c.close()
+
+    conn = init_db(p)  # must ALTER-add without dropping the row
+    tcols = {r["name"] for r in conn.execute("PRAGMA table_info(teams)")}
+    assert {"feed_id", "image", "feed_country_id"} <= tcols
+    ecols = {r["name"] for r in conn.execute("PRAGMA table_info(events)")}
+    assert {"venue", "stage"} <= ecols
+    scols = {r["name"] for r in conn.execute("PRAGMA table_info(event_states)")}
+    assert {"wp_home", "wp_away"} <= scols
+    assert conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0] == 1  # data kept
+    conn.close()
+    init_db(p).close()  # idempotent — no error on second open

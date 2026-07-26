@@ -409,6 +409,10 @@ class BetB2BExtractionRules:
 
         period_scores = self._extract_period_scores(sc)
 
+        # GetGameZip event/team enrichment (best-effort; absent on list feeds).
+        venue, stage = self._event_venue_stage(ev)
+        wp_home, wp_away = self._event_win_probs(ev)
+
         return Event(
             event_id=event_id,
             sport=sport_enum,
@@ -430,7 +434,48 @@ class BetB2BExtractionRules:
             raw_endpoint=source_url,
             sport_id=sport_id,
             league_id=league_id,
+            home_team_feed_id=_coerce_int(ev.get("O1I")),
+            away_team_feed_id=_coerce_int(ev.get("O2I")),
+            home_team_image=self._first_image(ev.get("O1IMG")),
+            away_team_image=self._first_image(ev.get("O2IMG")),
+            home_team_country_id=_coerce_int(ev.get("O1C")),
+            away_team_country_id=_coerce_int(ev.get("O2C")),
+            venue=venue,
+            stage=stage,
+            wp_home=wp_home,
+            wp_away=wp_away,
         )
+
+    @staticmethod
+    def _first_image(imgs: Any) -> Optional[str]:
+        """First crest filename from ``O1IMG``/``O2IMG`` (a list of filenames)."""
+        if isinstance(imgs, list) and imgs:
+            v = imgs[0]
+            return str(v) if v not in (None, "") else None
+        if isinstance(imgs, str) and imgs:
+            return imgs
+        return None
+
+    @staticmethod
+    def _event_venue_stage(ev: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+        """Venue (``MIO.Loc``) + tournament stage (``MIO.TSt``) when present."""
+        mio = ev.get("MIO")
+        if not isinstance(mio, dict):
+            return None, None
+        loc = mio.get("Loc")
+        tst = mio.get("TSt")
+        return (
+            str(loc).strip() or None if isinstance(loc, str) else None,
+            str(tst).strip() or None if isinstance(tst, str) else None,
+        )
+
+    @staticmethod
+    def _event_win_probs(ev: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+        """Win probabilities (``WP.P1``/``WP.P2``) when present."""
+        wp = ev.get("WP")
+        if not isinstance(wp, dict):
+            return None, None
+        return _coerce_float(wp.get("P1")), _coerce_float(wp.get("P2"))
 
     def _event_id(self, ev: Dict[str, Any]) -> str:
         eid = ev.get("I") or ev.get("ZP") or ev.get("id") or ev.get("Id")
@@ -443,7 +488,9 @@ class BetB2BExtractionRules:
         return str(home).strip(), str(away).strip()
 
     def _event_competition(self, ev: Dict[str, Any]) -> str:
-        comp = ev.get("L") or ev.get("League") or ev.get("LeagueName") or ""
+        # Prefer LE — the guaranteed-English league name (L can be locale-specific).
+        comp = (ev.get("LE") or ev.get("L") or ev.get("League")
+                or ev.get("LeagueName") or "")
         return str(comp).strip() if comp else ""
 
     def _infer_is_live(self, ev: Dict[str, Any], sc: Dict[str, Any]) -> bool:

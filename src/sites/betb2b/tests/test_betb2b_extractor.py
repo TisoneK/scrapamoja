@@ -824,3 +824,48 @@ def test_extract_statistics_none_and_malformed(rules: BetB2BExtractionRules) -> 
     # Non-dict / empty entries within the list are skipped.
     assert rules.extract_statistics_data(
         {"entity": {"periodStatistic": [None, {}, {"a": 1}]}}) == [{"a": 1}]
+
+
+# ---------------------------------------------------------------------------
+# GetGameZip event/team field mapping (ADR-11 field-mapping) — real PBA shapes
+# ---------------------------------------------------------------------------
+def test_build_event_maps_getgamezip_fields(rules: BetB2BExtractionRules) -> None:
+    """O1I/O2I, crests, feed country, venue/stage, WP and LE are captured."""
+    ev = {
+        "I": 739052498, "SI": 3, "SN": "Basketball",
+        "O1": "Nlex Road Warriors", "O2": "San Miguel Beermen",
+        "O1I": 51775, "O2I": 7694,
+        "O1IMG": ["51775.png"], "O2IMG": ["b2af04ca.png"],
+        "O1C": 196, "O2C": 196,
+        "L": "Localised name", "LE": "Philippines. Governors Cup", "LI": 850473,
+        "MIO": {"TSt": "Group Stage. Group A", "Loc": "Smart Araneta Coliseum"},
+        "WP": {"P1": 0.44, "P2": 0.56},
+    }
+    e = rules._build_event(ev, "https://test/GetGameZip")
+    assert e is not None
+    assert e.home_team_feed_id == 51775 and e.away_team_feed_id == 7694
+    assert e.home_team_image == "51775.png" and e.away_team_image == "b2af04ca.png"
+    assert e.home_team_country_id == 196 and e.away_team_country_id == 196
+    assert e.venue == "Smart Araneta Coliseum"
+    assert e.stage == "Group Stage. Group A"
+    assert e.wp_home == 0.44 and e.wp_away == 0.56
+    # LE (English) is preferred over L (localised).
+    assert e.competition == "Philippines. Governors Cup"
+    # Round-trips through to_dict for the store.
+    d = e.to_dict()
+    assert d["home_team_feed_id"] == 51775 and d["wp_away"] == 0.56
+
+
+def test_build_event_missing_getgamezip_fields(rules: BetB2BExtractionRules) -> None:
+    """List-feed events without the enrichment keys leave the fields None."""
+    ev = {"I": 1, "SI": 3, "O1": "A", "O2": "B"}
+    e = rules._build_event(ev, "u")
+    assert e is not None
+    assert e.home_team_feed_id is None and e.away_team_feed_id is None
+    assert e.home_team_image is None and e.venue is None and e.stage is None
+    assert e.wp_home is None and e.wp_away is None
+    # Malformed MIO/WP/O1IMG must not raise.
+    e2 = rules._build_event(
+        {"I": 2, "O1": "A", "O2": "B", "MIO": "bad", "WP": [], "O1IMG": "x.png"}, "u")
+    assert e2.venue is None and e2.wp_home is None
+    assert e2.home_team_image == "x.png"  # str form tolerated
