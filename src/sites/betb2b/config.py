@@ -73,6 +73,7 @@ DEFAULT_FEED_PATHS: Dict[str, str] = {
     "events_top": "/Get1x2_VZip",           # events + odds (top=true)
     "events_by_sport": "/Get1x2_VZip",      # same endpoint with ?sports=<id>
     "game": "/GetGameZip",                   # per-match full markets by ?id=<eventId>
+    "champ": "/GetChampZip",                  # per-league game list by ?champ=<champId> (un-gated)
     "top_champs": "/WebGetTopChampsZip",
     "sports_short": "/GetSportsShortZip",
     "top_games_stat": "/GetTopGamesStatZip",
@@ -221,6 +222,7 @@ class BetB2BSkinConfig:
             "h2h": True,
             "stats": True,          # fetch match statistics (statisticfeed api/v2/Game/statistic)
             "html_harvest": True,   # browser-free event-id discovery from page HTML
+            "champ_discovery": True,  # broaden discovery via per-league GetChampZip (un-gated)
             "subgames": False,      # fetch per-quarter/half sub-games (ADR-7 scoped ingestion; costs extra requests)
         }
     )

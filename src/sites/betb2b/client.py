@@ -229,6 +229,31 @@ class BetB2BFeedClient:
             params.update(extra_params)
         return await self.fetch("game", root=root, extra_params=params)
 
+    async def fetch_champ(
+        self,
+        champ_id: str,
+        *,
+        root: str = "line",
+        extra_params: Optional[Dict[str, str]] = None,
+    ) -> CapturedFeedResponse:
+        """Fetch one league's game list via ``GetChampZip?champ=<champId>``.
+
+        Unlike the aggregate list feeds (``Get1x2_VZip``/``GetSportsShortZip``,
+        which are SW-gated → 406 per ADR-4), the **per-champ** endpoint is
+        un-gated — same as ``GetGameZip`` — and returns a clean, complete game
+        list for the league under ``Value.G[]`` (each game's ``I`` = event id).
+        Used for broad, accurate event discovery. ``root="line"`` for prematch,
+        ``"live"`` for in-play.
+
+        Note: the skin default ``top=true`` filters GetChampZip to *featured*
+        games only (returns 0 for a specific champ), so we override it to
+        ``top=false`` to get the league's full slate.
+        """
+        params: Dict[str, str] = {"champ": str(champ_id), "top": "false"}
+        if extra_params:
+            params.update(extra_params)
+        return await self.fetch("champ", root=root, extra_params=params)
+
     async def fetch_many(
         self,
         feeds: List[str],

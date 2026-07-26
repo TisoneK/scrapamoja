@@ -489,7 +489,7 @@ class BetB2BScraper:
         10), and the per-match endpoint returns full markets/scores. Best-effort:
         returns [] on any trouble so the caller can fall back to DOM.
         """
-        from .harvest import extract_event_ids
+        from .harvest import extract_champ_ids, extract_event_ids
 
         if is_live:
             path = self.sport_ctx.live_bootstrap_path or self.skin.bootstrap_paths.get("live")
@@ -520,13 +520,48 @@ class BetB2BScraper:
             logger.warning("skin=%s HTML harvest GET %s failed: %s", self.skin.name, url, exc)
             return []
 
-        ids = extract_event_ids(html)
+        root = "live" if is_live else "line"
+
+        # Direct event ids server-rendered on the landing page (noisy — the 9–10
+        # digit regex also catches non-game numbers).
+        direct_ids = extract_event_ids(html)
+
+        # League-level discovery: the landing page also links the (geo-curated)
+        # "top" leagues. Each champ id → the un-gated GetChampZip → that league's
+        # full, accurate game list. This broadens + cleans discovery vs the
+        # landing sample alone; the aggregate list feeds stay 406 (ADR-4).
+        champ_game_ids: List[str] = []
+        if self.skin.features.get("champ_discovery", True):
+            champ_ids = extract_champ_ids(html)
+            for cid in champ_ids:
+                try:
+                    cap = await self.feed_client.fetch_champ(cid, root=root)
+                    value = (getattr(cap, "decoded", None) or {}).get("Value") or {}
+                    for g in value.get("G") or []:
+                        gi = g.get("I") if isinstance(g, dict) else None
+                        if gi:
+                            champ_game_ids.append(str(gi))
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug(
+                        "skin=%s GetChampZip champ=%s failed: %s",
+                        self.skin.name, cid, exc,
+                    )
+            if champ_ids:
+                logger.info(
+                    "skin=%s champ discovery: %d leagues → %d games",
+                    self.skin.name, len(champ_ids), len(set(champ_game_ids)),
+                )
+
+        # Union, GetChampZip games first (known-good → prioritised under the cap).
+        ordered: dict = {}
+        for eid in champ_game_ids + direct_ids:
+            ordered.setdefault(eid, None)
+        ids = list(ordered)
         if not ids:
             logger.info("skin=%s HTML harvest: 0 ids from %s", self.skin.name, url)
             return []
 
-        limit = int(getattr(self.skin, "max_harvest", 40) or 40)
-        root = "live" if is_live else "line"
+        limit = int(getattr(self.skin, "max_harvest", 200) or 200)
         events: List[Event] = []
         for eid in ids[:limit]:
             try:
@@ -538,8 +573,9 @@ class BetB2BScraper:
             except Exception as exc:  # noqa: BLE001
                 logger.debug("skin=%s harvest GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
         logger.info(
-            "skin=%s HTML harvest: %d ids → %d events (root=%s, cap=%d)",
-            self.skin.name, len(ids), len(events), root, limit,
+            "skin=%s harvest: %d ids (%d champ + %d direct) → %d events (root=%s, cap=%d)",
+            self.skin.name, len(ids), len(set(champ_game_ids)), len(direct_ids),
+            len(events), root, limit,
         )
         return events
 

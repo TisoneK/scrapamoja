@@ -23,11 +23,20 @@ from __future__ import annotations
 import re
 from typing import List
 
-__all__ = ["extract_event_ids"]
+__all__ = ["extract_event_ids", "extract_champ_ids"]
 
 # A 9+ digit run not glued to more digits — the event-id shape. League/country
 # ids in the URL hierarchy are ≤7 digits, so this cleanly discriminates them.
 _EVENT_ID_RE = re.compile(r"(?<!\d)(\d{9,10})(?!\d)")
+
+# A league/championship link: ``/en/(line|live)/<sport>/<champId>-<slug>``.
+# Champ ids are 4–7 digits (distinct from the 9–10 digit event ids). Feeding
+# each champ id to the un-gated ``GetChampZip`` yields that league's full,
+# accurate game list — broader + cleaner than scraping the landing page alone,
+# since the aggregate list feeds are SW-gated (406, ADR-4).
+_CHAMP_LINK_RE = re.compile(
+    r"/en/(?:line|live)/[a-z0-9\-]+/(\d{4,7})-[a-z0-9\-]+", re.IGNORECASE
+)
 
 
 def extract_event_ids(html: str, *, limit: int = 0) -> List[str]:
@@ -39,6 +48,20 @@ def extract_event_ids(html: str, *, limit: int = 0) -> List[str]:
     """
     seen: dict[str, None] = {}
     for m in _EVENT_ID_RE.finditer(html or ""):
+        seen.setdefault(m.group(1), None)
+    ids = list(seen)
+    return ids[:limit] if limit and limit > 0 else ids
+
+
+def extract_champ_ids(html: str, *, limit: int = 0) -> List[str]:
+    """Return distinct league/championship ids from page HTML, first-seen order.
+
+    These come from the ``/en/(line|live)/<sport>/<champId>-<slug>`` links the
+    sport landing page server-renders (the "top" leagues, geo-curated to the
+    egress country). Each id is meant for ``GetChampZip?champ=<id>``.
+    """
+    seen: dict[str, None] = {}
+    for m in _CHAMP_LINK_RE.finditer(html or ""):
         seen.setdefault(m.group(1), None)
     ids = list(seen)
     return ids[:limit] if limit and limit > 0 else ids
