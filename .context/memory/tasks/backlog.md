@@ -798,3 +798,29 @@ don't remove the line.
       Also worth checking: the v2 response's `teams[]` carries real backend team
       ids + `countryId` + crests/`clId`, which could fill the `teams.backend_id`/
       `country_id` nulls that today only H2H populates. Low-Medium.
+
+---
+- [x] **Broaden event discovery — per-league GetChampZip** (added 2026-07-26 by Claude Code; **done same day**, `82a3976`) —
+      "Why so few games?" investigation. The scraper discovered events only from
+      the sport landing-page HTML (~37 noisy 9–10-digit ids → ~12 events). Found
+      live that the **per-league** feed `GET /service-api/{Line,Live}Feed/GetChampZip?champ=<id>&top=false`
+      is **un-gated** (like GetGameZip) and returns a clean, complete game list
+      (`Value.G[].I`). Note `top=true` (the skin default) filters it to 0 — must
+      override to `top=false`. Wired champ-id harvest + `fetch_champ` + a
+      `champ_discovery` flag; cap 40→200. Live: 7 leagues → 15 games (was 12),
+      complete per-league. See `82a3976`.
+- [ ] **Full-card discovery needs the 406-gated champ ENUMERATION (ADR-4)** (added 2026-07-26 by Claude Code) —
+      GetChampZip un-gates per-league listing, but discovering *which* leagues
+      exist still relies on the landing page's ~6–10 geo-curated "top" champ links.
+      The endpoints that enumerate ALL champs for a sport — `GetSportsShortZip`,
+      `GetChampsZip`, `WebGetTopChampsZip` — all return **406 feed/NotAcceptableException**
+      and no static header (`x-project-id`/`x-dt`/plain/accept negotiation) nor the
+      `api-version=2` trick defeats them (unlike the statistics endpoint). Per ADR-4
+      this is the rotating **SW-injected header** (`ivpn-sw.js`); getting it needs a
+      runtime harvest from the service-worker (CDP `Target.setAutoAttach` on the SW
+      target, read the header it injects) — a real reverse-engineering task. Only
+      then can we enumerate the full global card. Also note two non-code realities:
+      landing champs are **geo-curated to the egress country** (a US/EU proxy surfaces
+      NBA/EuroLeague; KE surfaces minor African/Asian leagues), and basketball in
+      **July is off-season** so the card is genuinely thin. MED — the real unlock for
+      "all games", but larger and uncertain.
