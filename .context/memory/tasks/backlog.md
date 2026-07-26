@@ -627,7 +627,19 @@ don't remove the line.
       a mislabelled total = wrong odds to the engine. HIGH (unblocks scoped ingestion).
 
 ---
-- [ ] **Map ignored GetGameZip fields into Event/store** (added 2026-07-21 by Claude Code, Session 26; from real PBA capture 352961836) —
+- [~] **Map ignored GetGameZip fields into Event/store** (added 2026-07-21 by Claude Code, Session 26; **HIGH-value subset DONE 2026-07-26**, verified live) —
+      **Done (`Event` + SQLite store + ORM models, tests, live-verified through the
+      proxy):** `O1I/O2I` → `teams.feed_id`; `O1IMG/O2IMG[0]` → `teams.image` (crest);
+      `O1C/O2C` → `teams.feed_country_id`; `MIO.Loc/MIO.TSt` → `events.venue/stage`;
+      `WP.P1/P2` → `event_states.wp_home/wp_away`; `LE` now preferred over `L` for the
+      competition name. `init_db` idempotently ALTER-adds the 7 columns to existing DBs.
+      Note the feed ids live in their OWN columns — NOT folded into `teams.backend_id`
+      (that stays the H2H hash id; different id space). Live coverage on a 12-event
+      prematch card: teams feed_id 24/33 (rest are H2H-only), venue 11/12, wp 11/12.
+      **Still open (low value):** localization `O1R/O2R/LR/SR`; internal ids
+      `CI/COI/CID/SmI/N/SS/SST/SSI/STI/SGI`; flags `TN/TNS/V/VE/HHTHS/HSI`; the `E[].GS`
+      group-specifier (would sharpen the `(G,GS,T)` market identity — see ADR-7 addendum);
+      and `SG[]` sub-game metadata (`MG/TI/CI/EC/MEC`). Original list below.
       Fields present in the feed but NOT extracted today (map the HIGH-value ones):
         * **O1I / O2I** = numeric team backend ids (7694 / 7690) — HIGH: gives events real team ids (today teams dim only gets ids from h2h). Map → Event.home_team_id/away_team_id → store teams.backend_id.
         * **O1IMG/O2IMG, O1IS/O2IS** = team logo/image ids (list) — team crests for the website.
