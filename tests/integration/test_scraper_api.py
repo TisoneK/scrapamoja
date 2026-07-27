@@ -87,3 +87,25 @@ def test_skins_and_sports(client):
 def test_counts_endpoint(client):
     counts = client.get("/api/scraper/counts", headers=HDR).json()
     assert "events" in counts and "odds_snapshots" in counts
+
+
+def test_jobout_accepts_datetime_rows():
+    # Regression: Postgres returns timestamptz as datetime objects (SQLite gives
+    # ISO strings). JobOut must accept both and serialize to ISO in JSON.
+    from datetime import datetime, timezone
+    from src.api.routers.scraper import JobOut
+
+    row = {
+        "job_id": 1, "skin": "linebet", "sport": "basketball", "action": "list_live",
+        "subgames": False, "count": None, "status": "succeeded", "phase": "done",
+        "created_at": datetime(2026, 7, 27, 12, 0, tzinfo=timezone.utc),
+        "started_at": datetime(2026, 7, 27, 12, 0, 1, tzinfo=timezone.utc),
+        "finished_at": datetime(2026, 7, 27, 12, 2, tzinfo=timezone.utc),
+        "run_id": 5, "event_count": 10, "error": None,
+    }
+    out = JobOut.from_row(row)              # must not raise (was 500 on Postgres)
+    assert out.job_id == 1 and out.status == "succeeded"
+    assert "2026-07-27T12:00:00" in out.model_dump_json()  # serialized as ISO
+    # And ISO strings (the SQLite shape) still work.
+    row["created_at"] = "2026-07-27T12:00:00+00:00"
+    assert JobOut.from_row(row).created_at.year == 2026

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hmac
 import os
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -72,9 +73,11 @@ class JobOut(BaseModel):
     count: Optional[int]
     status: str
     phase: Optional[str] = None
-    created_at: str
-    started_at: Optional[str]
-    finished_at: Optional[str]
+    # Postgres returns timestamptz as datetime; SQLite returns ISO strings.
+    # `datetime` accepts both (str is parsed) and serializes to ISO in JSON.
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
     run_id: Optional[int]
     event_count: Optional[int]
     error: Optional[str]
