@@ -71,6 +71,7 @@ class JobOut(BaseModel):
     subgames: bool
     count: Optional[int]
     status: str
+    phase: Optional[str] = None
     created_at: str
     started_at: Optional[str]
     finished_at: Optional[str]

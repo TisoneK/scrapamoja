@@ -32,6 +32,30 @@ async def _drain(svc: ScraperService, path: str, job_id: int, tries: int = 200) 
     return row
 
 
+def test_scraper_emit_phase_reports_and_is_safe():
+    """The scraper's progress hook fires when set, and never breaks a scrape."""
+    from src.sites.betb2b.cli.main import _load_skin
+    from src.sites.betb2b.scraper import BetB2BScraper
+
+    sc = BetB2BScraper(_load_skin("linebet"))
+    seen = []
+    sc.progress_cb = seen.append
+    sc._emit_phase("bootstrapping")
+    sc._emit_phase("scraping events (2/10)")
+    assert seen == ["bootstrapping", "scraping events (2/10)"]
+
+    # No callback set → no-op (no raise).
+    sc.progress_cb = None
+    sc._emit_phase("discovering")
+
+    # A throwing callback is swallowed (progress must never break a scrape).
+    def boom(_):
+        raise RuntimeError("ui down")
+
+    sc.progress_cb = boom
+    sc._emit_phase("enriching")  # must not raise
+
+
 def test_build_proxy_from_env_none_when_unset(monkeypatch):
     monkeypatch.delenv("BETB2B_PROXY_URL", raising=False)
     assert build_proxy_from_env() == (None, None)

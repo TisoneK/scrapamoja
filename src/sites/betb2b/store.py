@@ -216,6 +216,7 @@ CREATE TABLE IF NOT EXISTS scraper_jobs (
     subgames      INTEGER DEFAULT 0,
     count         INTEGER,
     status        TEXT NOT NULL,        -- queued | running | succeeded | failed | cancelled
+    phase         TEXT,                 -- live sub-status while running (for progress UIs)
     created_at    TEXT NOT NULL,
     started_at    TEXT,
     finished_at   TEXT,
@@ -261,6 +262,7 @@ _ADDED_COLUMNS = [
     ("events", "stage", "TEXT"),
     ("event_states", "wp_home", "REAL"),
     ("event_states", "wp_away", "REAL"),
+    ("scraper_jobs", "phase", "TEXT"),
 ]
 
 
@@ -676,22 +678,39 @@ def claim_next_job(conn) -> Optional[sqlite3.Row]:
     if not row:
         return None
     conn.execute(
-        "UPDATE scraper_jobs SET status='running', started_at=? WHERE job_id=? AND status='queued'",
+        "UPDATE scraper_jobs SET status='running', phase='starting', started_at=? "
+        "WHERE job_id=? AND status='queued'",
         (datetime.now(timezone.utc).isoformat(), row["job_id"]),
     )
     conn.commit()
     return conn.execute("SELECT * FROM scraper_jobs WHERE job_id=?", (row["job_id"],)).fetchone()
 
 
+def update_job_phase(conn, job_id: int, phase: str) -> None:
+    """Set the live phase of a running job (progress signal for UIs). Cheap +
+    best-effort — only affects rows still 'running'."""
+    conn.execute(
+        "UPDATE scraper_jobs SET phase=? WHERE job_id=? AND status='running'",
+        (phase, job_id),
+    )
+    conn.commit()
+
+
 def finish_job(
     conn, job_id: int, *, status: str, run_id: Optional[int] = None,
     event_count: Optional[int] = None, error: Optional[str] = None,
 ) -> None:
-    """Mark a job terminal (succeeded/failed/cancelled) with its outcome."""
+    """Mark a job terminal (succeeded/failed/cancelled) with its outcome.
+
+    On success the phase is set to 'done'; on failure the last phase is kept so
+    a UI can show *where* it broke (e.g. 'bootstrapping' → proxy/session issue).
+    """
+    phase = "done" if status == "succeeded" else None  # None → leave phase as-is
     conn.execute(
-        "UPDATE scraper_jobs SET status=?, finished_at=?, run_id=?, event_count=?, error=? "
-        "WHERE job_id=?",
-        (status, datetime.now(timezone.utc).isoformat(), run_id, event_count, error, job_id),
+        "UPDATE scraper_jobs SET status=?, finished_at=?, run_id=?, event_count=?, "
+        "error=?, phase=COALESCE(?, phase) WHERE job_id=?",
+        (status, datetime.now(timezone.utc).isoformat(), run_id, event_count,
+         error, phase, job_id),
     )
     conn.commit()
 

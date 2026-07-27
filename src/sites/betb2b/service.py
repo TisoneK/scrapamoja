@@ -143,6 +143,7 @@ class ScraperService:
         try:
             result = await self._scrape(job)
             conn = store.init_db(self.path)
+            store.update_job_phase(conn, job_id, "persisting")
             run_id = store.persist_result(result, self.path, conn=conn)
             store.finish_job(
                 conn, job_id, status="succeeded", run_id=run_id,
@@ -162,7 +163,17 @@ class ScraperService:
         if job.get("subgames"):
             skin.features["subgames"] = True
         pm, _ = build_proxy_from_env()
+        job_id = job["job_id"]
+
+        def _write_phase(phase: str) -> None:
+            conn = store.init_db(self.path)
+            try:
+                store.update_job_phase(conn, job_id, phase)
+            finally:
+                conn.close()
+
         async with BetB2BScraper(skin, proxy_manager=pm, sport=job.get("sport")) as scraper:
+            scraper.progress_cb = _write_phase   # live phase → scraper_jobs.phase
             return await scraper.scrape(
                 action=job["action"], count=int(job.get("count") or 50),
             )

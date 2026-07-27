@@ -46,7 +46,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import httpx
 
@@ -176,6 +176,20 @@ class BetB2BScraper:
 
         self._started = False
 
+        # Optional progress hook — a caller (e.g. the control API's job runner)
+        # sets this to receive live phase updates during a scrape. Best-effort:
+        # never lets a progress callback break the scrape.
+        self.progress_cb: Optional[Callable[[str], None]] = None
+
+    def _emit_phase(self, phase: str) -> None:
+        cb = self.progress_cb
+        if cb is None:
+            return
+        try:
+            cb(phase)
+        except Exception:  # noqa: BLE001 — progress must never break a scrape
+            logger.debug("skin=%s progress callback failed", self.skin.name, exc_info=True)
+
     # ------------------------------------------------------------------ #
     # Lifecycle
     # ------------------------------------------------------------------ #
@@ -255,6 +269,7 @@ class BetB2BScraper:
         start = datetime.now(timezone.utc)
         overall_timeout = timeout_seconds or 120.0
 
+        self._emit_phase("bootstrapping")
         try:
             async with asyncio.timeout(overall_timeout):
                 captured, action_url, dom_events = await self._run_action(
@@ -296,6 +311,7 @@ class BetB2BScraper:
 
         # Enrich events with H2H data (best-effort, only if feature is on).
         if self.skin.features.get("h2h", True) and events and action != "raw_capture":
+            self._emit_phase("enriching")
             await self._enrich_with_h2h(events)
 
         # Enrich events with match statistics (best-effort, only if feature is on).
@@ -533,7 +549,10 @@ class BetB2BScraper:
         champ_game_ids: List[str] = []
         if self.skin.features.get("champ_discovery", True):
             champ_ids = extract_champ_ids(html)
-            for cid in champ_ids:
+            if champ_ids:
+                self._emit_phase(f"discovering leagues (0/{len(champ_ids)})")
+            for i, cid in enumerate(champ_ids, 1):
+                self._emit_phase(f"discovering leagues ({i}/{len(champ_ids)})")
                 try:
                     cap = await self.feed_client.fetch_champ(cid, root=root)
                     value = (getattr(cap, "decoded", None) or {}).get("Value") or {}
@@ -562,8 +581,10 @@ class BetB2BScraper:
             return []
 
         limit = int(getattr(self.skin, "max_harvest", 200) or 200)
+        total = len(ids[:limit])
         events: List[Event] = []
-        for eid in ids[:limit]:
+        for n, eid in enumerate(ids[:limit], 1):
+            self._emit_phase(f"scraping events ({n}/{total})")
             try:
                 cap = await self.feed_client.fetch_game(eid, root=root)
                 game_events = self.extraction_rules.extract_from_captured(cap)

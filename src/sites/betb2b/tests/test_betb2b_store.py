@@ -300,6 +300,41 @@ def test_scoped_odds_stored_and_deduped_per_scope(db, tmp_path):
         ("FULL_MATCH", 216.5), ("QUARTER_1", 52.5)}
 
 
+def test_job_phase_lifecycle(db):
+    from src.sites.betb2b.store import (
+        claim_next_job, create_job, finish_job, get_job, update_job_phase,
+    )
+    jid = create_job(db, skin="linebet", action="list_live", sport="basketball")
+    assert get_job(db, jid)["status"] == "queued"
+
+    claimed = claim_next_job(db)
+    assert claimed["job_id"] == jid
+    assert claimed["status"] == "running" and claimed["phase"] == "starting"
+    # Single-flight: nothing else claimable while one runs.
+    create_job(db, skin="melbet", action="list_live")
+    assert claim_next_job(db) is None
+
+    update_job_phase(db, jid, "scraping events (3/10)")
+    assert get_job(db, jid)["phase"] == "scraping events (3/10)"
+
+    finish_job(db, jid, status="succeeded", run_id=5, event_count=10)
+    row = get_job(db, jid)
+    assert row["status"] == "succeeded" and row["phase"] == "done"  # set on success
+
+
+def test_job_failure_keeps_last_phase(db):
+    from src.sites.betb2b.store import (
+        claim_next_job, create_job, finish_job, get_job, update_job_phase,
+    )
+    jid = create_job(db, skin="linebet", action="list_live")
+    claim_next_job(db)
+    update_job_phase(db, jid, "bootstrapping")
+    finish_job(db, jid, status="failed", error="geo/WAF block (203)")
+    row = get_job(db, jid)
+    assert row["status"] == "failed"
+    assert row["phase"] == "bootstrapping"   # kept → shows where it broke
+
+
 def _result_with_getgamezip_fields(skin="linebet"):
     r = _result(skin, price_1x2=(1.5, 2.5))
     r["events"][0].update({
