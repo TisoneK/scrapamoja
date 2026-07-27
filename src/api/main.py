@@ -22,8 +22,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.routers import failures as failures_router
 from src.api.routers import feature_flags as feature_flags_router
@@ -167,6 +169,15 @@ def create_app() -> FastAPI:
         prefix="/api/scraper",
         tags=["Scraper Control"],
     )
+
+    # ── DB errors → actionable 503 (not an opaque 500) ────────────────────────
+    @application.exception_handler(SQLAlchemyError)
+    async def _db_error(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+        # SQLAlchemy redacts passwords in URLs; still cap length. Surfaces
+        # Supabase connection/pooler failures instead of hiding them in a 500.
+        detail = f"database error: {type(exc).__name__}: {str(exc)[:400]}"
+        logger.error("DB error on %s: %s", request.url.path, exc)
+        return JSONResponse(status_code=503, content={"detail": detail})
 
     # ── Health check ──────────────────────────────────────────────────────────
     @application.get("/health", tags=["Meta"])
