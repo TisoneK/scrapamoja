@@ -79,7 +79,7 @@ def resolve_database_url(explicit: str | None = None) -> str:
 
     env_url = os.environ.get(DATABASE_URL_ENV)
     if env_url:
-        return env_url
+        return _normalize(env_url)   # pin the psycopg driver on bare postgres URLs
 
     adaptive_path = os.environ.get(ADAPTIVE_DB_PATH_ENV)
     if adaptive_path:
@@ -91,10 +91,19 @@ def resolve_database_url(explicit: str | None = None) -> str:
 def _normalize(value: str) -> str:
     """Accept either a full SQLAlchemy URL or a bare filesystem path.
 
-    ``:memory:`` and any string containing ``://`` is returned as-is; a bare
-    path becomes ``sqlite:///<path>``.
+    ``:memory:`` is returned as-is; a bare path becomes ``sqlite:///<path>``.
+    Postgres URLs are pinned to the **psycopg (v3)** driver: Supabase (and most
+    tooling) hand out a bare ``postgresql://`` / ``postgres://`` URL, but with no
+    ``+driver`` SQLAlchemy defaults to psycopg2 — which isn't installed. We ship
+    psycopg v3, so rewrite the scheme to ``postgresql+psycopg://``.
     """
-    if value == ":memory:" or "://" in value:
+    if value == ":memory:":
+        return value
+    if "://" in value:
+        if value.startswith("postgres://"):          # some providers' legacy form
+            value = "postgresql://" + value[len("postgres://"):]
+        if value.startswith("postgresql://"):          # bare → force psycopg v3
+            value = "postgresql+psycopg://" + value[len("postgresql://"):]
         return value
     return f"sqlite:///{value}"
 
@@ -134,6 +143,12 @@ def get_engine(url: str | None = None, *, echo: bool = False) -> Engine:
             kwargs["poolclass"] = StaticPool
         else:
             kwargs["connect_args"] = {"check_same_thread": False}
+    elif resolved.startswith("postgresql"):
+        # Supabase's transaction pooler (pgBouncer, port 6543) does NOT support
+        # prepared statements, which psycopg v3 uses by default → disable them.
+        # pool_pre_ping avoids handing out a pooled connection the pooler dropped.
+        kwargs["connect_args"] = {"prepare_threshold": None}
+        kwargs["pool_pre_ping"] = True
     engine = create_engine(resolved, **kwargs)
     logger.debug("db engine created: backend=%s", "postgres" if is_postgres(resolved) else "sqlite")
     return engine

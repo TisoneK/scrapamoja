@@ -44,6 +44,22 @@ def test_resolve_memory_passes_through(clean_env):
     assert dbmod.resolve_database_url(":memory:") == ":memory:"
 
 
+def test_bare_postgres_urls_pinned_to_psycopg_driver(clean_env, monkeypatch):
+    # Supabase hands out a bare postgresql:// (no +driver) → SQLAlchemy would
+    # default to psycopg2 (not installed). We ship psycopg v3, so both the
+    # explicit form and the DATABASE_URL env must be rewritten to +psycopg.
+    assert dbmod._normalize("postgresql://u:p@h:6543/postgres") == \
+        "postgresql+psycopg://u:p@h:6543/postgres"
+    assert dbmod._normalize("postgres://u:p@h/db") == \
+        "postgresql+psycopg://u:p@h/db"
+    # Already-correct driver is left untouched.
+    assert dbmod._normalize("postgresql+psycopg://u:p@h/db") == \
+        "postgresql+psycopg://u:p@h/db"
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:6543/postgres")
+    assert dbmod.resolve_database_url() == "postgresql+psycopg://u:p@h:6543/postgres"
+    assert dbmod.is_postgres()
+
+
 def test_database_url_env_wins(clean_env, monkeypatch):
     monkeypatch.setenv("ADAPTIVE_DB_PATH", "/tmp/legacy.db")
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/deployed")
