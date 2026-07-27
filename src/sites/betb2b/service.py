@@ -149,7 +149,19 @@ class ScraperService:
                     job_id, job["skin"], job["action"], job.get("sport"))
         try:
             result = await self._scrape(job)
-            conn = store.init_db(self.path)
+            # persist_result on Postgres is SYNCHRONOUS (psycopg) and fires many
+            # network round-trips — run it off the event loop so it can't block
+            # the uvicorn heartbeat (→ gunicorn WORKER TIMEOUT / SIGABRT) or stall
+            # the API. The scrape itself is async and stays on the loop.
+            await asyncio.to_thread(self._persist_and_finish, job_id, result)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("scraper job %d failed", job_id)
+            await asyncio.to_thread(self._fail_job, job_id, str(exc)[:500])
+
+    def _persist_and_finish(self, job_id: int, result: dict) -> None:
+        """Blocking DB work — always called via asyncio.to_thread."""
+        conn = store.init_db(self.path)
+        try:
             store.update_job_phase(conn, job_id, "persisting")
             run_id = store.persist_result(result, self.path, conn=conn)
             # A scrape-level error (e.g. timeout) yields an empty result — mark
@@ -165,11 +177,14 @@ class ScraperService:
                                  event_count=result.get("event_count"))
                 logger.info("scraper job %d: succeeded (%s events)",
                             job_id, result.get("event_count"))
+        finally:
             conn.close()
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("scraper job %d failed", job_id)
-            conn = store.init_db(self.path)
-            store.finish_job(conn, job_id, status="failed", error=str(exc)[:500])
+
+    def _fail_job(self, job_id: int, error: str) -> None:
+        conn = store.init_db(self.path)
+        try:
+            store.finish_job(conn, job_id, status="failed", error=error)
+        finally:
             conn.close()
 
     async def _scrape(self, job: dict) -> dict:

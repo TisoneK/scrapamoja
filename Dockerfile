@@ -163,7 +163,7 @@ CMD ["sh", "-c", "gunicorn src.api.main:app \
     --workers ${GUNICORN_WORKERS:-2} \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:${PORT:-8000} \
-    --timeout 120 \
+    --timeout 300 \
     --graceful-timeout 30 \
     --access-logfile - \
     --error-logfile - \
