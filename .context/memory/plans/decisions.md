@@ -389,3 +389,21 @@ scraper doesn't write through it yet.
   - The deployed scraper is only as reliable as its proxy. The bore.pub tunnel (operator's laptop, rotating port) is fine for validation but not production; a stable residential/KE proxy is the real dependency for always-on cloud scraping (backlogged).
   - `GUNICORN_WORKERS=1` trades API concurrency for deterministic single-flight. The control plane is low-traffic, so this is fine; if the API needs more workers later, move the runner to its own service (above) rather than raising workers.
   - Future agents: keep scrape execution behind the `scraper_jobs` queue. Do NOT add a second endpoint that scrapes inline in the request path (it would blow the request timeout and bypass single-flight).
+
+---
+
+## ADR-13: Supabase is the shared data + realtime + auth layer; Railway stays the compute — supersedes ADR-11's access model (2026-07-27)
+
+- **Status:** accepted (supersedes **ADR-11 point 2**'s "apps reach the data through the Python API, not direct-to-DB"; keeps ADR-11's Postgres-relational engine choice; refines ADR-1)
+- **Context:** ADR-11 chose Railway Postgres behind the Python API because the then-stated access model was "apps go through FastAPI." Since then the project gained a concrete **real-time, multi-client** direction: a live-progress UI (scrape `phase`, ADR-12) and planned **client apps + admin apps** consuming live odds. That is precisely the access model ADR-11 said would flip the decision toward Supabase. The operator chose the topology **scraper → Supabase → apps**.
+- **Decision:**
+  1. **Supabase (managed Postgres) is the shared store.** Its differentiators are now used, not wasted: **Realtime** (apps subscribe to odds/`phase` changes — no polling), **Auth** (app users), **RLS** (per-client read policies), and **client SDKs** (web/mobile/desktop).
+  2. **Railway remains the compute tier** — the scraper (Playwright/Chromium + proxy egress) and the control API (ADR-12). **Supabase cannot run the scraper** (Edge Functions are Deno; no Chromium, no long jobs), so this is a hard split, not a migration off Railway.
+  3. **Data flow:** the Railway scraper **writes to Supabase Postgres** via SQLAlchemy (`DATABASE_URL` = Supabase **pooler** URL). Apps **read Supabase directly** (Realtime + REST + RLS). The `scraper_jobs` table lives in the same store so apps read live job status/progress over Realtime alongside odds.
+  4. **Control (trigger) stays on the Railway API** for now (admin apps call `POST /api/scraper/runs`, then watch progress via Supabase Realtime). A later option (noted, not committed): admin apps insert a job row into Supabase and the Railway runner consumes it from there — fully Supabase-mediated control.
+- **Consequences:**
+  - **Enabling work (ADR-11 F2, now the active task):** the betb2b store's write path is still raw `sqlite3` (`store.persist_result` + job helpers). It must be ported to **SQLAlchemy** (one code path: SQLite locally/CI, Supabase Postgres deployed) so the scraper writes to Supabase. The ORM models (now incl. `ScraperJob`) + `core/db.py` + `scripts/migrate_sqlite_to_postgres.py` already exist; the port + a `DATABASE_URL`-driven persist is what remains.
+  - **Two providers.** More surface than Railway-alone, but each does what it's best at (Railway = browser compute; Supabase = data/realtime/auth). Accepted deliberately for the realtime-UI payoff.
+  - **Operator prerequisites (only the operator can do):** create the Supabase project; take the **pooler** (pgBouncer, port 6543) connection string; set `DATABASE_URL` on the Railway service (never shared with the agent — the code reads it from env); run `create_all`/the migration to build the schema + copy existing `odds.db`; enable **Realtime** on the read tables; author **RLS** policies (client apps: read-only on odds/events; admin apps: broader). Use the **pooler** URL for the scraper's many short writes, not a direct connection.
+  - **High-write caution:** `odds_snapshots` is time-series; apps should subscribe to **filtered** Realtime changes (a specific event/match), not the whole table. The change-only dedup already caps write volume.
+  - Future agents: do NOT try to run the scraper on Supabase. Keep compute on Railway; Supabase is data/realtime/auth. Do NOT point the scraper at a **direct** Supabase connection under load — use the pooler.

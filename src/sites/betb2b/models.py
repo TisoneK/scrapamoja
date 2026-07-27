@@ -256,9 +256,34 @@ class Statistic(Base):
     captured_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class ScraperJob(Base):
+    """Control-plane job queue/status — the remote-control API's runs (ADR-12).
+
+    Lives in the same store so apps can read live job status/progress (`phase`)
+    over Supabase Realtime alongside the odds data.
+    """
+    __tablename__ = "scraper_jobs"
+    job_id: Mapped[int] = mapped_column(SurrogatePK, primary_key=True, autoincrement=True)
+    skin: Mapped[str] = mapped_column(Text, nullable=False)
+    sport: Mapped[Optional[str]] = mapped_column(Text)
+    action: Mapped[str] = mapped_column(Text, nullable=False)
+    subgames: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    count: Mapped[Optional[int]] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(Text, nullable=False)  # queued|running|succeeded|failed
+    phase: Mapped[Optional[str]] = mapped_column(Text)         # live progress signal
+    created_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
+    run_id: Mapped[Optional[int]] = mapped_column(BigInteger)
+    event_count: Mapped[Optional[int]] = mapped_column(Integer)
+    error: Mapped[Optional[str]] = mapped_column(Text)
+    created_by: Mapped[Optional[str]] = mapped_column(Text)
+    __table_args__ = (Index("ix_jobs_status", "status", "created_at"),)
+
+
 __all__ = [
     "Base",
     "Sport", "Country", "League", "Team", "Event", "Market",
     "ScrapeRun", "EventState", "PeriodScore", "OddsSnapshot",
-    "H2HGame", "H2HPeriodScore", "Statistic",
+    "H2HGame", "H2HPeriodScore", "Statistic", "ScraperJob",
 ]

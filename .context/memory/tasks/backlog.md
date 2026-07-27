@@ -853,3 +853,28 @@ don't remove the line.
       into its own Railway worker service consuming the SAME `scraper_jobs` table
       (claim/finish seam already exists) and drop GUNICORN_WORKERS=1 on the web tier.
       Additive, not a rewrite. LOW until there's a reason.
+
+---
+- [ ] **ADR-13 store cutover: scraper writes to Supabase Postgres (SQLAlchemy)** (added 2026-07-27 by Claude Code) —
+      THE active task for "scraper → Supabase → apps". Port `src/sites/betb2b/store.py`
+      from raw `sqlite3` to a single SQLAlchemy path (SQLite locally/CI, Supabase
+      Postgres when `DATABASE_URL` is set) — `persist_result` (dimension UPSERTs via
+      dialect `insert().on_conflict_do_update`, change-only dedup, fact inserts) + the
+      job helpers + query helpers. ORM models are complete incl. `ScraperJob`
+      (`c…` this commit); `core/db.py` + `scripts/migrate_sqlite_to_postgres.py` exist.
+      Verify on SQLite (existing 219 tests) AND a real Postgres before trusting the
+      Postgres dialect (ON CONFLICT / timestamptz / boolean). HIGH.
+- [ ] **Operator: stand up Supabase + point Railway at it (ADR-13)** (added 2026-07-27 by Claude Code) —
+      Dashboard/account steps only the operator can do: (1) create the Supabase
+      project; (2) grab the **pooler** connection string (pgBouncer, port 6543); (3)
+      set `DATABASE_URL` on the Railway service to it (agent never sees it); (4) build
+      the schema + copy existing data:
+      `DATABASE_URL=… python -m scripts.migrate_sqlite_to_postgres`; (5) enable
+      **Realtime** on the read tables (odds_snapshots/events/scraper_jobs); (6) author
+      **RLS** policies (client apps read-only on odds/events; admin broader). Depends on
+      the store cutover above being deployed. HIGH.
+- [ ] **Client/admin apps read Supabase directly (Realtime + Auth + RLS)** (added 2026-07-27 by Claude Code) —
+      Once data lands in Supabase: build the app read paths on Supabase client SDKs —
+      subscribe to filtered odds changes + scrape `phase` for live UIs, Auth for users,
+      RLS for per-client scoping. Admin apps trigger scrapes via the Railway control API
+      (`POST /api/scraper/runs`) and watch progress via Realtime. MED (after the cutover).
