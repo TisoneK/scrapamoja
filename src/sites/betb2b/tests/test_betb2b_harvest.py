@@ -25,12 +25,12 @@ def test_ignores_short_league_country_ids():
 
 
 def test_dedupes_repeated_ids():
-    html = "738047045 ... 738047045 ... 738062773"
+    html = "/738047045-a ... /738047045-a ... /738062773-b"
     assert extract_event_ids(html) == ["738047045", "738062773"]
 
 
 def test_limit_caps_result():
-    html = " ".join(str(738000000 + i) for i in range(10))
+    html = " ".join(f"/{738000000 + i}-t{i}" for i in range(10))
     assert len(extract_event_ids(html, limit=3)) == 3
 
 
@@ -42,6 +42,19 @@ def test_empty_and_none_safe():
 def test_does_not_glue_longer_numbers():
     # A 15-digit blob (e.g. a timestamp) is not an event id.
     assert extract_event_ids("timestamp 1737460000123456") == []
+
+
+def test_bare_ids_and_asset_hashes_are_not_events():
+    # Only match-link ids (<id>-<slug>) count. Bare numbers and 9-10 digit runs
+    # embedded in asset hashes / file paths must NOT be fetched (they each cost a
+    # wasted GetGameZip → "Game is not found"). Real HTML shapes observed live.
+    html = (
+        'src="/…/1b72754ed49e8e7fb4b4d3c251436156/Aviator-dropdown.png" '
+        'href="third-party-files/140599367e25275c31b876fa5394b" '
+        'data-x="1785159600" '  # bare timestamp-ish number
+        'href="/en/line/basketball/1413697-x/354744562-england-3x3-women">'
+    )
+    assert extract_event_ids(html) == ["354744562"]  # only the real match link
 
 
 # --- champ (league) id extraction for GetChampZip discovery ----------------- #

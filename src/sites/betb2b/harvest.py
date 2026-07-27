@@ -25,9 +25,14 @@ from typing import List
 
 __all__ = ["extract_event_ids", "extract_champ_ids"]
 
-# A 9+ digit run not glued to more digits — the event-id shape. League/country
-# ids in the URL hierarchy are ≤7 digits, so this cleanly discriminates them.
-_EVENT_ID_RE = re.compile(r"(?<!\d)(\d{9,10})(?!\d)")
+# A 9–10 digit id that is the head of a match-link segment: ``<id>-<slug>``
+# (e.g. ``/354744562-england-3x3-women``). Requiring the trailing ``-<slug>``
+# is what separates real event links from bare 9–10 digit runs that also appear
+# in the HTML — asset hashes and third-party-file names (e.g.
+# ``.../…c251436156/Aviator.png``, ``third-party-files/140599367…``) — which
+# otherwise each cost a wasted, rate-limited ``GetGameZip`` returning
+# "Game is not found". League/country ids in the hierarchy are ≤7 digits.
+_EVENT_ID_RE = re.compile(r"(?<!\d)(\d{9,10})(?=-[a-z0-9])", re.IGNORECASE)
 
 # A league/championship link: ``/en/(line|live)/<sport>/<champId>-<slug>``.
 # Champ ids are 4–7 digits (distinct from the 9–10 digit event ids). Feeding
