@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 
 from src.sites.betb2b import store
-from src.sites.betb2b.service import ScraperService
+from src.sites.betb2b.service import ScraperService, build_proxy_from_env
 
 
 def _fake_result(job: dict) -> dict:
@@ -30,6 +30,23 @@ async def _drain(svc: ScraperService, path: str, job_id: int, tries: int = 200) 
             return row
         await asyncio.sleep(0.02)
     return row
+
+
+def test_build_proxy_from_env_none_when_unset(monkeypatch):
+    monkeypatch.delenv("BETB2B_PROXY_URL", raising=False)
+    assert build_proxy_from_env() == (None, None)
+
+
+def test_build_proxy_from_env_builds_manager(monkeypatch):
+    # Regression: source must be a VALID ProxySource — 'env' raised
+    # "'env' is not a valid ProxySource" at job runtime (live on Railway).
+    monkeypatch.setenv("BETB2B_PROXY_URL", "http://user:pass@bore.pub:15224")
+    monkeypatch.setenv("BETB2B_PROXY_COUNTRY", "KE")
+    monkeypatch.setenv("BETB2B_PROXY_ID", "kenya")
+    pm, endpoint_id = build_proxy_from_env()
+    assert pm is not None and endpoint_id == "kenya"
+    ep = pm.get("kenya")                    # resolves without raising
+    assert ep is not None and ep.host == "bore.pub" and ep.port == 15224
 
 
 def test_runner_runs_and_persists(tmp_path, monkeypatch):

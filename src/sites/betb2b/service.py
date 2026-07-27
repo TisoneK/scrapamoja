@@ -66,7 +66,8 @@ def build_proxy_from_env() -> Tuple[Optional[object], Optional[str]]:
 
     pm = build_proxy_manager({
         "endpoints": [
-            {"id": endpoint_id, "url": proxy_url, "country": country, "source": "env"},
+            # source must be a valid ProxySource; an env-supplied proxy is "manual".
+            {"id": endpoint_id, "url": proxy_url, "country": country, "source": "manual"},
         ],
         "routing": [{"pattern": f"*.{domain}", "target": endpoint_id}],
     })
