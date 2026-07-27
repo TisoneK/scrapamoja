@@ -855,7 +855,12 @@ don't remove the line.
       Additive, not a rewrite. LOW until there's a reason.
 
 ---
-- [ ] **ADR-13 store cutover: scraper writes to Supabase Postgres (SQLAlchemy)** (added 2026-07-27 by Claude Code) —
+- [x] **ADR-13 store cutover: scraper writes to Supabase Postgres (SQLAlchemy)** (added 2026-07-27 by Claude Code; **done same day**, `2712f4b`) —
+      DONE: `store.py` dispatches by connection type → `store_orm.py` (SQLAlchemy Core
+      over the ORM tables) when `DATABASE_URL` is set; raw-sqlite3 path unchanged.
+      Also fixed the URL/driver plumbing (`1762304`: bare postgres:// → +psycopg,
+      pooler-safe engine). Verified full ORM path on SQLite (7 tests); Postgres
+      dialect verified live against Supabase. Original:
       THE active task for "scraper → Supabase → apps". Port `src/sites/betb2b/store.py`
       from raw `sqlite3` to a single SQLAlchemy path (SQLite locally/CI, Supabase
       Postgres when `DATABASE_URL` is set) — `persist_result` (dimension UPSERTs via
