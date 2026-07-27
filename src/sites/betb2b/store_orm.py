@@ -232,14 +232,55 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
         template_version=result.get("template_version"),
     ).returning(_runs.c.run_id)).scalar()
 
+    # Per-persist caches + batches: repeating dimensions are looked up once, and
+    # the bulk facts are accumulated and inserted with one executemany each —
+    # collapsing hundreds of per-row network round-trips (the Supabase-persist
+    # slowness) into a handful.
+    sport_cache: Dict[Any, Any] = {}
+    country_cache: Dict[Any, Any] = {}
+    league_cache: Dict[Any, Any] = {}
+    market_cache: Dict[Any, Any] = {}
+    odds_batch: List[dict] = []
+    period_batch: List[dict] = []
+    stat_batch: List[dict] = []
+    h2hp_batch: List[dict] = []
+
+    def _sport_c(sid, name):
+        if sid is None:
+            return None
+        if sid not in sport_cache:
+            sport_cache[sid] = _sport(conn, sid, name)
+        return sport_cache[sid]
+
+    def _country_c(name):
+        if not name:
+            return None
+        if name not in country_cache:
+            country_cache[name] = _country(conn, name)
+        return country_cache[name]
+
+    def _league_c(lid, name, sport_id, country_id):
+        lid = _as_int(lid)
+        if lid is None:
+            return None
+        if lid not in league_cache:
+            league_cache[lid] = _league(conn, lid, name, sport_id, country_id)
+        return league_cache[lid]
+
+    def _market_c(name, mtype, raw_g):
+        mkey = (name, mtype, _as_int(raw_g))
+        if mkey not in market_cache:
+            market_cache[mkey] = _market(conn, name, mtype, raw_g)
+        return market_cache[mkey]
+
     for ev in events:
         event_id = str(ev.get("event_id") or "").strip()
         if not event_id:
             continue
 
-        sport_id = _sport(conn, _as_int(ev.get("sport_id")), ev.get("sport"))
-        country_id = _country(conn, ev.get("country"))
-        league_id = _league(conn, ev.get("league_id"), ev.get("competition"), sport_id, country_id)
+        sport_id = _sport_c(_as_int(ev.get("sport_id")), ev.get("sport"))
+        country_id = _country_c(ev.get("country"))
+        league_id = _league_c(ev.get("league_id"), ev.get("competition"), sport_id, country_id)
         home_id = _team(conn, ev.get("home"), sport_id, country_id=country_id,
                         feed_id=_as_int(ev.get("home_team_feed_id")), image=ev.get("home_team_image"),
                         feed_country_id=_as_int(ev.get("home_team_country_id")))
@@ -275,22 +316,22 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                 time_remaining=state[6], wp_home=ev.get("wp_home"), wp_away=ev.get("wp_away"),
                 captured_at=at))
 
-        # facts: period scores (only changed)
+        # facts: period scores (only changed) → batch
         last_periods = _last_periods(conn, event_id, skin)
         for ps in ev.get("period_scores") or []:
             pk = _as_int(ps.get("period_key"))
             row = (ps.get("period_name"), _as_int(ps.get("home_score")), _as_int(ps.get("away_score")))
             if last_periods.get(pk) == row:
                 continue
-            conn.execute(_periods.insert().values(
+            period_batch.append(dict(
                 run_id=run_id, event_id=event_id, skin=skin, period_key=pk, period_name=row[0],
                 home_score=row[1], away_score=row[2], captured_at=at))
             last_periods[pk] = row
 
-        # facts: odds (only when a selection's price/suspension changed)
+        # facts: odds (only when a selection's price/suspension changed) → batch
         last_odds = _last_odds(conn, event_id, skin)
         for m in ev.get("markets") or []:
-            market_id = _market(conn, m.get("name"), m.get("market_type"), m.get("raw_g"))
+            market_id = _market_c(m.get("name"), m.get("market_type"), m.get("raw_g"))
             scope = m.get("scope") or "FULL_MATCH"
             for s in m.get("selections") or []:
                 price = s.get("price")
@@ -301,7 +342,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                 key = (scope, market_id, s.get("name"), s.get("line"))
                 if last_odds.get(key) == (price, susp):
                     continue
-                conn.execute(_odds.insert().values(
+                odds_batch.append(dict(
                     run_id=run_id, event_id=event_id, skin=skin, market_id=market_id,
                     selection_name=s.get("name"), line=s.get("line"), price=price,
                     is_suspended=susp, raw_t=_as_int(s.get("raw_t")), scope=scope, captured_at=at))
@@ -325,21 +366,31 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                     winner=_as_int(g.get("winner")), status=_as_int(g.get("status")), captured_at=at
                 ).returning(_h2h.c.id)).scalar()
                 for ps in g.get("periods") or []:
-                    conn.execute(_h2hp.insert().values(
+                    h2hp_batch.append(dict(
                         h2h_game_id=h2h_game_id, event_id=event_id,
                         period_key=_as_int(ps.get("period_key")), period_name=ps.get("period_name"),
                         home_score=_as_int(ps.get("home_score")), away_score=_as_int(ps.get("away_score"))))
 
-        # facts: statistics (flatten name/value)
+        # facts: statistics (flatten name/value) → batch
         for st in ev.get("statistics") or []:
             if isinstance(st, dict):
                 for k, v in st.items():
-                    conn.execute(_stats.insert().values(
+                    stat_batch.append(dict(
                         run_id=run_id, event_id=event_id, skin=skin,
                         name=str(k), value=str(v), captured_at=at))
 
+    # One executemany per fact type — the big round-trip saving.
+    if period_batch:
+        conn.execute(_periods.insert(), period_batch)
+    if odds_batch:
+        conn.execute(_odds.insert(), odds_batch)
+    if h2hp_batch:
+        conn.execute(_h2hp.insert(), h2hp_batch)
+    if stat_batch:
+        conn.execute(_stats.insert(), stat_batch)
     conn.commit()
-    logger.info("persist run %s (skin=%s): %d events → Postgres", run_id, skin, len(events))
+    logger.info("persist run %s (skin=%s): %d events, %d odds → Postgres",
+                run_id, skin, len(events), len(odds_batch))
     return run_id
 
 
