@@ -33,6 +33,13 @@ logger = logging.getLogger(__name__)
 DB_PATH_ENV = "BETB2B_DB_PATH"
 DEFAULT_DB_PATH = "data/betb2b/odds.db"
 
+# A full prematch scrape (bootstrap + per-league GetChampZip + per-match
+# GetGameZip, rate-limited) runs ~135–165s — well over BetB2BScraper.scrape's
+# 120s default, which would time out and discard everything (0 events). Give
+# background jobs a realistic cap; override with BETB2B_SCRAPE_TIMEOUT.
+SCRAPE_TIMEOUT_ENV = "BETB2B_SCRAPE_TIMEOUT"
+DEFAULT_SCRAPE_TIMEOUT = 300.0
+
 
 def db_path() -> str:
     return os.environ.get(DB_PATH_ENV, DEFAULT_DB_PATH)
@@ -145,13 +152,20 @@ class ScraperService:
             conn = store.init_db(self.path)
             store.update_job_phase(conn, job_id, "persisting")
             run_id = store.persist_result(result, self.path, conn=conn)
-            store.finish_job(
-                conn, job_id, status="succeeded", run_id=run_id,
-                event_count=result.get("event_count"),
-            )
+            # A scrape-level error (e.g. timeout) yields an empty result — mark
+            # the job failed with that reason instead of a silent "succeeded/0".
+            scrape_error = result.get("error")
+            if scrape_error:
+                store.finish_job(conn, job_id, status="failed", run_id=run_id,
+                                 event_count=result.get("event_count"),
+                                 error=str(scrape_error)[:500])
+                logger.warning("scraper job %d: scrape error — %s", job_id, scrape_error)
+            else:
+                store.finish_job(conn, job_id, status="succeeded", run_id=run_id,
+                                 event_count=result.get("event_count"))
+                logger.info("scraper job %d: succeeded (%s events)",
+                            job_id, result.get("event_count"))
             conn.close()
-            logger.info("scraper job %d: succeeded (%s events)",
-                        job_id, result.get("event_count"))
         except Exception as exc:  # noqa: BLE001
             logger.exception("scraper job %d failed", job_id)
             conn = store.init_db(self.path)
@@ -172,8 +186,10 @@ class ScraperService:
             finally:
                 conn.close()
 
+        timeout = float(os.environ.get(SCRAPE_TIMEOUT_ENV, DEFAULT_SCRAPE_TIMEOUT))
         async with BetB2BScraper(skin, proxy_manager=pm, sport=job.get("sport")) as scraper:
             scraper.progress_cb = _write_phase   # live phase → scraper_jobs.phase
             return await scraper.scrape(
                 action=job["action"], count=int(job.get("count") or 50),
+                timeout_seconds=timeout,
             )

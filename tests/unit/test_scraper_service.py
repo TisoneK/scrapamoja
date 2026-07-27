@@ -118,6 +118,32 @@ def test_runner_marks_failure_with_reason(tmp_path, monkeypatch):
     assert "WAF" in (row["error"] or "")   # caller sees a clear reason
 
 
+def test_runner_surfaces_scrape_level_error(tmp_path, monkeypatch):
+    """A scrape that returns an error result (e.g. timeout → 0 events) marks the
+    job failed with the reason, not a silent 'succeeded/0'."""
+    path = str(tmp_path / "odds.db")
+
+    async def timed_out(self, job):
+        r = _fake_result(job)
+        r["error"] = "scrape 'list_prematch' timed out after 120.0s"
+        r["success"] = False
+        return r
+
+    monkeypatch.setattr(ScraperService, "_scrape", timed_out)
+
+    async def run():
+        svc = ScraperService(path)
+        await svc.start()
+        jid = svc.submit(skin="linebet", action="list_prematch")
+        row = await _drain(svc, path, jid)
+        await svc.stop()
+        return row
+
+    row = asyncio.run(run())
+    assert row["status"] == "failed"
+    assert "timed out" in (row["error"] or "")
+
+
 def test_single_flight_drains_multiple_jobs(tmp_path, monkeypatch):
     """Two queued jobs both complete (queue drains one-at-a-time)."""
     path = str(tmp_path / "odds.db")
