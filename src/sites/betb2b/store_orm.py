@@ -198,11 +198,19 @@ def _last_periods(conn, event_id, skin):
 
 
 def _last_odds(conn, event_id, skin):
+    # Latest (price, is_suspended) per (scope, market_id, selection, line).
+    # SQLite lets bare columns ride a GROUP BY (returns the max-row's values);
+    # Postgres rejects that (GroupingError), so join the max snap_id back to the
+    # table to fetch that row's price/is_suspended — portable on both.
+    sub = select(
+        _odds.c.scope, _odds.c.market_id, _odds.c.selection_name, _odds.c.line,
+        func.max(_odds.c.snap_id).label("mx")
+    ).where(_odds.c.event_id == event_id, _odds.c.skin == skin).group_by(
+        _odds.c.scope, _odds.c.market_id, _odds.c.selection_name, _odds.c.line).subquery()
     rows = conn.execute(select(
         _odds.c.scope, _odds.c.market_id, _odds.c.selection_name, _odds.c.line,
-        _odds.c.price, _odds.c.is_suspended, func.max(_odds.c.snap_id)
-    ).where(_odds.c.event_id == event_id, _odds.c.skin == skin)
-     .group_by(_odds.c.scope, _odds.c.market_id, _odds.c.selection_name, _odds.c.line)).all()
+        _odds.c.price, _odds.c.is_suspended
+    ).join(sub, _odds.c.snap_id == sub.c.mx)).all()
     return {(r[0], r[1], r[2], r[3]): (r[4], bool(r[5]) if r[5] is not None else False)
             for r in rows}
 
