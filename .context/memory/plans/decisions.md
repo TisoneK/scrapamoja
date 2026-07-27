@@ -371,3 +371,21 @@ point 5's Volume mount + `ADAPTIVE_DB_PATH` (ADR-11 point 5; `ADAPTIVE_DB_PATH`
 stays for local/CI SQLite only). Until F2 ships, the betb2b data still lands in
 `odds.db` — the Postgres path exists at the model/migration level but the
 scraper doesn't write through it yet.
+
+---
+
+## ADR-12: The scraper gets a remote-control API on the existing FastAPI service — single-flight background jobs, API-key auth (2026-07-27)
+
+- **Status:** accepted (deliberately deviates from ADR-1 point 4 for the control-plane MVP — see below)
+- **Context:** The betb2b scraper was CLI-only. The operator wants to drive it remotely (trigger scrapes, monitor, read odds) from apps/other services. Three forks were decided with the operator: (1) **deployment model** — Railway hosts the control plane (API + DB); scrapes execute against whatever proxy is configured, failing cleanly if none, because the Railway egress IP is WAF-blocked (203) and cannot scrape betb2b directly (backlog: "IP is WAF-blocked"); (2) **execution** — scrapes run as background jobs inside the API web service (not a separate worker); (3) **surface** — API-only (no website yet), secured by an API key.
+- **Decision:**
+  1. **Add `/api/scraper/*` to the existing `src/api/main.py` FastAPI app** (already the Railway-deployed service, ADR-1): `POST /runs` (queue), `GET /runs[/{id}]` (monitor), `GET /skins|sports|counts`, `GET /odds/{event_id}`.
+  2. **Auth: `x-api-key` vs `SCRAPER_API_KEY` env, fail-closed** — unset ⇒ 503 (feature disabled), wrong/missing ⇒ 401. No key handling beyond a constant-time compare; the operator sets the secret in Railway.
+  3. **Execution: single-flight background jobs in-process.** A `scraper_jobs` table is the queue/status; `ScraperService` (started in the app lifespan) drains it via `store.claim_next_job` — **one scrape at a time** (one Chromium bootstrap; ADR-1's memory concern). Jobs go queued→running→succeeded/failed; orphaned `running` rows are reset on startup. **Deploy with `GUNICORN_WORKERS=1`** so single-flight is global (the DB claim guards regardless, but one worker keeps it deterministic).
+  4. **Proxy from `BETB2B_PROXY_*` env.** No proxy / WAF block ⇒ the job is marked `failed` with the reason, never a hang — the caller polls a clear status.
+  5. **Store stays SQLite** (`BETB2B_DB_PATH`, on the Railway Volume). Apps read betb2b data **through this API**, which is exactly ADR-11's "apps reach the data via the Python API, not direct-to-DB" — so the Postgres cutover (ADR-11) is orthogonal and not required for remote control.
+- **Consequences:**
+  - **Deviation from ADR-1 point 4** ("do NOT run scrape jobs inside the API service"). Accepted deliberately for the control-plane MVP: the hybrid scraper only bootstraps a browser briefly, single-flight caps it at one Chromium, and a separate worker service (ADR-1's preference) is more infra/cost than this stage warrants. If scrape volume grows or API latency suffers, promote the runner to a separate Railway worker consuming the same `scraper_jobs` table — the queue/claim seam is already there, so it's an additive change, not a rewrite. Revisit then.
+  - The deployed scraper is only as reliable as its proxy. The bore.pub tunnel (operator's laptop, rotating port) is fine for validation but not production; a stable residential/KE proxy is the real dependency for always-on cloud scraping (backlogged).
+  - `GUNICORN_WORKERS=1` trades API concurrency for deterministic single-flight. The control plane is low-traffic, so this is fine; if the API needs more workers later, move the runner to its own service (above) rather than raising workers.
+  - Future agents: keep scrape execution behind the `scraper_jobs` queue. Do NOT add a second endpoint that scrapes inline in the request path (it would blow the request timeout and bypass single-flight).

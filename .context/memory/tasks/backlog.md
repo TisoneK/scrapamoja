@@ -824,3 +824,32 @@ don't remove the line.
       NBA/EuroLeague; KE surfaces minor African/Asian leagues), and basketball in
       **July is off-season** so the card is genuinely thin. MED — the real unlock for
       "all games", but larger and uncertain.
+
+---
+- [x] **Remote-control API for the scraper (ADR-12)** (added 2026-07-27 by Claude Code; **done same day**, `3fc3274`) —
+      `/api/scraper/*` on the existing Railway FastAPI service: POST /runs (queue a
+      scrape), GET /runs[/{id}], skins/sports/counts, odds/{event_id}. x-api-key auth
+      (SCRAPER_API_KEY, fail-closed). Scrapes run as single-flight background jobs
+      (`scraper_jobs` table + `ScraperService`); GUNICORN_WORKERS=1. Proxy from
+      BETB2B_PROXY_* env, jobs fail cleanly if the (WAF-blocked) egress has none.
+      213 tests green + live-smoked via uvicorn. See ADR-12 + RAILWAY.md.
+- [ ] **Operator: provision the scraper control plane on Railway** (added 2026-07-27 by Claude Code) —
+      Code is shipped; these are dashboard/account steps only the operator can do.
+      In the Railway service Variables: set `SCRAPER_API_KEY` (long random),
+      `BETB2B_PROXY_URL` (+ `_USER`/`_PASS`/`_COUNTRY`) to a working allowed-country
+      proxy, `BETB2B_DB_PATH=/app/data/betb2b/odds.db` (on the Volume mounted at
+      `/app/data`), and `GUNICORN_WORKERS=1`. Redeploy, then verify:
+      `curl -H "x-api-key: …" https://<app>.up.railway.app/api/scraper/skins`. Without
+      a proxy every job fails (203 WAF) — that is expected, not a bug.
+- [ ] **Stable production proxy for cloud scraping** (added 2026-07-27 by Claude Code) —
+      The deployed scraper is only as reliable as `BETB2B_PROXY_*`. The bore.pub tunnel
+      (operator laptop, rotating port) is fine for validation, not always-on. For
+      autonomous cloud scraping, provision a stable residential/KE proxy (Bright
+      Data/Soax/etc.) and set it in Railway. MED — the real dependency for 24/7 remote
+      scraping. Ties to ADR-12's proxy note.
+- [ ] **Promote the scrape runner to a separate Railway worker (if volume grows)** (added 2026-07-27 by Claude Code) —
+      ADR-12 runs scrapes in the API web service (single-flight, deviating from ADR-1
+      point 4). If scrape volume grows or API latency suffers, move `ScraperService`
+      into its own Railway worker service consuming the SAME `scraper_jobs` table
+      (claim/finish seam already exists) and drop GUNICORN_WORKERS=1 on the web tier.
+      Additive, not a rewrite. LOW until there's a reason.
