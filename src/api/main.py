@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routers import failures as failures_router
 from src.api.routers import feature_flags as feature_flags_router
+from src.api.routers import scraper as scraper_router
 
 logger = logging.getLogger(__name__)
 
@@ -105,10 +106,12 @@ ws_manager = ConnectionManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ANN001
-    """Seed demo feature flags on first startup, then yield."""
+    """Seed demo flags, start the scraper job runner, then yield."""
     _seed_demo_flags()
+    await scraper_router.service.start()
     logger.info("Scrapamoja API started.")
     yield
+    await scraper_router.service.stop()
     logger.info("Scrapamoja API shutting down.")
 
 
@@ -158,6 +161,11 @@ def create_app() -> FastAPI:
         failures_router.router,
         prefix="/failures",
         tags=["Failures / Escalation"],
+    )
+    application.include_router(
+        scraper_router.router,
+        prefix="/api/scraper",
+        tags=["Scraper Control"],
     )
 
     # ── Health check ──────────────────────────────────────────────────────────

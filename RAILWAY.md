@@ -61,8 +61,13 @@ Set these in the Railway service's **Variables** tab:
 | Variable | Default | Required | Purpose |
 |---|---|---|---|
 | `PORT` | `8000` | auto-injected by Railway | Port to bind. Railway injects this automatically — do NOT set it yourself. |
-| `GUNICORN_WORKERS` | `2` | no | Number of uvicorn workers. Bump for higher traffic. |
-| `ADAPTIVE_DB_PATH` | `/app/data/adaptive.db` | recommended | SQLite DB location. **Point at a Volume mount path** for persistence (see below). |
+| `GUNICORN_WORKERS` | `2` | **set to `1`** if you use the scraper control API | Number of uvicorn workers. The scrape-job runner is single-flight **per worker** — one worker keeps it globally single-flight (and one Chromium at a time). |
+| `ADAPTIVE_DB_PATH` | `/app/data/adaptive.db` | recommended | Selector-engine SQLite DB. **Point at a Volume mount path** for persistence (see below). |
+| `SCRAPER_API_KEY` | _(unset)_ | **required to enable** the scraper control API | Shared secret checked against the `x-api-key` header. Unset → all `/api/scraper/*` endpoints return `503` (fail closed). Generate a long random value. |
+| `BETB2B_DB_PATH` | `data/betb2b/odds.db` | recommended | betb2b odds + job store. **Point at the Volume** (`/app/data/betb2b/odds.db`) so scrape results + job history survive redeploys. |
+| `BETB2B_PROXY_URL` | _(unset)_ | **required for scraping** | Allowed-country proxy, e.g. `http://user:pass@host:port`. The Railway egress IP is WAF-blocked (HTTP 203), so **without a proxy every scrape job fails** with a clear status. |
+| `BETB2B_PROXY_USER` / `BETB2B_PROXY_PASS` | _(unset)_ | optional | Proxy creds if not embedded in `BETB2B_PROXY_URL`. |
+| `BETB2B_PROXY_COUNTRY` | _(unset)_ | optional | ISO code (e.g. `KE`) to validate proxy egress country before scraping. |
 
 The Dockerfile sets sensible defaults for everything else; Railway injects `PORT` at runtime.
 
@@ -86,6 +91,38 @@ If you skip the volume, the app still runs — but every redeploy wipes feature 
 Railway probes `GET /health` (configured in `railway.json` → `deploy.healthcheckPath`).
 
 The endpoint returns `200 {"status": "ok", "service": "scrapamoja-api"}`. If it returns non-200 or times out for ~30s, Railway marks the service unhealthy and restarts it (up to 5 retries per `restartPolicyMaxRetries`).
+
+---
+
+## Remote-controlling the scraper (control API)
+
+The betb2b scraper is driven over HTTP under `/api/scraper/*` (see `/docs`).
+Every endpoint requires the `x-api-key` header matching `SCRAPER_API_KEY`
+(unset ⇒ `503`; wrong/missing ⇒ `401`). Scrapes run as **single-flight
+background jobs** inside the web service and persist to the betb2b store; the
+deployed egress **needs `BETB2B_PROXY_*`** or jobs fail with a clear reason
+(the Railway IP is WAF-blocked). See ADR-12.
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/scraper/runs` | Queue a scrape. Body: `{skin, action, sport?, subgames?, count?}`. `action` = `live`/`prematch`/`all` (or `list_live`/…). Returns `202` + the job. |
+| `GET /api/scraper/runs` | List recent jobs (`?status=`, `?limit=`). |
+| `GET /api/scraper/runs/{id}` | One job's status/outcome (`queued`→`running`→`succeeded`/`failed`). |
+| `GET /api/scraper/skins` / `sports` | Available skins / sport slugs. |
+| `GET /api/scraper/counts` | Odds-store row counts (coverage/health). |
+| `GET /api/scraper/odds/{event_id}` | Latest odds per selection (cross-skin; `?skin=`). |
+
+```bash
+# Queue a live basketball scrape, then poll it:
+curl -sX POST https://<your-app>.up.railway.app/api/scraper/runs \
+  -H "x-api-key: $SCRAPER_API_KEY" -H "content-type: application/json" \
+  -d '{"skin":"linebet","action":"live","sport":"basketball"}'
+curl -s https://<your-app>.up.railway.app/api/scraper/runs/1 -H "x-api-key: $SCRAPER_API_KEY"
+```
+
+**Deploy checklist for the control API:** set `SCRAPER_API_KEY`,
+`BETB2B_PROXY_URL` (+ creds/country), `BETB2B_DB_PATH=/app/data/betb2b/odds.db`
+(on the Volume), and `GUNICORN_WORKERS=1`.
 
 ---
 

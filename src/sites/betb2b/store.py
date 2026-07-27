@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -205,8 +206,28 @@ CREATE TABLE IF NOT EXISTS statistics (
     captured_at  TEXT NOT NULL
 );
 
+-- Control plane: remote scrape jobs (triggered via the API). Not a scrape
+-- fact — this is the job queue/status the control API reads and writes.
+CREATE TABLE IF NOT EXISTS scraper_jobs (
+    job_id        INTEGER PRIMARY KEY,
+    skin          TEXT NOT NULL,        -- one skin, or comma-list
+    sport         TEXT,
+    action        TEXT NOT NULL,        -- list_live / list_prematch / list_all / ...
+    subgames      INTEGER DEFAULT 0,
+    count         INTEGER,
+    status        TEXT NOT NULL,        -- queued | running | succeeded | failed | cancelled
+    created_at    TEXT NOT NULL,
+    started_at    TEXT,
+    finished_at   TEXT,
+    run_id        INTEGER,              -- the scrape_runs row this produced (if any)
+    event_count   INTEGER,
+    error         TEXT,
+    created_by    TEXT                  -- optional caller label
+);
+
 CREATE INDEX IF NOT EXISTS ix_events_league   ON events(league_id);
 CREATE INDEX IF NOT EXISTS ix_events_sport     ON events(sport_id);
+CREATE INDEX IF NOT EXISTS ix_jobs_status      ON scraper_jobs(status, created_at);
 CREATE INDEX IF NOT EXISTS ix_states_event     ON event_states(event_id, captured_at);
 CREATE INDEX IF NOT EXISTS ix_periods_event    ON period_scores(event_id, captured_at);
 CREATE INDEX IF NOT EXISTS ix_odds_event       ON odds_snapshots(event_id, skin, captured_at);
@@ -620,3 +641,84 @@ def counts(conn) -> Dict[str, int]:
         "h2h_games", "h2h_period_scores", "statistics",
     ]
     return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
+
+
+# --------------------------------------------------------------------------- #
+# Control plane: scrape job queue (read/written by the remote-control API)
+# --------------------------------------------------------------------------- #
+def create_job(
+    conn, *, skin: str, action: str, sport: Optional[str] = None,
+    subgames: bool = False, count: Optional[int] = None,
+    created_by: Optional[str] = None,
+) -> int:
+    """Insert a queued scrape job; return its job_id."""
+    at = datetime.now(timezone.utc).isoformat()
+    job_id = int(conn.execute(
+        "INSERT INTO scraper_jobs "
+        "(skin, sport, action, subgames, count, status, created_at, created_by) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        (skin, sport, action, 1 if subgames else 0, count, "queued", at, created_by),
+    ).lastrowid)
+    conn.commit()
+    return job_id
+
+
+def claim_next_job(conn) -> Optional[sqlite3.Row]:
+    """Atomically move the oldest queued job to 'running'; return it (or None).
+
+    Single-flight: refuses if a job is already running (one Chromium at a time).
+    """
+    if conn.execute("SELECT 1 FROM scraper_jobs WHERE status='running' LIMIT 1").fetchone():
+        return None
+    row = conn.execute(
+        "SELECT * FROM scraper_jobs WHERE status='queued' ORDER BY job_id LIMIT 1"
+    ).fetchone()
+    if not row:
+        return None
+    conn.execute(
+        "UPDATE scraper_jobs SET status='running', started_at=? WHERE job_id=? AND status='queued'",
+        (datetime.now(timezone.utc).isoformat(), row["job_id"]),
+    )
+    conn.commit()
+    return conn.execute("SELECT * FROM scraper_jobs WHERE job_id=?", (row["job_id"],)).fetchone()
+
+
+def finish_job(
+    conn, job_id: int, *, status: str, run_id: Optional[int] = None,
+    event_count: Optional[int] = None, error: Optional[str] = None,
+) -> None:
+    """Mark a job terminal (succeeded/failed/cancelled) with its outcome."""
+    conn.execute(
+        "UPDATE scraper_jobs SET status=?, finished_at=?, run_id=?, event_count=?, error=? "
+        "WHERE job_id=?",
+        (status, datetime.now(timezone.utc).isoformat(), run_id, event_count, error, job_id),
+    )
+    conn.commit()
+
+
+def reset_orphan_jobs(conn) -> int:
+    """On startup, fail any job stuck 'running' from a previous crash. Returns count."""
+    n = conn.execute("SELECT COUNT(*) FROM scraper_jobs WHERE status='running'").fetchone()[0]
+    if n:
+        conn.execute(
+            "UPDATE scraper_jobs SET status='failed', finished_at=?, "
+            "error='interrupted (service restart)' WHERE status='running'",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+    return int(n)
+
+
+def get_job(conn, job_id: int) -> Optional[sqlite3.Row]:
+    return conn.execute("SELECT * FROM scraper_jobs WHERE job_id=?", (job_id,)).fetchone()
+
+
+def list_jobs(conn, *, limit: int = 50, status: Optional[str] = None) -> List[sqlite3.Row]:
+    if status:
+        return conn.execute(
+            "SELECT * FROM scraper_jobs WHERE status=? ORDER BY job_id DESC LIMIT ?",
+            (status, limit),
+        ).fetchall()
+    return conn.execute(
+        "SELECT * FROM scraper_jobs ORDER BY job_id DESC LIMIT ?", (limit,)
+    ).fetchall()

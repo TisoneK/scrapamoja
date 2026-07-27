@@ -1,0 +1,106 @@
+"""Runner logic for the scraper control service (no browser, scrape stubbed).
+
+Drives the real ScraperService queue/claim/persist path with ``_scrape`` faked,
+so we exercise start → submit → claim → persist/finish without a live scrape.
+"""
+
+from __future__ import annotations
+
+import asyncio
+
+from src.sites.betb2b import store
+from src.sites.betb2b.service import ScraperService
+
+
+def _fake_result(job: dict) -> dict:
+    return {
+        "skin": job["skin"], "action": job["action"], "url": "https://x/feed",
+        "extracted_at": "2026-07-26T00:00:00+00:00", "success": True,
+        "event_count": 0, "scrape_duration_seconds": 0.1,
+        "template_version": "1.0.0", "events": [],
+    }
+
+
+async def _drain(svc: ScraperService, path: str, job_id: int, tries: int = 200) -> dict:
+    for _ in range(tries):
+        conn = store.init_db(path)
+        row = dict(store.get_job(conn, job_id))
+        conn.close()
+        if row["status"] in ("succeeded", "failed"):
+            return row
+        await asyncio.sleep(0.02)
+    return row
+
+
+def test_runner_runs_and_persists(tmp_path, monkeypatch):
+    path = str(tmp_path / "odds.db")
+
+    async def fake_scrape(self, job):
+        return _fake_result(job)
+
+    monkeypatch.setattr(ScraperService, "_scrape", fake_scrape)
+
+    async def run():
+        svc = ScraperService(path)
+        await svc.start()
+        jid = svc.submit(skin="linebet", action="list_live", sport="basketball")
+        row = await _drain(svc, path, jid)
+        await svc.stop()
+        return row, path
+
+    row, path = asyncio.run(run())
+    assert row["status"] == "succeeded", row
+    assert row["run_id"] is not None       # persisted a scrape_runs row
+    conn = store.init_db(path)
+    assert conn.execute("SELECT COUNT(*) FROM scrape_runs").fetchone()[0] == 1
+    conn.close()
+
+
+def test_runner_marks_failure_with_reason(tmp_path, monkeypatch):
+    path = str(tmp_path / "odds.db")
+
+    async def boom(self, job):
+        raise RuntimeError("geo/WAF block detected (status=203)")
+
+    monkeypatch.setattr(ScraperService, "_scrape", boom)
+
+    async def run():
+        svc = ScraperService(path)
+        await svc.start()
+        jid = svc.submit(skin="linebet", action="list_live")
+        row = await _drain(svc, path, jid)
+        await svc.stop()
+        return row
+
+    row = asyncio.run(run())
+    assert row["status"] == "failed"
+    assert "WAF" in (row["error"] or "")   # caller sees a clear reason
+
+
+def test_single_flight_drains_multiple_jobs(tmp_path, monkeypatch):
+    """Two queued jobs both complete (queue drains one-at-a-time)."""
+    path = str(tmp_path / "odds.db")
+    running = {"now": 0, "max": 0}
+
+    async def fake_scrape(self, job):
+        running["now"] += 1
+        running["max"] = max(running["max"], running["now"])
+        await asyncio.sleep(0.05)
+        running["now"] -= 1
+        return _fake_result(job)
+
+    monkeypatch.setattr(ScraperService, "_scrape", fake_scrape)
+
+    async def run():
+        svc = ScraperService(path)
+        await svc.start()
+        j1 = svc.submit(skin="linebet", action="list_live")
+        j2 = svc.submit(skin="melbet", action="list_prematch")
+        r1 = await _drain(svc, path, j1)
+        r2 = await _drain(svc, path, j2)
+        await svc.stop()
+        return r1, r2
+
+    r1, r2 = asyncio.run(run())
+    assert r1["status"] == "succeeded" and r2["status"] == "succeeded"
+    assert running["max"] == 1             # never two scrapes at once
