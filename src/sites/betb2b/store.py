@@ -27,10 +27,16 @@ Postgres-portable (TEXT/INTEGER/REAL, ISO-8601 timestamps, explicit FKs).
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+
+def _is_orm(conn: Any) -> bool:
+    """A non-sqlite3 connection means the ORM/Postgres path (ADR-13)."""
+    return conn is not None and not isinstance(conn, sqlite3.Connection)
 
 logger = logging.getLogger(__name__)
 
@@ -237,8 +243,12 @@ CREATE INDEX IF NOT EXISTS ix_h2h_event        ON h2h_games(event_id);
 """
 
 
-def init_db(path: PathLike) -> sqlite3.Connection:
-    """Open (creating if needed) the store and ensure the schema."""
+def init_db(path: PathLike | None = None):
+    """Open the store + ensure the schema. Returns a sqlite3 connection, OR a
+    SQLAlchemy connection when ``DATABASE_URL`` is set (ADR-13 → Supabase)."""
+    if os.environ.get("DATABASE_URL"):
+        from . import store_orm
+        return store_orm.connect()
     p = Path(path)
     if p.parent and not p.parent.exists():
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -418,8 +428,8 @@ def _last_periods(conn, event_id: str, skin: str) -> Dict[Any, tuple]:
 # Persist
 # --------------------------------------------------------------------------- #
 def persist_result(
-    result: Dict[str, Any], path: PathLike, *,
-    conn: Optional[sqlite3.Connection] = None,
+    result: Dict[str, Any], path: PathLike | None = None, *,
+    conn: Optional[Any] = None,
 ) -> int:
     """Persist one ``BetB2BScrapeResult.to_dict()`` payload; return the run_id.
 
@@ -429,6 +439,13 @@ def persist_result(
     """
     owns = conn is None
     conn = conn or init_db(path)
+    if _is_orm(conn):
+        from . import store_orm
+        try:
+            return store_orm.persist_result(conn, result)
+        finally:
+            if owns:
+                conn.close()
     try:
         skin = result.get("skin") or ""
         at = result.get("extracted_at") or ""
@@ -600,8 +617,11 @@ def persist_result(
 # --------------------------------------------------------------------------- #
 # Read helpers
 # --------------------------------------------------------------------------- #
-def latest_odds(conn, event_id: str, *, skin: Optional[str] = None) -> List[sqlite3.Row]:
+def latest_odds(conn, event_id: str, *, skin: Optional[str] = None):
     """Most recent price per (skin, market, selection) for one event."""
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.latest_odds(conn, event_id, skin=skin)
     sql = (
         "SELECT o.skin, m.name AS market_name, o.selection_name, o.line, o.price, "
         "       o.is_suspended, MAX(o.captured_at) AS captured_at "
@@ -637,6 +657,9 @@ def cross_skin_odds(conn, event_id, market_name, selection_name) -> List[sqlite3
 
 def counts(conn) -> Dict[str, int]:
     """Row counts per table — a quick health/coverage summary."""
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.counts(conn)
     tables = [
         "sports", "countries", "leagues", "teams", "events", "markets",
         "scrape_runs", "event_states", "period_scores", "odds_snapshots",
@@ -654,6 +677,10 @@ def create_job(
     created_by: Optional[str] = None,
 ) -> int:
     """Insert a queued scrape job; return its job_id."""
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.create_job(conn, skin=skin, action=action, sport=sport,
+                                    subgames=subgames, count=count, created_by=created_by)
     at = datetime.now(timezone.utc).isoformat()
     job_id = int(conn.execute(
         "INSERT INTO scraper_jobs "
@@ -670,6 +697,9 @@ def claim_next_job(conn) -> Optional[sqlite3.Row]:
 
     Single-flight: refuses if a job is already running (one Chromium at a time).
     """
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.claim_next_job(conn)
     if conn.execute("SELECT 1 FROM scraper_jobs WHERE status='running' LIMIT 1").fetchone():
         return None
     row = conn.execute(
@@ -689,6 +719,9 @@ def claim_next_job(conn) -> Optional[sqlite3.Row]:
 def update_job_phase(conn, job_id: int, phase: str) -> None:
     """Set the live phase of a running job (progress signal for UIs). Cheap +
     best-effort — only affects rows still 'running'."""
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.update_job_phase(conn, job_id, phase)
     conn.execute(
         "UPDATE scraper_jobs SET phase=? WHERE job_id=? AND status='running'",
         (phase, job_id),
@@ -705,6 +738,10 @@ def finish_job(
     On success the phase is set to 'done'; on failure the last phase is kept so
     a UI can show *where* it broke (e.g. 'bootstrapping' → proxy/session issue).
     """
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.finish_job(conn, job_id, status=status, run_id=run_id,
+                                    event_count=event_count, error=error)
     phase = "done" if status == "succeeded" else None  # None → leave phase as-is
     conn.execute(
         "UPDATE scraper_jobs SET status=?, finished_at=?, run_id=?, event_count=?, "
@@ -717,6 +754,9 @@ def finish_job(
 
 def reset_orphan_jobs(conn) -> int:
     """On startup, fail any job stuck 'running' from a previous crash. Returns count."""
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.reset_orphan_jobs(conn)
     n = conn.execute("SELECT COUNT(*) FROM scraper_jobs WHERE status='running'").fetchone()[0]
     if n:
         conn.execute(
@@ -728,11 +768,17 @@ def reset_orphan_jobs(conn) -> int:
     return int(n)
 
 
-def get_job(conn, job_id: int) -> Optional[sqlite3.Row]:
+def get_job(conn, job_id: int):
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.get_job(conn, job_id)
     return conn.execute("SELECT * FROM scraper_jobs WHERE job_id=?", (job_id,)).fetchone()
 
 
-def list_jobs(conn, *, limit: int = 50, status: Optional[str] = None) -> List[sqlite3.Row]:
+def list_jobs(conn, *, limit: int = 50, status: Optional[str] = None):
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.list_jobs(conn, limit=limit, status=status)
     if status:
         return conn.execute(
             "SELECT * FROM scraper_jobs WHERE status=? ORDER BY job_id DESC LIMIT ?",
