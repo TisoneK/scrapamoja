@@ -21,9 +21,39 @@ a non-event id) be the final filter.
 from __future__ import annotations
 
 import re
-from typing import List
+from typing import Any, Dict, List, Optional, Tuple
 
-__all__ = ["extract_event_ids", "extract_champ_ids"]
+__all__ = ["extract_event_ids", "extract_champ_ids", "extract_leagues_from_sports"]
+
+
+def extract_leagues_from_sports(
+    decoded: Dict[str, Any], sport_id: Optional[int] = None,
+) -> List[Tuple[int, int, str]]:
+    """Parse a ``GetSportsZip`` response → ``(league_id, game_count, name)`` list.
+
+    The un-gated ``GetSportsZip`` returns the full sports→leagues tree
+    (ADR-15) with **no browser, cookies, or proxy**: ``Value[]`` per sport,
+    each sport's ``L[]`` listing every league with ``LI`` (champ/league id),
+    ``GC`` (game count), and ``L`` (name). This is the browser-free discovery
+    source. Returns leagues **with games** (``GC > 0``), highest game-count
+    first; filtered to ``sport_id`` (the ``I`` field, e.g. 3 = basketball)
+    when given, else all sports.
+    """
+    out: List[Tuple[int, int, str]] = []
+    for sport in (decoded or {}).get("Value") or []:
+        if not isinstance(sport, dict):
+            continue
+        if sport_id is not None and sport.get("I") != sport_id:
+            continue
+        for lg in sport.get("L") or []:
+            if not isinstance(lg, dict):
+                continue
+            li = lg.get("LI")
+            gc = lg.get("GC") or 0
+            if li and gc > 0:
+                out.append((int(li), int(gc), str(lg.get("L") or "")))
+    out.sort(key=lambda t: t[1], reverse=True)
+    return out
 
 # A 9–10 digit id that is the head of a match-link segment: ``<id>-<slug>``
 # (e.g. ``/354744562-england-3x3-women``). Requiring the trailing ``-<slug>``

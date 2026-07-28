@@ -191,6 +191,10 @@ class ScraperService:
         skin = _load_skin(job["skin"])
         if job.get("subgames"):
             skin.features["subgames"] = True
+        # ADR-15: BETB2B_DIRECT=1 makes the deployed scraper run browser+proxy-free
+        # (GetSportsZip discovery). Lets Railway drop the proxy entirely for odds.
+        if os.environ.get("BETB2B_DIRECT", "").lower() in ("1", "true", "yes"):
+            skin.features["direct"] = True
         pm, _ = build_proxy_from_env()
         job_id = job["job_id"]
 

@@ -64,10 +64,14 @@ class BetB2BFeedClient:
         timeout: float = 20.0,
         rate_limit_per_minute: int = 30,
         user_agent: Optional[str] = None,
+        direct: bool = False,
     ) -> None:
         self.skin = skin
         self.session_manager = session_manager
         self.proxy = proxy
+        # ADR-15: direct mode polls the un-gated feeds with NO session cookies
+        # (and typically no proxy) — the browser bootstrap is skipped entirely.
+        self.direct = direct
         self.timeout = timeout
         self.rate_limit_per_minute = rate_limit_per_minute
         # The UA is part of the session — fall back to the stealth profile's.
@@ -150,11 +154,15 @@ class BetB2BFeedClient:
         # Rate-limit politely.
         await self._respect_rate_limit()
 
-        # Pull a fresh session (re-bootstraps if expired/forced).
-        session: SessionPackage = await self.session_manager.get_session(
-            force=force_session_refresh,
-        )
-        cookie_header = session.to_cookie_header()
+        # Direct mode (ADR-15): the un-gated feeds work with no cookies, so skip
+        # the browser session bootstrap entirely. Otherwise harvest a session.
+        if self.direct:
+            cookie_header = None
+        else:
+            session: SessionPackage = await self.session_manager.get_session(
+                force=force_session_refresh,
+            )
+            cookie_header = session.to_cookie_header()
         url = self.skin.feed_url(feed, root=root, extra_params=extra_params)
         headers = self.skin.merged_headers(session_cookies=cookie_header)
         headers.setdefault("user-agent", self.user_agent)
@@ -253,6 +261,27 @@ class BetB2BFeedClient:
         if extra_params:
             params.update(extra_params)
         return await self.fetch("champ", root=root, extra_params=params)
+
+    async def fetch_sports(
+        self,
+        *,
+        root: str = "line",
+        extra_params: Optional[Dict[str, str]] = None,
+    ) -> CapturedFeedResponse:
+        """Fetch the full sports→leagues tree via ``GetSportsZip`` (ADR-15).
+
+        Un-gated and browser-free: returns every sport with its leagues
+        (`LI` id + `GC` game count), so discovery needs no SPA/landing page.
+        The browser-blocked path (203) is replaced by this. Parse with
+        :func:`~src.sites.betb2b.harvest.extract_leagues_from_sports`.
+
+        Note: like GetChampZip, ``top=true`` (the skin default) filters to only
+        "top" leagues — override to ``top=false`` for the full league list.
+        """
+        params: Dict[str, str] = {"top": "false"}
+        if extra_params:
+            params.update(extra_params)
+        return await self.fetch("sports_all", root=root, extra_params=params)
 
     async def fetch_many(
         self,

@@ -108,6 +108,7 @@ class BetB2BScraper:
         telemetry_enabled: bool = True,
         telemetry_output_dir: str = "./data/telemetry/betb2b",
         sport: Optional[Union[str, int, Sport, SportScraper]] = None,
+        direct: Optional[bool] = None,
     ) -> None:
         """Initialise the scraper for one skin + optional sport.
 
@@ -138,6 +139,9 @@ class BetB2BScraper:
         self.timeout = timeout
         self.rate_limit_per_minute = rate_limit_per_minute
         self.settle_seconds = settle_seconds
+        # ADR-15 direct mode: browser+proxy-free discovery via GetSportsZip.
+        # Param wins; otherwise the skin's `direct` feature flag.
+        self._direct = bool(direct) if direct is not None else skin.features.get("direct", False)
 
         # Resolve the sport strategy (None → AllSportsScraper).
         self.sport_scraper: SportScraper = resolve_sport(sport)
@@ -155,12 +159,16 @@ class BetB2BScraper:
             proxy=self.proxy_endpoint,
             settle_seconds=settle_seconds,
         )
+        # Direct mode hits un-gated endpoints (no session to protect), so a
+        # full card (100+ games) fits the timeout — bump the polite default.
+        feed_rate = max(rate_limit_per_minute, 120) if self._direct else rate_limit_per_minute
         self.feed_client = BetB2BFeedClient(
             skin=skin,
             session_manager=self.session_manager,
             proxy=self.proxy_endpoint,
             timeout=timeout,
-            rate_limit_per_minute=rate_limit_per_minute,
+            rate_limit_per_minute=feed_rate,
+            direct=self._direct,
         )
         self.extraction_rules = BetB2BExtractionRules(skin)
 
@@ -633,11 +641,78 @@ class BetB2BScraper:
     async def _discover_events(self, *, is_live: bool) -> List[Event]:
         """Primary discovery = HTML harvest (full card); DOM render is the
         fallback if the harvest yields nothing (flag: ``html_harvest``)."""
+        # ADR-15: direct mode replaces the browser-blocked landing-page discovery
+        # with the un-gated GetSportsZip tree — no browser, cookies, or proxy.
+        if self._direct:
+            return await self._discover_events_direct(is_live=is_live)
         if self.skin.features.get("html_harvest", True):
             harvested = await self._harvest_events(is_live=is_live)
             if harvested:
                 return harvested
         return await self._dom_fallback(is_live=is_live)
+
+    async def _discover_events_direct(self, *, is_live: bool) -> List[Event]:
+        """ADR-15 browser-free discovery: ``GetSportsZip`` → leagues →
+        ``GetChampZip`` → event ids → ``GetGameZip``. No SPA/browser, no session
+        cookies, no proxy required — runs from any IP (incl. datacenter)."""
+        from .harvest import extract_leagues_from_sports
+
+        root = "live" if is_live else "line"
+        sport_id = (
+            self.sport_scraper.sport_id if self.sport_scraper.sport_id > 0 else None
+        )
+
+        self._emit_phase("discovering sports")
+        try:
+            cap = await self.feed_client.fetch_sports(root=root)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("skin=%s GetSportsZip failed: %s", self.skin.name, exc)
+            return []
+        leagues = extract_leagues_from_sports(getattr(cap, "decoded", None) or {}, sport_id)
+        max_leagues = int(getattr(self.skin, "max_leagues", 60) or 60)
+        leagues = leagues[:max_leagues]
+        logger.info(
+            "skin=%s direct discovery: %d leagues (%d games) sport_id=%s",
+            self.skin.name, len(leagues), sum(g for _, g, _ in leagues), sport_id,
+        )
+
+        # Per-league GetChampZip → event ids (un-gated, cookie-free).
+        event_ids: dict = {}
+        for i, (li, _gc, _name) in enumerate(leagues, 1):
+            self._emit_phase(f"discovering leagues ({i}/{len(leagues)})")
+            try:
+                ccap = await self.feed_client.fetch_champ(str(li), root=root)
+                value = (getattr(ccap, "decoded", None) or {}).get("Value") or {}
+                for g in value.get("G") or []:
+                    gi = g.get("I") if isinstance(g, dict) else None
+                    if gi:
+                        event_ids.setdefault(str(gi), None)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("skin=%s direct GetChampZip li=%s failed: %s", self.skin.name, li, exc)
+
+        ids = list(event_ids)
+        if not ids:
+            logger.info("skin=%s direct discovery: 0 events", self.skin.name)
+            return []
+
+        limit = int(getattr(self.skin, "max_harvest", 200) or 200)
+        total = len(ids[:limit])
+        events: List[Event] = []
+        for n, eid in enumerate(ids[:limit], 1):
+            self._emit_phase(f"scraping events ({n}/{total})")
+            try:
+                gcap = await self.feed_client.fetch_game(eid, root=root)
+                game_events = self.extraction_rules.extract_from_captured(gcap)
+                for ge in game_events:
+                    await self._enrich_with_subgames(ge, gcap, root=root)
+                events.extend(game_events)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("skin=%s direct GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
+        logger.info(
+            "skin=%s direct: %d leagues → %d events (root=%s, cap=%d)",
+            self.skin.name, len(leagues), len(events), root, limit,
+        )
+        return events
 
     async def _dom_fallback(self, *, is_live: bool) -> List[Event]:
         """Render the corresponding live/line page and extract via DOM.
@@ -767,8 +842,11 @@ class BetB2BScraper:
         if not events:
             return
 
-        session = await self.session_manager.get_session()
-        cookie_header = session.to_cookie_header()
+        # Direct mode (ADR-15): statisticfeed works cookie-less too — skip session.
+        cookie_header = (
+            None if self._direct
+            else (await self.session_manager.get_session()).to_cookie_header()
+        )
         headers = self.skin.merged_headers(session_cookies=cookie_header)
         headers["accept"] = "application/json"
 
@@ -853,8 +931,11 @@ class BetB2BScraper:
         if not events:
             return
 
-        session = await self.session_manager.get_session()
-        cookie_header = session.to_cookie_header()
+        # Direct mode (ADR-15): statisticfeed works cookie-less too — skip session.
+        cookie_header = (
+            None if self._direct
+            else (await self.session_manager.get_session()).to_cookie_header()
+        )
         headers = self.skin.merged_headers(session_cookies=cookie_header)
         headers["accept"] = "application/json"
 

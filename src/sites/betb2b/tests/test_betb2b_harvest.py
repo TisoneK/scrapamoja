@@ -4,7 +4,37 @@ from __future__ import annotations
 
 import pytest
 
-from src.sites.betb2b.harvest import extract_champ_ids, extract_event_ids
+from src.sites.betb2b.harvest import (
+    extract_champ_ids, extract_event_ids, extract_leagues_from_sports,
+)
+
+
+# --- GetSportsZip league parsing (ADR-15 browser-free discovery) ------------ #
+_SPORTS = {"Value": [
+    {"I": 3, "N": "Basketball", "L": [
+        {"LI": 197289, "GC": 9, "L": "WNBA"},
+        {"LI": 850473, "GC": 2, "L": "Philippines"},
+        {"LI": 1, "GC": 0, "L": "empty (no games)"},
+    ]},
+    {"I": 1, "N": "Football", "L": [{"LI": 999, "GC": 50, "L": "EPL"}]},
+]}
+
+
+def test_extract_leagues_filters_sport_and_sorts_by_games():
+    # basketball only; GC=0 dropped; highest game-count first
+    assert extract_leagues_from_sports(_SPORTS, 3) == [
+        (197289, 9, "WNBA"), (850473, 2, "Philippines")]
+
+
+def test_extract_leagues_all_sports_when_no_filter():
+    assert extract_leagues_from_sports(_SPORTS, None) == [
+        (999, 50, "EPL"), (197289, 9, "WNBA"), (850473, 2, "Philippines")]
+
+
+def test_extract_leagues_empty_safe():
+    assert extract_leagues_from_sports({}, 3) == []
+    assert extract_leagues_from_sports({"Value": None}, 3) == []
+    assert extract_leagues_from_sports({"Value": [{"I": 3, "L": None}]}, 3) == []
 
 
 def test_extracts_nine_digit_event_ids():

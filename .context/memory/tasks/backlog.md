@@ -885,7 +885,12 @@ don't remove the line.
       (`POST /api/scraper/runs`) and watch progress via Realtime. MED (after the cutover).
 
 ---
-- [ ] **Build browser-less "direct mode" — proxy-free odds pipeline (ADR-15)** (added 2026-07-27 by Claude Code) —
+- [x] **Build browser-less "direct mode" — proxy-free odds pipeline (ADR-15)** (added 2026-07-27 by Claude Code; **done same day**) —
+      DONE: `direct` feature/flag (CLI `--direct`, API env `BETB2B_DIRECT=1`) → discovery via
+      `GetSportsZip` (`top=false`, full league list) → `GetChampZip` → `GetGameZip`, no browser/
+      cookies/proxy; H2H+stats run cookie-less too. Live-verified proxy-free: 32 leagues / 102
+      events / 7,659 odds / 382 h2h in ~103s (browser path got ~15 in 165s). Rate auto-bumped to
+      120/min in direct mode. Original:
       Verified live: `GetSportsZip` returns the full sports→leagues tree (`L[]` with `LI` champ id + `GC` game count) proxy-free/cookie-free/browser-free from a WAF-blocked datacenter IP, on 7/8 skins. Chain proxy-free: `GetSportsZip` → `GetChampZip(LI)` → `GetGameZip(id)` → persist to Supabase. Build a `direct` discovery mode (feature flag / CLI) that skips the Playwright bootstrap + session harvest + landing-HTML harvest entirely — the Railway scraper then needs NO proxy for odds. Keep the browser path as fallback. Also: prioritise leagues with `GC>0`; this supersedes the geo-curated landing-page discovery. HIGH — removes the last proxy dependency.
 - [ ] **Verify H2H (statisticfeed) works cookie-less; fix paripesa domain (203)** (added 2026-07-27 by Claude Code) —
       Two follow-ups to ADR-15's proxy-free discovery. (1) The odds feeds work with no cookies; check whether `statisticfeed/api/v1/Game/h2h` + the v2 stats endpoint do too — if not, H2H enrichment runs on an occasional proxy pass while odds stay proxy-free. (2) paripesa returned 203 on GetSportsZip (all other skins 200) — a domain-config outlier (cf. the earlier paripesa.bet→.cool fix); repoint its domain. MED.

@@ -216,6 +216,10 @@ class BetB2BCLI:
                                  "half and quarter scopes carry their own totals line "
                                  "(ADR-7). Without it only FULL_MATCH and the two team "
                                  "totals can be exported. Costs extra requests per event.")
+        scrape.add_argument("--direct", action="store_true",
+                            help="ADR-15 direct mode: browser+proxy-free discovery via "
+                                 "GetSportsZip → GetChampZip → GetGameZip (no Playwright, "
+                                 "no session cookies, no proxy). Faster + broader coverage.")
 
         # poll — scrape + persist on a loop so line-movement accumulates
         poll = sub.add_parser(
@@ -352,7 +356,7 @@ class BetB2BCLI:
         async with BetB2BScraper(
             skin, proxy_manager=proxy_manager, proxy_endpoint_id=proxy_endpoint_id,
             rate_limit_per_minute=args.rate, settle_seconds=args.settle,
-            sport=args.sport,
+            sport=args.sport, direct=getattr(args, "direct", False) or None,
         ) as scraper:
             result = await scraper.scrape(
                 action=args.action, sport_id=args.sport_id,
