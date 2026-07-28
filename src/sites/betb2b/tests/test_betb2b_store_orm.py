@@ -49,6 +49,11 @@ def _rich_result(skin="linebet", at="2026-07-27T12:00:00+00:00"):
                     "date_start": 1752183000, "score1": 81, "score2": 90,
                     "periods": [{"period_key": 18, "period_name": "Q1", "home_score": 15, "away_score": 22}]}]},
             "statistics": [{"rebounds": "40", "assists": "12"}],
+            "sub_games": [
+                {"sub_game_id": "739738505", "name": "Fouls", "period": None,
+                 "period_index": None, "market_count": 17, "sport_id": 3},
+                {"sub_game_id": "738518815", "name": None, "period": "1st quarter",
+                 "period_index": 1, "market_count": 150, "sport_id": 3}],
         }],
     }
 
@@ -63,8 +68,9 @@ def test_orm_persist_populates_all_tables(orm_conn):
     c = store.counts(orm_conn)
     assert c == {
         "sports": 1, "countries": 1, "leagues": 1, "teams": 2, "events": 1,
-        "markets": 1, "scrape_runs": 1, "event_states": 1, "period_scores": 1,
-        "odds_snapshots": 2, "h2h_games": 1, "h2h_period_scores": 1, "statistics": 2,
+        "markets": 1, "sub_games": 2, "scrape_runs": 1, "event_states": 1,
+        "period_scores": 1, "odds_snapshots": 2, "h2h_games": 1,
+        "h2h_period_scores": 1, "statistics": 2,
     }
 
 
@@ -95,6 +101,19 @@ def test_orm_h2h_batch_links_periods_to_right_game(orm_conn):
         "JOIN h2h_games g ON g.id = p.h2h_game_id ORDER BY g.score1")).all()
     # game score1=81 → period home_score 15; score1=90 → 27 (not swapped)
     assert [(r[0], r[1]) for r in rows] == [(81, 15), (90, 27)]
+
+
+def test_orm_sub_games_persisted_and_upserted(orm_conn):
+    store.persist_result(_rich_result(at="2026-07-27T12:00:00+00:00"), conn=orm_conn)
+    store.persist_result(_rich_result(at="2026-07-27T13:00:00+00:00"), conn=orm_conn)  # re-run
+    from sqlalchemy import text
+    rows = orm_conn.execute(text(
+        "SELECT sub_game_id, name, period, market_count FROM sub_games ORDER BY sub_game_id")).all()
+    # upsert (not duplicate) — 2 distinct sub-games across two runs
+    assert [(r[0], r[1], r[2], r[3]) for r in rows] == [
+        ("738518815", None, "1st quarter", 150),
+        ("739738505", "Fouls", None, 17),
+    ]
 
 
 def test_orm_change_only_dedup(orm_conn):

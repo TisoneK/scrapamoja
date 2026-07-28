@@ -23,7 +23,7 @@ from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 from .models import (
     Base, Country, Event, EventState, H2HGame, H2HPeriodScore, League,
     Market, OddsSnapshot, PeriodScore, ScrapeRun, ScraperJob, Sport,
-    Statistic, Team,
+    Statistic, SubGame, Team,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ _sports, _countries, _leagues, _teams = Sport.__table__, Country.__table__, Leag
 _events, _markets, _runs = Event.__table__, Market.__table__, ScrapeRun.__table__
 _states, _periods, _odds = EventState.__table__, PeriodScore.__table__, OddsSnapshot.__table__
 _h2h, _h2hp, _stats, _jobs = H2HGame.__table__, H2HPeriodScore.__table__, Statistic.__table__, ScraperJob.__table__
+_subgames = SubGame.__table__
 
 # One engine per resolved URL (pool reuse); schema ensured once.
 _engines: Dict[str, Any] = {}
@@ -449,6 +450,26 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                          home_score=_as_int(ps.get("home_score")), away_score=_as_int(ps.get("away_score")))
                     for ps in g.get("periods") or []])
 
+        # dimension: sub-games (SG[] — named per-period/per-stat groups) → upsert
+        for sg in ev.get("sub_games") or []:
+            sgid = str(sg.get("sub_game_id") or "").strip()
+            if not sgid:
+                continue
+            sstmt = _ins(conn)(_subgames).values(
+                sub_game_id=sgid, event_id=event_id, name=sg.get("name"),
+                period=sg.get("period"), period_index=_as_int(sg.get("period_index")),
+                market_count=_as_int(sg.get("market_count")),
+                sport_id=_as_int(sg.get("sport_id")), first_seen=at, last_seen=at)
+            sstmt = sstmt.on_conflict_do_update(index_elements=["sub_game_id"], set_={
+                "event_id": sstmt.excluded.event_id,
+                "name": func.coalesce(sstmt.excluded.name, _subgames.c.name),
+                "period": func.coalesce(sstmt.excluded.period, _subgames.c.period),
+                "period_index": func.coalesce(sstmt.excluded.period_index, _subgames.c.period_index),
+                "market_count": func.coalesce(sstmt.excluded.market_count, _subgames.c.market_count),
+                "sport_id": func.coalesce(sstmt.excluded.sport_id, _subgames.c.sport_id),
+                "last_seen": sstmt.excluded.last_seen})
+            conn.execute(sstmt)
+
         # facts: statistics (flatten name/value) → batch
         for st in ev.get("statistics") or []:
             if isinstance(st, dict):
@@ -560,7 +581,7 @@ def list_jobs(conn, *, limit=50, status=None):
 # Queries
 # --------------------------------------------------------------------------- #
 def counts(conn) -> Dict[str, int]:
-    tables = [_sports, _countries, _leagues, _teams, _events, _markets, _runs,
+    tables = [_sports, _countries, _leagues, _teams, _events, _markets, _subgames, _runs,
               _states, _periods, _odds, _h2h, _h2hp, _stats]
     return {t.name: conn.execute(select(func.count()).select_from(t)).scalar() for t in tables}
 

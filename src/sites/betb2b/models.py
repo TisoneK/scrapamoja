@@ -141,6 +141,24 @@ class Market(Base):
     raw_g: Mapped[Optional[int]] = mapped_column(Integer)
 
 
+class SubGame(Base):
+    """A named sub-game of an event (``SG[]``): a per-period or per-stat market
+    group ("Rebounds", "Free Throws Scored", "1st quarter"). Dimension, not a
+    fact — upserted, stable metadata cataloguing which prop/stat markets an
+    event carries (ADR-19)."""
+    __tablename__ = "sub_games"
+    sub_game_id: Mapped[str] = mapped_column(Text, primary_key=True)  # shared across skins
+    event_id: Mapped[str] = mapped_column(ForeignKey("events.event_id"), nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(Text)          # SG.TG — stat name
+    period: Mapped[Optional[str]] = mapped_column(Text)        # SG.PN — period name
+    period_index: Mapped[Optional[int]] = mapped_column(Integer)   # SG.P
+    market_count: Mapped[Optional[int]] = mapped_column(Integer)   # SG.EC
+    sport_id: Mapped[Optional[int]] = mapped_column(Integer)       # SG.SI
+    first_seen: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (Index("ix_sub_games_event", "event_id"),)
+
+
 # --------------------------------------------------------------------------- #
 # Facts (skin-scoped time-series, append-only)                                #
 # --------------------------------------------------------------------------- #

@@ -419,6 +419,7 @@ class BetB2BExtractionRules:
         # GetGameZip event/team enrichment (best-effort; absent on list feeds).
         venue, stage = self._event_venue_stage(ev)
         wp_home, wp_away = self._event_win_probs(ev)
+        sub_games = self._extract_sub_games(ev)
 
         return Event(
             event_id=event_id,
@@ -451,6 +452,7 @@ class BetB2BExtractionRules:
             stage=stage,
             wp_home=wp_home,
             wp_away=wp_away,
+            sub_games=sub_games,
         )
 
     @staticmethod
@@ -483,6 +485,42 @@ class BetB2BExtractionRules:
         if not isinstance(wp, dict):
             return None, None
         return _coerce_float(wp.get("P1")), _coerce_float(wp.get("P2"))
+
+    @staticmethod
+    def _extract_sub_games(ev: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Parse the ``SG[]`` sub-game list (GetGameZip with ``isSubGames=true``).
+
+        Each sub-game is a named per-period or per-stat market group —
+        ``TG`` = stat name ("Rebounds", "Free Throws Scored"), ``PN`` = period
+        name ("1st quarter", "1 Half"); one or both are set. ``I`` = the
+        sub-game's own id, ``MG`` = parent game id, ``EC`` = its market count.
+        Names are English because the feed is fetched with ``lng=en``. This is
+        the clean, feed-sourced naming win from ADR-19 (per-group ``G`` names
+        stay client-composed and out of reach).
+        """
+        sg = ev.get("SG")
+        if not isinstance(sg, list):
+            return []
+        out: List[Dict[str, Any]] = []
+        for s in sg:
+            if not isinstance(s, dict):
+                continue
+            sid = s.get("I")
+            if sid in (None, ""):
+                continue
+            name = (s.get("TG") or "").strip() or None
+            period = (s.get("PN") or "").strip() or None
+            if not name and not period:
+                continue  # nothing to label it with
+            out.append({
+                "sub_game_id": str(sid),
+                "name": name,
+                "period": period,
+                "period_index": _coerce_int(s.get("P")),
+                "market_count": _coerce_int(s.get("EC")),
+                "sport_id": _coerce_int(s.get("SI")),
+            })
+        return out
 
     def _event_id(self, ev: Dict[str, Any]) -> str:
         eid = ev.get("I") or ev.get("ZP") or ev.get("id") or ev.get("Id")

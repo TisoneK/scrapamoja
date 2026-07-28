@@ -278,6 +278,33 @@ def test_extract_drops_single_sided_outright_markets(rules: BetB2BExtractionRule
     assert events[0].away == "Connecticut Sun"
 
 
+def test_extract_sub_games_from_sg(rules: BetB2BExtractionRules) -> None:
+    """SG[] sub-games (isSubGames feed) are parsed into named dimensions —
+    the clean feed-sourced naming win (ADR-19). TG=stat name, PN=period."""
+    payload = {
+        "Success": True,
+        "Value": [{
+            "I": 738518814, "O1": "A", "O2": "B", "SN": "Basketball", "SI": 3,
+            "SG": [
+                {"I": 739738505, "TG": "Fouls", "PN": "", "MG": 738518814, "EC": 17, "SI": 3},
+                {"I": 738518815, "TG": "", "PN": "1st quarter", "P": 1, "MG": 738518814, "EC": 150, "SI": 3},
+                {"I": 999, "TG": "", "PN": ""},   # nothing to label → dropped
+            ],
+        }],
+    }
+    cap = rules.decode_response(
+        url="https://example.com/GetGameZip", status=200,
+        content_type="application/json", raw_bytes=json.dumps(payload).encode())
+    events = rules.extract_from_captured(cap)
+    assert len(events) == 1
+    sg = events[0].sub_games
+    assert [(s["sub_game_id"], s["name"], s["period"]) for s in sg] == [
+        ("739738505", "Fouls", None),
+        ("738518815", None, "1st quarter"),
+    ]
+    assert sg[1]["period_index"] == 1 and sg[0]["market_count"] == 17
+
+
 def test_extract_prematch_uses_more_markets(rules: BetB2BExtractionRules) -> None:
     """Prematch events typically carry ~20 markets — extractor should handle that."""
     selections_e = []

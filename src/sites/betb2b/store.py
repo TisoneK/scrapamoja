@@ -108,6 +108,19 @@ CREATE TABLE IF NOT EXISTS markets (
     raw_g        INTEGER
 );
 
+-- Named sub-games (SG[]): per-period/per-stat market groups. Dimension.
+CREATE TABLE IF NOT EXISTS sub_games (
+    sub_game_id   TEXT PRIMARY KEY,         -- shared across skins
+    event_id      TEXT NOT NULL REFERENCES events(event_id),
+    name          TEXT,                     -- SG.TG (stat name)
+    period        TEXT,                     -- SG.PN (period name)
+    period_index  INTEGER,                  -- SG.P
+    market_count  INTEGER,                  -- SG.EC
+    sport_id      INTEGER,                  -- SG.SI
+    first_seen    TEXT,
+    last_seen     TEXT
+);
+
 -- ------------------------------------------------------------------ --
 -- Facts (skin-scoped time-series, append-only)                        --
 -- ------------------------------------------------------------------ --
@@ -240,6 +253,7 @@ CREATE INDEX IF NOT EXISTS ix_periods_event    ON period_scores(event_id, captur
 CREATE INDEX IF NOT EXISTS ix_odds_event       ON odds_snapshots(event_id, skin, captured_at);
 CREATE INDEX IF NOT EXISTS ix_odds_market      ON odds_snapshots(event_id, skin, market_id, selection_name, captured_at);
 CREATE INDEX IF NOT EXISTS ix_h2h_event        ON h2h_games(event_id);
+CREATE INDEX IF NOT EXISTS ix_sub_games_event  ON sub_games(event_id);
 """
 
 
@@ -594,6 +608,28 @@ def persist_result(
                              _as_int(ps.get("away_score"))),
                         )
 
+            # --- dimension: sub-games (SG[] — named per-period/per-stat groups) ---
+            for sg in ev.get("sub_games") or []:
+                sgid = str(sg.get("sub_game_id") or "").strip()
+                if not sgid:
+                    continue
+                conn.execute(
+                    "INSERT INTO sub_games "
+                    "(sub_game_id, event_id, name, period, period_index, market_count, "
+                    " sport_id, first_seen, last_seen) VALUES (?,?,?,?,?,?,?,?,?) "
+                    "ON CONFLICT(sub_game_id) DO UPDATE SET "
+                    "  event_id=excluded.event_id, "
+                    "  name=COALESCE(excluded.name, sub_games.name), "
+                    "  period=COALESCE(excluded.period, sub_games.period), "
+                    "  period_index=COALESCE(excluded.period_index, sub_games.period_index), "
+                    "  market_count=COALESCE(excluded.market_count, sub_games.market_count), "
+                    "  sport_id=COALESCE(excluded.sport_id, sub_games.sport_id), "
+                    "  last_seen=excluded.last_seen",
+                    (sgid, event_id, sg.get("name"), sg.get("period"),
+                     _as_int(sg.get("period_index")), _as_int(sg.get("market_count")),
+                     _as_int(sg.get("sport_id")), at, at),
+                )
+
             # --- facts: statistics (flatten name/value dicts) ---
             for st in ev.get("statistics") or []:
                 if isinstance(st, dict):
@@ -661,7 +697,7 @@ def counts(conn) -> Dict[str, int]:
         from . import store_orm
         return store_orm.counts(conn)
     tables = [
-        "sports", "countries", "leagues", "teams", "events", "markets",
+        "sports", "countries", "leagues", "teams", "events", "markets", "sub_games",
         "scrape_runs", "event_states", "period_scores", "odds_snapshots",
         "h2h_games", "h2h_period_scores", "statistics",
     ]

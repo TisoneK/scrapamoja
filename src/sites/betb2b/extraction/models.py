@@ -182,6 +182,10 @@ class Event:
     stage: Optional[str] = None            # ``MIO.TSt`` — tournament stage
     wp_home: Optional[float] = None        # ``WP.P1`` — win probability home
     wp_away: Optional[float] = None        # ``WP.P2`` — win probability away
+    # ``SG[]`` — sub-games (per-period + per-stat market groups: "Rebounds",
+    # "Free Throws Scored", "1st quarter", …). Named in-feed; a dimension the
+    # engine can use to know which prop/stat markets an event carries (ADR-19).
+    sub_games: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -217,6 +221,7 @@ class Event:
             "stage": self.stage,
             "wp_home": self.wp_home,
             "wp_away": self.wp_away,
+            "sub_games": self.sub_games,
         }
 
 
