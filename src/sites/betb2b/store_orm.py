@@ -449,6 +449,15 @@ def _job_dict(row) -> Optional[dict]:
     return dict(row._mapping) if row is not None else None
 
 
+def events_last_seen(conn, event_ids):
+    ids = [str(e) for e in event_ids]
+    if not ids:
+        return {}
+    rows = conn.execute(select(_events.c.event_id, _events.c.last_seen)
+                        .where(_events.c.event_id.in_(ids))).all()
+    return {r[0]: r[1] for r in rows}
+
+
 def get_job(conn, job_id):
     return _job_dict(conn.execute(select(_jobs).where(_jobs.c.job_id == job_id)).first())
 

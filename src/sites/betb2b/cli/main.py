@@ -287,6 +287,23 @@ class BetB2BCLI:
         view.add_argument("--decompress-to", default=None,
                           help="Instead of printing, write the decompressed JSON to this path")
 
+        # schedule — long-running state-aware scheduler (ADR-14/15)
+        sch = sub.add_parser("schedule",
+                             help="Run the state-aware scheduler: scheduled (prematch, skip-fresh) "
+                                  "+ live passes on cadences. Browser+proxy-free (direct).")
+        sch.add_argument("skin", nargs="?", default="linebet", help="Skin (default: linebet)")
+        sch.add_argument("--sport", default="basketball", help="Sport slug (default: basketball)")
+        sch.add_argument("--db", nargs="?", const="", default=None,
+                         help="Store path (default: $BETB2B_DB_PATH / DATABASE_URL if set)")
+        sch.add_argument("--scheduled-interval", type=float, default=10800.0,
+                         help="Seconds between prematch passes (default: 10800 = 3h)")
+        sch.add_argument("--live-interval", type=float, default=15.0,
+                         help="Seconds between live passes (default: 15)")
+        sch.add_argument("--refresh-window", type=float, default=10800.0,
+                         help="Re-scrape a prematch match only after this many seconds (default: 3h)")
+        sch.add_argument("--no-direct", action="store_true",
+                         help="Use the browser/proxy path instead of direct mode")
+
         # compare-match
         cm = sub.add_parser("compare-match", help="Compare match page UI data vs API endpoints")
         cm.add_argument("--skin", "-s", default="linebet", help="Skin name (default: linebet)")
@@ -337,6 +354,8 @@ class BetB2BCLI:
             return self._cmd_sports(args)
         if args.command == "probe":
             return await self._cmd_probe(args)
+        if args.command == "schedule":
+            return await self._cmd_schedule(args)
         if args.command == "view":
             return self._cmd_view(args)
         if args.command == "compare-match":
@@ -458,6 +477,26 @@ class BetB2BCLI:
             "total_events": sum(r.get("event_count", 0) for r in results),
         }
         return self._emit(combined, args)
+
+    # ------------------------------------------------------------------ #
+    async def _cmd_schedule(self, args: argparse.Namespace) -> int:
+        from src.sites.betb2b.scheduler import BetB2BScheduler
+
+        db = args.db if args.db else None  # "" (bare --db) or None → scheduler default
+        sched = BetB2BScheduler(
+            args.skin, sport=args.sport, db_path=db, direct=not args.no_direct,
+            scheduled_interval=args.scheduled_interval, live_interval=args.live_interval,
+            refresh_window=args.refresh_window,
+        )
+        print(f"scheduler: skin={args.skin} sport={args.sport} "
+              f"scheduled={args.scheduled_interval:.0f}s live={args.live_interval:.0f}s "
+              f"(Ctrl-C to stop)", file=sys.stderr)
+        try:
+            await sched.run()
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            sched.stop()
+            print("scheduler stopped", file=sys.stderr)
+        return 0
 
     # ------------------------------------------------------------------ #
     async def _cmd_poll(self, args: argparse.Namespace) -> int:

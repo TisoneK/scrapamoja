@@ -651,17 +651,17 @@ class BetB2BScraper:
                 return harvested
         return await self._dom_fallback(is_live=is_live)
 
-    async def _discover_events_direct(self, *, is_live: bool) -> List[Event]:
-        """ADR-15 browser-free discovery: ``GetSportsZip`` → leagues →
-        ``GetChampZip`` → event ids → ``GetGameZip``. No SPA/browser, no session
-        cookies, no proxy required — runs from any IP (incl. datacenter)."""
+    async def discover_ids(self, *, is_live: bool = False) -> List[tuple]:
+        """ADR-15 browser-free DISCOVERY only: ``GetSportsZip`` → ``GetChampZip``
+        → ``[(event_id, start_epoch)]``. No ``GetGameZip`` (cheap) — lets a caller
+        state-filter (new / stale / started) before the expensive per-match fetch.
+        No SPA/browser, cookies, or proxy."""
         from .harvest import extract_leagues_from_sports
 
         root = "live" if is_live else "line"
         sport_id = (
             self.sport_scraper.sport_id if self.sport_scraper.sport_id > 0 else None
         )
-
         self._emit_phase("discovering sports")
         try:
             cap = await self.feed_client.fetch_sports(root=root)
@@ -669,15 +669,9 @@ class BetB2BScraper:
             logger.warning("skin=%s GetSportsZip failed: %s", self.skin.name, exc)
             return []
         leagues = extract_leagues_from_sports(getattr(cap, "decoded", None) or {}, sport_id)
-        max_leagues = int(getattr(self.skin, "max_leagues", 60) or 60)
-        leagues = leagues[:max_leagues]
-        logger.info(
-            "skin=%s direct discovery: %d leagues (%d games) sport_id=%s",
-            self.skin.name, len(leagues), sum(g for _, g, _ in leagues), sport_id,
-        )
+        leagues = leagues[:int(getattr(self.skin, "max_leagues", 60) or 60)]
 
-        # Per-league GetChampZip → event ids (un-gated, cookie-free).
-        event_ids: dict = {}
+        out: dict = {}  # event_id -> start_epoch (S)
         for i, (li, _gc, _name) in enumerate(leagues, 1):
             self._emit_phase(f"discovering leagues ({i}/{len(leagues)})")
             try:
@@ -686,19 +680,22 @@ class BetB2BScraper:
                 for g in value.get("G") or []:
                     gi = g.get("I") if isinstance(g, dict) else None
                     if gi:
-                        event_ids.setdefault(str(gi), None)
+                        out.setdefault(str(gi), g.get("S"))
             except Exception as exc:  # noqa: BLE001
-                logger.debug("skin=%s direct GetChampZip li=%s failed: %s", self.skin.name, li, exc)
+                logger.debug("skin=%s GetChampZip li=%s failed: %s", self.skin.name, li, exc)
+        logger.info("skin=%s direct discovery: %d leagues → %d events (root=%s)",
+                    self.skin.name, len(leagues), len(out), root)
+        return list(out.items())
 
-        ids = list(event_ids)
-        if not ids:
-            logger.info("skin=%s direct discovery: 0 events", self.skin.name)
-            return []
-
-        limit = int(getattr(self.skin, "max_harvest", 200) or 200)
-        total = len(ids[:limit])
+    async def fetch_events(self, ids, *, is_live: bool = False) -> List[Event]:
+        """GetGameZip a specific set of event ids → parsed :class:`Event`s
+        (+ sub-games). The state-aware pass supplies the ids; discovery is
+        separate (:meth:`discover_ids`). No browser/cookies/proxy (ADR-15)."""
+        root = "live" if is_live else "line"
+        ids = [str(i) for i in ids][:int(getattr(self.skin, "max_harvest", 200) or 200)]
+        total = len(ids)
         events: List[Event] = []
-        for n, eid in enumerate(ids[:limit], 1):
+        for n, eid in enumerate(ids, 1):
             self._emit_phase(f"scraping events ({n}/{total})")
             try:
                 gcap = await self.feed_client.fetch_game(eid, root=root)
@@ -707,11 +704,18 @@ class BetB2BScraper:
                     await self._enrich_with_subgames(ge, gcap, root=root)
                 events.extend(game_events)
             except Exception as exc:  # noqa: BLE001
-                logger.debug("skin=%s direct GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
-        logger.info(
-            "skin=%s direct: %d leagues → %d events (root=%s, cap=%d)",
-            self.skin.name, len(leagues), len(events), root, limit,
-        )
+                logger.debug("skin=%s GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
+        return events
+
+    async def _discover_events_direct(self, *, is_live: bool) -> List[Event]:
+        """Full direct pass = discover all ids, then fetch them all (used by the
+        plain `scrape()` path). The scheduler uses discover_ids + fetch_events
+        separately so it can state-filter in between."""
+        pairs = await self.discover_ids(is_live=is_live)
+        if not pairs:
+            return []
+        events = await self.fetch_events([i for i, _ in pairs], is_live=is_live)
+        logger.info("skin=%s direct: %d ids → %d events", self.skin.name, len(pairs), len(events))
         return events
 
     async def _dom_fallback(self, *, is_live: bool) -> List[Event]:

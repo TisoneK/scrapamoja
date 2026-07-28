@@ -775,6 +775,29 @@ def get_job(conn, job_id: int):
     return conn.execute("SELECT * FROM scraper_jobs WHERE job_id=?", (job_id,)).fetchone()
 
 
+def events_last_seen(conn, event_ids) -> Dict[str, Any]:
+    """``{event_id: last_seen}`` for the given ids (missing = never scraped).
+
+    Used by the scheduler's skip filter (ADR-15 follow-up): a discovered event
+    is fetched only if it's new (absent here) or its ``last_seen`` is older than
+    the refresh window. ``last_seen`` is an ISO string (SQLite) or datetime (PG).
+    """
+    ids = [str(e) for e in event_ids]
+    if not ids:
+        return {}
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.events_last_seen(conn, ids)
+    out: Dict[str, Any] = {}
+    # chunk to stay well under SQLite's variable limit
+    for i in range(0, len(ids), 400):
+        chunk = ids[i:i + 400]
+        q = f"SELECT event_id, last_seen FROM events WHERE event_id IN ({','.join('?' * len(chunk))})"
+        for r in conn.execute(q, chunk):
+            out[r["event_id"]] = r["last_seen"]
+    return out
+
+
 def list_jobs(conn, *, limit: int = 50, status: Optional[str] = None):
     if _is_orm(conn):
         from . import store_orm

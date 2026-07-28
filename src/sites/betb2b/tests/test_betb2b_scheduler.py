@@ -1,0 +1,70 @@
+"""State-aware scheduler logic (no network) — skip conditions + age.
+
+The passes themselves need live feeds (verified live: pass 1 fetches 117 new,
+pass 2 skips all 117 as fresh). These tests pin the deterministic filter logic.
+"""
+
+from __future__ import annotations
+
+import time
+from datetime import datetime, timedelta, timezone
+
+from src.sites.betb2b import store
+from src.sites.betb2b.scheduler import BetB2BScheduler, _age_seconds
+
+
+def test_age_seconds_handles_str_datetime_none():
+    now = datetime.now(timezone.utc)
+    assert _age_seconds(None) == float("inf")
+    assert _age_seconds("garbage") == float("inf")
+    assert _age_seconds((now - timedelta(hours=1)).isoformat()) > 3500
+    assert _age_seconds(now - timedelta(seconds=5)) < 60
+    # naive datetime is treated as UTC, not crash
+    assert _age_seconds(datetime.utcnow() - timedelta(seconds=5)) < 120
+
+
+def _seed_event(db, event_id):
+    conn = store.init_db(db)
+    res = {
+        "skin": "linebet", "action": "list_prematch", "url": "u",
+        "extracted_at": datetime.now(timezone.utc).isoformat(), "success": True,
+        "event_count": 1, "scrape_duration_seconds": 1.0, "template_version": "1.0.0",
+        "events": [{"event_id": event_id, "sport": "basketball", "sport_id": 3,
+                    "competition": "L", "home": "A", "away": "B", "status": "scheduled",
+                    "is_live": False}],
+    }
+    store.persist_result(res, db, conn=conn)
+    conn.close()
+
+
+def test_filter_scheduled_keeps_new_skips_fresh_and_started(tmp_path):
+    db = str(tmp_path / "sched.db")
+    store.init_db(db).close()
+    _seed_event(db, "SEEN")   # just scraped → fresh
+
+    s = BetB2BScheduler("linebet", db_path=db, refresh_window=3600, skip_started=True)
+    future, past = time.time() + 7200, time.time() - 100
+    pairs = [
+        ("SEEN", future),   # in DB, fresh → skip
+        ("NEW", future),    # not in DB → keep
+        ("STARTED", past),  # start time passed → skip (live pass owns it)
+    ]
+    assert s._filter_scheduled(pairs) == ["NEW"]
+
+
+def test_filter_scheduled_refetches_stale(tmp_path, monkeypatch):
+    db = str(tmp_path / "sched2.db")
+    store.init_db(db).close()
+    _seed_event(db, "OLD")
+
+    # refresh_window = 0 → even a just-seen match is "stale" and re-fetched
+    s = BetB2BScheduler("linebet", db_path=db, refresh_window=0, skip_started=True)
+    assert s._filter_scheduled([("OLD", time.time() + 7200)]) == ["OLD"]
+
+
+def test_filter_scheduled_can_disable_skip_started(tmp_path):
+    db = str(tmp_path / "sched3.db")
+    store.init_db(db).close()
+    s = BetB2BScheduler("linebet", db_path=db, refresh_window=3600, skip_started=False)
+    # started + new → kept when skip_started is off
+    assert s._filter_scheduled([("X", time.time() - 100)]) == ["X"]
