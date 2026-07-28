@@ -31,6 +31,25 @@ Root cause + full mechanism traced (proxy + Playwright) →
 - [ ] Verify live via the operator's proxy / a Railway run; then log Session 31
       exit + clear this file.
 
+### Phase-1 validation (2026-07-28) — CHANGES the plan
+Probed the new-builder feed before coding:
+- ✅ Works with our `I` id, proxy-free (no `CI` plumbing). `GE[].E` selections
+  have the same shape as `E[]` (`T`/`C`/`P`/`G`/`GS`) → odds parsing adapts cleanly.
+- ⚠️ New-builder returns **`GE` (not `E`/`AE`)** and is **main-game only** (~60
+  selections / 26 groups) vs our current `isSubGames=true` call's **425** flat
+  selections. Sub-game markets move to the separate `SG` list. Naive switch =
+  **odds-coverage regression**.
+- ⚠️ `MEC` is keyed by category `MT`, `SG` by sub-game — **neither yields a direct
+  per-group `G`→name**. Per-group naming is still the client-composed
+  `groupNames[GS]`, absent from the response. So the feed switch does NOT replace
+  `"G=27"` with its real group label on its own.
+
+**Revised scope (recommend):** keep the current comprehensive odds call unchanged;
+the one clean feed-sourced win is capturing **`SG.TG` sub-game names** (Rebounds,
+Assists, Fouls, 3-pt FG…) — new, correct, useful to the engine. Category/per-group
+labels stay `"G=<n>"` (odds+ids already correct). Awaiting operator steer before
+implementing (don't rush an odds-restructuring rewrite).
+
 **Deferred (ADR-19):** exact exotic per-group labels (client sport-aware template
 resolution / ADR-7 render-and-read) — cosmetic, odds+ids already correct.
 
