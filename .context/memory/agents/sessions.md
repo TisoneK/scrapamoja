@@ -805,3 +805,22 @@ past entries — append corrections instead.
 - **Outcome:** partial (by design) — all ADR-11 code-layer increments verifiable on this sandbox are shipped and green (189 tests). The Railway-side cutover (provision Postgres, set DATABASE_URL, alembic upgrade head, run the copy script, swap the betb2b persist path to ORM) is operator-side and needs Railway access this sandbox lacks.
 - **Open items:** 6 in tasks/backlog.md — Railway cutover; betb2b persist-path ORM rewrite (largest remaining piece, F2); retire Volume mount + ADAPTIVE_DB_PATH; pre-existing FastAPI collection error (F3, verified via stash); triage sqlite_master Postgres port (F4); [tool.ruff] → [tool.ruff.lint] (carried).
 - **Report:** .context/memory/reviews/2026-07-25-review.md
+
+---
+## 2026-07-27 — Session 30 — betb2b → Supabase, remote API, proxy-free direct mode
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini | **Core:** 0.3.0
+- **Task:** Take betb2b from "SQLite + proxy + browser" to a deployed, Supabase-backed, remotely-controllable, proxy-free pipeline; record the cross-repo architecture. (Protocol note: this session's `.context` session-log + `current.md` hygiene was done at the end, on operator reminder — a lapse; commits/pushes were kept current throughout.)
+- **Commits:** scrapamoja 25 (`ed20789`..`3576997`). Cross-repo: scorewise-engine (`0a4ebb1` ADR-1, `d0c22e0`, `07008f5`); scorewise-website (`8baa3a8` ADR-4, `dabd64d` revision, `951e535`, `e392bc0`).
+- **Outcome — shipped + live-verified against Railway/Supabase:**
+  1. **Field mapping + discovery** — mapped high-value GetGameZip fields (team feed ids/crests, venue/stage, WP) into the store; broadened discovery via un-gated **GetChampZip** (per-league); tightened the event-id regex to drop asset-hash junk (46→22 ids, 165s→108s).
+  2. **Remote-control API (ADR-12)** — `/api/scraper/*`: single-flight background jobs, `x-api-key` auth, live `phase`. Persist runs off the event loop (`asyncio.to_thread`) after a gunicorn WORKER TIMEOUT proved the sync Postgres persist blocks the loop.
+  3. **Supabase migration (ADR-13)** — decision + store cutover: `store.py` dispatches to `store_orm.py` when `DATABASE_URL` is set (odds+jobs+phase → Postgres); the raw-sqlite3 path (219 tests) untouched. Fixed a chain of **Postgres-only** bugs *live* (none caught by SQLite tests): psycopg driver + pooler settings, GroupingError in the dedup query, timestamptz→datetime serialization, the 120s scrape timeout, and ~100s persist → batched `executemany` (~20s). Verified: one run = **18 events / 2,041 odds / 102 h2h** into Supabase.
+  4. **Cross-repo architecture** — the **DB-mediated** model (Supabase is the bus; no point-to-point HTTP) in all three repos: scrapamoja ADR-14, engine ADR-1, website ADR-4(+rev = full migration/redesign). Plus two shared maps in every repo's `system/`: `db-architecture.md` (data plane) + `api-contracts.md` (control plane).
+  5. **Proxy-free direct mode (ADR-15)** — THE proxy dependency is gone. `GetSportsZip` returns the full sports→leagues tree un-gated/cookie-less/browser-less from a WAF-blocked datacenter IP (7/8 skins; paripesa 203 = domain outlier). Built `--direct` / `BETB2B_DIRECT=1`: GetSportsZip → GetChampZip → GetGameZip + cookie-less H2H/stats. Live: **32 leagues / 102 events / 7,659 odds / 382 h2h in 103s** (vs browser's ~15 in 165s — faster AND broader coverage).
+  6. **Docs** — README now documents betb2b (was entirely absent).
+- **Carried forward (lessons):**
+  - **A green push is not a live fix** — every Postgres bug surfaced only against real Supabase, never SQLite tests. Verify the dialect live.
+  - The **datacenter block is fingerprinting, not geo** — a Railway region change would not help; `GetSportsZip` sidesteps it.
+  - The engine's predictions store was ephemeral disk; engine ADR-1 (DB-mediated) makes it durable.
+- **Open items (tasks/backlog.md):** parallel/batch fetch (browser-free now — the big speedup); state-aware scheduler (live ~10s / prematch 3h / results pass for finished games); paripesa domain (203); ADR-11 cutover items now largely realized by ADR-13.
+- **Deliverable:** this log + ADR-14/15 + the two `system/` architecture maps.

@@ -2,27 +2,31 @@
 
 **Status:** Idle — no session in progress.
 
-Session 29 (2026-07-25, Z.ai Code / unknown model, cloud/sandbox) shipped the
-ADR-11 code-layer foundation (4 commits `e03da90`..`c0802a2`): shared env-driven
-db factory, adaptive repository routing, portable betb2b ORM models + indexes,
-Alembic baseline + one-time data-copy script. 189 tests green. The Railway-side
-cutover is operator-side (this sandbox has no Docker/Railway/live Postgres).
+Session 30 (2026-07-27, Claude Code / claude-opus-4-8, local) took betb2b from
+"SQLite + proxy + browser" to a **deployed, Supabase-backed, remotely-controllable,
+proxy-free** pipeline, and recorded the cross-repo architecture in all three repos.
 
-**Where ADR-11 stands:** the code layer is ready — `DATABASE_URL` routing,
-portable schema, migrations, and the copy tool all exist and are verified on the
-SQLite fallback. What remains is (1) the operator cutover on Railway, and (2)
-the betb2b persist-path rewrite from raw sqlite3 to ORM (F2 — the largest
-remaining code piece; high-risk: 13 store tests + CLI depend on the current
-conn API; needs a live Postgres to verify against).
+**Where things stand:**
+- **betb2b → Supabase is LIVE.** The scraper writes odds/events/h2h/jobs to a shared
+  Supabase Postgres when `DATABASE_URL` is set (ADR-13 store cutover, `store_orm.py`).
+  Verified end-to-end on Railway (18 events / 2,041 odds / 102 h2h in one run). This
+  realizes ADR-11's intent — the F2 "persist path → ORM" is done via the dispatch in `store.py`.
+- **Remote-control API is LIVE** (`/api/scraper/*`, `x-api-key`, single-flight background
+  jobs, live `phase`) — ADR-12. Deployed at `scrapamoja.up.railway.app`.
+- **Direct mode removes the proxy** (ADR-15): `--direct` / `BETB2B_DIRECT=1` → browser-free,
+  proxy-free discovery via `GetSportsZip → GetChampZip → GetGameZip` (+ cookie-less H2H/stats).
+  Live-verified: 32 leagues / 102 events / 7,659 odds in ~103s from a datacenter IP, no tunnel.
+- **Cross-repo architecture recorded** — DB-mediated (Supabase is the bus; no point-to-point
+  HTTP). scrapamoja ADR-14, scorewise-engine ADR-1, scorewise-website ADR-4 (+revision).
+  Shared `db-architecture.md` + `api-contracts.md` in every repo's `.context/memory/system/`.
 
-**Next session (with Railway access):** provision the Postgres plugin, set
-`DATABASE_URL`, `alembic upgrade head`, run `scripts/migrate_sqlite_to_postgres.py`
-against the live DB, verify row counts, then do F2. Until F2 ships the betb2b
-data still writes to `odds.db`.
+**Next (see tasks/backlog.md):**
+- **Parallel/batch fetch** — biggest remaining speedup, now that there's no browser
+  (bounded-concurrency `gather` over GetGameZip/H2H, replacing the sequential rate limit).
+- **State-aware scheduler** — live ~10s / prematch ~3h / a results pass for finished games;
+  env-configurable cadences + concurrency. Watch for datacenter-IP abuse limits — ramp slowly.
+- **paripesa** domain fix (203 on GetSportsZip; other 7 skins OK).
+- The **`predictions` table** design belongs to the **engine's own session** (its ADR-1).
 
-**Pre-existing (not ADR-11):** the adaptive/API integration test suite fails at
-collection under fastapi 0.140.0 (F3, verified via `git stash` to pre-exist).
-Backlogged separately.
-
-References: `reviews/2026-07-25-review.md`, `plans/decisions.md` (ADR-11 +
-ADR-11 PROGRESS), `tasks/backlog.md` (6 open).
+**Deploy note:** on Railway set `DATABASE_URL` (Supabase pooler) + `BETB2B_DIRECT=1`; leave
+`BETB2B_PROXY_URL` blank → the scraper runs standalone (no proxy, no browser). `GUNICORN_WORKERS=1`.
