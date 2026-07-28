@@ -421,3 +421,19 @@ scraper doesn't write through it yet.
   - Retires on the scraper side: `export/scorewise.py` + `--ingest`. The engine side (its `/api/ingest`, disk `_store`, webhook_sender) is retired in **scorewise-engine ADR-1**.
   - The ADR-7/8 scope logic is **re-homed in the engine**, not lost. The scrapamoja market-mapping (the `(G,T)` taxonomy, sub-games) stays — it's what populates the betb2b tables the engine reads.
   - Follow-up: define the Supabase `predictions` table shape jointly with the engine (event_id FK + scope + recommendation/confidence/lines).
+
+---
+## ADR-15: The full odds pipeline is proxy-free — GetSportsZip discovery works from any IP (2026-07-27)
+- **Status:** accepted (finding + direction; resolves the proxy dependency flagged in ADR-12/13 and the geo-curated-top-leagues coverage limit)
+- **Context:** The scraper needed an allowed-country **residential** proxy (the operator's bore.pub tunnel) because the SPA/browser cookie-harvest bootstrap **and** the landing-page league discovery are WAF-blocked (HTTP 203 → `/block`) from datacenter IPs — the block is **datacenter-IP fingerprinting, not geo** (backlog 2026-07-17). ADR-5 already found the per-match `GetGameZip` returns 200 from a blocked datacenter IP. The one open question was **proxy-free DISCOVERY** (which leagues/games exist) without the browser.
+- **Discovery (verified live — NO proxy, NO cookies, NO browser, from a WAF-blocked datacenter IP):**
+  - `GET /service-api/LineFeed/GetSportsZip` returns the **full sports→leagues tree**: `Value[]` per sport; each sport's `L[]` lists every league with `LI` (champ id), `GC` (game count), name, country. Basketball (`I=3`): 14 leagues / 37 games. **200 OK, 190 KB.**
+  - Chained proxy-free end-to-end: `GetSportsZip` (leagues) → `GetChampZip(LI)` (events) → `GetGameZip(id)` (odds — WNBA game, **436 markets**). The **entire pipeline runs proxy-free.**
+  - The SW-gated aggregate feeds (`GetSportsShortZip` / `Get1x2_VZip` / `WebGetTopChampsZip` / `GetChampsZip`) stay **406** regardless of IP/cookies — but `GetSportsZip` is **not** gated and makes them unnecessary.
+  - **Confirmed across the family:** 7/8 skins return identical 200 (22bet, 888starz, betwinner, helabet, linebet, megapari, melbet — all 93 sports / 14 basketball leagues / 37 games). **paripesa = 203** (a domain-config outlier, not a backend gate).
+- **Decision:** The scraper's discovery + fetch no longer need the browser or the proxy. Build a browser-less **"direct mode"**: `GetSportsZip` → `GetChampZip` → `GetGameZip` → persist to Supabase, with **no Playwright bootstrap, no session cookies, no proxy.** The existing browser/session/landing-HTML path becomes a fallback (or is retired).
+- **Consequences:**
+  - The Railway scraper **drops the proxy for the odds pipeline entirely** — no bore.pub tunnel, no residential-proxy dependency, no Railway region change needed. The backlog "stable production proxy" item is largely moot for odds.
+  - **Bonus coverage:** `GetSportsZip` lists **all** leagues (incl. WNBA), not the landing page's ~6–8 geo-curated *minor* leagues — this also resolves the "full-card discovery" limitation.
+  - Still to verify (not blockers): **H2H** (statisticfeed) — does it work cookie-less like the odds feeds? If not, H2H runs on an occasional proxy pass; odds stay proxy-free. **paripesa** needs a domain fix (separate).
+  - `GetSportsZip`'s `GC` counts let discovery prioritise leagues that actually have games. Direct mode is the immediate build.
