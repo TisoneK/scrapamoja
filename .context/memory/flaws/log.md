@@ -283,3 +283,11 @@ Friction caused by the `.context/` system or the protocol itself. See
   3. Update the Session 12/25 flaw entries: "batch into one shell script" → "batch into one PYTHON script that reads secrets from a FILE, executed with a secret-free command line."
   4. Package-level: add to the "tool-flakiness playbook" a one-liner: **never put a secret in a command argument or env-var-on-the-command-line; the router rejects secret-bearing command strings and poisons the window.**
 - **Status:** open (workaround proven; package-level doc update pending)
+
+---
+## 2026-07-27 — Claude Code / claude-opus-4-8 (Session 30)
+- **Flaw:** Session-log + `current.md` hygiene was deferred to the very end of a large multi-day session, and the operator had to explicitly say "follow .context" to trigger it. Commits + pushes stayed current throughout (the memory `context-protocol-commit-push-defaults` was honored), but the Step-2/Exit memory-write discipline (`agents/sessions.md`, `tasks/current.md`) was not maintained incrementally.
+- **Symptom:** After ~25 scrapamoja commits + cross-repo work, `agents/sessions.md` still ended at Session 29 and `current.md` still described the Session-29 ADR-11 state — stale, until the operator prompted.
+- **Root cause:** In a long, fast-moving, interactive build the agent optimized for shipping each change (commit/push) and treated the session-log/current.md as an end-of-session artifact, but never reached a natural "end" — the session just kept going. The protocol's exit checklist assumes a bounded session; a long open-ended one has no trigger to flush memory.
+- **Suggested fix:** Flush `current.md` (and append an interim `sessions.md` note) at **major milestones**, not only at session end — e.g. after each shipped ADR or deployable increment. Cheap, and it keeps memory usable if the session is interrupted. Package-level: the Exit checklist could add "if the session spans multiple deployable increments, update `current.md` at each, not just at exit."
+- **Status:** open (this session's log + current.md now written; the incremental-flush habit is the real fix)
