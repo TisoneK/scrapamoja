@@ -388,7 +388,14 @@ class BetB2BExtractionRules:
     def _build_event(self, ev: Dict[str, Any], source_url: str) -> Optional[Event]:
         event_id = self._event_id(ev)
         home, away = self._event_team_names(ev)
-        if not event_id or (not home and not away):
+        # Require BOTH sides: a real fixture is two teams (O1 vs O2). The feed
+        # also lists single-sided **outright/futures markets** in the same
+        # ``G[]`` — "Special bets", "Results of the championship", season/award
+        # winners — where ``O1`` holds the market title (e.g. "NBA. 2026/27.
+        # Winner") and ``O2`` is empty. Those aren't head-to-head matches: kept,
+        # they land as an event with the title in ``home`` and a null ``away``,
+        # and spawn a junk team dimension per title. Drop them here at the source.
+        if not event_id or not home or not away:
             return None
 
         sport_id = _coerce_int(ev.get("SI"))

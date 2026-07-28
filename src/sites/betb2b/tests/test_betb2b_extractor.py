@@ -245,6 +245,39 @@ def test_extract_skips_non_event_dicts(rules: BetB2BExtractionRules) -> None:
     assert events[0].home == "A"
 
 
+def test_extract_drops_single_sided_outright_markets(rules: BetB2BExtractionRules) -> None:
+    """Outright/"Special bets" markets (O1 = market title, O2 empty) are not
+    head-to-head fixtures and must be dropped — keeping only real two-team games.
+
+    Regression: these were landing in `events` with the market title as
+    `home_name` and a null `away`, spawning junk team dimensions.
+    """
+    payload = {
+        "Success": True,
+        "Value": [
+            # Real fixture: both sides present → kept.
+            {"I": 738518814, "O1": "Washington Mystics", "O2": "Connecticut Sun",
+             "SN": "Basketball", "SI": 3, "LE": "WNBA"},
+            # Outright ("Special bets"): O2 empty → dropped.
+            {"I": 597759200, "O1": "Kyrie Irving. Special bets", "O2": "",
+             "SN": "Basketball", "SI": 3, "LE": "Special bets"},
+            # Season-winner outright: O2 missing entirely → dropped.
+            {"I": 111, "O1": "NBA. 2026/27. Winner",
+             "SN": "Basketball", "SI": 3, "LE": "Results of the championship"},
+        ],
+    }
+    cap = rules.decode_response(
+        url="https://example.com/feed",
+        status=200,
+        content_type="application/json",
+        raw_bytes=json.dumps(payload).encode(),
+    )
+    events = rules.extract_from_captured(cap)
+    assert [e.event_id for e in events] == ["738518814"]
+    assert events[0].home == "Washington Mystics"
+    assert events[0].away == "Connecticut Sun"
+
+
 def test_extract_prematch_uses_more_markets(rules: BetB2BExtractionRules) -> None:
     """Prematch events typically carry ~20 markets — extractor should handle that."""
     selections_e = []
