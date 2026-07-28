@@ -215,6 +215,61 @@ def _last_odds(conn, event_id, skin):
             for r in rows}
 
 
+# --- Bulk variants: one query for the whole batch of events, not one per event.
+# The change-only dedup needs each event's last-seen row; fetching them per event
+# was N network round-trips to Supabase. These fetch them all at once, keyed by
+# event_id, so persist reads them from memory in the loop.
+def _last_states_bulk(conn, event_ids, skin):
+    if not event_ids:
+        return {}
+    sub = select(_states.c.event_id, func.max(_states.c.state_id).label("mx")).where(
+        _states.c.event_id.in_(event_ids), _states.c.skin == skin
+    ).group_by(_states.c.event_id).subquery()
+    rows = conn.execute(select(
+        _states.c.event_id, _states.c.status, _states.c.is_live, _states.c.score_home,
+        _states.c.score_away, _states.c.minute, _states.c.period, _states.c.time_remaining
+    ).join(sub, _states.c.state_id == sub.c.mx)).all()
+    return {r[0]: (r[1], bool(r[2]) if r[2] is not None else None, r[3], r[4], r[5], r[6], r[7])
+            for r in rows}
+
+
+def _last_periods_bulk(conn, event_ids, skin):
+    if not event_ids:
+        return {}
+    sub = select(
+        _periods.c.event_id, _periods.c.period_key, func.max(_periods.c.id).label("mx")
+    ).where(_periods.c.event_id.in_(event_ids), _periods.c.skin == skin).group_by(
+        _periods.c.event_id, _periods.c.period_key).subquery()
+    rows = conn.execute(select(
+        _periods.c.event_id, _periods.c.period_key, _periods.c.period_name,
+        _periods.c.home_score, _periods.c.away_score
+    ).join(sub, _periods.c.id == sub.c.mx)).all()
+    out: Dict[str, Dict[Any, Any]] = {}
+    for r in rows:
+        out.setdefault(r[0], {})[r[1]] = (r[2], r[3], r[4])
+    return out
+
+
+def _last_odds_bulk(conn, event_ids, skin):
+    if not event_ids:
+        return {}
+    sub = select(
+        _odds.c.event_id, _odds.c.scope, _odds.c.market_id, _odds.c.selection_name,
+        _odds.c.line, func.max(_odds.c.snap_id).label("mx")
+    ).where(_odds.c.event_id.in_(event_ids), _odds.c.skin == skin).group_by(
+        _odds.c.event_id, _odds.c.scope, _odds.c.market_id,
+        _odds.c.selection_name, _odds.c.line).subquery()
+    rows = conn.execute(select(
+        _odds.c.event_id, _odds.c.scope, _odds.c.market_id, _odds.c.selection_name,
+        _odds.c.line, _odds.c.price, _odds.c.is_suspended
+    ).join(sub, _odds.c.snap_id == sub.c.mx)).all()
+    out: Dict[str, Dict[Any, Any]] = {}
+    for r in rows:
+        out.setdefault(r[0], {})[(r[1], r[2], r[3], r[4])] = (
+            r[5], bool(r[6]) if r[6] is not None else False)
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Persist
 # --------------------------------------------------------------------------- #
@@ -240,10 +295,23 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
     country_cache: Dict[Any, Any] = {}
     league_cache: Dict[Any, Any] = {}
     market_cache: Dict[Any, Any] = {}
+    team_cache: Dict[Any, Any] = {}
     odds_batch: List[dict] = []
     period_batch: List[dict] = []
     stat_batch: List[dict] = []
+    # H2H games are inserted in one batch after the loop (each needs its returned
+    # id for the period-scores FK), so accumulate (game-values, periods) together.
+    h2h_game_batch: List[dict] = []
+    h2h_periods_batch: List[List[dict]] = []
     h2hp_batch: List[dict] = []
+
+    # Bulk-prefetch the change-only dedup state for every event at once (one query
+    # each) instead of one round-trip per event.
+    all_ids = [str(ev.get("event_id") or "").strip() for ev in events]
+    all_ids = [i for i in all_ids if i]
+    last_states = _last_states_bulk(conn, all_ids, skin)
+    last_periods_all = _last_periods_bulk(conn, all_ids, skin)
+    last_odds_all = _last_odds_bulk(conn, all_ids, skin)
 
     def _sport_c(sid, name):
         if sid is None:
@@ -273,6 +341,15 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
             market_cache[mkey] = _market(conn, name, mtype, raw_g)
         return market_cache[mkey]
 
+    def _team_c(name, sport_id, **kw):
+        # Memoize per (backend_id, name, sport_id): the same team recurs across
+        # events (home/away + H2H participants), so this avoids re-running the
+        # SELECT(+backfill) round-trip for a team already resolved this persist.
+        key = (kw.get("backend_id"), name, sport_id)
+        if key not in team_cache:
+            team_cache[key] = _team(conn, name, sport_id, **kw)
+        return team_cache[key]
+
     for ev in events:
         event_id = str(ev.get("event_id") or "").strip()
         if not event_id:
@@ -281,12 +358,12 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
         sport_id = _sport_c(_as_int(ev.get("sport_id")), ev.get("sport"))
         country_id = _country_c(ev.get("country"))
         league_id = _league_c(ev.get("league_id"), ev.get("competition"), sport_id, country_id)
-        home_id = _team(conn, ev.get("home"), sport_id, country_id=country_id,
-                        feed_id=_as_int(ev.get("home_team_feed_id")), image=ev.get("home_team_image"),
-                        feed_country_id=_as_int(ev.get("home_team_country_id")))
-        away_id = _team(conn, ev.get("away"), sport_id, country_id=country_id,
-                        feed_id=_as_int(ev.get("away_team_feed_id")), image=ev.get("away_team_image"),
-                        feed_country_id=_as_int(ev.get("away_team_country_id")))
+        home_id = _team_c(ev.get("home"), sport_id, country_id=country_id,
+                          feed_id=_as_int(ev.get("home_team_feed_id")), image=ev.get("home_team_image"),
+                          feed_country_id=_as_int(ev.get("home_team_country_id")))
+        away_id = _team_c(ev.get("away"), sport_id, country_id=country_id,
+                          feed_id=_as_int(ev.get("away_team_feed_id")), image=ev.get("away_team_image"),
+                          feed_country_id=_as_int(ev.get("away_team_country_id")))
 
         estmt = _ins(conn)(_events).values(
             event_id=event_id, sport_id=sport_id, league_id=league_id, country_id=country_id,
@@ -309,7 +386,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
         state = (ev.get("status"), bool(ev.get("is_live")), _as_int(ev.get("score_home")),
                  _as_int(ev.get("score_away")), _as_int(ev.get("minute")),
                  ev.get("period"), ev.get("time_remaining"))
-        if _last_state(conn, event_id, skin) != state:
+        if last_states.get(event_id) != state:
             conn.execute(_states.insert().values(
                 run_id=run_id, event_id=event_id, skin=skin, status=state[0], is_live=state[1],
                 score_home=state[2], score_away=state[3], minute=state[4], period=state[5],
@@ -317,7 +394,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                 captured_at=at))
 
         # facts: period scores (only changed) → batch
-        last_periods = _last_periods(conn, event_id, skin)
+        last_periods = last_periods_all.get(event_id, {})
         for ps in ev.get("period_scores") or []:
             pk = _as_int(ps.get("period_key"))
             row = (ps.get("period_name"), _as_int(ps.get("home_score")), _as_int(ps.get("away_score")))
@@ -329,7 +406,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
             last_periods[pk] = row
 
         # facts: odds (only when a selection's price/suspension changed) → batch
-        last_odds = _last_odds(conn, event_id, skin)
+        last_odds = last_odds_all.get(event_id, {})
         for m in ev.get("markets") or []:
             market_id = _market_c(m.get("name"), m.get("market_type"), m.get("raw_g"))
             scope = m.get("scope") or "FULL_MATCH"
@@ -348,28 +425,29 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                     is_suspended=susp, raw_t=_as_int(s.get("raw_t")), scope=scope, captured_at=at))
                 last_odds[key] = (price, susp)
 
-        # facts: H2H (+ enrich teams dim)
+        # facts: H2H (+ enrich teams dim). Games are accumulated and inserted in
+        # one batch after the loop — each game's periods carry the game's list
+        # index so they can be re-linked to the returned id (see the flush below).
         h2h = ev.get("h2h_data")
         if h2h:
             for t in h2h.get("teams") or []:
                 tc = t.get("country") or {}
-                _team(conn, t.get("title"), _as_int(h2h.get("sport_id")) or sport_id,
-                      backend_id=str(t.get("id")) if t.get("id") else None,
-                      country_id=_country(conn, tc.get("title")))
+                _team_c(t.get("title"), _as_int(h2h.get("sport_id")) or sport_id,
+                        backend_id=str(t.get("id")) if t.get("id") else None,
+                        country_id=_country_c(tc.get("title")))
             for g in h2h.get("game_shorts") or []:
-                h2h_game_id = conn.execute(_h2h.insert().values(
+                h2h_game_batch.append(dict(
                     run_id=run_id, event_id=event_id, skin=skin, game_id=g.get("game_id"),
                     sport_id=_as_int(h2h.get("sport_id")), team1_backend_id=g.get("team1_id"),
                     team2_backend_id=g.get("team2_id"), date_start=_dt(g.get("date_start")),
                     score1=_as_int(g.get("score1")), score2=_as_int(g.get("score2")),
                     sub_score1=_as_int(g.get("sub_score1")), sub_score2=_as_int(g.get("sub_score2")),
-                    winner=_as_int(g.get("winner")), status=_as_int(g.get("status")), captured_at=at
-                ).returning(_h2h.c.id)).scalar()
-                for ps in g.get("periods") or []:
-                    h2hp_batch.append(dict(
-                        h2h_game_id=h2h_game_id, event_id=event_id,
-                        period_key=_as_int(ps.get("period_key")), period_name=ps.get("period_name"),
-                        home_score=_as_int(ps.get("home_score")), away_score=_as_int(ps.get("away_score"))))
+                    winner=_as_int(g.get("winner")), status=_as_int(g.get("status")), captured_at=at))
+                h2h_periods_batch.append([
+                    dict(event_id=event_id,
+                         period_key=_as_int(ps.get("period_key")), period_name=ps.get("period_name"),
+                         home_score=_as_int(ps.get("home_score")), away_score=_as_int(ps.get("away_score")))
+                    for ps in g.get("periods") or []])
 
         # facts: statistics (flatten name/value) → batch
         for st in ev.get("statistics") or []:
@@ -384,6 +462,14 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
         conn.execute(_periods.insert(), period_batch)
     if odds_batch:
         conn.execute(_odds.insert(), odds_batch)
+    # H2H games in one batched INSERT...RETURNING (was one round-trip per game).
+    # SQLAlchemy's insertmanyvalues returns ids in input order, so zip them back
+    # to each game's periods to fill the FK.
+    if h2h_game_batch:
+        ids = conn.execute(_h2h.insert().returning(_h2h.c.id), h2h_game_batch).scalars().all()
+        for game_id, periods in zip(ids, h2h_periods_batch):
+            for p in periods:
+                h2hp_batch.append(dict(h2h_game_id=game_id, **p))
     if h2hp_batch:
         conn.execute(_h2hp.insert(), h2hp_batch)
     if stat_batch:

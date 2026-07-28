@@ -68,6 +68,35 @@ def test_orm_persist_populates_all_tables(orm_conn):
     }
 
 
+def test_orm_h2h_batch_links_periods_to_right_game(orm_conn):
+    """Batched H2H insert must zip returned ids back to the correct game's
+    periods. Two events, two distinct games with distinct period scores — each
+    h2h_period_scores row must join to the game it belongs to."""
+    def _ev(eid, gid, score1, ph):
+        return {
+            "event_id": eid, "sport": "basketball", "sport_id": 3,
+            "competition": "PBA", "league_id": 850473, "home": f"H{eid}", "away": f"A{eid}",
+            "h2h_data": {"sport_id": 3, "teams": [],
+                "game_shorts": [{"game_id": gid, "team1_id": "t1", "team2_id": "t2",
+                    "score1": score1, "score2": 0,
+                    "periods": [{"period_key": 1, "period_name": "Q1",
+                                 "home_score": ph, "away_score": 0}]}]},
+        }
+    result = {
+        "skin": "linebet", "action": "list_live", "url": "u",
+        "extracted_at": "2026-07-27T12:00:00+00:00", "success": True,
+        "event_count": 2, "scrape_duration_seconds": 1.0, "template_version": "1.0.0",
+        "events": [_ev("E1", "g1", 81, 15), _ev("E2", "g2", 90, 27)],
+    }
+    store.persist_result(result, conn=orm_conn)
+    from sqlalchemy import text
+    rows = orm_conn.execute(text(
+        "SELECT g.score1, p.home_score FROM h2h_period_scores p "
+        "JOIN h2h_games g ON g.id = p.h2h_game_id ORDER BY g.score1")).all()
+    # game score1=81 → period home_score 15; score1=90 → 27 (not swapped)
+    assert [(r[0], r[1]) for r in rows] == [(81, 15), (90, 27)]
+
+
 def test_orm_change_only_dedup(orm_conn):
     store.persist_result(_rich_result(at="2026-07-27T12:00:00+00:00"), conn=orm_conn)
     store.persist_result(_rich_result(at="2026-07-27T12:00:05+00:00"), conn=orm_conn)
