@@ -437,3 +437,30 @@ scraper doesn't write through it yet.
   - **Bonus coverage:** `GetSportsZip` lists **all** leagues (incl. WNBA), not the landing page's ~6–8 geo-curated *minor* leagues — this also resolves the "full-card discovery" limitation.
   - Still to verify (not blockers): **H2H** (statisticfeed) — does it work cookie-less like the odds feeds? If not, H2H runs on an occasional proxy pass; odds stay proxy-free. **paripesa** needs a domain fix (separate).
   - `GetSportsZip`'s `GC` counts let discovery prioritise leagues that actually have games. Direct mode is the immediate build.
+
+---
+## ADR-16: Finished-match results + prediction validation — state-driven, cross-repo (2026-07-28)
+- **Status:** accepted (direction; the results-capture endpoint is open research)
+- **Context:** The state-aware scheduler (ADR-15 follow-up, `66f9d30`) has **scheduled + live** passes but no **results** pass. The Line/Live feeds **drop a match once it ends**, so a finished match's final score is not reachable via `GetGameZip`. Final scores are what **grade predictions** (did OVER/UNDER hit? did the team win?) — the whole research/validation loop needs them, and nothing in the new pipeline captures them yet.
+- **Decision:**
+  1. **A results pass (scrapamoja scheduler) captures each finished match's final score once** — matches with `start_time + ~2.5h < now` and no result yet — and writes it to Supabase (`event_states` final score / a result field on `events`). **State-driven** (ADR-14): it queries the DB for finished-without-result matches; no cross-scraper trigger.
+  2. **Grading is the engine's job** (its ADR-1 domain, not the scraper's): the engine reads *finished-with-result matches + ungraded predictions* from Supabase → marks **HIT/MISS** → writes back to `predictions`. DB-mediated; optionally Supabase-Realtime-accelerated. Track in the engine's own session.
+  3. **Open research (blocks the scraper side):** *which endpoint returns a finished match's final score once it's off the Line/Live feed* — candidates: a results/history `statisticfeed` endpoint, the game `SC` via a different feed, or the H2H feed (which lists the just-finished game with its score). Find it live from a datacenter IP, proxy-free — same method as the `GetSportsZip` discovery win (ADR-15).
+- **Consequences:** results are a research + build item, not shipped. Once the endpoint is found, the results pass slots in as the scheduler's third pass. Until then predictions are *made but not graded* → the website can't show ✓/✗ and there's no accuracy feedback. This is the highest-value open item for the product loop.
+
+---
+## ADR-17: Fetch concurrency + persist batching — the scaling model, with datacenter-IP rate discipline (2026-07-28)
+- **Status:** accepted (direction)
+- **Context:** With the browser gone (ADR-15), fetch is independent `httpx` calls but still **sequential** behind a rate limiter (120/min in direct mode). Persist batched the odds (`0053ff5`), but `h2h_games` (one `.returning()` insert each — ~586/run), the per-event dedup queries, and team lookups are still **one-round-trip-per-row** → the ~5.5-min persist on the live 102-event / 10,686-odds Railway run. The scheduler's tight live cadence (ADR-15/18) needs both faster.
+- **Decision:**
+  1. **Fetch: bounded concurrency, not a slow sequential rate.** Replace the sequential rate-limiter with a semaphore-bounded `asyncio.gather` over `GetGameZip`/`GetChampZip`/H2H (default ~8, `BETB2B_CONCURRENCY`). The un-gated feeds tolerate it (single-request proven; ramp under monitoring).
+  2. **Persist: batch the remaining per-row work.** `h2h_games` via `insert().returning()` executemany (then batch `h2h_period_scores`), **one** dedup query across all event ids, an in-memory **team cache** — target ~5.5 min → ~30 s.
+  3. **Datacenter-IP rate discipline (recorded constraint):** high-*volume* proxy-free access is **UNPROVEN** — only single requests are. Start conservative (concurrency ~8, live cadence ~10–15 s), watch for `429`/`403`/`203`, ramp deliberately. If the IP gets blocked, the proxy returns as a **fallback** — ADR-15 direct is opt-in, not exclusive.
+- **Consequences:** 5–10× faster fetch + persist → 5–15 s live polling becomes viable. Change-only dedup keeps DB writes sane regardless of cadence. Risk: abuse-limit blocking under aggressive settings — mitigated by the conservative defaults + the proxy fallback path. Do NOT remove the rate cap entirely; bound concurrency instead.
+
+---
+## ADR-18: The scheduler runs as a dedicated always-on worker, separate from the API job runner (2026-07-28)
+- **Status:** accepted (direction)
+- **Context:** The state-aware scheduler (ADR-15/16) is a **continuously looping** process (scheduled ~3h + live ~15s + results). The remote-control API (ADR-12) runs **single-flight, request-triggered** background jobs inside the web service — right for on-demand scrapes, but a wrong shape for an always-on loop (it would tie up the single worker indefinitely).
+- **Decision:** Run the scheduler as a **dedicated Railway worker service** (`python -m src.sites.betb2b.cli schedule …`), **separate** from the API web service — one always-on process, single-flight internally, restart-safe (each pass is idempotent + change-only, so a restart re-runs harmlessly). Do NOT run it inside the ADR-12 job runner. Both processes write to the **same Supabase**: the API stays for manual/ad-hoc triggers, the worker for continuous cadence.
+- **Consequences:** a second Railway service (cost) for clean separation — the always-on scheduler can't starve the API, and the API's `GUNICORN_WORKERS=1` is unaffected. Env for the worker: `DATABASE_URL` (Supabase pooler) + `BETB2B_DIRECT=1` (proxy-free) + the cadence vars (ADR-15). Single-flight is **per-process**, so running the same skin's scheduler *and* a manual API job at once isn't coordinated — harmless thanks to change-only dedup, but avoid it deliberately. Alternative rejected: a cron-style external trigger — the live 15s cadence is too tight for cron and a persistent process is simpler.
