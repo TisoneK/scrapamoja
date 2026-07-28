@@ -894,3 +894,25 @@ don't remove the line.
       Verified live: `GetSportsZip` returns the full sports→leagues tree (`L[]` with `LI` champ id + `GC` game count) proxy-free/cookie-free/browser-free from a WAF-blocked datacenter IP, on 7/8 skins. Chain proxy-free: `GetSportsZip` → `GetChampZip(LI)` → `GetGameZip(id)` → persist to Supabase. Build a `direct` discovery mode (feature flag / CLI) that skips the Playwright bootstrap + session harvest + landing-HTML harvest entirely — the Railway scraper then needs NO proxy for odds. Keep the browser path as fallback. Also: prioritise leagues with `GC>0`; this supersedes the geo-curated landing-page discovery. HIGH — removes the last proxy dependency.
 - [ ] **Verify H2H (statisticfeed) works cookie-less; fix paripesa domain (203)** (added 2026-07-27 by Claude Code) —
       Two follow-ups to ADR-15's proxy-free discovery. (1) The odds feeds work with no cookies; check whether `statisticfeed/api/v1/Game/h2h` + the v2 stats endpoint do too — if not, H2H enrichment runs on an occasional proxy pass while odds stay proxy-free. (2) paripesa returned 203 on GetSportsZip (all other skins 200) — a domain-config outlier (cf. the earlier paripesa.bet→.cool fix); repoint its domain. MED.
+
+---
+- [~] **State-aware scheduler** (added 2026-07-28 by Claude Code; **scheduled + live DONE**, `66f9d30`) —
+      DONE: `BetB2BScheduler` (`scheduler.py`) + CLI `betb2b schedule` — decoupled passes on
+      cadences, single-flight, matches routed by feed-root + DB state (no cross-scraper triggers,
+      ADR-14). **Scheduled** (~3h): LineFeed discovery → skip fresh (`events_last_seen` within
+      `refresh_window`) / started → fetch new+stale. **Live** (~15s): LiveFeed discovery → fetch.
+      Live-verified: rerun of scheduled skipped all 117 (only cheap discovery ran). Enabled by the
+      new scraper `discover_ids` / `fetch_events` split.
+      **STILL OPEN:** (1) **Results pass** — the Line/Live feeds drop a match once it ends, so
+      finished-match final scores need the results/history endpoint (research, like the GetSportsZip
+      discovery). This is what feeds the engine's prediction validation (HIT/MISS). (2) Deploy the
+      scheduler as a Railway worker (or wire it into the service) so it runs continuously.
+- [ ] **Parallel/batch fetch + persist batching (h2h/dedup/teams)** (added 2026-07-28 by Claude Code) —
+      Two speedups now that there's no browser: (a) FETCH — bounded-concurrency `gather` over
+      GetGameZip/H2H (replace the sequential rate limiter with a semaphore ~8) so a full card fetches
+      in seconds; (b) PERSIST — the odds batch (`0053ff5`) is deployed, but `h2h_games` (one
+      `.returning()` insert each — ~586/run), per-event dedup queries, and team lookups are still
+      one-round-trip-per-row (the ~5.5-min persist on the 102-event/10,686-odds Railway run). Batch
+      h2h_games (executemany returning), batch the dedup across all event ids, cache teams → persist
+      ~5.5min → ~30s. Watch datacenter-IP abuse limits when raising concurrency/cadence. HIGH — makes
+      5s-live polling viable.
