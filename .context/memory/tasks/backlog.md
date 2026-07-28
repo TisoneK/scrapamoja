@@ -478,12 +478,20 @@ don't remove the line.
       Expect ≥1 live event with clean teams + score + ≥1 market. NOTE the
       entry point is `python -m src.sites.betb2b.cli` (NOT `.cli.main` — that
       has no `__main__` guard and silently no-ops). MED.
-- [ ] **Map remaining GetGameZip market-group ids to names** (added 2026-07-21 by Claude Code, Session 25) —
+- [ ] **Map remaining GetGameZip market-group ids to names** (added 2026-07-21 by Claude Code, Session 25;
+      **approach revised 2026-07-28, Session 31 → ADR-19**) —
       A few markets from `GetGameZip` extract with placeholder names like
       `G=14`, `G=91`, `G=92` (unmapped group id → display name) — odds/lines
-      are still captured correctly, only the market label is generic. Extend
-      the `G`(group)→name lookup (basketball) in
-      `src/sites/betb2b/markets.py` / sport overrides. Cosmetic. LOW.
+      are still captured correctly, only the market label is generic.
+      **Do NOT try to extend `markets.py` from a static file:** the SPA's naming
+      was fully traced (`reviews/2026-07-28-market-naming-mechanism.md`) — feed `G`
+      is a client-side "foreignId" resolved against per-sport bet-model templates;
+      the `bets_model_short` CDN files are a different id-space (verified they
+      mislabel basketball); the odds grid is canvas (no DOM). Per **ADR-19**: switch
+      to the **new-builder** `GetGameZip` (`isNewBuilder=true&GroupEvents=true&marketType=1`)
+      → get `MEC` category names + `SG.TG` sub-game names from the feed; category
+      label replaces `G=<n>`. Exact exotic per-group labels deferred (never guess).
+      Cosmetic. LOW.
 
 ---
 - [ ] **Fix 22bet skin: KE-redirect domain drops the `/en` prefix (0 live events)** (added 2026-07-21 by Claude Code, Session 25) —

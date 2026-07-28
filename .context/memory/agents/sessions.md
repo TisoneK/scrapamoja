@@ -824,3 +824,17 @@ past entries — append corrections instead.
   - The engine's predictions store was ephemeral disk; engine ADR-1 (DB-mediated) makes it durable.
 - **Open items (tasks/backlog.md):** parallel/batch fetch (browser-free now — the big speedup); state-aware scheduler (live ~10s / prematch 3h / results pass for finished games); paripesa domain (203); ADR-11 cutover items now largely realized by ADR-13.
 - **Deliverable:** this log + ADR-14/15 + the two `system/` architecture maps.
+
+---
+## 2026-07-28 — Session 31 — betb2b data-quality (outrights, persist speedup, market-naming recon + ADR-19)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** local (macOS) | **Core:** 0.3.0
+- **Task:** Operator flagged bad Supabase data on review — events polluted, `markets.name` = `"G=27"`, slow persist. Fix + document.
+- **Commits (scrapamoja):** `787972e` (outrights), `27edbee` (persist batching), plus this planning push (ADR-19 + recon + tasks). Earlier same-day: `11b6e66` (ADR-16/17/18).
+- **Shipped:**
+  1. **Outrights dropped** — single-sided outright/futures markets (Special bets, Results of the championship, season/award winners: `O1`=title, `O2`=empty) were ingested as events (title in `home`, null `away`) → junk `teams`. `_build_event` now requires both home AND away. Verified live proxy-free (WNBA 9/9 both teams; Special bets 1/1 single-sided). Cleanup SQL (targeted + full-wipe options) handed to operator; the running scraper carries the fix (`115 discovered → 48 persisted`).
+  2. **Persist speedup (ADR-17 persist half)** — batched H2H `insert().returning()` (insertmanyvalues, ids zipped back to periods), one bulk change-only dedup query per fact type, in-memory team cache. ~1000 sequential Supabase round-trips → a handful. New test pins batched-RETURNING ordering across multiple events. 210 betb2b tests green.
+  3. **Market-naming: fully traced (ADR-19 + recon doc).** Root cause: feed carries numeric `G`/`T` only; names composed client-side (`name = groupNames[GS] ?? getMarketGroupTemplatesByGroupId(G).name`; feed `G` = "foreignId" → per-sport bet-model templates). Ruled out (with evidence): `bets_model_short` CDN files (wrong id-space — can't reproduce one basketball market), un-gated group dictionaries (404), DOM scrape (odds grid is canvas). **Found the lever:** the SPA's **new-builder** `GetGameZip` (`isNewBuilder=true&GroupEvents=true&marketType=1`, id via `CI`) returns `MEC` category names + `SG.TG` sub-game names in-feed. Decision: adopt it; defer exact exotic per-group labels (never guess).
+- **Method note:** operator supplied a residential proxy (`bore.pub`) — used it with Playwright to capture the real SPA's 446 JS chunks + network, which is how the naming mechanism was traced. The in-app browser + httpx both 203-block the SPA HTML from a datacenter IP (data endpoints still work).
+- **Docs:** ADR-19; `reviews/2026-07-28-market-naming-mechanism.md`; backlog item "map market-group ids" revised to ADR-19 approach; `current.md` set ACTIVE with the implementation plan.
+- **Next (this session, per current.md):** implement the new-builder feed change + `MEC`/`SG` parsing + tests + live verify, then log exit.
+- **Deliverable:** the two product fixes (pushed) + the market-naming decision record (this push), implementation to follow.
