@@ -1,62 +1,29 @@
-# Current Task — betb2b data-quality: market naming (ADR-19)
+# Current Task — Idle
 
-**Status:** ACTIVE — Session 31 (2026-07-28, Claude Code / claude-opus-4-8, local).
+**Status:** Idle — no session in progress.
 
-## This session so far (shipped + pushed)
-1. **Outrights dropped** (`787972e`) — single-sided outright/futures markets
-   (Special bets, Results of the championship, season/award winners) were
-   ingested as events (title in `home`, null `away`) → junk teams. `_build_event`
-   now requires both home AND away. Verified live (WNBA 9/9 both teams; Special
-   bets 1/1 single-sided). Supabase cleanup SQL handed to the operator.
-2. **Persist speedup** (`27edbee`, ADR-17) — batched H2H `insert().returning()`,
-   bulk change-only dedup, in-memory team cache. ~1000 round-trips → a handful.
-3. **ADR-16/17/18** (`11b6e66`) recorded earlier this session.
+Last: **Session 31 (2026-07-28, Claude Code / claude-opus-4-8, local)** — betb2b
+data-quality pass off an operator review of the Supabase tables. All pushed.
 
-## Now: market naming (ADR-19) — planning pushed, implementing next
-Root cause + full mechanism traced (proxy + Playwright) →
-`reviews/2026-07-28-market-naming-mechanism.md`, decision in **ADR-19**.
+**Shipped this session:**
+- **Outrights dropped** (`787972e`) — single-sided outright/futures markets no
+  longer ingested as events; `_build_event` requires both home AND away.
+- **Persist speedup** (`27edbee`, ADR-17) — batched H2H insert + bulk dedup +
+  team cache; ~1000 Supabase round-trips → a handful.
+- **ADR-16/17/18** (`11b6e66`); **ADR-19** + market-naming recon (`034f8bf`).
+- **Sub-game dimension** (`b3e1c69`, ADR-19) — `SG[]` named per-period/per-stat
+  groups (Rebounds/Assists/Fouls/quarters) → new `sub_games` table. The clean
+  feed-sourced naming win; exact per-group `G` labels deferred (client-composed).
 
-**Implementation plan (next):**
-- [ ] Add the **new-builder** `GetGameZip` params to `client.py::fetch_game`
-      (`isNewBuilder=true&GroupEvents=true&marketType=1&countevents=250`), id via
-      the event's `CI`. Validate the response parses for **prematch + live**.
-- [ ] Parse `MEC[]` (category names) + `SG[].TG` (sub-game names) in
-      `extraction/rules.py`; keep the verified `(G,T)` map for core markets and
-      use the `MEC` category as the group label where `(G,T)` is unknown
-      (replaces bare `"G=<n>"`).
-- [ ] Decide sub-game-name storage (new dimension vs. market scope) — small
-      schema/store touch if added.
-- [ ] Tests: new-builder fixture → assert category names + sub-game names;
-      assert core `(G,T)` still resolves; no regression to `"G=<n>"` for known groups.
-- [ ] Verify live via the operator's proxy / a Railway run; then log Session 31
-      exit + clear this file.
+**Operator action outstanding:** run the Supabase cleanup (targeted DELETE or
+full `TRUNCATE`) to clear pre-fix outright junk + old data — SQL was provided in
+chat; the running scraper already carries all fixes.
 
-### Phase-1 validation (2026-07-28) — CHANGES the plan
-Probed the new-builder feed before coding:
-- ✅ Works with our `I` id, proxy-free (no `CI` plumbing). `GE[].E` selections
-  have the same shape as `E[]` (`T`/`C`/`P`/`G`/`GS`) → odds parsing adapts cleanly.
-- ⚠️ New-builder returns **`GE` (not `E`/`AE`)** and is **main-game only** (~60
-  selections / 26 groups) vs our current `isSubGames=true` call's **425** flat
-  selections. Sub-game markets move to the separate `SG` list. Naive switch =
-  **odds-coverage regression**.
-- ⚠️ `MEC` is keyed by category `MT`, `SG` by sub-game — **neither yields a direct
-  per-group `G`→name**. Per-group naming is still the client-composed
-  `groupNames[GS]`, absent from the response. So the feed switch does NOT replace
-  `"G=27"` with its real group label on its own.
-
-**Revised scope (recommend):** keep the current comprehensive odds call unchanged;
-the one clean feed-sourced win is capturing **`SG.TG` sub-game names** (Rebounds,
-Assists, Fouls, 3-pt FG…) — new, correct, useful to the engine. Category/per-group
-labels stay `"G=<n>"` (odds+ids already correct). Awaiting operator steer before
-implementing (don't rush an odds-restructuring rewrite).
-
-**Deferred (ADR-19):** exact exotic per-group labels (client sport-aware template
-resolution / ADR-7 render-and-read) — cosmetic, odds+ids already correct.
-
-## Also open (tasks/backlog.md)
-- Parallel/batch fetch (ADR-17 fetch half — bounded-concurrency `gather`).
-- Deploy scheduler as a Railway worker (ADR-18).
-- Results-pass endpoint research (ADR-16).
+**Next (tasks/backlog.md):**
+- Parallel/batch fetch (ADR-17 fetch half — bounded-concurrency `gather`) — the
+  biggest remaining speedup.
+- Deploy the scheduler as a dedicated Railway worker (ADR-18).
+- Results-pass endpoint research (ADR-16) — unblocks prediction grading.
 - paripesa domain (203 on GetSportsZip).
 
 **Deploy note:** on Railway set `DATABASE_URL` (Supabase pooler) + `BETB2B_DIRECT=1`; leave
