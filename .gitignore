@@ -51,6 +51,7 @@ node_modules/
 
 # BetB2B live validation output (generated)
 betb2b_validate_*/
+output/                      # scratch scrape/test dumps (test_data_quality.py etc.)
 *.db-wal
 
 # Build artifacts

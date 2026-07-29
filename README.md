@@ -16,8 +16,6 @@ That philosophy shapes everything about how Scrapamoja is built. It's not a scra
 
 *Scrape together. Build together.*
 
-> **Flagship real-world use:** the [**BetB2B**](#betb2b--flagship-scraper--data-platform) family scraper — an 8-skin sportsbook odds/events/H2H pipeline with a browser-free, proxy-free "direct" mode, a Postgres/Supabase store, and a remote-control API. It's the production proving ground for everything below.
-
 ---
 
 ## Core Framework Capabilities
@@ -227,47 +225,7 @@ strategies:
 | FlashScore | Live scores, match stats, odds | Basketball, Football | Live, Finished, Scheduled |
 | Wikipedia | Article content, tables, references | Any | N/A |
 
-BetB2B is the flagship real-world scraper + data platform (see below). FlashScore handles live match updates and status-aware extraction; Wikipedia handles table parsing and multi-language articles.
-
----
-
-## BetB2B — flagship scraper & data platform
-
-`src/sites/betb2b/` scrapes the 1xbet/BetB2B skin family (8 skins, one shared
-backend) for a full relational odds dataset, persists it to Postgres/Supabase,
-and exposes a remote-control API. It underpins the `scraper → Supabase →
-engine/website` architecture (see `.context/memory/system/db-architecture.md`).
-
-**Two extraction modes**
-- **Hybrid** (default) — bootstrap a browser once through an allowed-country
-  proxy to harvest session cookies, then poll the terse-key `LineFeed`/`LiveFeed`
-  JSON feeds directly via `httpx` (no browser per poll). ADR-3.
-- **Direct** (`--direct`) — **browser-free and proxy-free.** Discovers the full
-  league tree via the un-gated `GetSportsZip` → `GetChampZip` → `GetGameZip`
-  (odds) + cookie-less H2H/stats. Runs from any IP incl. a datacenter — no
-  Playwright, no cookies, no proxy. Faster and broader-coverage. ADR-15.
-
-**Structured store** (`store.py`, portable SQLite ↔ Postgres via `DATABASE_URL`)
-— normalized dimensions (`sports`, `countries`, `leagues`, `teams`, `markets`),
-`events` (shared backend id, dedup across skins), time-series facts
-(`odds_snapshots` with change-only dedup, `event_states`, `period_scores`),
-`h2h_games`/`h2h_period_scores`, and a `scraper_jobs` control queue.
-
-**Remote-control API** (`/api/scraper/*` on the deployed FastAPI service,
-`x-api-key` auth) — queue a scrape, monitor live job `phase`, read odds/counts.
-
-```bash
-# Local scrape (browser-free direct mode) → persist to the store
-python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --direct --db
-
-# Trigger + monitor remotely
-curl -sX POST https://<app>/api/scraper/runs -H "x-api-key: $KEY" \
-  -H 'content-type: application/json' \
-  -d '{"skin":"linebet","action":"prematch","sport":"basketball"}'
-```
-
-Deploy: set `DATABASE_URL` (Supabase pooler) + `BETB2B_DIRECT=1` and the scraper
-runs proxy-free on Railway. See [RAILWAY.md](RAILWAY.md).
+BetB2B scrapes the 1xbet skin family (8 skins, one backend) for odds/events/markets/H2H, with a browser-free "direct" mode and a portable SQLite↔Postgres store — see [`src/sites/betb2b/README.md`](src/sites/betb2b/README.md). FlashScore handles live match updates and status-aware extraction; Wikipedia handles table parsing and multi-language articles.
 
 ---
 

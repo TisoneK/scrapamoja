@@ -4,7 +4,7 @@ A **single parameterized scraper** for the entire BetB2B / 1xbet platform
 family — linebet, melbet, betwinner, 22bet, megapari, 888starz, helabet,
 paripesa, … — with per-skin config in YAML.
 
-> This is the flagship example of Scrapamoja's "one framework, many sites"
+> A real-world example of Scrapamoja's "one framework, many sites"
 > thesis. linebet was reverse-engineered first (`src/sites/linebet/RECON.md`);
 > the findings generalize across 8+ family members (verified 2026-07-18 via
 > the Kenya proxy). ADR-3 in `.context/memory/plans/decisions.md` records
@@ -88,6 +88,51 @@ The recipe is browser bootstrap once → httpx polling:
 Re-bootstrap is automatic: the `SessionValidator` watches for the
 session TTL (default 2h) and for auth-error HTTP statuses (401/403/419/
 440); on either signal, the next `get_session()` call re-bootstraps.
+
+## Extraction mode: `direct` (ADR-15)
+
+`--direct` / `BETB2B_DIRECT=1` — **browser-free and proxy-free.** The un-gated
+feeds return data cookie-less from any IP (including a datacenter): discover the
+full league tree via `GetSportsZip` → `GetChampZip`, fetch odds via `GetGameZip`,
+and enrich H2H/stats/results via the `statisticfeed` API — no Playwright, no
+cookies, no proxy. Faster and broader-coverage than the hybrid bootstrap; it's
+the default for the scheduler and the deployed worker. (The WAF 203 blocks the
+SPA *HTML* from datacenter IPs, but the JSON data endpoints are not gated.)
+
+## Store, remote API & deployment
+
+**Structured store** (`store.py`, portable **SQLite ↔ Postgres** via
+`DATABASE_URL`) — normalized dimensions (`sports`, `countries`, `leagues`,
+`teams`, `markets`, `sub_games`), `events` (shared backend id, dedup across
+skins; carries the finished-match result), time-series facts (`odds_snapshots`
+with change-only dedup, `event_states`, `period_scores`),
+`h2h_games`/`h2h_period_scores`, `statistics`, and a `scraper_jobs` control
+queue. When `DATABASE_URL` is set, `store.py` dispatches to `store_orm.py`
+(SQLAlchemy → Supabase Postgres); otherwise it uses raw SQLite. Change-only
+dedup and batched/bounded-concurrency I/O keep it cheap (ADR-13/17).
+
+**Remote-control API** (`src/api/routers/scraper.py`, `/api/scraper/*`,
+`x-api-key` auth) — queue a scrape, monitor live job `phase`, read odds/counts.
+Single-flight background jobs inside the FastAPI service (ADR-12).
+
+**Scheduler** (`scheduler.py`, `betb2b schedule …`) — a continuously-looping
+worker with **scheduled** (~3h, skip-fresh), **live** (~15s), and **results**
+(~10min, finished-match final scores via `statisticfeed v1/Game`) passes; matches
+flow by feed-root + DB state, no cross-scraper triggers (ADR-15/16/18/20).
+
+**Deploy** — set `DATABASE_URL` (Supabase pooler) + `BETB2B_DIRECT=1` and it runs
+proxy-free on Railway; the scheduler is a dedicated second service. See
+[`RAILWAY.md`](../../../RAILWAY.md).
+
+```bash
+# Local scrape (browser-free direct mode) → persist to the store
+python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --direct --db
+
+# Trigger + monitor remotely
+curl -sX POST https://<app>/api/scraper/runs -H "x-api-key: $KEY" \
+  -H 'content-type: application/json' \
+  -d '{"skin":"linebet","action":"prematch","sport":"basketball"}'
+```
 
 ## Quick start
 
@@ -354,6 +399,31 @@ python -m src.sites.betb2b.scripts.probe_family
   session, the cookies likely expired — `BetB2BSessionManager` will
   auto-re-bootstrap on the next auth-error status, but you can force
   it with `session_manager.clear()`.
+
+### Open items (maintenance — none blocking)
+
+- **paripesa 203 in direct mode.** 7/8 skins return `GetSportsZip` fine proxy-free;
+  paripesa 203s (domain outlier — cf. the Session-19 `paripesa.bet`→`paripesa.cool`
+  fix). Workaround: scrape paripesa via the hybrid/proxy path, or fix its domain in
+  `skins/paripesa.yaml`.
+- **Exotic market names show as `G=<n>`** (ADR-19). The feed carries only numeric
+  market group/type ids; the human name is composed client-side and not in any feed
+  or static dictionary. **Core markets are named correctly** (1x2, totals, handicap,
+  individual totals, moneyline, To Win Match) via the verified `(G,T)` map; only rare
+  prop/exotic groups fall back to the numeric label. Cosmetic — odds and ids are
+  captured correctly. See `reviews/2026-07-28-market-naming-mechanism.md`.
+- **`statisticfeed` `529` under high concurrency.** The H2H/stats/results endpoints
+  intermittently return `529` (overloaded) at `BETB2B_CONCURRENCY=8`. Best-effort and
+  non-fatal (odds/events persist fine; the odds endpoints aren't affected). Lower
+  `BETB2B_CONCURRENCY` (e.g. 4) if the warnings are noisy — datacenter-IP rate
+  discipline, ADR-17.
+- **`statisticfeed` coverage gaps.** Virtual/simulated leagues (e.g. "NBA" with player
+  names) and some minor leagues have no `statisticfeed` data → `204` for H2H/stats and
+  no result. Those matches scrape odds/events fine but won't be H2H-enriched or graded.
+- **One skin per scheduler process.** `betb2b schedule` runs a single skin. Additional
+  skins currently mean additional worker services (or extend the scheduler to loop
+  skins). The other 7 skins scrape correctly on demand; only the scheduled cadence is
+  single-skin.
 
 ## See also
 
