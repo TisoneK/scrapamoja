@@ -915,12 +915,11 @@ don't remove the line.
       finished-match final scores need the results/history endpoint (research, like the GetSportsZip
       discovery). This is what feeds the engine's prediction validation (HIT/MISS). (2) Deploy the
       scheduler as a Railway worker (or wire it into the service) so it runs continuously.
-- [ ] **Parallel/batch fetch + persist batching (h2h/dedup/teams)** (added 2026-07-28 by Claude Code) —
-      Two speedups now that there's no browser: (a) FETCH — bounded-concurrency `gather` over
-      GetGameZip/H2H (replace the sequential rate limiter with a semaphore ~8) so a full card fetches
-      in seconds; (b) PERSIST — the odds batch (`0053ff5`) is deployed, but `h2h_games` (one
-      `.returning()` insert each — ~586/run), per-event dedup queries, and team lookups are still
-      one-round-trip-per-row (the ~5.5-min persist on the 102-event/10,686-odds Railway run). Batch
-      h2h_games (executemany returning), batch the dedup across all event ids, cache teams → persist
-      ~5.5min → ~30s. Watch datacenter-IP abuse limits when raising concurrency/cadence. HIGH — makes
-      5s-live polling viable.
+- [x] **Parallel/batch fetch + persist batching (h2h/dedup/teams)** (added 2026-07-28 by Claude Code; **DONE 2026-07-28 Session 31/32**) —
+      Both halves shipped (ADR-17): (a) FETCH — `6fb782e` — bounded-concurrency `gather` over
+      GetGameZip + H2H + stats (semaphore = `BETB2B_CONCURRENCY`, default 8 direct / 1 non-direct,
+      clamped [1,32]; client serial spacing disabled when concurrency>1). Live-verified proxy-free:
+      7 WNBA matches 3.2s→0.3s (~10x), lossless. (b) PERSIST — `27edbee` — batched h2h_games
+      `insert().returning()`, one bulk dedup query per fact type, in-memory team cache (~1000
+      round-trips → a handful). Datacenter-IP discipline: conservative default, ramp deliberately,
+      proxy fallback retained. Together they make tight (5–15s) live polling viable.

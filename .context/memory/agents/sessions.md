@@ -839,3 +839,14 @@ past entries — append corrections instead.
 - **Phase-1 validation → scope revised (operator-approved):** the new-builder feed gives category (`MEC`) + sub-game (`SG`) names but NOT per-group `G`→names (client-composed), and a naive switch drops odds coverage (425→~60). So the clean win is the `SG` sub-game names — and they're **already in the response we fetch** (`isSubGames=true`, `lng=en`), no feed change.
 - **Implemented + shipped (`b3e1c69`):** `Event.sub_games` (`_extract_sub_games` parses `SG[]`) → new **`sub_games`** dimension table (both store paths, upsert). Named per-period ("1st quarter") + per-stat ("Fouls", "Free Throws Scored", "Rebounds") groups. Additive — odds extraction untouched; **live-verified 62 markets preserved + 22 named sub-games**. 212 tests green. Exact per-group labels deferred (ADR-19).
 - **Deliverable:** two product fixes + persist speedup + ADR-19/recon/backlog + the sub-game dimension — all pushed.
+
+## 2026-07-28 — Session 32 — cross-repo doc sync + bounded-concurrency fetch (ADR-17 fetch half)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** local (macOS) | **Core:** 0.3.0
+- **Task:** operator-directed — sync scrapamoja's shared maps to the engine source of truth, then implement ADR-17's fetch half.
+- **Commits:** `b087d73` (doc sync), `6fb782e` (concurrency fetch), + this bookkeeping.
+- **Shipped:**
+  1. **Shared-doc sync** (`b087d73`) — scrapamoja's `db-architecture.md` + `api-contracts.md` were the Session-30 originals (group B "TO DESIGN", no `sub_games`). Synced to the engine repo (source of truth) post-ADR-2/3 + Session-4 propagation: group B now DESIGNED/corrected, `sub_games` restored to group A, `event_ids [uuid]→[text]` fix picked up. (Cross-repo context: engine ADR-3 corrected the read-query/FK-type mismatches I flagged; engine Session 5 recorded the arbitrage-system proposal — standalone, research-first, not an engine step.)
+  2. **Bounded-concurrency fetch (ADR-17 fetch half)** (`6fb782e`) — `fetch_events` + H2H + stats enrichment now gather under a semaphore instead of looping serially. `BETB2B_CONCURRENCY` (default 8 direct / 1 non-direct, clamped [1,32]); the semaphore is the throttle so the client's serial spacing is disabled when concurrency>1. Non-direct (browser) path stays sequential. Live-verified proxy-free: **7 WNBA matches 3.2s→0.3s (~10×), lossless**. New tests: bounded+lossless concurrency, env/default resolution. 214 tests green. **This closes ADR-17 — both fetch + persist halves now shipped.**
+- **Note:** the timing probe first hit outright ids (correctly dropped by the 787972e filter → 0 events) — confirmed the fix works, then re-timed on real WNBA matches.
+- **Next (backlog):** deploy scheduler as a Railway worker (ADR-18); results-pass endpoint research (ADR-16); paripesa domain (203).
+- **Deliverable:** the sync + the concurrency fetch (ADR-17 complete).
