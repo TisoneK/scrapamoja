@@ -490,12 +490,27 @@ class BetB2BCLI:
         )
         print(f"scheduler: skin={args.skin} sport={args.sport} "
               f"scheduled={args.scheduled_interval:.0f}s live={args.live_interval:.0f}s "
-              f"(Ctrl-C to stop)", file=sys.stderr)
+              f"(SIGTERM/Ctrl-C to stop)", file=sys.stderr)
+        # As a Railway worker (ADR-18) this runs forever until the platform sends
+        # SIGTERM on redeploy/shutdown. Handle it (and SIGINT) gracefully → stop()
+        # lets the current pass finish and run()'s finally closes the scraper, so
+        # no half-written persist. add_signal_handler is unavailable on some
+        # platforms (Windows) — the KeyboardInterrupt/CancelledError except covers those.
+        import signal
+        try:
+            loop = asyncio.get_running_loop()
+            for _sig in (signal.SIGTERM, signal.SIGINT):
+                try:
+                    loop.add_signal_handler(_sig, sched.stop)
+                except (NotImplementedError, RuntimeError):
+                    pass
+        except RuntimeError:
+            pass
         try:
             await sched.run()
         except (KeyboardInterrupt, asyncio.CancelledError):
             sched.stop()
-            print("scheduler stopped", file=sys.stderr)
+        print("scheduler stopped", file=sys.stderr)
         return 0
 
     # ------------------------------------------------------------------ #

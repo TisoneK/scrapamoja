@@ -8,9 +8,10 @@ This guide deploys the **FastAPI control plane** (`src/api/main.py`) to Railway 
 
 | Component | Status |
 |---|---|
-| FastAPI app (`src/api/main:app`) | ✅ Deployed (primary web service) |
+| FastAPI app (`src/api/main:app`) | ✅ Deployed (primary **web** service) |
+| BetB2B scheduler (`betb2b schedule`) | ➕ Optional **second service** — the always-on scraper worker (ADR-18, see below) |
 | Playwright + Chromium | ✅ Baked into the image |
-| SQLite DB (`data/adaptive.db`) | ⚠️ Requires a Railway Volume for persistence |
+| SQLite DB (`data/adaptive.db`) | ⚠️ Requires a Railway Volume for persistence (web service only; the worker uses Supabase) |
 | React UI (`ui/app/`) | ❌ Not deployed by this config — deploy separately or add a build step |
 
 **Public endpoints after deploy:**
@@ -123,6 +124,57 @@ curl -s https://<your-app>.up.railway.app/api/scraper/runs/1 -H "x-api-key: $SCR
 **Deploy checklist for the control API:** set `SCRAPER_API_KEY`,
 `BETB2B_PROXY_URL` (+ creds/country), `BETB2B_DB_PATH=/app/data/betb2b/odds.db`
 (on the Volume), and `GUNICORN_WORKERS=1`.
+
+---
+
+## Scheduler worker (ADR-18) — the always-on scraper
+
+The control API above runs scrapes **on demand** (one job per POST). The **scheduler**
+is the other half: a continuously-looping process that runs `scheduled` (prematch,
+skip-fresh) and `live` passes on their own cadences, writing straight to Supabase. Per
+ADR-18 it runs as a **dedicated, second Railway service** — not inside the web service
+(an always-on loop would tie up the API's single worker). Both services deploy from the
+**same image/repo**; only the start command + env differ.
+
+**It is browser-free and proxy-free** (direct mode, ADR-15) and writes to Supabase, so it
+needs **no Volume** and no proxy — just `DATABASE_URL`.
+
+### Create the worker service (one-time, Railway dashboard)
+
+1. In the **same Railway project**, **New → GitHub Repo** → pick this repo again (or
+   **New → Empty Service** and attach the repo). This gives a second service off the same
+   Dockerfile.
+2. **Settings → Deploy → Start Command** — override to the scheduler (this is the
+   `worker:` line in the `Procfile`):
+   ```
+   python -m src.sites.betb2b.cli schedule ${SCHED_SKIN:-linebet} --sport ${SCHED_SPORT:-basketball} --scheduled-interval ${SCHED_PREMATCH_INTERVAL:-10800} --live-interval ${SCHED_LIVE_INTERVAL:-15} --refresh-window ${SCHED_REFRESH_WINDOW:-10800}
+   ```
+3. **Settings → Deploy → Health Check** — **remove it** (a worker has no HTTP port).
+4. **Variables** (worker service):
+
+   | Var | Value | Notes |
+   |---|---|---|
+   | `DATABASE_URL` | Supabase pooler URL | port `6543`; same as the web service |
+   | `BETB2B_DIRECT` | `1` | browser/proxy-free (ADR-15) |
+   | `BETB2B_CONCURRENCY` | `8` (default) | bounded fetch concurrency (ADR-17) — ramp cautiously |
+   | `SCHED_SKIN` | `linebet` | skin to schedule |
+   | `SCHED_SPORT` | `basketball` | sport |
+   | `SCHED_LIVE_INTERVAL` | `15` | live pass cadence (s) — **start conservative** |
+   | `SCHED_PREMATCH_INTERVAL` | `10800` | prematch pass cadence (s, 3h) |
+   | `SCHED_REFRESH_WINDOW` | `10800` | re-scrape a prematch match only after this (s) |
+
+   Leave `BETB2B_PROXY_URL` **unset** — direct mode needs no proxy.
+
+The process handles **SIGTERM** cleanly (finishes the current pass, closes the scraper),
+so redeploys don't half-write. Each pass is idempotent + change-only, so a restart just
+re-runs harmlessly. **Rate discipline (ADR-17):** the datacenter IP is unproven at high
+volume — keep the live cadence ≥ ~10–15s and concurrency ~8 to start; watch for
+`429/403/203`; the proxy path (set `BETB2B_PROXY_URL` + `--no-direct`) is the fallback.
+
+### Do NOT run it inside the web service
+Single-flight is **per-process** — the scheduler and a manual API job can both run at once
+against the same Supabase. That's harmless thanks to change-only dedup, but don't do it
+deliberately. Keep them as two services.
 
 ---
 
