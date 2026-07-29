@@ -549,6 +549,55 @@ def test_scraper_dedupe_merges_markets() -> None:
     assert out[0].is_live is True
 
 
+def test_fetch_events_bounded_concurrency(skin: BetB2BSkinConfig) -> None:
+    """ADR-17: fetch_events gathers ids under a semaphore — bounded (never more
+    than `concurrency` in flight), actually concurrent, and lossless."""
+    import asyncio
+    from src.sites.betb2b.extraction.models import Event
+    from src.sites.betb2b.scraper import BetB2BScraper
+
+    s = BetB2BScraper(skin, direct=True, concurrency=4)
+    assert s.concurrency == 4
+
+    inflight = max_inflight = 0
+
+    async def fake_fetch_game(eid, root="line", **kw):
+        nonlocal inflight, max_inflight
+        inflight += 1
+        max_inflight = max(max_inflight, inflight)
+        await asyncio.sleep(0.02)   # hold the slot so overlap is observable
+        inflight -= 1
+        return eid                   # sentinel "capture" carrying the id
+
+    async def noop(*a, **k):
+        return None
+
+    s.feed_client.fetch_game = fake_fetch_game
+    s.extraction_rules.extract_from_captured = lambda cap: [Event(
+        event_id=str(cap), sport=Sport.BASKETBALL, competition="L", home="A", away="B")]
+    s._enrich_with_subgames = noop
+
+    ids = [str(i) for i in range(20)]
+    events = asyncio.run(s.fetch_events(ids, is_live=False))
+
+    assert {e.event_id for e in events} == set(ids)   # lossless
+    assert 1 < max_inflight <= 4                        # concurrent but bounded
+
+
+def test_scraper_concurrency_env_and_direct_default(skin: BetB2BSkinConfig, monkeypatch) -> None:
+    from src.sites.betb2b.scraper import BetB2BScraper
+    # direct → default 8; non-direct → sequential 1
+    assert BetB2BScraper(skin, direct=True).concurrency == 8
+    assert BetB2BScraper(skin, direct=False).concurrency == 1
+    # env override + clamp to [1, 32]
+    monkeypatch.setenv("BETB2B_CONCURRENCY", "16")
+    assert BetB2BScraper(skin, direct=True).concurrency == 16
+    monkeypatch.setenv("BETB2B_CONCURRENCY", "999")
+    assert BetB2BScraper(skin, direct=True).concurrency == 32
+    # explicit param wins over env
+    assert BetB2BScraper(skin, direct=True, concurrency=3).concurrency == 3
+
+
 def test_scraper_get_info(skin: BetB2BSkinConfig) -> None:
     from src.sites.betb2b.scraper import BetB2BScraper
 

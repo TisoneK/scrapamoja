@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -109,6 +110,7 @@ class BetB2BScraper:
         telemetry_output_dir: str = "./data/telemetry/betb2b",
         sport: Optional[Union[str, int, Sport, SportScraper]] = None,
         direct: Optional[bool] = None,
+        concurrency: Optional[int] = None,
     ) -> None:
         """Initialise the scraper for one skin + optional sport.
 
@@ -143,6 +145,20 @@ class BetB2BScraper:
         # Param wins; otherwise the skin's `direct` feature flag.
         self._direct = bool(direct) if direct is not None else skin.features.get("direct", False)
 
+        # ADR-17: bounded-concurrency fetch. In direct mode the un-gated feeds
+        # tolerate parallel polls, so a semaphore-bounded `gather` replaces the
+        # sequential rate limiter (which becomes the semaphore). Conservative
+        # default (8) per the datacenter-IP rate discipline — ramp via
+        # `BETB2B_CONCURRENCY`, watch for 429/403/203. Non-direct (browser) mode
+        # stays sequential (1) to protect the harvested session.
+        default_conc = 8 if self._direct else 1
+        if concurrency is None:
+            try:
+                concurrency = int(os.environ.get("BETB2B_CONCURRENCY", str(default_conc)))
+            except ValueError:
+                concurrency = default_conc
+        self.concurrency = max(1, min(concurrency, 32))
+
         # Resolve the sport strategy (None → AllSportsScraper).
         self.sport_scraper: SportScraper = resolve_sport(sport)
         self.sport_ctx: SportScraperContext = SportScraperContext.from_sport_scraper(
@@ -161,7 +177,13 @@ class BetB2BScraper:
         )
         # Direct mode hits un-gated endpoints (no session to protect), so a
         # full card (100+ games) fits the timeout — bump the polite default.
-        feed_rate = max(rate_limit_per_minute, 120) if self._direct else rate_limit_per_minute
+        # When concurrency > 1 the semaphore is the throttle (ADR-17), so the
+        # client's per-request serial spacing is disabled (rate 0) to let the
+        # gathered requests actually run in parallel.
+        if self.concurrency > 1:
+            feed_rate = 0
+        else:
+            feed_rate = max(rate_limit_per_minute, 120) if self._direct else rate_limit_per_minute
         self.feed_client = BetB2BFeedClient(
             skin=skin,
             session_manager=self.session_manager,
@@ -694,18 +716,29 @@ class BetB2BScraper:
         root = "live" if is_live else "line"
         ids = [str(i) for i in ids][:int(getattr(self.skin, "max_harvest", 200) or 200)]
         total = len(ids)
-        events: List[Event] = []
-        for n, eid in enumerate(ids, 1):
-            self._emit_phase(f"scraping events ({n}/{total})")
-            try:
-                gcap = await self.feed_client.fetch_game(eid, root=root)
-                game_events = self.extraction_rules.extract_from_captured(gcap)
-                for ge in game_events:
-                    await self._enrich_with_subgames(ge, gcap, root=root)
-                events.extend(game_events)
-            except Exception as exc:  # noqa: BLE001
-                logger.debug("skin=%s GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
-        return events
+        # ADR-17: bounded-concurrency fetch — a semaphore caps in-flight
+        # GetGameZip calls; the ids are gathered instead of looped serially.
+        sem = asyncio.Semaphore(self.concurrency)
+        done = 0
+
+        async def _one(eid: str) -> List[Event]:
+            nonlocal done
+            out: List[Event] = []
+            async with sem:
+                try:
+                    gcap = await self.feed_client.fetch_game(eid, root=root)
+                    game_events = self.extraction_rules.extract_from_captured(gcap)
+                    for ge in game_events:
+                        await self._enrich_with_subgames(ge, gcap, root=root)
+                    out = game_events
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("skin=%s GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
+            done += 1                                   # single-threaded loop → no lock needed
+            self._emit_phase(f"scraping events ({done}/{total})")
+            return out
+
+        results = await asyncio.gather(*[_one(eid) for eid in ids])
+        return [ev for sub in results for ev in sub]
 
     async def _discover_events_direct(self, *, is_live: bool) -> List[Event]:
         """Full direct pass = discover all ids, then fetch them all (used by the
@@ -860,66 +893,67 @@ class BetB2BScraper:
             else None
         )
 
+        url = f"{self.skin.base_url}/service-api/statisticfeed/api/v1/Game/h2h"
+        sem = asyncio.Semaphore(self.concurrency)   # ADR-17: bounded concurrency
+
         async with httpx.AsyncClient(
             proxy=proxy_url, timeout=15.0, follow_redirects=True,
         ) as client:
-            for ev in events:
+            async def _one(ev: Event) -> None:
                 eid = str(ev.event_id)
                 if not eid.isdigit():
                     logger.debug(
                         "skin=%s H2H skip non-numeric event_id=%s",
                         self.skin.name, eid,
                     )
-                    continue
+                    return
+                async with sem:
+                    try:
+                        params = {
+                            "id": eid,
+                            "lng": self.skin.language,
+                            "ref": str(self.skin.partner),
+                            "fcountry": str(self.skin.country),
+                            "gr": str(self.skin.gr),
+                        }
+                        resp = await client.get(url, params=params, headers=headers)
 
-                try:
-                    params = {
-                        "id": eid,
-                        "lng": self.skin.language,
-                        "ref": str(self.skin.partner),
-                        "fcountry": str(self.skin.country),
-                        "gr": str(self.skin.gr),
-                    }
-                    url = (
-                        f"{self.skin.base_url}"
-                        f"/service-api/statisticfeed/api/v1/Game/h2h"
-                    )
-                    resp = await client.get(url, params=params, headers=headers)
+                        if resp.status_code == 204:
+                            # 204 = no H2H data for this match (minor league).
+                            logger.debug(
+                                "skin=%s H2H 204 (no data) for event=%s",
+                                self.skin.name, eid,
+                            )
+                            return
 
-                    if resp.status_code == 204:
-                        # 204 = no H2H data for this match (minor league).
-                        logger.debug(
-                            "skin=%s H2H 204 (no data) for event=%s",
-                            self.skin.name, eid,
-                        )
-                        continue
+                        if resp.status_code != 200:
+                            logger.warning(
+                                "skin=%s H2H status=%d for event=%s",
+                                self.skin.name, resp.status_code, eid,
+                            )
+                            return
 
-                    if resp.status_code != 200:
+                        raw = resp.json()
+                        h2h_data = BetB2BExtractionRules.extract_h2h_data(raw)
+                        if h2h_data is not None:
+                            ev.h2h_data = h2h_data
+                            logger.debug(
+                                "skin=%s H2H enriched event=%s (%d game shorts)",
+                                self.skin.name, eid, len(h2h_data.game_shorts),
+                            )
+
+                    except httpx.HTTPError as exc:
                         logger.warning(
-                            "skin=%s H2H status=%d for event=%s",
-                            self.skin.name, resp.status_code, eid,
+                            "skin=%s H2H HTTP error for event=%s: %s",
+                            self.skin.name, eid, exc,
                         )
-                        continue
-
-                    raw = resp.json()
-                    h2h_data = BetB2BExtractionRules.extract_h2h_data(raw)
-                    if h2h_data is not None:
-                        ev.h2h_data = h2h_data
-                        logger.debug(
-                            "skin=%s H2H enriched event=%s (%d game shorts)",
-                            self.skin.name, eid, len(h2h_data.game_shorts),
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning(
+                            "skin=%s H2H parse error for event=%s: %s",
+                            self.skin.name, eid, exc,
                         )
 
-                except httpx.HTTPError as exc:
-                    logger.warning(
-                        "skin=%s H2H HTTP error for event=%s: %s",
-                        self.skin.name, eid, exc,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(
-                        "skin=%s H2H parse error for event=%s: %s",
-                        self.skin.name, eid, exc,
-                    )
+            await asyncio.gather(*[_one(ev) for ev in events])
 
     async def _enrich_with_stats(self, events: List[Event]) -> None:
         """Enrich events with match statistics from the statisticfeed endpoint.
@@ -950,54 +984,56 @@ class BetB2BScraper:
         )
 
         enriched = 0
+        url = f"{self.skin.base_url}/service-api/statisticfeed/api/v2/Game/statistic"
+        sem = asyncio.Semaphore(self.concurrency)   # ADR-17: bounded concurrency
+
         async with httpx.AsyncClient(
             proxy=proxy_url, timeout=15.0, follow_redirects=True,
         ) as client:
-            for ev in events:
+            async def _one(ev: Event) -> None:
+                nonlocal enriched
                 eid = str(ev.event_id)
                 if not eid.isdigit():
-                    continue
+                    return
+                async with sem:
+                    try:
+                        params = {
+                            "id": eid,
+                            "lng": self.skin.language,
+                            "ref": str(self.skin.partner),
+                            "fcountry": str(self.skin.country),
+                            "gr": str(self.skin.gr),
+                        }
+                        resp = await client.get(url, params=params, headers=headers)
 
-                try:
-                    params = {
-                        "id": eid,
-                        "lng": self.skin.language,
-                        "ref": str(self.skin.partner),
-                        "fcountry": str(self.skin.country),
-                        "gr": str(self.skin.gr),
-                    }
-                    url = (
-                        f"{self.skin.base_url}"
-                        f"/service-api/statisticfeed/api/v2/Game/statistic"
-                    )
-                    resp = await client.get(url, params=params, headers=headers)
+                        if resp.status_code == 204:
+                            # 204 = no stats for this match (minor league).
+                            return
 
-                    if resp.status_code == 204:
-                        # 204 = no stats for this match (minor league).
-                        continue
+                        if resp.status_code != 200:
+                            logger.warning(
+                                "skin=%s stats status=%d for event=%s",
+                                self.skin.name, resp.status_code, eid,
+                            )
+                            return
 
-                    if resp.status_code != 200:
+                        rows = BetB2BExtractionRules.extract_statistics_data(resp.json())
+                        if rows:
+                            ev.statistics = rows
+                            enriched += 1
+
+                    except httpx.HTTPError as exc:
                         logger.warning(
-                            "skin=%s stats status=%d for event=%s",
-                            self.skin.name, resp.status_code, eid,
+                            "skin=%s stats HTTP error for event=%s: %s",
+                            self.skin.name, eid, exc,
                         )
-                        continue
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning(
+                            "skin=%s stats parse error for event=%s: %s",
+                            self.skin.name, eid, exc,
+                        )
 
-                    rows = BetB2BExtractionRules.extract_statistics_data(resp.json())
-                    if rows:
-                        ev.statistics = rows
-                        enriched += 1
-
-                except httpx.HTTPError as exc:
-                    logger.warning(
-                        "skin=%s stats HTTP error for event=%s: %s",
-                        self.skin.name, eid, exc,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(
-                        "skin=%s stats parse error for event=%s: %s",
-                        self.skin.name, eid, exc,
-                    )
+            await asyncio.gather(*[_one(ev) for ev in events])
 
         if enriched:
             logger.info(
