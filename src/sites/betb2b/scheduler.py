@@ -7,8 +7,9 @@ is the bus):
   - **scheduled** (~3h): LineFeed discovery → skip matches already scraped
     recently or already kicked off → fetch only new/stale prematch odds.
   - **live** (~15s): LiveFeed discovery → fetch (always; live odds move fast).
-  - **results** (finished-match final scores): TODO — the Line/Live feeds drop a
-    match once it ends, so this needs the results/history endpoint (research).
+  - **results** (~10min): finished-match final scores (ADR-16/20) — the Line/Live
+    feeds drop a match once it ends, so this reads statisticfeed `v1/Game` for
+    real matches past ~2.5h with no result yet and stamps score/winner on finish.
 
 Single-flight: passes share one lock, so only one scrape runs at a time (one
 httpx pool, no self-contention). Browser-free/proxy-free via direct mode.

@@ -911,13 +911,14 @@ don't remove the line.
       `refresh_window`) / started → fetch new+stale. **Live** (~15s): LiveFeed discovery → fetch.
       Live-verified: rerun of scheduled skipped all 117 (only cheap discovery ran). Enabled by the
       new scraper `discover_ids` / `fetch_events` split.
-      **STILL OPEN:** (1) **Results pass** — **endpoint FOUND 2026-07-28 (ADR-20 / recon
-      `reviews/2026-07-28-results-endpoint.md`)**: `statisticfeed/api/v1/Game?id=<id>` → `entity`
-      with `status` (3=finished), final `score1/score2`, `winner` (1/2), `periods[]`; un-gated,
-      proxy-free, retains finished games for weeks. Now a **build, not research**: capture
-      `entity.id` during live/scheduled scraping (v1/Game is a superset of the /Game/h2h call we
-      already make), then a results pass polls `v1/Game?id=<entity.id>` for `start_time+~2.5h<now`
-      matches and writes final score/winner/periods to Supabase. Feeds the engine's HIT/MISS grading.
+      **~~(1) Results pass~~ — DONE 2026-07-28 Session 34 (`fa00e2f`, ADR-16/20):** scheduler's
+      third pass. `events` result columns (stat_game_id, final_score_home/away, winner,
+      result_status, result_captured_at) + PG ALTER migration; `scraper.fetch_result` →
+      statisticfeed `v1/Game` entity (status 3=finished); `store.record_result` /
+      `events_needing_results` drive the state-driven pass (real matches past ~2.5h, no result →
+      fetch by retained stat_game_id else event id → stamp on status==3). CLI `--results-interval`
+      (10min) + worker config. Live-verified + 217 tests. **Next: the ENGINE grades HIT/MISS**
+      from these result fields (engine's own session, ADR-1/2).
       **~~(2) Deploy the scheduler as a Railway worker~~ — DONE 2026-07-28 Session 32 (`8c43077`, ADR-18):**
       deploy-ready as a dedicated second Railway service — graceful SIGTERM handling in the `schedule`
       CLI, a `worker:` Procfile process (env-configurable via `SCHED_*`), and RAILWAY.md setup docs.

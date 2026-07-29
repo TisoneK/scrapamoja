@@ -876,3 +876,22 @@ past entries — append corrections instead.
 - **Recorded:** ADR-20 (resolves ADR-16 §3 + pins the results-pass design), recon `reviews/2026-07-28-results-endpoint.md`, backlog item flipped research→build.
 - **Next (build):** the scheduler's third **results pass** + a final-result store target (`events` result fields / terminal `event_states`) + `stat_game_id` on `events`; then the engine grades HIT/MISS (its session). Optional: consolidate H2H enrichment onto `v1/Game`.
 - **Deliverable:** the endpoint + ADR-20 + recon (research done; implementation proposed).
+
+## 2026-07-28 — Session 34 continued — results pass BUILT (ADR-16/20)
+- **Shipped (`fa00e2f`):** the scheduler's third pass, completing ADR-16. `events` gains result
+  columns (stat_game_id, final_score_home/away, winner, result_status, result_captured_at) — with
+  an idempotent Postgres `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` migration in store_orm (since
+  create_all only adds tables, not columns). `scraper.fetch_result(id)` hits statisticfeed
+  `v1/Game` and parses `entity` (status 3=finished, score1/2, winner, periods) via a testable
+  static `_parse_result_entity`. `store.record_result` / `events_needing_results` (both paths)
+  drive a state-driven pass: real matches (away set) past `result_min_age` (~2.5h) with
+  `result_status IS NULL` → fetch by retained `stat_game_id` else the event id → stamp
+  score/winner only on `status==3` (captures stat_game_id opportunistically otherwise). Scheduler
+  `_results_pass` on a 10-min loop (bounded concurrency, ADR-17); CLI `--results-interval` + worker
+  start-command/Procfile.
+- **Verified:** live `fetch_result` returns a finished game (110-128, winner 2, 5 periods incl.
+  per-quarter). 217 tests green (3 new: entity parse, needing/record, outright+fresh skip). The
+  deployed worker auto-picks this up on redeploy; the ALTER migration adds the Supabase columns on connect.
+- **Handoff to the engine session:** grade HIT/MISS by reading `events` where `result_status=3`
+  (final_score_home/away + winner) joined to ungraded `predictions` → write back (engine ADR-1/2).
+- **Trio complete:** ADR-17 (speed) · ADR-18 (scheduler live on Railway) · ADR-16/20 (results).
