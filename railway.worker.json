@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "sh -c \"python -m src.sites.betb2b.cli schedule ${SCHED_SKIN:-linebet} --sport ${SCHED_SPORT:-basketball} --scheduled-interval ${SCHED_PREMATCH_INTERVAL:-10800} --live-interval ${SCHED_LIVE_INTERVAL:-15} --refresh-window ${SCHED_REFRESH_WINDOW:-10800}\"",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
+  }
+}

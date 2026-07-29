@@ -141,15 +141,17 @@ needs **no Volume** and no proxy — just `DATABASE_URL`.
 
 ### Create the worker service (one-time, Railway dashboard)
 
-1. In the **same Railway project**, **New → GitHub Repo** → pick this repo again (or
-   **New → Empty Service** and attach the repo). This gives a second service off the same
-   Dockerfile.
-2. **Settings → Deploy → Start Command** — override to the scheduler (this is the
-   `worker:` line in the `Procfile`):
-   ```
-   python -m src.sites.betb2b.cli schedule ${SCHED_SKIN:-linebet} --sport ${SCHED_SPORT:-basketball} --scheduled-interval ${SCHED_PREMATCH_INTERVAL:-10800} --live-interval ${SCHED_LIVE_INTERVAL:-15} --refresh-window ${SCHED_REFRESH_WINDOW:-10800}
-   ```
-3. **Settings → Deploy → Health Check** — **remove it** (a worker has no HTTP port).
+1. In the **same Railway project**, **New → GitHub Repo** → pick this repo again. This
+   gives a second service off the same repo.
+2. **Settings → Build → Builder = Dockerfile** (match the web service; a new service
+   otherwise defaults to Railpack).
+3. **Settings → Config-as-code → Railway Config File = `railway.worker.json`.** This is
+   the important one: the repo's default `railway.json` pins the **web** start command
+   (`gunicorn`) + `/health` healthcheck, and Railway config-as-code **overrides the
+   dashboard** — so a dashboard "custom start command" is ignored and the worker would
+   wrongly boot the API. `railway.worker.json` gives the worker the **scheduler** start
+   command and **no healthcheck**. (The dashboard Start Command / Health Check fields are
+   moot once a config file is set.)
 4. **Variables** (worker service):
 
    | Var | Value | Notes |
