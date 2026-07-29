@@ -860,3 +860,11 @@ past entries — append corrections instead.
 - **Manual step remaining (operator):** create the second Railway service in the dashboard (documented in RAILWAY.md) — cannot be done from here (needs the Railway account).
 - **Next (backlog):** results-pass endpoint research (ADR-16 — the last scheduler pass + engine grading); paripesa domain (203).
 - **Deliverable:** ADR-18 deploy support (code + Procfile + docs).
+
+## 2026-07-28 — Session 33 addendum — scheduler worker DEPLOYED to Railway (co-driven)
+- Operator logged into Railway; agent drove the dashboard to create the worker.
+- **Created** a second service in the `scrapamoja` project off the same repo (`TisoneK/scrapamoja`, `main`), Dockerfile builder, `DATABASE_URL=${{scrapamoja.DATABASE_URL}}` (reference — secret never handled), `BETB2B_DIRECT=1`, `BETB2B_CONCURRENCY=8`, `SCHED_*` cadences; no public domain, no healthcheck.
+- **Gotcha fixed (`63f5c25`):** the repo's default `railway.json` (web gunicorn start command + `/health` healthcheck) is config-as-code and **overrode the dashboard** — the worker first booted the API. Added **`railway.worker.json`** (scheduler start command, no healthcheck) and pointed the service's Config-as-code file at it. Web service keeps `railway.json`.
+- **Verified live in the deploy logs:** scheduler running (not gunicorn), parallel stats/H2H requests (ADR-17), live passes persisting to **Supabase Postgres** — e.g. `persist run 5 (linebet): 34 events, 1019 odds → Postgres`. No "Network"/healthcheck step (correct for a worker).
+- **Watch item:** the `statisticfeed` **stats** sub-endpoint returns intermittent `529` (best-effort enrichment, non-fatal — odds/events persist fine). Endpoint-specific (LineFeed/GetGameZip odds succeed), so not a global IP block; if noisy, lower `BETB2B_CONCURRENCY` (e.g. 4) or gate stats. Ties to the ADR-17 rate discipline.
+- **Cosmetic:** the service is auto-named `wonderful-joy` (the inline rename control didn't commit); rename to `betb2b-scheduler` when convenient — no redeploy needed.
