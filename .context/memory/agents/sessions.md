@@ -895,3 +895,8 @@ past entries — append corrections instead.
 - **Handoff to the engine session:** grade HIT/MISS by reading `events` where `result_status=3`
   (final_score_home/away + winner) joined to ungraded `predictions` → write back (engine ADR-1/2).
 - **Trio complete:** ADR-17 (speed) · ADR-18 (scheduler live on Railway) · ADR-16/20 (results).
+
+## 2026-07-29 — Session 34 continued (2) — docs rebalance + cleanup
+- **`ad220e7`:** de-emphasized betb2b in the main README to match the other sites — removed the "flagship" intro callout + the dedicated "scraper & data platform" section (which combined betb2b with the DB/Supabase/engine architecture). betb2b is now a Supported-Sites table row + a one-line description (parallel to FlashScore/Wikipedia) pointing at `src/sites/betb2b/README.md`. Moved the direct-mode / store / remote-API / scheduler / deploy content into the site README, and documented current known issues there (paripesa 203, market names `G=n`, statisticfeed 529/coverage, single-skin scheduler) under its "Limitations & known issues" section.
+- **Cleanup:** removed committed scratch dumps (`output/*.json`) + gitignored `output/`. Left the `betb2b_h2h_*/` recon outputs in place (referenced by discovery scripts/docs) — flagged to operator as optional further cleanup.
+- **Operator principle recorded:** site docs live with the site; the main README treats every site equally — no site is "more special than the rest."
