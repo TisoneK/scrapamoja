@@ -913,8 +913,12 @@ don't remove the line.
       new scraper `discover_ids` / `fetch_events` split.
       **STILL OPEN:** (1) **Results pass** — the Line/Live feeds drop a match once it ends, so
       finished-match final scores need the results/history endpoint (research, like the GetSportsZip
-      discovery). This is what feeds the engine's prediction validation (HIT/MISS). (2) Deploy the
-      scheduler as a Railway worker (or wire it into the service) so it runs continuously.
+      discovery). This is what feeds the engine's prediction validation (HIT/MISS).
+      **~~(2) Deploy the scheduler as a Railway worker~~ — DONE 2026-07-28 Session 32 (`8c43077`, ADR-18):**
+      deploy-ready as a dedicated second Railway service — graceful SIGTERM handling in the `schedule`
+      CLI, a `worker:` Procfile process (env-configurable via `SCHED_*`), and RAILWAY.md setup docs.
+      Smoke-verified: worker ran scheduled+live passes (27+31 persisted), SIGTERM → clean exit 0 in 6.6s.
+      The remaining step (creating the Railway service in the dashboard) is a one-time manual op.
 - [x] **Parallel/batch fetch + persist batching (h2h/dedup/teams)** (added 2026-07-28 by Claude Code; **DONE 2026-07-28 Session 31/32**) —
       Both halves shipped (ADR-17): (a) FETCH — `6fb782e` — bounded-concurrency `gather` over
       GetGameZip + H2H + stats (semaphore = `BETB2B_CONCURRENCY`, default 8 direct / 1 non-direct,

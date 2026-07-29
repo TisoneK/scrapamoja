@@ -850,3 +850,13 @@ past entries — append corrections instead.
 - **Note:** the timing probe first hit outright ids (correctly dropped by the 787972e filter → 0 events) — confirmed the fix works, then re-timed on real WNBA matches.
 - **Next (backlog):** deploy scheduler as a Railway worker (ADR-18); results-pass endpoint research (ADR-16); paripesa domain (203).
 - **Deliverable:** the sync + the concurrency fetch (ADR-17 complete).
+
+## 2026-07-28 — Session 33 — scheduler as a deployable Railway worker (ADR-18)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** local (macOS) | **Core:** 0.3.0
+- **Task:** make the state-aware scheduler deploy-ready as a dedicated Railway worker (ADR-18).
+- **Commit:** `8c43077` (+ this bookkeeping).
+- **Shipped:** (a) **Graceful SIGTERM** — the `schedule` CLI installs SIGTERM/SIGINT loop handlers → `stop()` lets the current pass finish and `run()` closes the scraper, so a Railway redeploy never half-writes (falls back to KeyboardInterrupt/CancelledError where `add_signal_handler` is unavailable). (b) **`worker:` Procfile process** — env-configurable via `SCHED_*` vars. (c) **RAILWAY.md** — full second-service setup (start command = the `worker:` line, remove healthcheck, env: `DATABASE_URL` + `BETB2B_DIRECT=1` + cadences), rate-discipline (ADR-17) + do-not-colocate notes.
+- **Verified:** subprocess smoke test — worker ran scheduled (97 discovered → 27 real matches persisted, outrights dropped) + live (31 persisted) passes, then **SIGTERM → exit 0 in 6.6s, "scheduler stopped"**, no traceback. 214 tests green.
+- **Manual step remaining (operator):** create the second Railway service in the dashboard (documented in RAILWAY.md) — cannot be done from here (needs the Railway account).
+- **Next (backlog):** results-pass endpoint research (ADR-16 — the last scheduler pass + engine grading); paripesa domain (203).
+- **Deliverable:** ADR-18 deploy support (code + Procfile + docs).
