@@ -116,6 +116,36 @@ def test_orm_sub_games_persisted_and_upserted(orm_conn):
     ]
 
 
+def test_orm_results_needing_and_record(orm_conn):
+    """Results pass (ADR-16/20): a past real match is 'needing results'; a live
+    (status 2) probe captures stat_game_id but stays pending; status 3 stamps the
+    final result and clears it from the list."""
+    store.persist_result(_rich_result(), conn=orm_conn)   # event 739052498, away set, start 2026-07-27
+    assert ("739052498", None) in store.events_needing_results(orm_conn, min_age_seconds=60)
+
+    # live probe: capture the statisticfeed id, still not finished → still pending
+    store.record_result(orm_conn, "739052498", stat_game_id="stat9", status=2,
+                        score_home=42, score_away=49, at="2026-07-28T00:00:00+00:00")
+    assert ("739052498", "stat9") in store.events_needing_results(orm_conn, min_age_seconds=60)
+
+    # finished → final score/winner stamped, removed from the work list
+    store.record_result(orm_conn, "739052498", stat_game_id="stat9", status=3,
+                        score_home=95, score_away=101, winner=2, at="2026-07-28T01:00:00+00:00")
+    assert store.events_needing_results(orm_conn, min_age_seconds=60) == []
+    from sqlalchemy import text
+    row = orm_conn.execute(text(
+        "SELECT final_score_home, final_score_away, winner, result_status, stat_game_id "
+        "FROM events WHERE event_id='739052498'")).first()
+    assert tuple(row) == (95, 101, 2, 3, "stat9")
+
+
+def test_orm_results_skips_outrights_and_fresh(orm_conn):
+    """needing_results excludes outrights (no away team) and matches younger than min_age."""
+    store.persist_result(_rich_result(), conn=orm_conn)   # start 2026-07-27 → old enough
+    # nothing qualifies when the age bar is a decade
+    assert store.events_needing_results(orm_conn, min_age_seconds=10**9) == []
+
+
 def test_orm_change_only_dedup(orm_conn):
     store.persist_result(_rich_result(at="2026-07-27T12:00:00+00:00"), conn=orm_conn)
     store.persist_result(_rich_result(at="2026-07-27T12:00:05+00:00"), conn=orm_conn)

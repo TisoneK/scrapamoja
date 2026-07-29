@@ -584,6 +584,23 @@ def test_fetch_events_bounded_concurrency(skin: BetB2BSkinConfig) -> None:
     assert 1 < max_inflight <= 4                        # concurrent but bounded
 
 
+def test_parse_result_entity() -> None:
+    """statisticfeed v1/Game `entity` → result dict (ADR-20). status 3 = finished."""
+    from src.sites.betb2b.scraper import BetB2BScraper
+    p = BetB2BScraper._parse_result_entity
+    fin = p({"id": "6a6", "status": 3, "score1": 110, "score2": 128, "winner": 2,
+             "periods": [{"type": 18, "score1": 27, "score2": 26}]})
+    assert fin == {"stat_game_id": "6a6", "status": 3, "score_home": 110,
+                   "score_away": 128, "winner": 2,
+                   "periods": [{"type": 18, "score1": 27, "score2": 26}]}
+    # live game (status 2) parses too — caller decides what to store
+    live = p({"id": "x", "status": 2, "score1": 42, "score2": 49, "winner": 0})
+    assert live["status"] == 2 and live["periods"] == []
+    # no id → not a game
+    assert p({}) is None
+    assert p({"status": 3}) is None
+
+
 def test_scraper_concurrency_env_and_direct_default(skin: BetB2BSkinConfig, monkeypatch) -> None:
     from src.sites.betb2b.scraper import BetB2BScraper
     # direct → default 8; non-direct → sequential 1

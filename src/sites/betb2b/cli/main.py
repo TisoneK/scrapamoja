@@ -299,6 +299,8 @@ class BetB2BCLI:
                          help="Seconds between prematch passes (default: 10800 = 3h)")
         sch.add_argument("--live-interval", type=float, default=15.0,
                          help="Seconds between live passes (default: 15)")
+        sch.add_argument("--results-interval", type=float, default=600.0,
+                         help="Seconds between finished-match results passes (default: 600 = 10min)")
         sch.add_argument("--refresh-window", type=float, default=10800.0,
                          help="Re-scrape a prematch match only after this many seconds (default: 3h)")
         sch.add_argument("--no-direct", action="store_true",
@@ -486,7 +488,7 @@ class BetB2BCLI:
         sched = BetB2BScheduler(
             args.skin, sport=args.sport, db_path=db, direct=not args.no_direct,
             scheduled_interval=args.scheduled_interval, live_interval=args.live_interval,
-            refresh_window=args.refresh_window,
+            refresh_window=args.refresh_window, results_interval=args.results_interval,
         )
         print(f"scheduler: skin={args.skin} sport={args.sport} "
               f"scheduled={args.scheduled_interval:.0f}s live={args.live_interval:.0f}s "

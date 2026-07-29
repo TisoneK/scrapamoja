@@ -55,6 +55,8 @@ class BetB2BScheduler:
         refresh_window: float = 10800.0,       # re-scrape a prematch match after 3h
         skip_started: bool = True,
         rate_limit_per_minute: int = 120,
+        results_interval: float = 600.0,       # 10min — results pass cadence
+        result_min_age: float = 9000.0,        # 2.5h — a match this old should be done
     ) -> None:
         self.skin_name = skin_name
         self.sport = sport
@@ -65,6 +67,8 @@ class BetB2BScheduler:
         self.refresh_window = refresh_window
         self.skip_started = skip_started
         self.rate_limit_per_minute = rate_limit_per_minute
+        self.results_interval = results_interval
+        self.result_min_age = result_min_age
         self._scraper: Optional[BetB2BScraper] = None
         self._lock = asyncio.Lock()
         self._stop = asyncio.Event()
@@ -83,13 +87,14 @@ class BetB2BScheduler:
         """Run the passes until stop(); blocks."""
         if self._scraper is None:
             await self.start()
-        logger.info("scheduler start: skin=%s sport=%s scheduled=%.0fs live=%.0fs refresh=%.0fs",
+        logger.info("scheduler start: skin=%s sport=%s scheduled=%.0fs live=%.0fs results=%.0fs refresh=%.0fs",
                     self.skin_name, self.sport, self.scheduled_interval,
-                    self.live_interval, self.refresh_window)
+                    self.live_interval, self.results_interval, self.refresh_window)
         try:
             await asyncio.gather(
                 self._loop("scheduled", self._scheduled_pass, self.scheduled_interval),
                 self._loop("live", self._live_pass, self.live_interval),
+                self._loop("results", self._results_pass, self.results_interval),
             )
         finally:
             if self._scraper is not None:
@@ -133,6 +138,46 @@ class BetB2BScheduler:
         await self._enrich(events)
         logger.info("live: %d live matches fetched", len(events))
         self._persist("list_live", events)
+
+    async def _results_pass(self) -> None:
+        """Capture finished-match final scores (ADR-16/20). State-driven: query
+        the DB for real matches past `result_min_age` with no result yet, fetch
+        each via statisticfeed `v1/Game` (by retained stat_game_id, else the event
+        id), and write score/winner when `status==3`. No cross-scraper trigger."""
+        sc = self._scraper
+        conn = store.init_db(self.db_path)
+        try:
+            pending = store.events_needing_results(conn, min_age_seconds=self.result_min_age)
+        finally:
+            conn.close()
+        if not pending:
+            return
+        sem = asyncio.Semaphore(sc.concurrency)
+        out: List[Tuple[str, dict]] = []
+
+        async def _one(eid: str, stat_id: Optional[str]) -> None:
+            async with sem:
+                res = await sc.fetch_result(stat_id or eid)   # prefer the retained id
+            if res:
+                out.append((eid, res))
+
+        await asyncio.gather(*[_one(eid, sid) for eid, sid in pending])
+
+        conn = store.init_db(self.db_path)
+        finished = 0
+        at = datetime.now(timezone.utc).isoformat()
+        try:
+            for eid, res in out:
+                store.record_result(
+                    conn, eid, stat_game_id=res.get("stat_game_id"),
+                    score_home=res.get("score_home"), score_away=res.get("score_away"),
+                    winner=res.get("winner"), status=res.get("status"), at=at)
+                if res.get("status") == 3:
+                    finished += 1
+        finally:
+            conn.close()
+        logger.info("results: %d pending → %d checked → %d finished captured",
+                    len(pending), len(out), finished)
 
     # -- helpers --------------------------------------------------------- #
     def _filter_scheduled(self, pairs: List[Tuple[str, object]]) -> List[str]:

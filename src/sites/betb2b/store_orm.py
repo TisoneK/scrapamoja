@@ -13,7 +13,7 @@ API (``init_db`` → a connection, helpers take that ``conn``, return dicts).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Connection, func, select
@@ -39,6 +39,28 @@ _subgames = SubGame.__table__
 _engines: Dict[str, Any] = {}
 
 
+# Columns added to already-existing tables — `create_all` only adds missing
+# TABLES, not columns, so on Postgres (the live Supabase table) they need an
+# explicit idempotent ALTER. SQLite (tests) gets them fresh from create_all.
+_ADDED_COLUMNS_PG = [
+    ("events", "stat_game_id", "TEXT"),
+    ("events", "final_score_home", "INTEGER"),
+    ("events", "final_score_away", "INTEGER"),
+    ("events", "winner", "INTEGER"),
+    ("events", "result_status", "INTEGER"),
+    ("events", "result_captured_at", "TIMESTAMPTZ"),
+]
+
+
+def _ensure_columns(eng) -> None:
+    if eng.dialect.name != "postgresql":
+        return  # SQLite path: create_all built the full table
+    from sqlalchemy import text
+    with eng.begin() as c:
+        for table, col, typ in _ADDED_COLUMNS_PG:
+            c.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}'))
+
+
 def _get_engine():
     from src.core.db import get_engine, resolve_database_url
     url = resolve_database_url()
@@ -46,6 +68,7 @@ def _get_engine():
     if eng is None:
         eng = get_engine()
         Base.metadata.create_all(eng, checkfirst=True)
+        _ensure_columns(eng)
         _engines[url] = eng
     return eng
 
@@ -580,6 +603,39 @@ def list_jobs(conn, *, limit=50, status=None):
 # --------------------------------------------------------------------------- #
 # Queries
 # --------------------------------------------------------------------------- #
+def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):
+    """(event_id, stat_game_id) for real matches that should have finished
+    (start_time older than min_age, default 2.5h) and have no result yet —
+    the results pass's work list (ADR-16/20). Oldest first."""
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=min_age_seconds)
+    rows = conn.execute(
+        select(_events.c.event_id, _events.c.stat_game_id).where(
+            _events.c.away_team_id.isnot(None),   # a real H2H match, not an outright
+            _events.c.start_time.isnot(None),
+            _events.c.start_time < cutoff,
+            _events.c.result_status.is_(None),     # not yet resolved
+        ).order_by(_events.c.start_time).limit(limit)
+    ).all()
+    return [(r[0], r[1]) for r in rows]
+
+
+def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
+                  score_away=None, winner=None, status=None, at=None) -> None:
+    """Write a match's statisticfeed result onto the event (ADR-20). `stat_game_id`
+    is captured whenever seen; the final score/winner/status are stamped only on
+    `status == 3` (finished) — which also removes it from `events_needing_results`."""
+    vals: Dict[str, Any] = {}
+    if stat_game_id:
+        vals["stat_game_id"] = str(stat_game_id)
+    if status == 3:
+        vals.update(final_score_home=_as_int(score_home), final_score_away=_as_int(score_away),
+                    winner=_as_int(winner), result_status=3, result_captured_at=_dt(at))
+    if not vals:
+        return
+    conn.execute(_events.update().where(_events.c.event_id == str(event_id)).values(**vals))
+    conn.commit()
+
+
 def counts(conn) -> Dict[str, int]:
     tables = [_sports, _countries, _leagues, _teams, _events, _markets, _subgames, _runs,
               _states, _periods, _odds, _h2h, _h2hp, _stats]

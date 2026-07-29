@@ -126,6 +126,15 @@ class Event(Base):
     stage: Mapped[Optional[str]] = mapped_column(Text)   # MIO.TSt — tournament stage
     first_seen: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
     last_seen: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
+    # Finished-match result (ADR-16/20) — statisticfeed `v1/Game` `entity`, written
+    # once by the scheduler's results pass. `winner` 1=home/2=away/0=none;
+    # `result_status` is the statisticfeed status (3 = finished).
+    stat_game_id: Mapped[Optional[str]] = mapped_column(Text)          # entity.id (statisticfeed)
+    final_score_home: Mapped[Optional[int]] = mapped_column(Integer)   # entity.score1
+    final_score_away: Mapped[Optional[int]] = mapped_column(Integer)   # entity.score2
+    winner: Mapped[Optional[int]] = mapped_column(Integer)             # entity.winner (1/2/0)
+    result_status: Mapped[Optional[int]] = mapped_column(Integer)      # entity.status (3=finished)
+    result_captured_at: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
     __table_args__ = (
         Index("ix_events_league", "league_id"),
         Index("ix_events_sport", "sport_id"),

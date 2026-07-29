@@ -863,6 +863,66 @@ class BetB2BScraper:
         return list(by_id.values())
 
     # ------------------------------------------------------------------ #
+    # Results (ADR-16/20)
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _parse_result_entity(entity: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """statisticfeed `v1/Game` `entity` → a result dict. `status` 3 = finished."""
+        if not isinstance(entity, dict) or not entity.get("id"):
+            return None
+
+        def _i(v):
+            try:
+                return int(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+        return {
+            "stat_game_id": str(entity.get("id")),
+            "status": _i(entity.get("status")),
+            "score_home": _i(entity.get("score1")),
+            "score_away": _i(entity.get("score2")),
+            "winner": _i(entity.get("winner")),   # 1=home, 2=away, 0=none
+            "periods": entity.get("periods") or [],
+        }
+
+    async def fetch_result(self, ident: str) -> Optional[Dict[str, Any]]:
+        """Fetch a match's result via statisticfeed ``v1/Game?id=<ident>`` (ADR-20).
+
+        ``ident`` is the LineFeed event id (while the match is recent) or the
+        retained statisticfeed ``entity.id``. Returns the parsed result (see
+        :meth:`_parse_result_entity`) or ``None`` (204/no data/error).
+        """
+        ident = str(ident or "").strip()
+        if not ident:
+            return None
+        cookie_header = (
+            None if self._direct
+            else (await self.session_manager.get_session()).to_cookie_header()
+        )
+        headers = self.skin.merged_headers(session_cookies=cookie_header)
+        headers["accept"] = "application/json"
+        proxy_url = (
+            self.proxy_endpoint.to_httpx_proxy() if self.proxy_endpoint is not None else None
+        )
+        url = f"{self.skin.base_url}/service-api/statisticfeed/api/v1/Game"
+        params = {
+            "id": ident, "lng": self.skin.language, "ref": str(self.skin.partner),
+            "fcountry": str(self.skin.country), "gr": str(self.skin.gr),
+        }
+        try:
+            async with httpx.AsyncClient(
+                proxy=proxy_url, timeout=15.0, follow_redirects=True,
+            ) as client:
+                resp = await client.get(url, params=params, headers=headers)
+            if resp.status_code != 200 or not resp.text:
+                return None
+            entity = (resp.json() or {}).get("entity") or {}
+            return self._parse_result_entity(entity)
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.debug("skin=%s result fetch id=%s failed: %s", self.skin.name, ident, exc)
+            return None
+
+    # ------------------------------------------------------------------ #
     # H2H enrichment
     # ------------------------------------------------------------------ #
     async def _enrich_with_h2h(self, events: List[Event]) -> None:

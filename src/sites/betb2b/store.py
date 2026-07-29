@@ -98,7 +98,13 @@ CREATE TABLE IF NOT EXISTS events (
     venue         TEXT,                     -- MIO.Loc — arena/venue
     stage         TEXT,                     -- MIO.TSt — tournament stage
     first_seen    TEXT,
-    last_seen     TEXT
+    last_seen     TEXT,
+    stat_game_id       TEXT,                -- statisticfeed entity.id (ADR-20)
+    final_score_home   INTEGER,             -- results pass: entity.score1
+    final_score_away   INTEGER,             -- entity.score2
+    winner             INTEGER,             -- entity.winner (1=home/2=away/0=none)
+    result_status      INTEGER,             -- entity.status (3=finished)
+    result_captured_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS markets (
@@ -287,6 +293,12 @@ _ADDED_COLUMNS = [
     ("event_states", "wp_home", "REAL"),
     ("event_states", "wp_away", "REAL"),
     ("scraper_jobs", "phase", "TEXT"),
+    ("events", "stat_game_id", "TEXT"),
+    ("events", "final_score_home", "INTEGER"),
+    ("events", "final_score_away", "INTEGER"),
+    ("events", "winner", "INTEGER"),
+    ("events", "result_status", "INTEGER"),
+    ("events", "result_captured_at", "TEXT"),
 ]
 
 
@@ -832,6 +844,47 @@ def events_last_seen(conn, event_ids) -> Dict[str, Any]:
         for r in conn.execute(q, chunk):
             out[r["event_id"]] = r["last_seen"]
     return out
+
+
+def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):
+    """(event_id, stat_game_id) for real matches past ``min_age`` (default 2.5h)
+    with no result yet — the results pass's work list (ADR-16/20). Oldest first."""
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.events_needing_results(conn, min_age_seconds=min_age_seconds, limit=limit)
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=min_age_seconds)).isoformat()
+    rows = conn.execute(
+        "SELECT event_id, stat_game_id FROM events "
+        "WHERE away_team_id IS NOT NULL AND start_time IS NOT NULL AND start_time < ? "
+        "AND result_status IS NULL ORDER BY start_time LIMIT ?",
+        (cutoff, limit),
+    ).fetchall()
+    return [(r["event_id"], r["stat_game_id"]) for r in rows]
+
+
+def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
+                  score_away=None, winner=None, status=None, at=None) -> None:
+    """Write a match's statisticfeed result onto the event (ADR-20). Captures
+    ``stat_game_id`` whenever seen; stamps final score/winner/status only on
+    ``status == 3`` (finished) — which removes it from ``events_needing_results``."""
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.record_result(
+            conn, event_id, stat_game_id=stat_game_id, score_home=score_home,
+            score_away=score_away, winner=winner, status=status, at=at)
+    sets, params = [], []
+    if stat_game_id:
+        sets.append("stat_game_id=?"); params.append(str(stat_game_id))
+    if status == 3:
+        sets += ["final_score_home=?", "final_score_away=?", "winner=?",
+                 "result_status=?", "result_captured_at=?"]
+        params += [_as_int(score_home), _as_int(score_away), _as_int(winner), 3, at]
+    if not sets:
+        return
+    params.append(str(event_id))
+    conn.execute(f"UPDATE events SET {', '.join(sets)} WHERE event_id=?", params)
+    conn.commit()
 
 
 def list_jobs(conn, *, limit: int = 50, status: Optional[str] = None):
