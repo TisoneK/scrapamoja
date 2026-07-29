@@ -868,3 +868,11 @@ past entries — append corrections instead.
 - **Verified live in the deploy logs:** scheduler running (not gunicorn), parallel stats/H2H requests (ADR-17), live passes persisting to **Supabase Postgres** — e.g. `persist run 5 (linebet): 34 events, 1019 odds → Postgres`. No "Network"/healthcheck step (correct for a worker).
 - **Watch item:** the `statisticfeed` **stats** sub-endpoint returns intermittent `529` (best-effort enrichment, non-fatal — odds/events persist fine). Endpoint-specific (LineFeed/GetGameZip odds succeed), so not a global IP block; if noisy, lower `BETB2B_CONCURRENCY` (e.g. 4) or gate stats. Ties to the ADR-17 rate discipline.
 - **Cosmetic:** the service is auto-named `wonderful-joy` (the inline rename control didn't commit); rename to `betb2b-scheduler` when convenient — no redeploy needed.
+
+## 2026-07-28 — Session 34 — results-endpoint research (ADR-16 → resolved, ADR-20)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** local (macOS) | **Core:** 0.3.0
+- **Task:** ADR-16's open research — find where a finished match's final score lives once Line/Live drops it.
+- **Found (proxy-free from a datacenter IP):** `statisticfeed/api/v1/Game?id=<id>` → `entity` with `status` (**3=finished**, 2=live), final `score1/score2`, `winner` (1/2), `periods[]` (Q1–Q4). Discovered via 204-vs-404 endpoint probing (real: `v1/Game`, `v1/Game/events`; guessed result/get/info/score all 404). **Retention proven** — games 6–18 days old still return full results, so the feed dropping the match doesn't lose the score. `v1/Game` is a **superset of `/Game/h2h`** (teams+gameShorts+entity). Could not catch a just-finished game in the live sample to confirm the LineFeed-id-post-finish path, so the design uses the guaranteed `entity.id` (captured during scraping) → robust.
+- **Recorded:** ADR-20 (resolves ADR-16 §3 + pins the results-pass design), recon `reviews/2026-07-28-results-endpoint.md`, backlog item flipped research→build.
+- **Next (build):** the scheduler's third **results pass** + a final-result store target (`events` result fields / terminal `event_states`) + `stat_game_id` on `events`; then the engine grades HIT/MISS (its session). Optional: consolidate H2H enrichment onto `v1/Game`.
+- **Deliverable:** the endpoint + ADR-20 + recon (research done; implementation proposed).
