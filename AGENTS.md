@@ -326,7 +326,7 @@ python -m src.sites.betb2b.cli.main compare-match --skin linebet --sport basketb
 1. **Start at `.context/kickoff.md`.** Do not grep the codebase for "context" — the protocol lives in `.context/`.
 2. **Never write under `.context/core/`** — it is read-only. All project memory goes under `.context/memory/`.
 3. **Pick your instruction set by YOUR agent type:** local IDE → `.context/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox → `.context/core/rules/ai-engineering-protocol.md`.
-4. **Read memory before working:** `.context/memory/workflows/active.md`, `.context/memory/agents/sessions.md` (last entries), `.context/memory/tasks/current.md`, `.context/memory/inefficiencies/log.md`.
+4. **Read memory before working:** `.context/memory/workflows/active.md`, `.context/memory/agents/sessions.md` (last entries), `.context/memory/tasks/current.md`, `.context/memory/inefficiencies/log.md`. If the active session has detailed notes at `.context/memory/sessions/`, skim them for current state.
 5. **One task at a time.** Check `.context/memory/tasks/current.md` first.
 6. **Append-only files:** `agents/sessions.md`, `tasks/backlog.md`, `plans/decisions.md`, `flaws/log.md`, `inefficiencies/log.md`.
 7. **No secrets in tracked files.** Values go only in `.context/memory/secrets/` (self-gitignored).
