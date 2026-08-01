@@ -429,17 +429,25 @@ def test_extract_market_categories_absent_and_malformed(rules: BetB2BExtractionR
 
 
 def test_extract_markets_from_ge_layout(rules: BetB2BExtractionRules) -> None:
-    """New-builder GE[] grouped layout builds one market per group (ADR-19)."""
+    """New-builder GE[] grouped layout builds one market per group (ADR-19).
+
+    Uses the REAL live shape (captured 2026-08-01 through the operator proxy):
+    ``GE[].E`` is a list of ROWS, each row a list of selection dicts
+    (``[[{T,C}], [{T,C}], ...]``) — NOT the flat AE-style shape. Regression
+    for the bug where the nested rows were fed straight to market building and
+    produced 0 markets.
+    """
     event = {
         "I": 1, "O1": "A", "O2": "B", "SN": "Basketball", "SI": 3,
         "GE": [
+            # Real new-builder shape: E = rows, each row = list of selections.
             {"G": 17, "GS": 4, "E": [
-                {"T": 9, "P": 146.5, "C": 1.78, "G": 17},
-                {"T": 10, "P": 146.5, "C": 1.85, "G": 17},
+                [{"T": 9, "P": 146.5, "C": 1.78, "G": 17}],
+                [{"T": 10, "P": 146.5, "C": 1.85, "G": 17}],
             ]},
             {"G": 14, "GS": 22, "E": [
-                {"T": 182, "C": 1.84, "G": 14},
-                {"T": 183, "C": 1.82, "G": 14},
+                [{"T": 182, "C": 1.84, "G": 14}],
+                [{"T": 183, "C": 1.82, "G": 14}],
             ]},
         ],
     }
@@ -457,6 +465,29 @@ def test_extract_markets_from_ge_layout(rules: BetB2BExtractionRules) -> None:
     assert len(g17.selections) == 2
     # Verified (G,T) map applies inside GE groups too.
     assert g17.selections[0].name == "Over 146.5"
+
+
+def test_extract_markets_from_ge_flat_rows(rules: BetB2BExtractionRules) -> None:
+    """GE[].E may also be flat ([[..]] vs [{T,C}, {T,C}]): dict rows are
+    tolerated too — backward-compat for the AE-style shape."""
+    event = {
+        "I": 1, "O1": "A", "O2": "B", "SN": "Basketball", "SI": 3,
+        "GE": [
+            {"G": 17, "GS": 4, "E": [
+                {"T": 9, "P": 146.5, "C": 1.78, "G": 17},
+                {"T": 10, "P": 146.5, "C": 1.85, "G": 17},
+            ]},
+        ],
+    }
+    feed = {"Success": True, "Value": [event]}
+    cap = rules.decode_response(
+        url="https://example.com/GetGameZip", status=200,
+        content_type="application/json", raw_bytes=json.dumps(feed).encode())
+    events = rules.extract_from_captured(cap)
+    ev = events[0]
+    g17 = next(m for m in ev.markets if m.raw_g == 17)
+    assert len(g17.selections) == 2
+    assert {s.name for s in g17.selections} == {"Over 146.5", "Under 146.5"}
 
 
 def test_sub_games_carry_own_mec_categories(rules: BetB2BExtractionRules) -> None:

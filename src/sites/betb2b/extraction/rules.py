@@ -666,9 +666,11 @@ class BetB2BExtractionRules:
 
         # Layout 2b: GE[] (new-builder grouped — ADR-19). The SPA's new-builder
         # GetGameZip groups selections into GE[] with each group carrying
-        # {G, GS, E: [selections]}; we build one market per group exactly like
-        # AE (the group G is the market group id). Prefer AE when both are
-        # present (AE is the richer/older layout); fall back to GE otherwise.
+        # {G, GS, E: [rows]} where E is a list of ROWS, each row a list of
+        # selection dicts (live-verified 2026-08-01). We flatten the rows and
+        # build one market per group exactly like AE (the group G is the market
+        # group id). Prefer AE when both are present (AE is the richer/older
+        # layout); fall back to GE otherwise.
         if not markets:
             ge = ev.get("GE")
             if isinstance(ge, list) and ge:
@@ -676,11 +678,19 @@ class BetB2BExtractionRules:
                     if not isinstance(group, dict):
                         continue
                     g_id = _coerce_int(group.get("G"))
-                    me = group.get("E")
-                    if not isinstance(me, list):
+                    rows = group.get("E")
+                    if not isinstance(rows, list):
                         continue
+                    # Flatten rows → flat selection list (both the old flat
+                    # shape [sel, sel] and the real nested [[sel],[sel]]).
+                    sels: List[Dict[str, Any]] = []
+                    for row in rows:
+                        if isinstance(row, dict):
+                            sels.append(row)
+                        elif isinstance(row, list):
+                            sels.extend(x for x in row if isinstance(x, dict))
                     market = self._build_market_from_selections(
-                        me, g_id=g_id, is_live=is_live,
+                        sels, g_id=g_id, is_live=is_live,
                     )
                     if market is not None:
                         markets.append(market)
