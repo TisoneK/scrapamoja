@@ -2,29 +2,21 @@
 
 **Status:** Idle — no session in progress.
 
-Last: **Session 31 (2026-07-28, Claude Code / claude-opus-4-8, local)** — betb2b
-data-quality pass off an operator review of the Supabase tables. All pushed.
-
-**Shipped this session:**
-- **Outrights dropped** (`787972e`) — single-sided outright/futures markets no
-  longer ingested as events; `_build_event` requires both home AND away.
-- **Persist speedup** (`27edbee`, ADR-17) — batched H2H insert + bulk dedup +
-  team cache; ~1000 Supabase round-trips → a handful.
-- **ADR-16/17/18** (`11b6e66`); **ADR-19** + market-naming recon (`034f8bf`).
-- **Sub-game dimension** (`b3e1c69`, ADR-19) — `SG[]` named per-period/per-stat
-  groups (Rebounds/Assists/Fouls/quarters) → new `sub_games` table. The clean
-  feed-sourced naming win; exact per-group `G` labels deferred (client-composed).
-
-**Operator action outstanding:** run the Supabase cleanup (targeted DELETE or
-full `TRUNCATE`) to clear pre-fix outright junk + old data — SQL was provided in
-chat; the running scraper already carries all fixes.
+Last: **Session 35 (2026-08-01, Buffy / deepseek-v4-flash, local macOS)** — `.context` sync.
+Core updated **0.3.0 → 0.5.0** (session-scoped memory release); `kickoff.md` + `AGENTS.md`
+regenerated for the new templates (Windows `pwsh` block + `memory/sessions/` skim note);
+new `memory/sessions/` module seeded (README + SUMMARY with Sessions 30–35 backfill).
+No product code touched. All pushed.
 
 **Next (tasks/backlog.md):**
-- Parallel/batch fetch (ADR-17 fetch half — bounded-concurrency `gather`) — the
-  biggest remaining speedup.
-- Deploy the scheduler as a dedicated Railway worker (ADR-18).
-- Results-pass endpoint research (ADR-16) — unblocks prediction grading.
+- Results-pass engine grading (ADR-16/20) — handoff to the engine session: grade HIT/MISS by
+  reading `events` where `result_status=3` joined to ungraded `predictions`.
 - paripesa domain (203 on GetSportsZip).
+- ADR-19 market-naming build-out (new-builder GetGameZip MEC/SG names).
+- Standalone scheduler on Railway is live (ADR-18); watch statisticfeed `529` noise; consider
+  `BETB2B_CONCURRENCY=4` if noisy.
+- Operator action from Session 31 still outstanding: run the Supabase cleanup to clear
+  pre-fix outright junk.
 
 **Deploy note:** on Railway set `DATABASE_URL` (Supabase pooler) + `BETB2B_DIRECT=1`; leave
 `BETB2B_PROXY_URL` blank → the scraper runs standalone (no proxy, no browser). `GUNICORN_WORKERS=1`.

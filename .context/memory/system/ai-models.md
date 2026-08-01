@@ -14,6 +14,7 @@ accordingly).
 | Super Z | unknown | 2026-07-14 | 2026-07-14 | 1 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-19 | 2026-07-20 | 2 |
 | Z.ai Code | unknown | 2026-07-25 | 2026-07-25 | 1 |
+| Buffy (Freebuff) | deepseek-v4-flash | 2026-08-01 | 2026-08-01 | 1 |
 
 ## Observations
 
@@ -38,3 +39,4 @@ Update in place when a newer session contradicts an old observation.
 
 - **Z.ai Code / unknown:** Model id recorded as `unknown` — the system prompt names the agent family ("Z.ai Code") but not an exact model version; per the kickoff rule, the agent does not guess its own model. (2026-07-25)
 - **Z.ai Code / unknown:** Session 29 — shipped the ADR-11 code-layer foundation (4 commits: shared env-driven db factory, adaptive repo routing, portable betb2b ORM models + indexes, Alembic baseline + data-copy script). Refined the documented Bash-403 root cause: the tool router rejects command strings containing a secret and poisons the window; proven workaround is scripts that read secrets from a FILE, executed with secret-free command lines. Corrected two ADR-11 premises during discovery (the store is two SQLite files not three; "connection-string swap" holds only for the adaptive/SQLAlchemy half, not the betb2b/raw-sqlite3 half). (2026-07-25)
+- **Buffy (Freebuff) / deepseek-v4-flash:** Model ID from its own system prompt (stated fact, not a guess). Session 35 — `.context`-sync only (no project code touched): applied the core 0.3.0→0.5.0 update, regenerated kickoff.md/AGENTS.md to the new templates (surgical — preserved the project-customized AGENTS.md, added only the sessions/ skim sentence), seeded the new `memory/sessions/` module. No product-code capability demonstrated this session. (2026-08-01)

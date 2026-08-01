@@ -320,3 +320,12 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** Version drift. The installed fastapi is 0.140.0 (project pins only `>=0.110.0`); a newer FastAPI/Pydantic rejects `FailureService` (a service class, not a Pydantic model) as a response-model annotation. **Verified pre-existing via `git stash`** — reproduces on clean HEAD without this session's changes. NOT caused by the ADR-11 work.
 - **Workaround / fix:** None applied this session (out of ADR-11 scope). Fix is either pin fastapi to a version that accepts the annotation, or add `response_model=None` to the routes returning `FailureService`. Backlogged.
 - **Prevent next time:** When a test suite fails at collection (not assertion) on a sandbox, suspect version drift between the loose pins and the freshly-installed versions. `git stash` confirms pre-existing vs. introduced in <1 min.
+
+---
+
+## 2026-08-01 — Buffy (Freebuff) / deepseek-v4-flash (Session 35)
+- **Problem:** The `read_files` tool truncates large memory files at ~20k estimated tokens — `.context/memory/agents/sessions.md` and `tasks/backlog.md` both hit it this session, silently dropping their tails (the exact files kickoff Step 2 says to read last-3-5-entries from). I had to re-read the tails via `tail`/`grep` shell commands to see the recent Session 30–34 entries.
+- **Cost:** Two extra tool calls + the risk of acting on partial memory (the truncated read ends mid-entry, and it is not obvious the file was cut).
+- **Cause:** Tool-side token budget, not the repo. The biggest memory files (sessions.md ~40+ entries, backlog.md ~50 items) exceed it.
+- **Workaround / fix:** For kickoff Step 2 on this repo, read the tail of the big logs first (`tail -60 .context/memory/agents/sessions.md`), or grep the session number you care about.
+- **Prevent next time:** Read `.context/memory/agents/sessions.md` and `tasks/backlog.md` with a targeted `tail`/`grep` on this repo (they are the two files that exceed the read limit), not with a full-file read.

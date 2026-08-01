@@ -19,7 +19,7 @@ block (and its "last verified" date) every time you run on it again.
    preferences in `user/`; project-wide decisions in `plans/`.
 
 ---
-## Baos-Mac-mini (last verified 2026-07-22, session 28)
+## Baos-Mac-mini (last verified 2026-08-01, session 35)
 - **Identify by:** hostname `Baos-Mac-mini.local`, `$USER` = `bao`, workspace `/Users/bao/Code/scrapamoja`
 - **OS:** macOS 15.7.7 (build 24G720, Darwin 24.6.0), Intel **x86_64**
 - **Runtimes:** system python3 = 3.9.6 (too old); **project runtime = uv-managed CPython 3.12.13 in `.venv/`**; node v24.17.0
@@ -39,6 +39,7 @@ block (and its "last verified" date) every time you run on it again.
   - `--only-binary :all:` is required (see above). If a needed package has no wheel, that surfaces here as a hard error rather than a slow failing source build.
   - Network/filesystem-writing uv commands were run with the sandbox disabled (they need internet + writes to `~/.cache/uv`, `~/.local`).
   - **No GNU `timeout`** on PATH (macOS ships no coreutils, no Homebrew here) — `timeout 300 <cmd>` fails with "command not found". Use pytest's own `--timeout=` or a background run instead of wrapping. (session 28)
+  - **`sh .context/core/bin/context-sync {verify,status,update}` verified (session 35)** — the POSIX `sh` tool works fine on this Mac; no need for the 0.4.0+ `context-sync.ps1` PowerShell port here (that's for TisoneK-Windows).
 
 ---
 ## Railway (deployment target — linked 2026-07-17, session 7)
