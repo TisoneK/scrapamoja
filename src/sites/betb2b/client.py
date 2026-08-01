@@ -220,6 +220,7 @@ class BetB2BFeedClient:
         *,
         root: str = "line",
         extra_params: Optional[Dict[str, str]] = None,
+        new_builder: Optional[bool] = None,
     ) -> CapturedFeedResponse:
         """Fetch one match's full markets via ``GetGameZip?id=<eventId>``.
 
@@ -227,12 +228,32 @@ class BetB2BFeedClient:
         carry stubs / are SW-gated, but the per-match ``GetGameZip`` returns the
         full nested ``E[]``/``AE[]`` markets and is not SW-gated. ``root="line"``
         for prematch, ``"live"`` for in-play.
+
+        ``new_builder``: use the SPA's new-builder variant (ADR-19) — adds
+        ``isNewBuilder=true&GroupEvents=true&marketType=1&countevents=250``
+        (plus an empty ``topGroups``), which makes the feed carry real market
+        names: ``MEC[]`` filter categories + ``SG[].TG`` sub-game names. Defaults
+        to the skin's ``new_builder_markets`` feature flag (off until CI-vs-I
+        addressing is validated live). The response keeps the same ``E[]``/
+        ``AE[]`` market layout (the new-builder adds ``GE[]``; the extractor
+        handles both), so flipping the flag only adds names — it never changes
+        the parsed shape.
         """
+        if new_builder is None:
+            new_builder = self.skin.features.get("new_builder_markets", False)
         params: Dict[str, str] = {
             "id": str(event_id),
             "isSubGames": "true",
             "grMode": "4",
         }
+        if new_builder:
+            params.update({
+                "isNewBuilder": "true",
+                "GroupEvents": "true",
+                "marketType": "1",
+                "countevents": "250",
+                "topGroups": "",
+            })
         if extra_params:
             params.update(extra_params)
         return await self.fetch("game", root=root, extra_params=params)

@@ -186,6 +186,12 @@ class Event:
     # "Free Throws Scored", "1st quarter", …). Named in-feed; a dimension the
     # engine can use to know which prop/stat markets an event carries (ADR-19).
     sub_games: List[Dict[str, Any]] = field(default_factory=list)
+    # ``MEC[]`` — the SPA's market-filter categories with REAL names (ADR-19),
+    # e.g. [{market_type_id: 3, count: 20, name: "Total"}, {… "Handicap"}].
+    # Feed-sourced truth; the category label replaces a bare ``G=<n>`` where the
+    # verified (G,T) core map has no entry. Exact exotic per-group labels stay
+    # deferred (never guess). Empty when the feed carries no MEC.
+    market_categories: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -222,6 +228,7 @@ class Event:
             "wp_home": self.wp_home,
             "wp_away": self.wp_away,
             "sub_games": self.sub_games,
+            "market_categories": self.market_categories,
         }
 
 

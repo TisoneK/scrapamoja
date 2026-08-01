@@ -420,6 +420,7 @@ class BetB2BExtractionRules:
         venue, stage = self._event_venue_stage(ev)
         wp_home, wp_away = self._event_win_probs(ev)
         sub_games = self._extract_sub_games(ev)
+        market_categories = self._extract_market_categories(ev)
 
         return Event(
             event_id=event_id,
@@ -453,6 +454,7 @@ class BetB2BExtractionRules:
             wp_home=wp_home,
             wp_away=wp_away,
             sub_games=sub_games,
+            market_categories=market_categories,
         )
 
     @staticmethod
@@ -487,6 +489,35 @@ class BetB2BExtractionRules:
         return _coerce_float(wp.get("P1")), _coerce_float(wp.get("P2"))
 
     @staticmethod
+    def _extract_market_categories(ev: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Parse the ``MEC[]`` market-filter categories (ADR-19, new-builder feed).
+
+        The SPA's new-builder ``GetGameZip`` carries ``MEC[]`` — the market
+        filter categories with REAL names ("Popular", "Total", "Handicap",
+        "Points", "Special", …). Each entry is ``{MT, EC, N}``: ``MT`` = the
+        market-type filter id, ``EC`` = market count in that category, ``N`` =
+        the display name. Feed-sourced truth — this is the naming win from
+        ADR-19, distinct from the per-``G`` group names that stay
+        client-composed (never guess those).
+        """
+        mec = ev.get("MEC")
+        if not isinstance(mec, list):
+            return []
+        out: List[Dict[str, Any]] = []
+        for c in mec:
+            if not isinstance(c, dict):
+                continue
+            name = (c.get("N") or "").strip()
+            if not name:
+                continue
+            out.append({
+                "market_type_id": _coerce_int(c.get("MT")),
+                "count": _coerce_int(c.get("EC")),
+                "name": name,
+            })
+        return out
+
+    @staticmethod
     def _extract_sub_games(ev: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Parse the ``SG[]`` sub-game list (GetGameZip with ``isSubGames=true``).
 
@@ -519,6 +550,9 @@ class BetB2BExtractionRules:
                 "period_index": _coerce_int(s.get("P")),
                 "market_count": _coerce_int(s.get("EC")),
                 "sport_id": _coerce_int(s.get("SI")),
+                # Each sub-game carries its own MEC category list (new-builder
+                # feed) — named market filters scoped to that sub-game (ADR-19).
+                "categories": BetB2BExtractionRules._extract_market_categories(s),
             })
         return out
 
@@ -630,6 +664,27 @@ class BetB2BExtractionRules:
                 if market is not None:
                     markets.append(market)
 
+        # Layout 2b: GE[] (new-builder grouped — ADR-19). The SPA's new-builder
+        # GetGameZip groups selections into GE[] with each group carrying
+        # {G, GS, E: [selections]}; we build one market per group exactly like
+        # AE (the group G is the market group id). Prefer AE when both are
+        # present (AE is the richer/older layout); fall back to GE otherwise.
+        if not markets:
+            ge = ev.get("GE")
+            if isinstance(ge, list) and ge:
+                for group in ge:
+                    if not isinstance(group, dict):
+                        continue
+                    g_id = _coerce_int(group.get("G"))
+                    me = group.get("E")
+                    if not isinstance(me, list):
+                        continue
+                    market = self._build_market_from_selections(
+                        me, g_id=g_id, is_live=is_live,
+                    )
+                    if market is not None:
+                        markets.append(market)
+
         # Layout 1: E[] (flat) — only used to ENRICH existing markets
         # (add selections the AE layout missed) or as a fallback when
         # AE is absent.
@@ -645,12 +700,13 @@ class BetB2BExtractionRules:
                     continue
                 by_g.setdefault(g_id, []).append(sel)
 
-            # If we already have AE markets, merge E selections into them
-            # by G; otherwise build fresh markets from E.
+            # If we already have grouped-layout markets (AE or the new-builder
+            # GE), merge E selections into them by G; otherwise build fresh
+            # markets from E.
             existing_by_g: Dict[int, Market] = {m.raw_g: m for m in markets if m.raw_g is not None}
             for g_id, sels in by_g.items():
                 if g_id in existing_by_g:
-                    # Skip — AE layout is richer, E is just a subset.
+                    # Skip — the grouped layout (AE/GE) is richer, E is a subset.
                     continue
                 market = self._build_market_from_selections(
                     sels, g_id=g_id, is_live=is_live,

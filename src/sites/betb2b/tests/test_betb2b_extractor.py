@@ -393,6 +393,142 @@ def test_extract_with_unknown_market_ids(rules: BetB2BExtractionRules) -> None:
 
 
 # ---------------------------------------------------------------------------
+# MEC market categories + GE[] layout (ADR-19 new-builder feed)
+# ---------------------------------------------------------------------------
+def test_extract_market_categories_from_mec(rules: BetB2BExtractionRules) -> None:
+    """The new-builder GetGameZip MEC[] names are parsed (ADR-19 naming win)."""
+    event = {
+        "I": 1, "O1": "A", "O2": "B", "SN": "Basketball", "SI": 3,
+        "MEC": [
+            {"MT": 2, "EC": 27, "N": "Popular"},
+            {"MT": 3, "EC": 20, "N": "Total"},
+            {"MT": 4, "EC": 6, "N": "Handicap"},
+            {"MT": 1, "EC": 33, "N": "All markets"},
+        ],
+    }
+    feed = {"Success": True, "Value": [event]}
+    cap = rules.decode_response(
+        url="https://example.com/GetGameZip", status=200,
+        content_type="application/json", raw_bytes=json.dumps(feed).encode())
+    events = rules.extract_from_captured(cap)
+    assert len(events) == 1
+    cats = events[0].market_categories
+    assert [(c["name"], c["count"], c["market_type_id"]) for c in cats] == [
+        ("Popular", 27, 2), ("Total", 20, 3), ("Handicap", 6, 4), ("All markets", 33, 1),
+    ]
+    # Round-trips through to_dict for the store.
+    assert events[0].to_dict()["market_categories"][1]["name"] == "Total"
+
+
+def test_extract_market_categories_absent_and_malformed(rules: BetB2BExtractionRules) -> None:
+    """No/malformed MEC degrades to [] — never a crash."""
+    assert BetB2BExtractionRules._extract_market_categories({}) == []
+    assert BetB2BExtractionRules._extract_market_categories({"MEC": "nope"}) == []
+    assert BetB2BExtractionRules._extract_market_categories(
+        {"MEC": [None, {"MT": 3, "EC": 2}, {"MT": 4, "EC": 1, "N": ""}]}) == []
+
+
+def test_extract_markets_from_ge_layout(rules: BetB2BExtractionRules) -> None:
+    """New-builder GE[] grouped layout builds one market per group (ADR-19)."""
+    event = {
+        "I": 1, "O1": "A", "O2": "B", "SN": "Basketball", "SI": 3,
+        "GE": [
+            {"G": 17, "GS": 4, "E": [
+                {"T": 9, "P": 146.5, "C": 1.78, "G": 17},
+                {"T": 10, "P": 146.5, "C": 1.85, "G": 17},
+            ]},
+            {"G": 14, "GS": 22, "E": [
+                {"T": 182, "C": 1.84, "G": 14},
+                {"T": 183, "C": 1.82, "G": 14},
+            ]},
+        ],
+    }
+    feed = {"Success": True, "Value": [event]}
+    cap = rules.decode_response(
+        url="https://example.com/GetGameZip", status=200,
+        content_type="application/json", raw_bytes=json.dumps(feed).encode())
+    events = rules.extract_from_captured(cap)
+    assert len(events) == 1
+    ev = events[0]
+    groups = {m.raw_g for m in ev.markets}
+    assert groups == {17, 14}
+    g17 = next(m for m in ev.markets if m.raw_g == 17)
+    assert g17.market_type == MarketType.TOTALS
+    assert len(g17.selections) == 2
+    # Verified (G,T) map applies inside GE groups too.
+    assert g17.selections[0].name == "Over 146.5"
+
+
+def test_sub_games_carry_own_mec_categories(rules: BetB2BExtractionRules) -> None:
+    """Each SG[] sub-game carries its own MEC category list (new-builder feed)."""
+    event = {
+        "I": 1, "O1": "A", "O2": "B", "SN": "Basketball", "SI": 3,
+        "SG": [
+            {"I": 42, "TG": "", "PN": "1st quarter", "EC": 19,
+             "MEC": [{"MT": 3, "EC": 12, "N": "Total"},
+                      {"MT": 4, "EC": 2, "N": "Handicap"}]},
+        ],
+    }
+    feed = {"Success": True, "Value": [event]}
+    cap = rules.decode_response(
+        url="https://example.com/GetGameZip", status=200,
+        content_type="application/json", raw_bytes=json.dumps(feed).encode())
+    events = rules.extract_from_captured(cap)
+    sg = events[0].sub_games[0]
+    assert sg["categories"] == [
+        {"market_type_id": 3, "count": 12, "name": "Total"},
+        {"market_type_id": 4, "count": 2, "name": "Handicap"},
+    ]
+
+
+def test_fetch_game_new_builder_param_wiring(skin: BetB2BSkinConfig, monkeypatch) -> None:
+    """fetch_game adds the new-builder params only when the flag is on (ADR-19)."""
+    from src.sites.betb2b.client import BetB2BFeedClient
+    from src.sites.betb2b.extraction.models import CapturedFeedResponse
+
+    class _SM:
+        async def get_session(self, force=False):
+            raise AssertionError("direct mode must not harvest a session")
+        def record_auth_failure(self, status):
+            return False
+        def clear(self):
+            pass
+
+    client = BetB2BFeedClient(skin, session_manager=_SM(), direct=True)
+    seen: dict = {}
+
+    async def fake_fetch(feed, *, root="live", extra_params=None, force_session_refresh=False):
+        seen["params"] = dict(extra_params or {})
+        return CapturedFeedResponse(url="u", status=200, content_type="", body_bytes=0, decoded={})
+
+    monkeypatch.setattr(client, "fetch", fake_fetch)
+
+    import asyncio
+    asyncio.run(client.fetch_game("123", root="line"))
+    # Flag off (default): no new-builder params.
+    assert seen["params"]["id"] == "123"
+    assert "isNewBuilder" not in seen["params"]
+
+    asyncio.run(client.fetch_game("123", root="line", new_builder=True))
+    p = seen["params"]
+    assert p["isNewBuilder"] == "true"
+    assert p["GroupEvents"] == "true"
+    assert p["marketType"] == "1"
+    assert p["countevents"] == "250"
+    assert "topGroups" in p
+
+    # Flag on via skin features → the default flips. Build a FRESH skin so the
+    # shared DEFAULT_SKIN_CONFIG fixture is never mutated for later tests.
+    flagged = skin.with_overrides(features={**skin.features, "new_builder_markets": True})
+    client2 = BetB2BFeedClient(flagged, session_manager=_SM(), direct=True)
+    monkeypatch.setattr(client2, "fetch", fake_fetch)
+    asyncio.run(client2.fetch_game("123", root="line"))
+    assert seen["params"]["isNewBuilder"] == "true"
+    # The default skin is untouched.
+    assert "new_builder_markets" not in skin.features or skin.features.get("new_builder_markets") is False
+
+
+# ---------------------------------------------------------------------------
 # Skin config tests
 # ---------------------------------------------------------------------------
 def test_skin_config_from_yaml(tmp_path: Path) -> None:
