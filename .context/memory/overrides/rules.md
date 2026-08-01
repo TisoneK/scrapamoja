@@ -21,9 +21,9 @@ Example:
 
 *(none yet)*
 
-- **`kickoff.md` Step 1 — `sh .context/core/bin/context-sync verify`** → **On Windows, skip the `sh context-sync` commands and verify integrity manually via PowerShell** — `context-sync` is POSIX-only (`sha256sum`/`shasum`/`sh` are not on Windows PATH). Replace with:
+- **~~`kickoff.md` Step 1 — `sh .context/core/bin/context-sync verify`~~** → **SUPERSEDED 2026-08-01 (Session 35):** core **0.4.0+ ships a PowerShell port** — `pwsh -File .context/core/bin/context-sync.ps1 verify|status|update|rollback` — so Windows agents use the port instead of the manual PowerShell verification below. The manual script is kept only as a fallback for a project still on a pre-0.4.0 core. (set by agent, 2026-07-20; superseded by the core 0.4.0 ps1 port, noted 2026-08-01)
   ```powershell
-  # Verify: compare SHA256 of every file in .context/core/ against its MANIFEST.sha256
+  # Fallback only (pre-0.4.0 core): compare SHA256 of every file in .context/core/ against its MANIFEST.sha256
   $manifest = Get-Content ".context/core/MANIFEST.sha256"
   $fail = $false
   foreach ($line in $manifest) {
@@ -35,10 +35,9 @@ Example:
   if (-not $fail) { Write-Host "CORE INTEGRITY PASSED" }
   ```
   ```powershell
-  # Status: check core version + git log
+  # Status fallback: check core version + git log
   Get-Content ".context/core/VERSION" | Select-Object -First 1
   git log --oneline -5 -- .context/core/
   ```
-  (set by agent, 2026-07-20)
 
 - **`kickoff.md` Step 1 — `git pull --ff-only`** → **No change needed** — git works fine from PowerShell on Windows. (set by agent, 2026-07-20)
