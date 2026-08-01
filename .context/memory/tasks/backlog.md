@@ -932,3 +932,15 @@ don't remove the line.
       `insert().returning()`, one bulk dedup query per fact type, in-memory team cache (~1000
       round-trips → a handful). Datacenter-IP discipline: conservative default, ramp deliberately,
       proxy fallback retained. Together they make tight (5–15s) live polling viable.
+- [ ] **Persist MEC market_categories to the store** (added 2026-08-01 Session 36; flagged by code review) —
+      ADR-19 build-out parses `MEC[]` into `Event.market_categories` (+ `to_dict()`), but neither
+      `store.py` (raw SQLite) nor `store_orm.py` (ORM) persists the dimension, so it silently
+      disappears from DB output. Add a `market_categories` column (or JSON blob) to the events
+      write path in both stores, mirroring how `sub_games` is handled (named-column upserts),
+      plus a store test. MEDIUM.
+- [ ] **Live-validate the new-builder GetGameZip params, then flip `new_builder_markets`**
+      (added 2026-08-01 Session 36) — the ADR-19 `isNewBuilder=true&GroupEvents=true&marketType=1`
+      shape + `CI`-vs-`I` id equivalence is fixture-tested but NOT live-verified; the feature flag
+      defaults False until then. Run one bounded probe (e.g. `compare-match` or a raw
+      `fetch_game(new_builder=True)`) against a real event and diff the parsed markets/names
+      against the old-builder result before flipping the flag for any skin. MEDIUM/HIGH.

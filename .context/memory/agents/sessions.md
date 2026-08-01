@@ -910,3 +910,17 @@ past entries — append corrections instead.
 - **Open items:** none — sync session; no code touched. Standing backlog unchanged (results-pass engine grading, paripesa 203, market-naming ADR-19 build-out).
 - **Report:** no review report — sync session (precedent: sessions 5/7/8). Summary in chat.
 - **Notes:** none — trivial session, summary only.
+
+---
+## 2026-08-01 — Session 36 — ADR-19 market-naming build-out
+- **Agent:** Buffy (Freebuff) | **Model:** deepseek-v4-flash (from system prompt) | **Platform:** Baos-Mac-mini (macOS, user `bao`) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-19 build — switch the betb2b scraper's `GetGameZip` to the new-builder params (`isNewBuilder=true&GroupEvents=true&marketType=1`, id via the event's `CI`) and parse `MEC` category names + `SG.TG` sub-game names from the feed.
+- **Commits:** 1 project-surface `feat(betb2b):` + 1 context-surface `chore(context):` (this log) — pending push.
+- **Outcome:** done (code + tests; live-flag validation deferred by design) —
+  1. `config.py`: new `new_builder_markets` feature flag on the skin (default **False** — safe until the new-builder shape is live-validated; flips via `with_overrides`/YAML).
+  2. `client.py`: `fetch_game` gains a `new_builder` param — when the flag is on it sends `isNewBuilder=true&GroupEvents=true&marketType=1&countevents=250` (+ `topGroups`) and switches the id key to `CI`; old-builder shape (`isSubGames=true&grMode=4`, id=`I`) unchanged by default.
+  3. `models.py`: `Event.market_categories` field (parsed `MEC[]`) + `to_dict()` entry.
+  4. `rules.py`: `_extract_market_categories` parses `MEC[]` `{MT, EC, N}` defensively (malformed input degrades, never raises) at event AND per-sub-game level; `_extract_markets` gained the new-builder `GE[]` grouped layout (activates only when `AE[]` produced no markets; the E-flat merge dedups by `raw_g`). Per ADR-19, unknown `(G,T)` markets keep the honest `G=<n>` fallback — MEC gives the category taxonomy, NOT a per-`G` name map, so no guessing.
+  5. Tests: 6 new fixture-based tests (MEC parse, per-SG categories, GE layout, param wiring via fresh `with_overrides` skin so the shared fixture is never mutated, malformed-MEC degradation). Full betb2b suite green.
+- **Open items:** (a) persist `market_categories` into the store (`store.py`/`store_orm.py` — new backlog item); (b) live-validate the new-builder params and confirm `CI`-vs-`I` id equivalence on a real `GetGameZip` before flipping the flag (backlog).
+- **Report:** no review report — feature build (precedent: sessions 9/12). Summary in chat.
