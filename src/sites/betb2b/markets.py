@@ -18,7 +18,7 @@ Per-skin YAML can extend/override these via the ``market_groups`` and
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 
 @dataclass(frozen=True)
@@ -182,18 +182,60 @@ DEFAULT_MARKET_GT: Dict["tuple[int, int]", "tuple[str, str]"] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# (G, GS, T) → (market_name, selection) — the ADR-7 addendum's market
+# identity: the T-only table mislabels total variants across sports, and the
+# ``GS`` group-specifier disambiguates (G,T) pairs that repeat in different
+# scopes. GS values below are CONFIRMED from real captures — the betb2b
+# fixture (Brazil LDB U22, GetGameZip) and the new-builder GE[] probe of a
+# Euroleague game agree on G=17→GS=4, G=2→GS=3, and the rest match the
+# ADR-7 verified mapping table (PBA game). GS is stable across builder
+# variants (old E[] and new GE[]). Unknown (G,GS,T) triples fall through to
+# the (G,T) map and then the honest G=<n> fallback — never guess.
+# ---------------------------------------------------------------------------
+DEFAULT_MARKET_GST: Dict["tuple[int, int, int]", "tuple[str, str]"] = {
+    # Combined total (both teams) — G=17 GS=4
+    (17, 4, 9): ("Total", "Over"),
+    (17, 4, 10): ("Total", "Under"),
+    # Individual total — HOME (team 1) — G=15 GS=5
+    (15, 5, 11): ("Individual Total Home", "Over"),
+    (15, 5, 12): ("Individual Total Home", "Under"),
+    # Individual total — AWAY (team 2) — G=62 GS=6
+    (62, 6, 13): ("Individual Total Away", "Over"),
+    (62, 6, 14): ("Individual Total Away", "Under"),
+    # Asian handicap — G=2 GS=3
+    (2, 3, 7): ("Asian Handicap", "W1"),
+    (2, 3, 8): ("Asian Handicap", "W2"),
+    # To Win Match (moneyline 2-way, no line) — G=14 GS=22
+    (14, 22, 182): ("To Win Match", "1"),
+    (14, 22, 183): ("To Win Match", "2"),
+    # Moneyline 3-way — G=101 GS=38
+    (101, 38, 401): ("Moneyline 3-way", "1"),
+    (101, 38, 402): ("Moneyline 3-way", "2"),
+    (101, 38, 403): ("Moneyline 3-way", "X"),
+}
+
+
 def lookup_market(
     g_id: int,
     t_id: int,
     market_groups: Dict[int, MarketGroup],
     market_types: Dict[int, MarketTypeMap],
+    gs_id: Optional[int] = None,
 ) -> "tuple[str | None, str | None]":
-    """Look up a market's (market_name, selection_label) from ``G`` + ``T``.
+    """Look up a market's (market_name, selection_label) from ``G`` + ``T``
+    (and ``GS`` when the feed carries it).
 
-    Order: verified (G,T) map → T-only map → G-only group name → placeholder.
-    Falls back to ``f"G={g_id}"`` / ``f"T={t_id}"`` if unknown — the
-    extractor degrades gracefully rather than dropping the market.
+    Order: verified (G,GS,T) map → verified (G,T) map → T-only map → G-only
+    group name → placeholder. Falls back to ``f"G={g_id}"`` / ``f"T={t_id}"``
+    if unknown — the extractor degrades gracefully rather than dropping the
+    market. ``gs_id`` is optional for backward compatibility (list feeds and
+    older callers that don't carry GS).
     """
+    if gs_id is not None:
+        gst = DEFAULT_MARKET_GST.get((g_id, gs_id, t_id))
+        if gst is not None:
+            return gst
     gt = DEFAULT_MARKET_GT.get((g_id, t_id))
     if gt is not None:
         return gt

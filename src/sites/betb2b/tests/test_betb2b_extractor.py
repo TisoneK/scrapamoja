@@ -1061,6 +1061,87 @@ def test_lookup_market_gt_verified(skin) -> None:
     assert lookup_market(14, 182, mg, mt) == ("To Win Match", "1")
 
 
+def test_lookup_market_gst_verified(skin) -> None:
+    """(G,GS,T) verified map — the ADR-7 addendum identity. GS values are
+    CONFIRMED from the real betb2b fixture (Brazil LDB U22, GetGameZip) +
+    the ADR-7 PBA mapping: G=17→GS=4, G=15→GS=5, G=62→GS=6, G=2→GS=3,
+    G=14→GS=22, G=101→GS=38. Same names as the (G,T) map — the GS key
+    disambiguates scopes (quarter/half/full repeat the same G,T)."""
+    from src.sites.betb2b.markets import lookup_market
+    mg, mt = skin.market_groups, skin.market_types
+    assert lookup_market(17, 9, mg, mt, gs_id=4) == ("Total", "Over")
+    assert lookup_market(15, 11, mg, mt, gs_id=5) == ("Individual Total Home", "Over")
+    assert lookup_market(62, 13, mg, mt, gs_id=6) == ("Individual Total Away", "Over")
+    assert lookup_market(2, 7, mg, mt, gs_id=3) == ("Asian Handicap", "W1")
+    assert lookup_market(14, 182, mg, mt, gs_id=22) == ("To Win Match", "1")
+    assert lookup_market(101, 401, mg, mt, gs_id=38) == ("Moneyline 3-way", "1")
+
+
+def test_lookup_market_gst_fallback(skin) -> None:
+    """Unknown (G,GS,T) triples fall through to the (G,T) map / G-only —
+    never guessed, never a crash. gs_id=None (list feeds) stays backward
+    compatible."""
+    from src.sites.betb2b.markets import lookup_market
+    mg, mt = skin.market_groups, skin.market_types
+    # GS not in the verified map → (G,T) map still resolves.
+    assert lookup_market(17, 9, mg, mt, gs_id=9999) == ("Total", "Over")
+    # Exotic new-builder group (G=2766 GS=939) → honest fallback.
+    assert lookup_market(2766, 3653, mg, mt, gs_id=939) == (None, "G=2766 T=3653")
+    # No GS at all → unchanged behaviour.
+    assert lookup_market(17, 9, mg, mt) == ("Total", "Over")
+    assert lookup_market(999, 9999, mg, mt) == (None, "G=999 T=9999")
+
+
+def test_extract_selection_carries_gs(skin) -> None:
+    """Selections extracted from E[]/AE[] carry raw_gs, and the (G,GS,T) map
+    resolves names via GS (the ADR-7 addendum identity)."""
+    rules = BetB2BExtractionRules(skin)
+    # A market built from a selection with GS — via the extractor path.
+    event = {
+        "I": 1, "O1": "A", "O2": "B", "SN": "Basketball", "SI": 3,
+        "E": [
+            {"T": 9, "P": 146.5, "C": 1.85, "G": 17, "GS": 4},
+            {"T": 10, "P": 146.5, "C": 1.90, "G": 17, "GS": 4},
+        ],
+    }
+    feed = {"Success": True, "Value": [event]}
+    cap = rules.decode_response(
+        url="https://example.com/GetGameZip", status=200,
+        content_type="application/json", raw_bytes=json.dumps(feed).encode())
+    ev = rules.extract_from_captured(cap)[0]
+    m = next(m for m in ev.markets if m.raw_g == 17)
+    assert m.name == "Total"
+    assert all(s.raw_gs == 4 for s in m.selections)
+    assert all(s.raw_g == 17 for s in m.selections)
+    assert m.selections[0].raw_t == 9
+    # Round-trips through to_dict (the store path).
+    d = m.selections[0].to_dict()
+    assert d["raw_gs"] == 4
+
+
+def test_extract_market_gs_from_real_fixture(skin) -> None:
+    """The real betb2b fixture's (G,GS,T) combos resolve to names via the
+    verified map — regression for the ADR-7 addendum identity."""
+    fx_path = Path(__file__).parent / "fixtures" / "getgamezip_basketball.json"
+    if not fx_path.exists():
+        pytest.skip("fixture not present")
+    payload = json.loads(fx_path.read_text(encoding="utf-8"))
+    rules2 = BetB2BExtractionRules(skin)
+    cap2 = rules2.decode_response(
+        url="https://example.com/GetGameZip", status=200,
+        content_type="application/json",
+        raw_bytes=json.dumps(payload).encode())
+    ev = rules2.extract_from_captured(cap2)[0]
+    # Combined total (G=17 GS=4) → "Total"; individual totals via GS.
+    names = {m.raw_g: m.name for m in ev.markets}
+    assert names.get(17) == "Total"
+    assert names.get(15) == "Individual Total Home"
+    assert names.get(62) == "Individual Total Away"
+    assert names.get(14) == "To Win Match"
+    # Exotic groups (G=2766/2768) keep the honest G=<n> fallback.
+    assert names.get(2766, "").startswith("G=") or names.get(2766) is None
+
+
 # ---------------------------------------------------------------------------
 # Match statistics (statisticfeed api/v2/Game/statistic) — ADR-11 verification
 # ---------------------------------------------------------------------------

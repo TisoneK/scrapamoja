@@ -106,6 +106,7 @@ class Selection:
     is_suspended: bool = False
     raw_t: Optional[int] = None         # the raw ``T`` market-type id
     raw_g: Optional[int] = None         # the raw ``G`` group id
+    raw_gs: Optional[int] = None        # the raw ``GS`` group-specifier id (ADR-7 addendum: market identity = (G, GS, T))
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -115,6 +116,7 @@ class Selection:
             "is_suspended": self.is_suspended,
             "raw_t": self.raw_t,
             "raw_g": self.raw_g,
+            "raw_gs": self.raw_gs,
         }
 
 

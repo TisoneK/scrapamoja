@@ -761,10 +761,15 @@ class BetB2BExtractionRules:
 
             line = _coerce_float(sel.get("P"))
             blocked = bool(sel.get("B") or False)
+            # GS is the group-specifier — market identity is (G, GS, T), not
+            # T alone (ADR-7 addendum). The lookup prefers the verified
+            # (G,GS,T) map when the feed carries GS.
+            gs_id = _coerce_int(sel.get("GS"))
 
             m_name, sel_label = lookup_market(
                 g_id=g_id,
                 t_id=t_id,
+                gs_id=gs_id,
                 market_groups=self.skin.market_groups,
                 market_types=self.skin.market_types,
             )
@@ -791,6 +796,7 @@ class BetB2BExtractionRules:
                 is_suspended=blocked,
                 raw_t=t_id,
                 raw_g=g_id,
+                raw_gs=gs_id,
             ))
 
         if not selections:
