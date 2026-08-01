@@ -924,3 +924,17 @@ past entries — append corrections instead.
   5. Tests: 6 new fixture-based tests (MEC parse, per-SG categories, GE layout, param wiring via fresh `with_overrides` skin so the shared fixture is never mutated, malformed-MEC degradation). Full betb2b suite green.
 - **Open items:** (a) persist `market_categories` into the store (`store.py`/`store_orm.py` — new backlog item); (b) live-validate the new-builder params and confirm `CI`-vs-`I` id equivalence on a real `GetGameZip` before flipping the flag (backlog).
 - **Report:** no review report — feature build (precedent: sessions 9/12). Summary in chat.
+
+---
+## 2026-08-01 — Session 37 — ADR-19 live wire validation (old-builder vs new-builder GetGameZip)
+- **Agent:** Buffy (Freebuff) | **Model:** deepseek-v4-flash (from system prompt) | **Platform:** Baos-Mac-mini (macOS, user `bao`) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** user: "mock test passing and real life test passing are two different things" — live-validate the ADR-19 new-builder GetGameZip params through the operator proxy (`bore.pub:12382`) before trusting the fixture tests.
+- **Commits:** 1 project-surface `fix(betb2b):` (GE flatten) + probe script + regression tests + 1 context-surface `chore(context):` (this log) — pending push.
+- **Outcome:** done — live probe built (`src/sites/betb2b/scripts/probe_newbuilder.py`) and run against a real Euroleague game (Barcelona vs Dubai `I=740520171 CI=355900432`) through KE egress. Findings that fixture tests could NOT have caught:
+  1. **GE[] shape bug found + fixed.** The real new-builder `GE[].E` is a list of ROWS, each row a list of selection dicts (`[[{T,C}],[{T,C}],…]`) — NOT the flat AE-style list the fixture assumed. The extractor fed nested rows straight to market building → **0 markets live**. `_extract_markets` now flattens rows (dict-row + list-row tolerant); regression tests updated to the real nested shape + a flat-rows backward-compat test.
+  2. **CI-vs-I resolved (ADR's live gate cleared):** new-builder with `id=I` and `id=CI` returns byte-identical payloads (17815 b) — the endpoint accepts both. `id` stays `I` in `fetch_game`; no change needed.
+  3. **MEC categories already flow on the old-builder path** (9 names: Popular/Total/Handicap/Points/…) — the ADR-19 naming win is live WITHOUT flipping the flag.
+  4. **Flag stays OFF (evidence, not caution):** new-builder yields FEWER markets (22 GE groups vs 27 from flat `E[]`) and uses exotic G-ids (2766/2768) outside the verified map → more `G=<n>` fallbacks, not fewer. Flipping `new_builder_markets` would be a regression. SG[] absent on this game either way (sub-games only appear when an event has them — needs a market-rich game with quarters/halves to validate live).
+  - Probe results: A old-builder `id=I` 200/27 mk/22 fallback · B new-builder `id=I` 200/22 mk/18 fallback · C new-builder `id=CI` 200/22 mk/18 fallback (B≡C). Full betb2b suite green after fix.
+- **Open items:** (a) persist `market_categories` to the store (backlog); (b) validate SG[].TG live on a game WITH sub-games (quarter/half markets) — the recon's WNBA example had them, this Euroleague game did not; (c) MEC category → market-name cross-map remains deferred per ADR-19 "never guess".
+- **Report:** no review report — feature validation + small fix (precedent: session 18). Summary in chat.

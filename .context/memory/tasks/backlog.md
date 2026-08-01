@@ -938,9 +938,10 @@ don't remove the line.
       disappears from DB output. Add a `market_categories` column (or JSON blob) to the events
       write path in both stores, mirroring how `sub_games` is handled (named-column upserts),
       plus a store test. MEDIUM.
-- [ ] **Live-validate the new-builder GetGameZip params, then flip `new_builder_markets`**
-      (added 2026-08-01 Session 36) — the ADR-19 `isNewBuilder=true&GroupEvents=true&marketType=1`
-      shape + `CI`-vs-`I` id equivalence is fixture-tested but NOT live-verified; the feature flag
-      defaults False until then. Run one bounded probe (e.g. `compare-match` or a raw
-      `fetch_game(new_builder=True)`) against a real event and diff the parsed markets/names
-      against the old-builder result before flipping the flag for any skin. MEDIUM/HIGH.
+- [x] **Live-validate the new-builder GetGameZip params — DONE 2026-08-01 Session 37**
+      (added 2026-08-01 Session 36) — probed live via `src/sites/betb2b/scripts/probe_newbuilder.py`
+      against a real Euroleague game through the operator proxy (KE egress). **Result: flag stays
+      OFF** — new-builder yields FEWER markets (22 GE groups vs 27 from flat `E[]`) with exotic
+      G-ids outside the verified map, while MEC categories already flow on the old-builder path.
+      `id=CI` ≡ `id=I` byte-identical, so no id change needed. The GE[] shape bug (nested rows
+      → 0 markets) found + fixed. See session 37 log for the full A/B/C comparison table.
