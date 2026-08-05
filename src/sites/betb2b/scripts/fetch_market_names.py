@@ -29,9 +29,10 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import re
 import sys
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Tuple
 
 from ._common import ensure_repo_on_path, repo_root
 
@@ -49,22 +50,36 @@ def _decode(raw: bytes) -> dict:
     return json.loads(raw)
 
 
-def build_tables(lng: str = "en") -> "tuple[Dict[str, str], Dict[str, str]]":
-    """Fetch all templates once; return two unions with string keys:
+def _clean_selection(label: str) -> str:
+    """Strip the ``()`` line- and ``[]`` param-placeholders from a bet-model
+    selection label so it's a clean side ("Over ()" → "Over", "[] - W1" → "W1").
+    The line/handicap is appended separately at extraction time.
+    """
+    s = label.replace("()", "").replace("[]", "")
+    s = re.sub(r"\s+", " ", s).strip(" -")
+    return s.strip()
+
+
+def build_tables(lng: str = "en") -> "Tuple[Dict[str, str], Dict[str, str], Dict[str, str]]":
+    """Fetch all templates once; return three unions with string keys:
 
     * ``by_gs`` — ``{GS: name}`` from every entry's ``GN`` sub-map (keyed by the
-      feed's *groupShortId*). The precise key ``lookup_market`` uses.
+      feed's *groupShortId*). The precise key ``lookup_market`` uses for names.
     * ``by_g`` — ``{G: name}`` from every entry's top-level ``N`` (keyed by the
       feed's *group id*). Coarser (one name per group), but the only key the
       store persists on ``markets.raw_g`` — used by the name backfill.
+    * ``by_t`` — ``{T: selection label}`` from every entry's ``M`` sub-map
+      (keyed by the feed's selection *type* id). Names the selection SIDE
+      (Over/Under/Yes/No/W1/…) for exotic groups the hand-map doesn't cover.
 
-    Both spaces are globally unique across the 78 templates (0 conflicts).
+    All three spaces are globally unique across the 78 templates (0 conflicts).
     """
     import httpx
 
     gs_name: Dict[int, str] = {}
     g_name: Dict[int, str] = {}
-    gs_conflicts = g_conflicts = 0
+    t_label: Dict[int, str] = {}
+    gs_conflicts = g_conflicts = t_conflicts = 0
     with httpx.Client(timeout=30.0, follow_redirects=True) as client:
         for n in range(NUM_TEMPLATES):
             url = f"{CDN_BASE}/bets_model_short_{lng}_{n}.json"
@@ -99,12 +114,29 @@ def build_tables(lng: str = "en") -> "tuple[Dict[str, str], Dict[str, str]]":
                         if gs_i in gs_name and gs_name[gs_i] != name:
                             gs_conflicts += 1
                         gs_name[gs_i] = name.strip()
-    if gs_conflicts or g_conflicts:
-        print(f"  NOTE: {gs_conflicts} GS + {g_conflicts} G name conflicts (last-wins)",
-              file=sys.stderr)
+                    for t, sel in (entry.get("M") or {}).items():
+                        if not isinstance(sel, dict):
+                            continue
+                        label = sel.get("N")
+                        if not isinstance(label, str):
+                            continue
+                        label = _clean_selection(label)
+                        if not label:
+                            continue
+                        try:
+                            t_i = int(t)
+                        except (TypeError, ValueError):
+                            continue
+                        if t_i in t_label and t_label[t_i] != label:
+                            t_conflicts += 1
+                        t_label[t_i] = label
+    if gs_conflicts or g_conflicts or t_conflicts:
+        print(f"  NOTE: {gs_conflicts} GS + {g_conflicts} G + {t_conflicts} T "
+              f"conflicts (last-wins)", file=sys.stderr)
     return (
         {str(k): gs_name[k] for k in sorted(gs_name)},
         {str(k): g_name[k] for k in sorted(g_name)},
+        {str(k): t_label[k] for k in sorted(t_label)},
     )
 
 
@@ -115,17 +147,18 @@ def main() -> int:
     args = ap.parse_args()
 
     print(f"Fetching {NUM_TEMPLATES} bet-model templates ({args.lng}) from CDN...")
-    by_gs, by_g = build_tables(args.lng)
+    by_gs, by_g, by_t = build_tables(args.lng)
     data_dir = Path(args.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    gs_out = data_dir / f"market_group_names_{args.lng}.json"
-    gs_out.write_text(json.dumps(by_gs, ensure_ascii=False, indent=0), encoding="utf-8")
-    print(f"Wrote {len(by_gs)} GS -> name entries to {gs_out} ({gs_out.stat().st_size} bytes)")
-
-    g_out = data_dir / f"market_group_names_by_g_{args.lng}.json"
-    g_out.write_text(json.dumps(by_g, ensure_ascii=False, indent=0), encoding="utf-8")
-    print(f"Wrote {len(by_g)} G -> name entries to {g_out} ({g_out.stat().st_size} bytes)")
+    for name, table, label in [
+        (f"market_group_names_{args.lng}.json", by_gs, "GS -> name"),
+        (f"market_group_names_by_g_{args.lng}.json", by_g, "G -> name"),
+        (f"market_selection_labels_{args.lng}.json", by_t, "T -> selection"),
+    ]:
+        out = data_dir / name
+        out.write_text(json.dumps(table, ensure_ascii=False, indent=0), encoding="utf-8")
+        print(f"Wrote {len(table)} {label} entries to {out} ({out.stat().st_size} bytes)")
     return 0
 
 

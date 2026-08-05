@@ -365,11 +365,14 @@ family-shared defaults; per-skin YAML can extend/override.
 
 Every market group is named from the SPA's own bet-model dictionary, keyed
 by **`GS` (groupShortId)** — not feed `G`. The union of the CDN's
-`bets_model_short_en_<0..77>.json` templates is a globally-unique
-`GS → name` table (~5.4k entries), shipped as
-`data/market_group_names_en.json` (plus a coarser `…_by_g_en.json` for the
-backfill). `lookup_market` resolves names in order: verified `(G,GS,T)` →
-`(G,T)` → the GS table → T-only → G-only → honest `G=<n>`.
+`bets_model_short_en_<0..77>.json` templates gives three globally-unique
+tables shipped under `data/`: `market_group_names_en.json` (`GS → name`,
+~5.4k), `market_group_names_by_g_en.json` (`G → name`, for feeds/rows without
+GS + the backfill), and `market_selection_labels_en.json` (`T → side`
+Over/Under/Yes/No/W1/…, ~14.6k — from each entry's `M` sub-map). `lookup_market`
+resolves the group NAME as verified `(G,GS,T)` → `(G,T)` → GS table → G table →
+T-only → `G=<n>`, and the selection SIDE as verified maps → T→label table →
+T-only → `T=<n>`.
 
 ```bash
 # Refresh both tables from the CDN (no proxy needed):

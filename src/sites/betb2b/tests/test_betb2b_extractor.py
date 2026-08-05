@@ -368,9 +368,11 @@ def test_extract_prematch_uses_more_markets(rules: BetB2BExtractionRules) -> Non
 
 def test_extract_with_unknown_market_ids(rules: BetB2BExtractionRules) -> None:
     """Unknown T/G ids should degrade gracefully (no exception, market emitted)."""
+    # Ids far outside the bet-model tables (~5k groups / ~15k selections) so
+    # they genuinely can't resolve — tests the honest fallback path.
     event = {
         "I": 1, "O1": "A", "O2": "B", "SN": "Football", "SI": 1,
-        "E": [{"T": 9999, "C": 2.0, "G": 999, "P": 3.3}],
+        "E": [{"T": 8888888, "C": 2.0, "G": 7777777, "P": 3.3}],
     }
     feed = {"Success": True, "Value": [event]}
     cap = rules.decode_response(
@@ -384,12 +386,12 @@ def test_extract_with_unknown_market_ids(rules: BetB2BExtractionRules) -> None:
     ev = events[0]
     assert len(ev.markets) == 1
     m = ev.markets[0]
-    # Unknown group → OTHER market type, name falls back to "G=999".
+    # Unknown group → OTHER market type, name falls back to "G=7777777".
     assert m.market_type == MarketType.OTHER
-    assert "999" in m.name
-    # Selection label falls back to "T=9999" but still includes the line.
+    assert "7777777" in m.name
+    # Selection label falls back to "T=8888888".
     assert m.selections
-    assert "9999" in m.selections[0].name
+    assert "8888888" in m.selections[0].name
 
 
 # ---------------------------------------------------------------------------
@@ -668,13 +670,13 @@ def test_lookup_market_unknown(skin: BetB2BSkinConfig) -> None:
     from src.sites.betb2b.markets import lookup_market
 
     name, label = lookup_market(
-        g_id=999, t_id=9999,
+        g_id=7777777, t_id=8888888,
         market_groups=skin.market_groups,
         market_types=skin.market_types,
     )
-    # Falls back to the group label, then to a raw G/T label.
-    assert name is None or "999" in (name or "")
-    assert "9999" in label
+    # Ids outside the bet-model tables → honest raw G/T labels.
+    assert "7777777" in (name or "")
+    assert "8888888" in label
 
 
 def test_lookup_sport_known(skin: BetB2BSkinConfig) -> None:
@@ -1058,9 +1060,10 @@ def test_lookup_market_gt_verified(skin) -> None:
     assert lookup_market(15, 11, mg, mt) == ("Individual Total Home", "Over")
     # The old T-only map wrongly called (62,13) "Double Chance".
     assert lookup_market(62, 13, mg, mt) == ("Individual Total Away", "Over")
-    # (14,182) was WRONGLY mapped to "To Win Match" (ADR-19 correction). With no
-    # GS the group can't be named from the GS table → honest "G=14".
-    assert lookup_market(14, 182, mg, mt) == ("G=14", "T=182")
+    # (14,182) was WRONGLY mapped to "To Win Match" (ADR-19 correction). Even
+    # without GS the G→name table names the group and the T→label table names
+    # the side: "Total Even" / "Yes".
+    assert lookup_market(14, 182, mg, mt) == ("Total Even", "Yes")
 
 
 def test_lookup_market_gst_verified(skin) -> None:
@@ -1077,8 +1080,8 @@ def test_lookup_market_gst_verified(skin) -> None:
     assert lookup_market(2, 7, mg, mt, gs_id=3) == ("Asian Handicap", "W1")
     # ADR-19 correction: GS=22 is "Total Even" (an Even/Odd market — fixture
     # odds 1.84/1.82, no line), NOT the moneyline "To Win Match" it was hand-
-    # mislabelled as. The authoritative GS table names it; the side stays honest.
-    assert lookup_market(14, 182, mg, mt, gs_id=22) == ("Total Even", "T=182")
+    # mislabelled as. The GS table names it; the T→label table gives the side.
+    assert lookup_market(14, 182, mg, mt, gs_id=22) == ("Total Even", "Yes")
     assert lookup_market(101, 401, mg, mt, gs_id=38) == ("Moneyline 3-way", "1")
 
 
@@ -1090,13 +1093,28 @@ def test_lookup_market_gst_fallback(skin) -> None:
     # GS not in the verified map → (G,T) map still resolves.
     assert lookup_market(17, 9, mg, mt, gs_id=9999) == ("Total", "Over")
     # Exotic new-builder group (G=2766 GS=939) → named by the authoritative GS
-    # table (ADR-19); the selection side stays honest.
-    assert lookup_market(2766, 3653, mg, mt, gs_id=939) == ("1X2 In Regular Time", "T=3653")
-    # No GS at all → can't use the GS table; unknown group degrades to G=<n>.
+    # table; the T→label table gives the side (ADR-19).
+    assert lookup_market(2766, 3653, mg, mt, gs_id=939) == ("1X2 In Regular Time", "W1")
+    # No GS → the G→name table still names the group; T→label the side.
     assert lookup_market(17, 9, mg, mt) == ("Total", "Over")
-    assert lookup_market(999, 9999, mg, mt) == ("G=999", "T=9999")
-    # Unknown GS not in the table → still honest, never a guess.
-    assert lookup_market(999, 9999, mg, mt, gs_id=888888) == ("G=999", "T=9999")
+    # Ids outside every table → honest raw G/T labels, never a guess.
+    assert lookup_market(7777777, 8888888, mg, mt) == ("G=7777777", "T=8888888")
+    assert lookup_market(7777777, 8888888, mg, mt, gs_id=6666666) == ("G=7777777", "T=8888888")
+
+
+def test_exotic_selection_labels_via_bet_model(skin) -> None:
+    """Exotic groups get real SELECTION sides from the T→label table (ADR-19) —
+    no more bare 'T=<n>'. Verified against real feed (G,T) combos."""
+    from src.sites.betb2b.markets import lookup_market
+    mg, mt = skin.market_groups, skin.market_types
+    # (name, side) — side now comes from the authoritative bet-model M map.
+    assert lookup_market(14, 183, mg, mt, gs_id=22) == ("Total Even", "No")
+    assert lookup_market(91, 755, mg, mt, gs_id=118) == ("Individual Total 1 Even", "Yes")
+    assert lookup_market(92, 767, mg, mt, gs_id=119) == ("Individual Total 2 Even", "No")
+    assert lookup_market(2768, 3656, mg, mt, gs_id=940) == ("Regular Time Double Chance", "1X")
+    # The old hand T-only table wrongly called T=13/14 "1X"/"12"; the bet-model
+    # table corrects them to the totals sides.
+    assert lookup_market(62, 14, mg, mt, gs_id=6)[1] == "Under"
 
 
 def test_extract_selection_carries_gs(skin) -> None:
