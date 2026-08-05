@@ -478,7 +478,16 @@ don't remove the line.
       Expect ≥1 live event with clean teams + score + ≥1 market. NOTE the
       entry point is `python -m src.sites.betb2b.cli` (NOT `.cli.main` — that
       has no `__main__` guard and silently no-ops). MED.
-- [ ] **Map remaining GetGameZip market-group ids to names** (added 2026-07-21 by Claude Code, Session 25;
+- [x] **Map remaining GetGameZip market-group ids to names** — **DONE 2026-08-05 (Session 39)**.
+      Solved by fetching the SPA's own `bets_model` template files from
+      `traincdn/genfiles/cms/betstemplates/bets_model_short_en_<0..77>.json` and indexing them
+      by **`GS` (groupShortId)**, not feed `G` (the 2026-07-28 recon's indexing error). Union =
+      5419 `GS`→name entries, 0 conflicts, names every group incl. exotics. Shipped
+      `data/market_group_names_en.json` + `scripts/fetch_market_names.py` + rewritten
+      `lookup_market`. Also fixed a real mislabel: `(G=14,GS=22)` = "Total Even", not the
+      hand-mapped "To Win Match". Only leftover: exotic selection-SIDE labels (still honest
+      `T=<n>`), extractable from the same files' `M` map if needed. See ADR-19 ADDENDUM.
+      Original entry (superseded): (added 2026-07-21 by Claude Code, Session 25;
       **approach revised 2026-07-28, Session 31 → ADR-19**) —
       A few markets from `GetGameZip` extract with placeholder names like
       `G=14`, `G=91`, `G=92` (unmapped group id → display name) — odds/lines
@@ -491,7 +500,11 @@ don't remove the line.
       to the **new-builder** `GetGameZip` (`isNewBuilder=true&GroupEvents=true&marketType=1`)
       → get `MEC` category names + `SG.TG` sub-game names from the feed; category
       label replaces `G=<n>`. Exact exotic per-group labels deferred (never guess).
-      Cosmetic. LOW.
+      Cosmetic. LOW. — **NOTE: the "defer exotic labels" call was OVERTURNED
+      2026-08-05: they ARE mappable via the `GS`-indexed `bets_model` table (see the
+      DONE marker above). Render-and-read (DOM/Vue/network) is impossible on this SPA
+      (canvas grid + SW-mediated feed/JS + prod-Vue no hook) — but the static CDN
+      dictionary, indexed by `GS`, solved it without any live capture.**
 
 ---
 - [ ] **Fix 22bet skin: KE-redirect domain drops the `/en` prefix (0 live events)** (added 2026-07-21 by Claude Code, Session 25) —
@@ -618,8 +631,7 @@ don't remove the line.
       `.context/memory/secrets/` (never tracked). The store now keeps h2h periods
       (`d0117eb`) so FULL is buildable now; scoped waits on the G-map above. HIGH.
 
----
-- [ ] **Map ALL basketball modes: (G,GS,T) taxonomy + sub-game fetching** (added 2026-07-21 by Claude Code, Session 26; supersedes the earlier "map quarter/half/team G ids" item) —
+---- [~] **Map ALL basketball modes: (G,GS,T) taxonomy + sub-game fetching** (added 2026-07-21 by Claude Code, Session 26; supersedes the earlier "map quarter/half/team G ids" item; **(3) DONE 2026-08-01 Session 38**) —
       The operator wants every mode mapped: full-match BOTH-teams total + full-match
       SINGLE-team totals, and the same for each half + each quarter (combined +
       individual). Structure (ADR-7 addendum): FULL markets in the main event;
@@ -633,6 +645,16 @@ don't remove the line.
       markets.py + rewrite lookup_market to (G,GS,T); (4) add SG sub-game fetching to
       the scraper, tagging each scoped market with its PredictionScope. Do NOT guess —
       a mislabelled total = wrong odds to the engine. HIGH (unblocks scoped ingestion).
+      **~~(3) GST map + lookup~~ — DONE 2026-08-01 Session 38:** `DEFAULT_MARKET_GST`
+      (g_id, gs_id, t_id) with CONFIRMED basketball rows from the real fixture (Brazil
+      LDB U22: G=17/GS=4 Total, G=15/GS=5 + G=62/GS=6 individual totals, G=2/GS=3
+      AsianHcp, G=14/GS=22 ToWin, G=101/GS=38 Moneyline-3way) — GS confirmed stable
+      across old-E[]/new-GE[] variants; `lookup_market` gained `gs_id` (GST→GT→T-only→
+      G-only→fallback); `Selection.raw_gs`; GS threaded through rules.py. 226 tests
+      green. **Remaining:** (1)+(2) live sub-game capture to enumerate quarter/half
+      (G,GS,T) rows (ADR-7 says (G,T) stable across scopes — likely unchanged) and
+      (4) sub-game fetch per SG id is ALREADY wired (`_enrich_with_subgames`, subgames
+      flag) — verify scoped markets carry PredictionScope end-to-end.
 
 ---
 - [~] **Map ignored GetGameZip fields into Event/store** (added 2026-07-21 by Claude Code, Session 26; **HIGH-value subset DONE 2026-07-26**, verified live) —

@@ -938,3 +938,30 @@ past entries — append corrections instead.
   - Probe results: A old-builder `id=I` 200/27 mk/22 fallback · B new-builder `id=I` 200/22 mk/18 fallback · C new-builder `id=CI` 200/22 mk/18 fallback (B≡C). Full betb2b suite green after fix.
 - **Open items:** (a) persist `market_categories` to the store (backlog); (b) validate SG[].TG live on a game WITH sub-games (quarter/half markets) — the recon's WNBA example had them, this Euroleague game did not; (c) MEC category → market-name cross-map remains deferred per ADR-19 "never guess".
 - **Report:** no review report — feature validation + small fix (precedent: session 18). Summary in chat.
+
+---
+## 2026-08-01 — Session 38 — (G,GS,T) market taxonomy (ADR-7 addendum / backlog item 622)
+- **Agent:** Buffy (Freebuff) | **Model:** deepseek-v4-flash (from system prompt) | **Platform:** Baos-Mac-mini (macOS, user `bao`) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** operator steer — stop the ADR-19 new-builder probe loop (it re-discovered what Session 31 already scoped: the naive switch drops odds coverage, already rejected) and do the REAL roadmap item instead: the **(G,GS,T)** market taxonomy that unblocks ADR-7 scoped ingestion. User chose "Pivot to the (G,GS,T) map".
+- **Commits:** 1 project-surface `feat(betb2b):` + 1 context-surface `chore(context):` (this log) — pending push.
+- **Outcome:** done (code + tests; live sub-game capture deferred) —
+  1. **No new probing.** Analyzed the data ALREADY in the repo: the real betb2b fixture (Brazil LDB U22 GetGameZip, 21 distinct (G,GS,T) combos) + the ADR-7 VERIFIED MAPPING table (real PBA game, 11 sub-games) + the Session-37 live new-builder probe (which independently confirmed G=17→GS=4, G=2→GS=3 across builder variants). GS is stable across old-E[] and new-GE[].
+  2. `markets.py`: new **`DEFAULT_MARKET_GST`** keyed (g_id, gs_id, t_id) with the CONFIRMED basketball rows (G=17/GS=4 Total; G=15/GS=5 + G=62/GS=6 individual totals; G=2/GS=3 Asian Handicap; G=14/GS=22 To Win Match; G=101/GS=38 Moneyline 3-way). `lookup_market` gained an optional `gs_id` param: lookup order (G,GS,T) → (G,T) → T-only → G-only → honest fallback. Exotic groups (G=91,92,2766,2768) stay unmapped — never guess.
+  3. `models.py`: `Selection.raw_gs` + `to_dict()` — the store path now carries the GS dimension.
+  4. `rules.py`: `_build_market_from_selections` reads `GS` per selection, passes it to `lookup_market`, stamps `raw_gs`.
+  5. Tests: (G,GS,T) verified lookup, fallback (unknown triple + no-GS backward compat), GS wiring through E[], and a regression test that runs the REAL fixture file through the extractor (Total / Individual Total Home/Away / To Win Match resolve by GS; exotic groups keep G=<n>). Full betb2b suite green (226 tests).
+- **Open items (backlog):** (a) capture a 5v5 game's SUB-GAMES live (NBA/EuroLeague with quarters/halves) and enumerate the quarter/half-scope (G,GS,T) rows that repeat in SG[] payloads — the ADR-7 verified mapping says (G,T) is stable across scopes, so the GST map likely extends to sub-games unchanged; (b) scoped-ingestion exporter then selects each scope's line (ADR-7); (c) MEC persistence to store.
+- **Report:** no review report — feature build (precedent: sessions 9/12). Summary in chat.
+
+---
+## 2026-08-05 — Session 39 — Market-group naming SOLVED via GS-indexed bets_model (ADR-19 ADDENDUM / backlog item 481)
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS, user `bao`) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** operator — "the only remaining is figuring out how to map the market names." Chose "try render-and-read now"; supplied the KE bore proxy (ports 14614→55978 across drops).
+- **Commits:** 1 project-surface `feat(betb2b):` + 1 context-surface `chore(context):` (this log + the dangling Session-38 log that was left uncommitted) — pending push.
+- **Outcome:** DONE — the exotic `G=<n>` labels are gone; every group is named.
+  1. **Render-and-read is impossible on this SPA** (proved across 5 live capture runs vs a real WNBA match): market grid is `<canvas>` (no DOM labels); the feed + betting-app JS + `bets_model` dictionary are all service-worker-mediated/cached (invisible to page-network — 0 feed/`.js` even on a fully-hydrated page); prod Vue exposes no `__VUE_DEVTOOLS_GLOBAL_HOOK__` (Pinia unreachable).
+  2. **The win came from the static CDN dictionary, not the browser.** The 2026-07-28 recon's "wrong id-space" verdict was an INDEXING error — it keyed `bets_model` by feed `G`. The SPA composes `name = groupNames[GS]`; `groupNames` = the union of every template file's `GN` sub-map, keyed by **`GS` (groupShortId)**. Fetched `traincdn/genfiles/cms/betstemplates/bets_model_short_en_<0..77>.json` (gzip, no proxy), unioned `GN` → **5419 `GS`→name entries, 0 conflicts**, names EVERY group incl. exotics (verified against the real fixture).
+  3. **Shipped:** `data/market_group_names_en.json` (committed static asset, `.gitignore` exception added) + `scripts/fetch_market_names.py` (regenerator) + `markets.py::DEFAULT_MARKET_GROUP_NAMES` + rewritten `lookup_market` (name order: verified (G,GS,T) → (G,T) → GS table → T-only → G-only → `G=<n>`; selection SIDE still from the verified maps / T-table). betb2b extractor+models+enrichment suites green (66) + full market/lookup tests (19).
+  4. **Bug the GS table caught + fixed:** the hand-verified ADR-7 `(14,22,182/183)` → "To Win Match" was WRONG — `GS=22` = "Total Even" (Even/Odd; fixture odds 1.84/1.82, no line). Removed from `DEFAULT_MARKET_GST`/`_GT`; updated the 4 tests that encoded the old behavior.
+- **Open items:** (a) exotic selection-SIDE labels still honest `T=<n>` — extractable from the same files' `M` sub-map if the product needs Over/Under/Even/Odd on exotics; (b) persist the richer names to Supabase + a cleanup of existing `G=<n>` rows.
+- **Report:** no review report — feature build + doc correction (precedent: sessions 9/12/18). Summary in chat.
