@@ -192,3 +192,55 @@ def test_orm_job_failure_keeps_phase(orm_conn):
     store.finish_job(orm_conn, jid, status="failed", error="geo/WAF 203")
     row = store.get_job(orm_conn, jid)
     assert row["status"] == "failed" and row["phase"] == "bootstrapping"
+
+
+def test_backfill_market_names(orm_conn, monkeypatch):
+    """The G=<n> name backfill (ADR-19): rename by raw_g, merge into an existing
+    correctly-named row (repointing odds), and leave unknown groups honest."""
+    from datetime import datetime, timezone
+    from sqlalchemy import insert, select
+    from src.core.db import get_engine
+    from src.sites.betb2b.models import Event, Market, OddsSnapshot, ScrapeRun
+    from src.sites.betb2b.scripts import backfill_market_names as bf
+
+    m, o = Market.__table__, OddsSnapshot.__table__
+    now = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    with get_engine().begin() as c:
+        g27 = c.execute(insert(m).values(name="G=27", market_type="european_handicap",
+                                         raw_g=27).returning(m.c.market_id)).scalar()
+        unknown = c.execute(insert(m).values(name="G=999999", raw_g=999999)
+                            .returning(m.c.market_id)).scalar()
+        g91 = c.execute(insert(m).values(name="G=91", raw_g=91)
+                        .returning(m.c.market_id)).scalar()
+        # a newer scrape already created the correctly-named row for G=27
+        euro = c.execute(insert(m).values(name="European Handicap",
+                                          market_type="european_handicap", raw_g=27)
+                         .returning(m.c.market_id)).scalar()
+        rid = c.execute(insert(ScrapeRun.__table__).values(skin="linebet", extracted_at=now)
+                        .returning(ScrapeRun.__table__.c.run_id)).scalar()
+        c.execute(insert(Event.__table__).values(event_id="E1"))
+        c.execute(insert(o).values(run_id=rid, event_id="E1", skin="linebet",
+                                   market_id=g27, selection_name="W1", price=1.9,
+                                   captured_at=now))
+
+    # Dry-run changes nothing.
+    counts = bf.run(apply=False, verbose=False)
+    assert counts == {"renamed": 1, "merged": 1, "skipped": 1}
+    with get_engine().connect() as c:
+        assert c.execute(select(m.c.name).where(m.c.market_id == g91)).scalar() == "G=91"
+
+    # Apply: G=91 renamed, G=27 merged into the euro row (odds repointed + deleted),
+    # unknown left honest.
+    counts = bf.run(apply=True, verbose=False)
+    assert counts == {"renamed": 1, "merged": 1, "skipped": 1}
+    with get_engine().connect() as c:
+        names = dict(c.execute(select(m.c.market_id, m.c.name)).fetchall())
+        assert g27 not in names                         # merged away
+        assert names[g91] == "Individual Total 1 Even"  # renamed via GS/G table
+        assert names[euro] == "European Handicap"
+        assert names[unknown] == "G=999999"             # honest, never guessed
+        odds_mids = [r[0] for r in c.execute(select(o.c.market_id))]
+        assert odds_mids == [euro]                      # repointed to the kept row
+
+    # Idempotent: re-running finds only the unknown.
+    assert bf.run(apply=True, verbose=False) == {"renamed": 0, "merged": 0, "skipped": 1}

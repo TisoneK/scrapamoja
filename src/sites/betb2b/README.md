@@ -361,6 +361,26 @@ Market-id tables (`G` → group, `T` → type within group) live in
 `markets.py`. Sport-id table (`SI` → name) in `sports.py`. Both are
 family-shared defaults; per-skin YAML can extend/override.
 
+### Market-group names (ADR-19)
+
+Every market group is named from the SPA's own bet-model dictionary, keyed
+by **`GS` (groupShortId)** — not feed `G`. The union of the CDN's
+`bets_model_short_en_<0..77>.json` templates is a globally-unique
+`GS → name` table (~5.4k entries), shipped as
+`data/market_group_names_en.json` (plus a coarser `…_by_g_en.json` for the
+backfill). `lookup_market` resolves names in order: verified `(G,GS,T)` →
+`(G,T)` → the GS table → T-only → G-only → honest `G=<n>`.
+
+```bash
+# Refresh both tables from the CDN (no proxy needed):
+python -m src.sites.betb2b.scripts.fetch_market_names
+
+# Backfill real names onto existing markets rows stored as "G=<n>"
+# (dry-run first; --apply writes, merging into any correctly-named row):
+DATABASE_URL=... python -m src.sites.betb2b.scripts.backfill_market_names
+DATABASE_URL=... python -m src.sites.betb2b.scripts.backfill_market_names --apply
+```
+
 ## Testing
 
 ```bash

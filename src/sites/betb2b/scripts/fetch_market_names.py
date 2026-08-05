@@ -49,12 +49,22 @@ def _decode(raw: bytes) -> dict:
     return json.loads(raw)
 
 
-def build_table(lng: str = "en") -> Dict[str, str]:
-    """Fetch all templates and return the ``{GS: name}`` union (string keys)."""
+def build_tables(lng: str = "en") -> "tuple[Dict[str, str], Dict[str, str]]":
+    """Fetch all templates once; return two unions with string keys:
+
+    * ``by_gs`` — ``{GS: name}`` from every entry's ``GN`` sub-map (keyed by the
+      feed's *groupShortId*). The precise key ``lookup_market`` uses.
+    * ``by_g`` — ``{G: name}`` from every entry's top-level ``N`` (keyed by the
+      feed's *group id*). Coarser (one name per group), but the only key the
+      store persists on ``markets.raw_g`` — used by the name backfill.
+
+    Both spaces are globally unique across the 78 templates (0 conflicts).
+    """
     import httpx
 
     gs_name: Dict[int, str] = {}
-    conflicts = 0
+    g_name: Dict[int, str] = {}
+    gs_conflicts = g_conflicts = 0
     with httpx.Client(timeout=30.0, follow_redirects=True) as client:
         for n in range(NUM_TEMPLATES):
             url = f"{CDN_BASE}/bets_model_short_{lng}_{n}.json"
@@ -67,9 +77,18 @@ def build_table(lng: str = "en") -> Dict[str, str]:
             for tpl in obj.values():
                 if not isinstance(tpl, dict):
                     continue
-                for entry in tpl.values():
+                for g, entry in tpl.items():
                     if not isinstance(entry, dict):
                         continue
+                    n_name = entry.get("N")
+                    try:
+                        g_i = int(g)
+                    except (TypeError, ValueError):
+                        g_i = None
+                    if g_i is not None and isinstance(n_name, str) and n_name.strip():
+                        if g_i in g_name and g_name[g_i] != n_name.strip():
+                            g_conflicts += 1
+                        g_name[g_i] = n_name.strip()
                     for gs, name in (entry.get("GN") or {}).items():
                         try:
                             gs_i = int(gs)
@@ -78,28 +97,35 @@ def build_table(lng: str = "en") -> Dict[str, str]:
                         if not isinstance(name, str) or not name.strip():
                             continue
                         if gs_i in gs_name and gs_name[gs_i] != name:
-                            conflicts += 1
+                            gs_conflicts += 1
                         gs_name[gs_i] = name.strip()
-    if conflicts:
-        print(f"  NOTE: {conflicts} GS name conflicts (last-wins)", file=sys.stderr)
-    return {str(k): gs_name[k] for k in sorted(gs_name)}
+    if gs_conflicts or g_conflicts:
+        print(f"  NOTE: {gs_conflicts} GS + {g_conflicts} G name conflicts (last-wins)",
+              file=sys.stderr)
+    return (
+        {str(k): gs_name[k] for k in sorted(gs_name)},
+        {str(k): g_name[k] for k in sorted(g_name)},
+    )
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lng", default="en")
-    ap.add_argument(
-        "--out",
-        default=str(repo_root() / "src/sites/betb2b/data/market_group_names_en.json"),
-    )
+    ap.add_argument("--data-dir", default=str(repo_root() / "src/sites/betb2b/data"))
     args = ap.parse_args()
 
     print(f"Fetching {NUM_TEMPLATES} bet-model templates ({args.lng}) from CDN...")
-    table = build_table(args.lng)
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(table, ensure_ascii=False, indent=0), encoding="utf-8")
-    print(f"Wrote {len(table)} GS -> name entries to {out} ({out.stat().st_size} bytes)")
+    by_gs, by_g = build_tables(args.lng)
+    data_dir = Path(args.data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    gs_out = data_dir / f"market_group_names_{args.lng}.json"
+    gs_out.write_text(json.dumps(by_gs, ensure_ascii=False, indent=0), encoding="utf-8")
+    print(f"Wrote {len(by_gs)} GS -> name entries to {gs_out} ({gs_out.stat().st_size} bytes)")
+
+    g_out = data_dir / f"market_group_names_by_g_{args.lng}.json"
+    g_out.write_text(json.dumps(by_g, ensure_ascii=False, indent=0), encoding="utf-8")
+    print(f"Wrote {len(by_g)} G -> name entries to {g_out} ({g_out.stat().st_size} bytes)")
     return 0
 
 
