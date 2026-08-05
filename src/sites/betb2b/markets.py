@@ -17,7 +17,9 @@ Per-skin YAML can extend/override these via the ``market_groups`` and
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Optional
 
 
@@ -168,9 +170,9 @@ DEFAULT_MARKET_GT: Dict["tuple[int, int]", "tuple[str, str]"] = {
     # Asian handicap
     (2, 7): ("Asian Handicap", "W1"),
     (2, 8): ("Asian Handicap", "W2"),
-    # To Win Match (moneyline 2-way, no line)
-    (14, 182): ("To Win Match", "1"),
-    (14, 183): ("To Win Match", "2"),
+    # NOTE (2026-08-05, ADR-19): (14,182/183) is NOT "To Win Match" — the SPA
+    # names GS=22 "Total Even" and the odds confirm Even/Odd (see DEFAULT_MARKET_GST
+    # note). Removed; resolves via the GS name table instead.
     # 1x2 (3-way, seen in sub-games)
     (1, 1): ("Match Result 1x2", "1"),
     (1, 2): ("Match Result 1x2", "X"),
@@ -206,14 +208,41 @@ DEFAULT_MARKET_GST: Dict["tuple[int, int, int]", "tuple[str, str]"] = {
     # Asian handicap — G=2 GS=3
     (2, 3, 7): ("Asian Handicap", "W1"),
     (2, 3, 8): ("Asian Handicap", "W2"),
-    # To Win Match (moneyline 2-way, no line) — G=14 GS=22
-    (14, 22, 182): ("To Win Match", "1"),
-    (14, 22, 183): ("To Win Match", "2"),
+    # NOTE (2026-08-05, ADR-19): the earlier (14,22,182/183) → "To Win Match"
+    # rows were WRONG. The SPA's own naming table (bets_model, keyed by GS)
+    # resolves GS=22 → "Total Even", and the fixture confirms it (T=182/183
+    # odds 1.84/1.82, NO line, symmetric → an Even/Odd market, not a moneyline).
+    # Removed so G=14/GS=22 falls through to the authoritative GS name table.
     # Moneyline 3-way — G=101 GS=38
     (101, 38, 401): ("Moneyline 3-way", "1"),
     (101, 38, 402): ("Moneyline 3-way", "2"),
     (101, 38, 403): ("Moneyline 3-way", "X"),
 }
+
+
+# ---------------------------------------------------------------------------
+# GS → market-group name — the SPA's authoritative naming table (ADR-19).
+# The 1xbet-family SPA composes group names client-side via
+# ``name = groupNames[GS]`` where ``GS`` is the feed's *groupShortId*. That
+# ``groupNames`` table is the union of the per-template bet-model files served
+# at ``traincdn/genfiles/cms/betstemplates/bets_model_short_en_<0..77>.json``;
+# indexed by GS the space is globally unique (~5.4k entries, 0 conflicts). This
+# is what turns the exotic ``G=<n>`` fallbacks into real names — the whole
+# group space, not just the hand-verified core. Regenerate with
+# ``python -m src.sites.betb2b.scripts.fetch_market_names``.
+# ---------------------------------------------------------------------------
+_GROUP_NAMES_FILE = Path(__file__).with_name("data") / "market_group_names_en.json"
+
+
+def _load_group_names() -> Dict[int, str]:
+    try:
+        raw = json.loads(_GROUP_NAMES_FILE.read_text(encoding="utf-8"))
+        return {int(k): v for k, v in raw.items() if isinstance(v, str) and v.strip()}
+    except (OSError, ValueError):
+        return {}
+
+
+DEFAULT_MARKET_GROUP_NAMES: Dict[int, str] = _load_group_names()
 
 
 def lookup_market(
@@ -222,16 +251,21 @@ def lookup_market(
     market_groups: Dict[int, MarketGroup],
     market_types: Dict[int, MarketTypeMap],
     gs_id: Optional[int] = None,
+    market_group_names: Optional[Dict[int, str]] = None,
 ) -> "tuple[str | None, str | None]":
     """Look up a market's (market_name, selection_label) from ``G`` + ``T``
     (and ``GS`` when the feed carries it).
 
-    Order: verified (G,GS,T) map → verified (G,T) map → T-only map → G-only
-    group name → placeholder. Falls back to ``f"G={g_id}"`` / ``f"T={t_id}"``
-    if unknown — the extractor degrades gracefully rather than dropping the
-    market. ``gs_id`` is optional for backward compatibility (list feeds and
-    older callers that don't carry GS).
+    Market-name order: verified (G,GS,T) map → verified (G,T) map → the
+    authoritative **GS → name** table (ADR-19; names every group the feed can
+    carry) → T-only market name → G-only group name → ``f"G={g_id}"``.
+    Selection label: the T-only table's label → ``f"T={t_id}"``. The verified
+    maps take precedence because they carry a *confirmed selection side*
+    (Over/Under, W1/W2) the GS table doesn't. ``gs_id`` is optional for
+    backward compatibility (list feeds / older callers). ``market_group_names``
+    defaults to the shipped GS table.
     """
+    # 1. Verified maps — confirmed (name, selection side) for core markets.
     if gs_id is not None:
         gst = DEFAULT_MARKET_GST.get((g_id, gs_id, t_id))
         if gst is not None:
@@ -239,10 +273,21 @@ def lookup_market(
     gt = DEFAULT_MARKET_GT.get((g_id, t_id))
     if gt is not None:
         return gt
+
+    # 2. Resolve the group NAME and the SELECTION label independently.
     mt = market_types.get(t_id)
-    if mt is not None:
-        return mt.market_name, mt.selection_label
-    mg = market_groups.get(g_id)
-    if mg is not None:
-        return mg.name.capitalize(), f"T={t_id}"
-    return None, f"G={g_id} T={t_id}"
+    selection = mt.selection_label if mt is not None else f"T={t_id}"
+
+    names = market_group_names if market_group_names is not None else DEFAULT_MARKET_GROUP_NAMES
+    name: Optional[str] = None
+    if gs_id is not None:
+        name = names.get(gs_id)          # authoritative SPA group name
+    if name is None and mt is not None:
+        name = mt.market_name            # T-only table (sport-ambiguous, last resort)
+    if name is None:
+        mg = market_groups.get(g_id)
+        if mg is not None:
+            name = mg.name.capitalize()
+    if name is None:
+        name = f"G={g_id}"
+    return name, selection

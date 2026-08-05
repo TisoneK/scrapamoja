@@ -1058,7 +1058,9 @@ def test_lookup_market_gt_verified(skin) -> None:
     assert lookup_market(15, 11, mg, mt) == ("Individual Total Home", "Over")
     # The old T-only map wrongly called (62,13) "Double Chance".
     assert lookup_market(62, 13, mg, mt) == ("Individual Total Away", "Over")
-    assert lookup_market(14, 182, mg, mt) == ("To Win Match", "1")
+    # (14,182) was WRONGLY mapped to "To Win Match" (ADR-19 correction). With no
+    # GS the group can't be named from the GS table → honest "G=14".
+    assert lookup_market(14, 182, mg, mt) == ("G=14", "T=182")
 
 
 def test_lookup_market_gst_verified(skin) -> None:
@@ -1073,23 +1075,28 @@ def test_lookup_market_gst_verified(skin) -> None:
     assert lookup_market(15, 11, mg, mt, gs_id=5) == ("Individual Total Home", "Over")
     assert lookup_market(62, 13, mg, mt, gs_id=6) == ("Individual Total Away", "Over")
     assert lookup_market(2, 7, mg, mt, gs_id=3) == ("Asian Handicap", "W1")
-    assert lookup_market(14, 182, mg, mt, gs_id=22) == ("To Win Match", "1")
+    # ADR-19 correction: GS=22 is "Total Even" (an Even/Odd market — fixture
+    # odds 1.84/1.82, no line), NOT the moneyline "To Win Match" it was hand-
+    # mislabelled as. The authoritative GS table names it; the side stays honest.
+    assert lookup_market(14, 182, mg, mt, gs_id=22) == ("Total Even", "T=182")
     assert lookup_market(101, 401, mg, mt, gs_id=38) == ("Moneyline 3-way", "1")
 
 
 def test_lookup_market_gst_fallback(skin) -> None:
-    """Unknown (G,GS,T) triples fall through to the (G,T) map / G-only —
-    never guessed, never a crash. gs_id=None (list feeds) stays backward
-    compatible."""
+    """Name resolution order + graceful degradation (never guessed, never a
+    crash). gs_id=None (list feeds) stays backward compatible."""
     from src.sites.betb2b.markets import lookup_market
     mg, mt = skin.market_groups, skin.market_types
     # GS not in the verified map → (G,T) map still resolves.
     assert lookup_market(17, 9, mg, mt, gs_id=9999) == ("Total", "Over")
-    # Exotic new-builder group (G=2766 GS=939) → honest fallback.
-    assert lookup_market(2766, 3653, mg, mt, gs_id=939) == (None, "G=2766 T=3653")
-    # No GS at all → unchanged behaviour.
+    # Exotic new-builder group (G=2766 GS=939) → named by the authoritative GS
+    # table (ADR-19); the selection side stays honest.
+    assert lookup_market(2766, 3653, mg, mt, gs_id=939) == ("1X2 In Regular Time", "T=3653")
+    # No GS at all → can't use the GS table; unknown group degrades to G=<n>.
     assert lookup_market(17, 9, mg, mt) == ("Total", "Over")
-    assert lookup_market(999, 9999, mg, mt) == (None, "G=999 T=9999")
+    assert lookup_market(999, 9999, mg, mt) == ("G=999", "T=9999")
+    # Unknown GS not in the table → still honest, never a guess.
+    assert lookup_market(999, 9999, mg, mt, gs_id=888888) == ("G=999", "T=9999")
 
 
 def test_extract_selection_carries_gs(skin) -> None:
@@ -1137,9 +1144,14 @@ def test_extract_market_gs_from_real_fixture(skin) -> None:
     assert names.get(17) == "Total"
     assert names.get(15) == "Individual Total Home"
     assert names.get(62) == "Individual Total Away"
-    assert names.get(14) == "To Win Match"
-    # Exotic groups (G=2766/2768) keep the honest G=<n> fallback.
-    assert names.get(2766, "").startswith("G=") or names.get(2766) is None
+    # ADR-19 correction: G=14/GS=22 is "Total Even", not "To Win Match".
+    assert names.get(14) == "Total Even"
+    # Exotic groups now resolve to real names via the authoritative GS table
+    # (ADR-19) — no more bare G=<n>.
+    assert names.get(2766) == "1X2 In Regular Time"
+    assert names.get(2768) == "Regular Time Double Chance"
+    assert names.get(91) == "Individual Total 1 Even"
+    assert names.get(92) == "Individual Total 2 Even"
 
 
 # ---------------------------------------------------------------------------
