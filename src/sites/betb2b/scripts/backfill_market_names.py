@@ -44,7 +44,7 @@ def run(apply: bool = False, like: str = "G=%", *, verbose: bool = True) -> Dict
     Returns ``{"renamed": .., "merged": .., "skipped": ..}``. Reads
     ``DATABASE_URL`` via the shared engine builder. Idempotent.
     """
-    from sqlalchemy import delete, select, update
+    from sqlalchemy import delete, select, text, update
     from src.core.db import get_engine
     from src.sites.betb2b.models import Market, OddsSnapshot
 
@@ -61,7 +61,14 @@ def run(apply: bool = False, like: str = "G=%", *, verbose: bool = True) -> Dict
     _say(f"Loaded {len(g_names)} G -> name entries.")
     counts = {"renamed": 0, "merged": 0, "skipped": 0}
 
-    with get_engine().begin() as conn:
+    engine = get_engine()
+    with engine.connect() as conn:
+        trans = conn.begin()
+        # Supabase's pooled role defaults the session to read-only
+        # (default_transaction_read_only=on). Override it for THIS write
+        # transaction — must be the first statement after BEGIN. Postgres-only.
+        if apply and engine.dialect.name == "postgresql":
+            conn.execute(text("SET TRANSACTION READ WRITE"))
         rows = conn.execute(
             select(m.c.market_id, m.c.name, m.c.market_type, m.c.raw_g)
             .where(m.c.name.like(like))
@@ -99,9 +106,11 @@ def run(apply: bool = False, like: str = "G=%", *, verbose: bool = True) -> Dict
                     conn.execute(update(m).where(m.c.market_id == mid)
                                  .values(name=target))
 
-        if not apply:
+        if apply:
+            trans.commit()
+        else:
             _say("\n-- DRY RUN (no changes written) --")
-            conn.rollback()
+            trans.rollback()
 
     verb = "Applied" if apply else "Would apply"
     _say(f"\n{verb}: {counts['renamed']} renamed, {counts['merged']} merged, "
