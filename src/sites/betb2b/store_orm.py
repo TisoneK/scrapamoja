@@ -55,10 +55,31 @@ _ADDED_COLUMNS_PG = [
 def _ensure_columns(eng) -> None:
     if eng.dialect.name != "postgresql":
         return  # SQLite path: create_all built the full table
-    from sqlalchemy import text
-    with eng.begin() as c:
-        for table, col, typ in _ADDED_COLUMNS_PG:
-            c.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}'))
+    from sqlalchemy import inspect, text
+
+    # Only ALTER columns that are genuinely missing. Issuing no-op `ADD COLUMN
+    # IF NOT EXISTS` is still DDL, which a read-only session rejects — e.g. when
+    # Supabase forces the project read-only for exceeding its disk quota. On a
+    # redeploy the columns already exist, so this normally runs zero DDL.
+    insp = inspect(eng)
+    missing = []
+    for table, col, typ in _ADDED_COLUMNS_PG:
+        try:
+            existing = {c["name"] for c in insp.get_columns(table)}
+        except Exception:  # noqa: BLE001 — table may not exist yet
+            existing = set()
+        if col not in existing:
+            missing.append((table, col, typ))
+    if not missing:
+        return
+    try:
+        with eng.begin() as c:
+            for table, col, typ in missing:
+                c.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}'))
+    except Exception as e:  # noqa: BLE001
+        # A read-only DB (e.g. over-quota Supabase) can't ALTER — log and carry
+        # on so the app still starts and serves reads instead of crash-looping.
+        logger.warning("could not add columns %s (read-only DB?): %s", missing, e)
 
 
 def _get_engine():
