@@ -296,11 +296,12 @@ class BetB2BCLI:
         sch.add_argument("--db", nargs="?", const="", default=None,
                          help="Store path (default: $BETB2B_DB_PATH / DATABASE_URL if set)")
         sch.add_argument("--scheduled-interval", type=float, default=10800.0,
-                         help="Seconds between prematch passes (default: 10800 = 3h)")
+                         help="Seconds between prematch passes (default: 10800 = 3h). <=0 disables.")
         sch.add_argument("--live-interval", type=float, default=15.0,
-                         help="Seconds between live passes (default: 15)")
+                         help="Seconds between live passes (default: 15). Set 0 to DISABLE the "
+                              "live pass — 'scheduled-only' low-storage mode (ADR-22).")
         sch.add_argument("--results-interval", type=float, default=600.0,
-                         help="Seconds between finished-match results passes (default: 600 = 10min)")
+                         help="Seconds between finished-match results passes (default: 600 = 10min). <=0 disables.")
         sch.add_argument("--refresh-window", type=float, default=10800.0,
                          help="Re-scrape a prematch match only after this many seconds (default: 3h)")
         sch.add_argument("--no-direct", action="store_true",

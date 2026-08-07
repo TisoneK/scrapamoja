@@ -91,12 +91,22 @@ class BetB2BScheduler:
         logger.info("scheduler start: skin=%s sport=%s scheduled=%.0fs live=%.0fs results=%.0fs refresh=%.0fs",
                     self.skin_name, self.sport, self.scheduled_interval,
                     self.live_interval, self.results_interval, self.refresh_window)
+        # A pass with interval <= 0 is DISABLED. The `live` pass is the dominant
+        # data producer (15s polling of constantly-moving odds); disabling it
+        # (SCHED_LIVE_INTERVAL=0) is the "scheduled-only" low-storage mode — see
+        # ADR-22. Re-enable it (positive interval) once on a paid tier.
+        loops = []
+        for name, fn, interval in (
+            ("scheduled", self._scheduled_pass, self.scheduled_interval),
+            ("live", self._live_pass, self.live_interval),
+            ("results", self._results_pass, self.results_interval),
+        ):
+            if interval > 0:
+                loops.append(self._loop(name, fn, interval))
+            else:
+                logger.info("scheduler %s pass DISABLED (interval<=0)", name)
         try:
-            await asyncio.gather(
-                self._loop("scheduled", self._scheduled_pass, self.scheduled_interval),
-                self._loop("live", self._live_pass, self.live_interval),
-                self._loop("results", self._results_pass, self.results_interval),
-            )
+            await asyncio.gather(*loops)
         finally:
             if self._scraper is not None:
                 await self._scraper.close()

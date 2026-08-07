@@ -68,3 +68,34 @@ def test_filter_scheduled_can_disable_skip_started(tmp_path):
     s = BetB2BScheduler("linebet", db_path=db, refresh_window=3600, skip_started=False)
     # started + new → kept when skip_started is off
     assert s._filter_scheduled([("X", time.time() - 100)]) == ["X"]
+
+
+def test_scheduler_skips_live_pass_when_disabled(tmp_path):
+    """live_interval<=0 → the live pass (the storage firehose) is not run;
+    scheduled still runs. The 'scheduled-only' low-storage mode (ADR-22)."""
+    import asyncio
+
+    db = str(tmp_path / "s.db")
+    store.init_db(db).close()
+    s = BetB2BScheduler("linebet", db_path=db, scheduled_interval=3600,
+                        live_interval=0, results_interval=0)
+
+    class _DummyScraper:
+        async def close(self):
+            pass
+
+    s._scraper = _DummyScraper()  # non-None → run() skips start() (no network)
+    calls = []
+
+    async def _sched():
+        calls.append("scheduled")
+        s.stop()            # one iteration then unwind
+
+    async def _live():
+        calls.append("live")
+
+    s._scheduled_pass = _sched
+    s._live_pass = _live
+    asyncio.run(asyncio.wait_for(s.run(), timeout=5))
+    assert "scheduled" in calls
+    assert "live" not in calls
