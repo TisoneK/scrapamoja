@@ -1002,3 +1002,22 @@ don't remove the line.
       circumvents platform enforcement). Then confirm: app writes resume, scraper repopulates
       tables, result-capture runs. The app already starts+serves reads read-only (`e70f17a`). LOW
       effort but BLOCKS everything downstream (scraping, results, retention).
+
+---
+- [ ] **In-process last-odds cache to cut Supabase egress (ADR-23)** (added 2026-08-05 by Claude Code, Session 39) —
+      Egress (not DB size) is now the binding free-tier constraint: 9.21 GB / 5 GB while DB
+      is a healthy 28 MB. The dominant controllable source is `store_orm.persist_result`
+      calling `_last_odds(event_id, skin)` before every persist — a per-event Supabase READ
+      that's hot under the 15s live pass. Build an in-process cache of `(price, is_suspended)`
+      keyed by `(event, scope, market_id, selection_name, line)` so a poll compares against
+      memory instead of re-`SELECT`ing from Supabase each cycle (seed/repair the cache from a
+      single read per event on first touch after a restart). Biggest egress win **when live is
+      re-enabled** (paid tier); with scheduled-only (live off) egress is already ~0. MED —
+      not urgent while live stays off; do before turning live back on on a metered plan.
+- [ ] **Decide Supabase Pro vs stay-free before 2026-09-06 grace-period end (ADR-21 §5/ADR-23)** (added 2026-08-05 by Claude Code, Session 39) —
+      Org is in a grace period to 2026-09-06 (over-quota prior cycle: DB size + egress). After
+      that, Fair Use restrictions return 402/read-only. Free tier is viable ONLY with live OFF
+      (scheduled-only) + retention (ADR-22); full live capture needs Pro (8 GB DB, 250 GB
+      egress, ~$25/mo) which also ends the read-only/restore-loop fights. Operator decision.
+      The app now degrades gracefully either way (read-only backoff ADR-21 §1b). LOW effort,
+      but a real deadline.
