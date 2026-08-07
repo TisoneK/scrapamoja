@@ -967,3 +967,38 @@ don't remove the line.
       G-ids outside the verified map, while MEC categories already flow on the old-builder path.
       `id=CI` ≡ `id=I` byte-identical, so no id change needed. The GE[] shape bug (nested rows
       → 0 markets) found + fixed. See session 37 log for the full A/B/C comparison table.
+
+---
+- [ ] **Build `odds_snapshots` retention/rollup — MANDATORY (ADR-22)** (added 2026-08-05 by Claude Code, Session 39) —
+      The free-tier blow-out (ADR-21: 1.6GB, 3× over 500MB, forced read-only, prod crash)
+      was 96% `odds_snapshots` (1.3GB / 5.5M rows) growing unbounded (~1.3GB/week) with no
+      retention. Change-only dedup works — it's tick history of finished games kept forever.
+      Build a retention pass: for events finished > N days ago (gate on `result_status IS NOT
+      NULL` or a safe age past grading — never delete data an ungraded prediction needs),
+      DELETE their `odds_snapshots` (± `event_states`/`period_scores`/`h2h_*`), keeping the
+      final result on `events`. Weigh hard-delete+VACUUM vs day/week partition-drop (repartition
+      `odds_snapshots`) vs rollup to O/H/L/C per (market,selection,line). Dry-run + counts;
+      operator-gated on prod. Ties to ADR-17 + the existing "grow the store: dedup, retention…"
+      item. HIGH — without it the DB returns to over-quota in ~1 week. Needs the DB writable
+      (operator must lift Supabase read-only in the dashboard post-wipe first).
+- [ ] **Make results-fetch actually work: capture `entity.id` for (nearly) every event (ADR-20 addendum)** (added 2026-08-05 by Claude Code, Session 39) —
+      Live audit: only 37 of 1554 events ever captured a `stat_game_id`, and ONLY those got
+      results (18 finished). ADR-20's `v1/Game?id=<LineFeedEventId>` shortcut does NOT resolve —
+      statisticfeed needs its own `entity.id`. So 1517/1536 pending events structurally can't
+      get results; the predict→grade loop only grades the enriched fraction. `scheduler.
+      _results_pass` + `store.events_needing_results` are wired right — the gap is upstream
+      capture. Fix: (a) fold `v1/Game` into the STANDARD per-event enrichment (ADR-20 step 1) so
+      every scraped event stores `stat_game_id` (one request also returns teams+gameShorts, can
+      replace `/Game/h2h`); and/or (b) add an `entity.id`-resolution step to the results pass for
+      legacy/stat-id-less events (search statisticfeed by teams+date, or map via `/Game/h2h`).
+      `fetch_result` is geo-gated (203 w/o allowed-country proxy — prod has it). HIGH — blocks
+      the whole grading loop for most games. Post-wipe (ADR-21) the store is empty, so fixing
+      capture now means fresh events get stat ids from the start.
+- [ ] **Lift Supabase read-only post-wipe + verify writes resume (ADR-21)** (added 2026-08-05 by Claude Code, Session 39) —
+      After the fresh-start wipe (1.6GB→11MB) the project was STILL read-only
+      (`transaction_read_only=on`, normal writes blocked) — Supabase doesn't auto-lift instantly.
+      OPERATOR ACTION: click "restore"/disable read-only on the Supabase dashboard banner now
+      that we're under 500MB (do NOT `ALTER DATABASE default_transaction_read_only=off` — it
+      circumvents platform enforcement). Then confirm: app writes resume, scraper repopulates
+      tables, result-capture runs. The app already starts+serves reads read-only (`e70f17a`). LOW
+      effort but BLOCKS everything downstream (scraping, results, retention).
