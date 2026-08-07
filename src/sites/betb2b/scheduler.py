@@ -21,7 +21,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from . import store
 from .cli.main import _load_skin
@@ -58,6 +58,7 @@ class BetB2BScheduler:
         rate_limit_per_minute: int = 120,
         results_interval: float = 600.0,       # 10min — results pass cadence
         result_min_age: float = 9000.0,        # 2.5h — a match this old should be done
+        read_only_backoff: float = 900.0,      # 15min — pause when the DB is read-only
     ) -> None:
         self.skin_name = skin_name
         self.sport = sport
@@ -70,9 +71,11 @@ class BetB2BScheduler:
         self.rate_limit_per_minute = rate_limit_per_minute
         self.results_interval = results_interval
         self.result_min_age = result_min_age
+        self.read_only_backoff = read_only_backoff
         self._scraper: Optional[BetB2BScraper] = None
         self._lock = asyncio.Lock()
         self._stop = asyncio.Event()
+        self._ro_warned_at: Dict[str, float] = {}   # per-pass warning throttle
 
     # -- lifecycle ------------------------------------------------------- #
     async def start(self) -> None:
@@ -116,15 +119,31 @@ class BetB2BScheduler:
 
     async def _loop(self, name: str, fn, interval: float) -> None:
         while not self._stop.is_set():
+            delay = interval
             try:
                 async with self._lock:          # single-flight across passes
                     await fn()
-            except Exception:                    # noqa: BLE001 — a pass must never kill the loop
-                logger.exception("scheduler %s pass failed", name)
+            except Exception as exc:             # noqa: BLE001 — a pass must never kill the loop
+                if store.is_read_only_error(exc):
+                    # Supabase restricts an over-quota project to read-only (the
+                    # HTTP layer's 402). Don't hammer it with doomed writes every
+                    # `interval`s — back off, warn (throttled), auto-resume when
+                    # the DB is writable again. See ADR-21/22.
+                    delay = max(interval, self.read_only_backoff)
+                    now = time.monotonic()
+                    if now - self._ro_warned_at.get(name, 0.0) > 300:
+                        logger.warning(
+                            "scheduler %s pass: DB is READ-ONLY (Supabase over-quota / "
+                            "restricted) — pausing writes, backing off %ds (not retrying at "
+                            "%ds). Free up space or upgrade; not hammering the server.",
+                            name, int(delay), int(interval))
+                        self._ro_warned_at[name] = now
+                else:
+                    logger.exception("scheduler %s pass failed", name)
             try:
-                await asyncio.wait_for(self._stop.wait(), timeout=interval)
+                await asyncio.wait_for(self._stop.wait(), timeout=delay)
             except asyncio.TimeoutError:
-                pass  # interval elapsed → run again
+                pass  # interval (or backoff) elapsed → run again
 
     # -- passes ---------------------------------------------------------- #
     async def _scheduled_pass(self) -> None:

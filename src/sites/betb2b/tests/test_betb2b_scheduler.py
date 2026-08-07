@@ -99,3 +99,56 @@ def test_scheduler_skips_live_pass_when_disabled(tmp_path):
     asyncio.run(asyncio.wait_for(s.run(), timeout=5))
     assert "scheduled" in calls
     assert "live" not in calls
+
+
+def test_is_read_only_error_detects_25006():
+    """Detect the read-only-transaction signal (SQLSTATE 25006 / message /
+    SQLAlchemy .orig wrapping); ignore unrelated errors."""
+    from src.sites.betb2b import store
+
+    class _E(Exception):
+        def __init__(self, msg, sqlstate=None):
+            super().__init__(msg)
+            self.sqlstate = sqlstate
+
+    assert store.is_read_only_error(_E("cannot execute INSERT in a read-only transaction"))
+    assert store.is_read_only_error(_E("boom", sqlstate="25006"))
+
+    class _Wrap(Exception):
+        def __init__(self, orig):
+            super().__init__("wrapped")
+            self.orig = orig
+
+    assert store.is_read_only_error(_Wrap(_E("boom", sqlstate="25006")))
+    assert not store.is_read_only_error(_E("some unrelated error"))
+    assert not store.is_read_only_error(None)
+
+
+def test_scheduler_backs_off_and_warns_on_read_only(tmp_path, caplog):
+    """A read-only write does NOT crash the loop or hammer — it logs a throttled
+    warning and backs off (ADR-21/22)."""
+    import asyncio
+    import logging
+
+    db = str(tmp_path / "ro.db")
+    store.init_db(db).close()
+    s = BetB2BScheduler("linebet", db_path=db, scheduled_interval=3600,
+                        live_interval=0, results_interval=0, read_only_backoff=3600)
+
+    class _Dummy:
+        async def close(self):
+            pass
+
+    s._scraper = _Dummy()
+
+    class _RO(Exception):
+        sqlstate = "25006"
+
+    async def _sched():
+        s.stop()  # unwind after this iteration
+        raise _RO("cannot execute INSERT in a read-only transaction")
+
+    s._scheduled_pass = _sched
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(asyncio.wait_for(s.run(), timeout=5))
+    assert any("READ-ONLY" in r.getMessage() for r in caplog.records)

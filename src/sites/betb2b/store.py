@@ -38,10 +38,37 @@ def _is_orm(conn: Any) -> bool:
     """A non-sqlite3 connection means the ORM/Postgres path (ADR-13)."""
     return conn is not None and not isinstance(conn, sqlite3.Connection)
 
+
+def is_read_only_error(exc: BaseException | None) -> bool:
+    """True if ``exc`` (or a wrapped cause) is a Postgres read-only-transaction
+    error — SQLSTATE ``25006`` (``read_only_sql_transaction``).
+
+    This is how a WRITE fails when Supabase restricts an over-quota project to
+    read-only — the same condition their HTTP/REST layer surfaces as **402**.
+    (The scraper writes over a direct Postgres connection, so it sees 25006, not
+    402; if a supabase-js/PostgREST write path is ever added, treat 402 the same
+    way here.) Detecting it lets writers back off gracefully instead of
+    hammering the DB with doomed INSERTs.
+    """
+    seen: set[int] = set()
+    e: BaseException | None = exc
+    while e is not None and id(e) not in seen:
+        seen.add(id(e))
+        sqlstate = getattr(e, "sqlstate", None) or getattr(e, "pgcode", None)
+        if sqlstate == "25006":
+            return True
+        msg = str(e).lower()
+        if "read-only transaction" in msg or "read only transaction" in msg:
+            return True
+        e = getattr(e, "orig", None) or e.__cause__ or e.__context__
+    return False
+
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "init_db",
+    "is_read_only_error",
     "persist_result",
     "latest_odds",
     "line_movement",
