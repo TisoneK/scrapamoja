@@ -42,3 +42,7 @@ records.
 ---
 - **2026-08-01 — Session 35** — Buffy (Freebuff) / deepseek-v4-flash — `.context` sync: core 0.3.0 → **0.5.0** (session-scoped memory release), kickoff.md + AGENTS.md regenerated for the new templates, `memory/sessions/` module seeded.
   Detail: summary only (sync session, no notes file).
+
+---
+- **2026-08-18 — Session 40** — Buffy (Freebuff) / deepseek-v4-pro — `.context` sync: core 0.5.0 → **0.8.0** (lifecycle gates + peer collaboration), kickoff.md + .context/README.md regenerated, AGENTS.md rules merged surgically, `gates.conf` initialized with explicit venv commands.
+  Detail: summary only (sync session, no notes file).

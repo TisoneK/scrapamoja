@@ -19,7 +19,7 @@ block (and its "last verified" date) every time you run on it again.
    preferences in `user/`; project-wide decisions in `plans/`.
 
 ---
-## Baos-Mac-mini (last verified 2026-08-01, session 35)
+## Baos-Mac-mini (last verified 2026-08-18, session 40)
 - **Identify by:** hostname `Baos-Mac-mini.local`, `$USER` = `bao`, workspace `/Users/bao/Code/scrapamoja`
 - **OS:** macOS 15.7.7 (build 24G720, Darwin 24.6.0), Intel **x86_64**
 - **Runtimes:** system python3 = 3.9.6 (too old); **project runtime = uv-managed CPython 3.12.13 in `.venv/`**; node v24.17.0
@@ -31,9 +31,10 @@ block (and its "last verified" date) every time you run on it again.
   - `.venv/bin/python -m playwright install` — chromium/firefox/webkit/ffmpeg downloaded to `~/Library/Caches/ms-playwright`; chromium headless launch smoke-tested OK
   - `git` push/pull work with existing creds
   - `.venv/bin/python -m pytest tests/sites/template --no-cov -p no:cacheprovider --timeout=60 --timeout-method=signal -q` — verified (session 4); per-area runs finish in ~1.5s and dodge the suite-wide hangs. `pytest-timeout` is present in the venv (installed ad hoc session 3, still undeclared).
-  - `.venv/bin/python -m pytest src/sites/betb2b/tests/ --no-cov -p no:cacheprovider` — verified session 28: **173 passed in 3.46s**, no hangs, no timeout flag needed. This is the betb2b suite; it lives next to the code, NOT under `tests/`. `pytest tests/ -k betb2b` collects none of it and dies on 15 unrelated pre-existing collection errors.
+  - `.venv/bin/python -m pytest src/sites/betb2b/tests/ --no-cov -p no:cacheprovider` — verified session 28: **173 passed in 3.46s**, no hangs, no timeout flag needed. This is the betb2b suite; it lives next to the code, NOT under `tests/`. `pytest tests/ -k betb2b` collects none of it and dies on 15 unrelated pre-existing collection errors. Verified again session 40: **232 passed** (dots+exit-0; the "N passed" summary line is suppressed by the `addopts`/plugin combo here — count the dots or trust exit code).
+  - `sh .context/core/bin/context-gates {checkpoint,run pre-commit}` — verified session 40 (core 0.8.0). `gates.conf` has explicit pre-commit/integration/exit commands = `.venv/bin/python -m pytest src/sites/betb2b/tests/ --no-cov -q`. **`python`/`ruff` are NOT on PATH in the agent shell** — the gate's hybrid discovery of `python -m pytest`/`ruff check .` fails with 127; the explicit venv commands avoid that.
   - `.venv/bin/python -m src.sites.betb2b.cli <cmd>` — verified session 28. The `…cli.main` spelling also works as of `4e6aaec`; before that it exited 0 in silence.
-  - `.venv/bin/ruff check <path> --select F821` — verified (session 4); note the repo's `pyproject.toml` uses deprecated top-level `select`/`ignore` keys (ruff warns; still works). Session 28: the consequence is that the project's `ignore` list is inert, so a plain `ruff check src/sites/betb2b/` reports 563 errors (baseline, pre-existing).
+  - `.venv/bin/ruff check <path> --select F821` — verified (session 4); note the repo's `pyproject.toml` uses deprecated top-level `select`/`ignore` keys (ruff warns; still works). Session 28: the consequence is that the project's `ignore` list is inert, so a plain `ruff check src/sites/betb2b/` reports 563 errors (baseline, pre-existing). Session 40: a full `ruff check .` reports **63,650 pre-existing errors** — never use it as a gate/baseline; use `--select F821` or the betb2b suite.
 - **Quirks / gotchas:**
   - `uv venv` does not install `pip` into the venv — use `uv pip ...` or `.venv/bin/python -m` for tools.
   - `--only-binary :all:` is required (see above). If a needed package has no wheel, that surfaces here as a hard error rather than a slow failing source build.
