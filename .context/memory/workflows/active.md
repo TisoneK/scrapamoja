@@ -17,3 +17,4 @@ user changes the rules; note the change in your session entry.
 - **Commit style:** Conventional Commits with scope; `chore(context):` for this directory
 - **Commit granularity:** one logical change per commit
 - **Deliverable:** report in `.context/memory/reviews/` + chat summary
+- **Gates:** `.context/memory/workflows/gates.conf` — checkpoint before each next action; `pre-commit`, `integration`, and `exit` gates are mandatory (core 0.8.0, initialized 2026-08-18)

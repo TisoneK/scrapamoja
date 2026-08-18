@@ -326,11 +326,11 @@ python -m src.sites.betb2b.cli.main compare-match --skin linebet --sport basketb
 1. **Start at `.context/kickoff.md`.** Do not grep the codebase for "context" — the protocol lives in `.context/`.
 2. **Never write under `.context/core/`** — it is read-only. All project memory goes under `.context/memory/`.
 3. **Pick your instruction set by YOUR agent type:** local IDE → `.context/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox → `.context/core/rules/ai-engineering-protocol.md`.
-4. **Read memory before working:** `.context/memory/workflows/active.md`, `.context/memory/agents/sessions.md` (last entries), `.context/memory/tasks/current.md`, `.context/memory/inefficiencies/log.md`. If the active session has detailed notes at `.context/memory/sessions/`, skim them for current state.
-5. **One task at a time.** Check `.context/memory/tasks/current.md` first.
-6. **Append-only files:** `agents/sessions.md`, `tasks/backlog.md`, `plans/decisions.md`, `flaws/log.md`, `inefficiencies/log.md`.
+4. **Read memory before working:** at minimum `.context/memory/workflows/active.md`, `.context/memory/agents/sessions.md` (last entries), `.context/memory/collaboration/README.md` and relevant event files when collaboration is enabled, `.context/memory/workflows/gates.conf`, `.context/memory/tasks/current.md`, and `.context/memory/inefficiencies/log.md` (known traps). If the active session has detailed notes at `.context/memory/sessions/`, skim them for current state.
+5. **Choose the mode explicitly.** Without a shared collaboration `session` + `issue`, `tasks/current.md` is the single-agent lock. In collaboration mode, use an isolated git worktree/branch and the immutable event trail; do not block peers on `tasks/current.md`. Before each next action run `context-gates checkpoint`; before commits, integration, and exit run the matching gate.
+6. **Append-only files:** `agents/sessions.md`, `tasks/backlog.md`, `plans/decisions.md`, `flaws/log.md`, `inefficiencies/log.md`. Add at the bottom; never edit or delete past entries. Collaboration event files are stronger: immutable, one event per file; emit a correction instead of editing one.
 7. **No secrets in tracked files.** Values go only in `.context/memory/secrets/` (self-gitignored).
-8. **Two surfaces, two prefixes:** product code = normal commit prefixes; `.context/` = `chore(context):`.
+8. **Two surfaces, two prefixes:** product code = normal commit prefixes; `.context/` = `chore(context):`. Never mix both surfaces in one commit. Collaboration events are separate immutable context commits.
 9. **Session is done when committed AND pushed**, session logged, and `tasks/current.md` cleared.
 10. **Don't ask permission for the default next step.** Do it and report. Ask only on genuine ambiguity.
 
