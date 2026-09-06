@@ -10,6 +10,402 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 0.16.1 — 2026-09-06
+
+**The ports' self-referential help matches the `.cmd` convention.**
+`context-sync.ps1`'s printed help (what `context-sync.cmd` shows with no
+arguments) and `context-collab.ps1`'s header examples still told Windows
+agents to run `pwsh -File .context/core/bin/...ps1` — which an
+execution-policy-locked machine blocks. Both now show the documented
+no-setup form (`context-sync.cmd <cmd>`). Text-only change, line counts
+preserved (the sync help is sliced from the file header); manifest
+regenerated.
+
+## 0.16.0 — 2026-09-06
+
+**Sync is one command and fill again.** Each release since 0.9.x added files
+or zones that only `update`'s versioned backfill installed — and because that
+backfill lived in the *old* script that runs first, migrating an old project
+meant running `update` twice, guessing about CRLF, and hand-creating new
+zones. This restores the old simplicity.
+
+- **New `context-sync migrate` (POSIX + PowerShell + `.cmd`):** the
+  one-command bring-current. It updates the core to the newest reachable
+  same-MAJOR version, then **backfills every missing zone/file** (`history/`,
+  `archive/`, `CLAUDE.md`, `.gitattributes`, `roster.md`, `history.conf`,
+  `GROUP`, …), LF-normalizes, relocks, and verifies — then prints the single
+  manual step: fill the project facts. Idempotent; safe to re-run; doubles as
+  a repair command for a project missing any current file.
+- **The backfill is factored out** (`backfill_project`) as the one definition
+  of "what a fully-migrated project contains" — adding a new template file to
+  that list is all it takes to teach migration about it. Both `update` and
+  `migrate` go through it.
+- **`update` now fully migrates in one run** (from this version on): after
+  the core swap it re-execs the *just-installed* script's `migrate
+  --backfill-only`, so the new script — which knows every new file — does the
+  backfill. No more "run update twice."
+- **The PowerShell `update` caught up:** it had only ever backfilled README /
+  `.gitattributes` / `CLAUDE.md`, missing the `history/`, `archive/`,
+  `roster.md`, `GROUP`, and `history.conf` a 0.13+ project needs. It now
+  installs all of them through the shared backfill.
+- **MIGRATION.md rewritten** to lead with the one-command path for any
+  0.2.0+ project (with the old-script fallback), keeping the pre-0.2.0
+  flat-layout `git mv` steps as a clearly-marked special case that ends in
+  the same `migrate`.
+
+**Migration to 0.16.0 itself:** from an older project, `update` once (installs
+this script) then `migrate` — or just `migrate` if the vendored script already
+has it. From 0.16.0 forward, one `update` (or one `migrate`) is enough.
+
+## 0.15.0 — 2026-09-06
+
+**Agents are named coworkers, not "peers".** Collaboration works, but agents
+identified as "peer" or a bare `S427`. Now each agent picks a real name and
+the team reads as people in a workplace — with the human as the supervisor.
+
+- **New `agents/roster.md`** (update-in-place, current-group-scoped): a team
+  board, one row per person — a chosen human **Name**, a **codename**
+  `S<NNN>` (session number), the **model**, and one line on what they're
+  doing. An agent adds its row at session start and presents itself by that
+  name everywhere ("John (S427)"), in events and when reporting to the
+  supervisor.
+- **Name and codename are each unique within the group.** `context-mem
+  check` now validates the roster and flags a duplicate name or codename
+  (there is only one John on the team at a time) — the same update-in-place
+  discipline as the other registries.
+- **The roster rotates with the group.** `context-history close` captures
+  the closed group's roster into `history/group-<NNN>.md` and resets a fresh
+  empty roster for the new group.
+- **Docs reframed to the workplace metaphor:** the collaboration README (new
+  "Who you are — pick a name" section), both protocol editions (a step 0 in
+  the light path), the AGENTS digest, and the schema now say: pick a name,
+  present yourself by it, the human is the supervisor. `--agent` takes your
+  name, so the chatter feed reads "John: ...".
+
+**Migration from 0.14.x:** `update` installs `agents/roster.md` if absent.
+Existing agents just start adding rows; nothing else changes. The `.ps1`
+port changes (roster check + roster reset) are ASCII-clean but owe the usual
+Windows runtime pass.
+
+## 0.14.0 — 2026-09-06
+
+**Windows verified for real: three latent port bugs fixed, `.cmd`
+launchers remove the execution-policy hurdle.** 0.13.1 made the `.ps1`
+ports *parse* under Windows PowerShell 5.1; this release makes them *run*.
+Every port was executed end-to-end against a bootstrapped fixture project
+(registry hygiene, the full three-zone history lifecycle, the
+collaboration trail, the gates), which surfaced defects a parse-level fix
+cannot catch.
+
+- **`context-collab-check.ps1` crashed on every invocation.** It assigned
+  the automatic `$args` variable (a no-op under `Set-StrictMode`) and its
+  `if`-expression `@()` unwrapped to `$null`, so the argument loop died on
+  `$null.Count`. The array is now built by direct assignment. 0.9.1 had
+  shipped this file as "Windows-verified"; only its parse had ever been
+  exercised.
+- **`context-history.ps1 close` / `gc` crashed when run without flags.**
+  `$RestArgs.Count` on a `$null` `ValueFromRemainingArguments` parameter
+  is fatal under strict mode. Both such parameters now default to `@()`
+  (`context-mem.ps1` hardened the same way).
+- **`context-history.ps1` never archived anything.** It passed a
+  `C:\...` archive path to `tar`, which GNU tar (MSYS, often first on
+  PATH) parses as remote *host* `C` ("Cannot connect to C: resolve
+  failed"). The roll now runs tar from inside `history/` with a relative
+  `-f` path — the exact pattern the POSIX port already used — so bsdtar
+  (System32 `tar.exe`) and GNU tar behave identically.
+- **`context-collab.ps1` rejected its own documented `--re` flag.**
+  PowerShell parameter prefix-matching bound `--re` to the `$Rest`
+  parameter (re ⊂ Rest), consuming it and derailing binding of every
+  later flag ("parameter cannot be found '-session'"). The parameter is
+  renamed `$Extra`; `emit assessment --re <id>` and friends work.
+- **New `context-*.cmd` launchers**, one per `.ps1` port. A `.cmd` file is
+  executed by cmd.exe regardless of the PowerShell execution policy, and
+  starts its port with `powershell -NoProfile -ExecutionPolicy Bypass
+  -File`. The documented Windows invocation becomes e.g.
+  `.context/core/bin/context-mem.cmd check` — no `Set-ExecutionPolicy`
+  step. Windows PowerShell 5.1 is targeted deliberately: it ships with
+  every Windows 10+ install, while pwsh 7 is an optional add-on. All
+  docs (kickoff, both protocol editions, schema, README, QUICKSTART) now
+  show the `.cmd` form.
+
+**Migration from 0.13.x:** `update` installs the launchers with the rest
+of `core/`; no memory changes and no behavior change for POSIX. Windows
+agents should switch to the `.cmd` form; `pwsh -File` keeps working where
+the policy allows it.
+
+## 0.13.1 — 2026-09-06
+
+**ASCII-clean the new PowerShell ports.** `context-mem.ps1` and
+`context-history.ps1` (0.10.0–0.13.0) shipped with UTF-8 punctuation
+(em-dashes, arrows) in string literals. Windows PowerShell 5.1 decodes the
+`.ps1` as ANSI and fails to parse non-ASCII bytes — the same defect 0.9.1
+fixed for the other ports. Both files are now ASCII-only, matching the
+standing rule. POSIX ports unchanged (sh handles UTF-8). No behavior change;
+manifest regenerated.
+
+## 0.13.0 — 2026-09-06
+
+**Session history is grouped and bounded (three-zone lifecycle).**
+`agents/sessions.md` was append-only *forever* — session history grew without
+bound and sat in the startup read (LocalMind's registry alone spans dozens of
+sessions). This introduces session **groups** that rotate through three zones
+so `memory/` only ever holds the live group.
+
+- **New zones `history/` and `archive/`** under `.context/` (created by
+  bootstrap and installed by `update` for existing projects). Neither is read
+  at session start — the schema and both editions state this. `memory/`
+  (live) → `history/` (closed, readable `group-<NNN>.md`) → `archive/` (cold
+  `group-<NNN>.tar.gz`) → `gc`.
+- **New `context-history` + `context-history.ps1`:** `status` (current group,
+  session count, zone sizes, due?), `close [--milestone L] [--confirm]`
+  (consolidate the live group into `history/`, start a fresh group, roll the
+  oldest readable group into `archive/`), `gc [--confirm]` (delete oldest
+  `archive/` tarballs over the cap, oldest-first, git-recoverable). Destructive
+  steps are gated behind `--confirm` and print a dry-run plan first.
+- **A "group" is the session-history subtree only** — `agents/sessions.md`,
+  `sessions/SUMMARY.md`, `sessions/<date-N>/`. Durable facts (`user/`,
+  `system/`, decisions, backlog, flaws, inefficiencies) and collaboration
+  events never rotate; they persist in `memory/` with their own hygiene. This
+  scoping is deliberate: resetting all of `memory/` per group would break the
+  durable-facts spine (ADRs are respected, not relitigated).
+- **No implicit carryover.** `close` prints a promotion checklist and refuses
+  to execute without `--confirm`: every open thread must already live in its
+  durable domain file before the group closes, so the new group starts clean —
+  the spec's "no carryover" enforced at the boundary, not by wiping memory.
+- **Tunable, weak-agent-safe defaults** in `memory/workflows/history.conf`:
+  `group_size=20`, `history_keep=3`, `archive_keep=12`. `agents/sessions.md`
+  becomes the *current group's* registry (backward-compatible — rotation only
+  begins at the first `close`).
+
+**Migration from 0.12.x:** `update` creates `history/`, `archive/`,
+`history.conf`, and `agents/GROUP` if absent, and never clobbers an existing
+one. Existing `agents/sessions.md` keeps growing until the first
+`context-history close`, which starts the rotation. Archives are `.tar.gz` on
+both platforms (the `.ps1` uses `tar.exe`, shipped on Windows 10+).
+
+## 0.12.0 — 2026-09-05
+
+**Bound the durable logs (context pruning).** The append-only durable logs
+(`flaws/log.md`, `inefficiencies/log.md`) grow forever and sit in the
+mandatory startup reading order, so a mature project reads mostly resolved
+history every session (LocalMind: flaws 614 lines / 52 entries,
+inefficiencies 1172 lines / 108 entries). The session layer already had a
+cold-storage story (disposable notes, prunable SUMMARY.md); the durable
+layer had none.
+
+- **`context-mem prune`:** advises archiving resolved history out of the
+  durable logs. It reports each log's size and how many entries are
+  explicitly marked `RESOLVED` / `superseded` / fixed — the archive-eligible
+  ones — and `--list` names them. It **never moves or deletes anything**;
+  archiving stays a deliberate cut-and-paste into a companion `archive.md`
+  (which stays in git, grep-able). Conservative by design: **only an
+  explicit closed marker makes an entry eligible; age alone never does**, so
+  an unresolved flaw is never archived out from under the next agent.
+- **The archive convention** is documented in both editions (beside the
+  SUMMARY.md prune rule), the schema, and the `flaws/` and `inefficiencies/`
+  log templates: move a resolved entry verbatim into `archive.md`; startup
+  reads only the active log.
+
+**Migration from 0.11.x:** none — additive advisory + wording. Nothing is
+moved automatically; run `context-mem prune` when a log feels heavy and
+archive the entries it flags.
+
+## 0.11.0 — 2026-09-05
+
+**Keep `.context` vocabulary out of product code.** The protocol trains
+agents to think in ADRs, bug IDs, and session numbers — and that vocabulary
+leaks into product artifacts. Across the fleet, product source cites
+`.context`-internal terms in docstrings and comments
+(`/** ADR-34 B-8: bounded evidence entry */`, `"""ADR-11 one-time data
+copy..."""`) — dangling pointers into a `.context/` that anyone cloning only
+the product repo does not have.
+
+- **`context-mem lint`:** a new subcommand (POSIX + PowerShell). It scans the
+  **staged** product diff (everything outside `.context/`) and fails if an
+  added line cites an ADR number (`ADR-N`), a bug ID (`B-YYYY-MM-DD-N`),
+  `"per ADR"`, or a `.context/` path. `.context/` files are exempt — they
+  legitimately use the vocabulary. (`Session N` is deliberately *not*
+  flagged: apps have a legitimate "session" domain noun.)
+- **The one-way-linkage rule.** Memory may reference product code; product
+  code must never reference memory. Added as a pitfall in both editions, the
+  `AGENTS.md` "two surfaces" rule, and a schema invariant. If the reason for
+  a decision matters, state it in plain words in the docstring; the ADR link
+  lives in `plans/decisions.md`, which points at the code — never the
+  reverse. The pre-commit step runs `context-mem lint` for product commits.
+
+**Migration from 0.10.x:** none — additive subcommand + wording. Existing
+product code that already cites `.context` vocabulary will fail
+`context-mem lint` on the next edit to those lines; rephrase the docstring to
+stand alone and move the ADR link into `plans/decisions.md`.
+
+## 0.10.0 — 2026-09-05
+
+**Update-in-place registries stop duplicating.** `system/ai-models.md` and
+`system/environments.md` are update-in-place (one entry per key), but the
+append-only invariant is stated so loudly that agents apply it here too and
+*append* a corrected entry instead of editing the existing one — so a
+registry accumulates two rows for one key with conflicting counts (observed
+in the fleet: one agent+model registered three times, sessions 8/10/30).
+
+- **`context-mem` + `context-mem.ps1`:** a new helper. `context-mem check`
+  flags a duplicated key in the update-in-place registries —
+  `ai-models.md` keyed by (Agent, Model), `environments.md` by its
+  "Identify by:" line. It is the inverse of the append-only rule: for these
+  files, a *second* entry for an existing key is the defect. Different
+  models for one agent are separate rows (expected), not duplicates.
+- **The distinction is now stated as loudly as append-only.** Both protocol
+  editions' top rules, the `AGENTS.md` digest, the `ai-models.md` header,
+  and the schema now say: correct an update-in-place entry by *editing* it,
+  never by appending a duplicate — the prior value is safe in git history,
+  so editing loses nothing. The exit step runs `context-mem check`.
+
+**Migration from 0.9.x:** none — additive helper + wording. Existing
+registries that already have a duplicated key will fail `context-mem check`;
+merge the rows/blocks into one (sessions accumulate) and the old values
+remain in git history.
+
+## 0.9.1 — 2026-09-05
+
+**Windows verified on Windows.** 0.9.0 shipped the durable LF policy
+(`.gitattributes`) and the CRLF manifest-parse fix, but the verifiers still
+hashed raw on-disk bytes — so any CRLF copy of the core (a project checked
+out under `core.autocrlf=true` before the `.gitattributes` existed, or files
+copied outside git, where the attribute never reaches) still failed every
+hash and reported CORE INTEGRITY FAILURE. Worse, the advised remediation
+(`rollback`) re-restored CRLF bytes on those targets — an unfixable loop —
+and on the sh side a CRLF `memory/core.lock` poisoned the version lookup so
+rollback died with "no commit in history has core VERSION". This release
+was written and validated on Windows (Git Bash + PowerShell 7.6 + Windows
+PowerShell 5.1), closing the validation pass 0.9.0 owed.
+
+- **`verify` hashes CR-stripped content** (both sh and PowerShell). One
+  manifest stays byte-compatible across LF checkouts and CRLF copies:
+  LF-only files hash identically, so `MANIFEST.sha256` values are unchanged
+  and 0.9.1 verifiers validate 0.9.0 cores and vice versa. A CRLF copy now
+  verifies clean instead of reporting 46 false integrity failures.
+- **`update` / `bootstrap` normalize the staged copy to LF in place**
+  (sh `normalize_lf`; PowerShell `Convert-ToLf`), so a core vendored or
+  updated from a CRLF source is byte-identical to its manifest on disk —
+  no renormalize dance needed afterward. `bootstrap` normalizes the memory
+  skeleton too.
+- **PowerShell `rollback` rewrites the restored core to LF**, so a rollback
+  under `core.autocrlf=true` verifies afterward instead of looping.
+- **`lock_version` tolerates a CRLF `core.lock`** (sh), fixing the
+  rollback dead-end above.
+- **PowerShell `update` parity with sh:** installs `.context/.gitattributes`
+  and the root `CLAUDE.md` pointer when absent — and `update` now installs
+  them on *every* run, including a no-op, so a 0.8.x project's second
+  `update` (after the new core has landed) picks them up (0.9.0 taught
+  only the sh script; Windows agents run the `.ps1`).
+- **Gate results propagate again.** Two independent bugs silently turned
+  every gate failure into a pass. PowerShell: `Run-One`'s log lines went
+  through the return pipeline, so `if (-not (Run-One ...))` compared an
+  array — and `-not` on a non-empty array is always `$false`. sh:
+  `run_explicit` and `run_discovered` reset the caller's `_failed` counter
+  (functions have no locals in sh). Gate logs now go to the host stream
+  and the sh helpers use distinct failure counters. Also: a cmdlet-only
+  gate command no longer inherits a stale `$LASTEXITCODE`, a thrown
+  script error fails the gate instead of crashing it, and child `.ps1`
+  invocations pre-seed `$LASTEXITCODE` (a child script's `exit N` does
+  not reliably set it on every host, and reading it unset trips
+  StrictMode).
+- **PowerShell argument parsing works again.** Parameters named `$Args`
+  collide with the automatic variable of the same name, so every
+  `--session/--issue/--paths/...` flag was silently lost in
+  `context-collab.ps1` (status filters matched everything) and
+  `context-gates.ps1` (checkpoint and integration scopes no-oped).
+  Renamed throughout. A missing collaboration events directory no longer
+  crashes `context-collab-check.ps1` under StrictMode.
+- **`manifest` regenerates identically on Windows.** `sha256sum` under Git
+  Bash defaults to the binary-mode separator (`hash *path`), so a
+  Windows-regenerated manifest churned all 46 lines vs a mac `shasum`
+  regen; `cmd_manifest` now forces the text-mode separator (`-t`). The
+  parsers already accept both.
+
+**Migration from 0.9.0:** none — verify both ways, no manifest or memory
+changes. Projects still on a CRLF working tree no longer need the 0.9.0
+renormalize step for `verify` to pass; the `.gitattributes` LF policy
+remains the durable git-level fix and is worth committing anyway.
+
+**Upgrading a 0.8.x project on Windows:** (1) Use a git checkout of this
+package as the update source — a fresh clone, or the existing clone pulled
+to 0.9.1 and re-smudged (`rm -rf core && git checkout -- core`) if it
+predates 0.9.0. The 0.8.x verifier hashes raw bytes, so a CRLF source (a
+stale clone or a hand copy) will be refused. (2) Run the update under Git
+Bash or PowerShell 7 — the 0.8.x `.ps1` cannot be parsed by Windows
+PowerShell 5.1 (its UTF-8 punctuation breaks 5.1's ANSI decoding; the
+0.9.1 `.ps1` files are ASCII-clean). (3) Run `update` a second time after
+it lands: the first run executes the old script and swaps in 0.9.1, the
+second (no-op) run is the one that installs `.context/.gitattributes` and
+the root `CLAUDE.md` pointer. (4) Commit `chore(context): update core to
+0.9.1`, and `git add --renormalize .` if the project ever committed CRLF
+blobs. Once 0.9.1 is in place, `verify` passes on LF and CRLF working
+trees alike, so the rollback deadlock cannot recur.
+
+## 0.9.0 — 2026-09-05
+
+**Collaboration that feels like coworkers.** Peer collaboration was
+technically working but less effective than single-agent mode: fleet
+evidence (LocalMind's 42-event trail — the only trail that ever exercised
+it) showed agents paying heavy ceremony for solo work, never once
+completing an `agreement`, and colliding on identical paths with no
+resolution. The framing primed rivalry ("competing proposals are
+expected"), the tooling reported closed claims as active forever and hung
+for minutes, and Windows CRLF corrupted the integrity system. This release
+turns the "courtroom" into an "office."
+
+- **New `note` event — the office channel.** An informal heads-up to peers:
+  a body is all it needs (optional `--to <peer>`, `--re <event|path|commit>`),
+  it never gates `check`, and it never has to be resolved. `status` opens
+  with a **Recent chatter** feed. Notes give agents the low-stakes
+  back-and-forth they lacked, so peer reviews and hand-offs stop being
+  smuggled into shared durable files.
+- **Cooperative reframing.** The README, both protocol editions, the AGENTS
+  digest, the schema, and the kickoff now frame peers as one team with one
+  goal. The light path (`note` + `claim`/`release`) is the documented
+  default; the `proposal → assessment → agreement` ceremony is the
+  escalation for a genuine conflict (same paths, incompatible changes) only.
+- **`context-collab` tells the truth.** A `release`/`handoff` now closes a
+  claim when it cites the claim's event ID **or** simply shares its
+  session+issue and overlaps its paths — so a release citing only the commit
+  SHA no longer strands its claim as "active forever" (the common,
+  weak-agent case).
+- **`context-collab check` no longer hangs.** Rewritten as a single-pass
+  in-memory index instead of re-globbing the events dir and forking
+  `sed`+`head` per field. On a 42-event trail it went from > 3.5 minutes
+  (killed) to < 0.1 s. Notes are exempt from every gate; release/handoff
+  correspondence is checked by the same forgiving claim-linkage.
+- **Windows / CRLF root fix.** New package-root `.gitattributes` and a
+  shipped `templates/.gitattributes` (installed into `.context/` by
+  `bootstrap` and `update`) force `eol=lf` on the vendored core *and* the
+  memory logs — fixing the `context-sync verify` false-positive under
+  `core.autocrlf=true`, the `sh` manifest-parse death on `\r`-suffixed
+  filenames, and the phantom whole-file diffs in append-only logs. `verify`
+  also tolerates a CRLF manifest defensively, and the "no sha256sum" error
+  now points Windows users at the `.ps1` port.
+- **`context-gates.ps1` runs again.** Fixed a PowerShell binding crash
+  (`Cannot bind parameter because parameter 'PathType' is specified more
+  than once` — two `Test-Path` calls chained by `-or` without parenthesizing
+  each) that made every gate fail on Windows.
+- **No agent starts blind.** Bootstrap (and `update`) now install a root
+  `CLAUDE.md` pointer, because Claude Code auto-loads `CLAUDE.md`, not
+  `AGENTS.md`, and a session that never reads the digest runs with zero
+  `.context/` discipline (a logged fleet failure). `CLAUDE.md` routes into
+  `AGENTS.md` + the kickoff; the bootstrap guidance and `AGENTS.md` header
+  now name the other agent entrypoints (Copilot/Cursor/Gemini) that should
+  carry the same one-line pointer. Existing `CLAUDE.md` files are never
+  overwritten.
+
+**Migration from 0.8.x:** fully compatible — the seven formal event types
+keep their exact meaning; `note` is additive. New bootstraps and `update`
+install `.context/.gitattributes`. If a project was already checked out with
+CRLF (Windows `core.autocrlf=true`), run once after updating:
+`git add --renormalize . && git commit -m "chore(context): normalize line endings to LF"`
+(or set `core.autocrlf=false` and `git checkout -- .context`). The `.ps1`
+ports could not be executed on the maintainer's Mac (no `pwsh`); they were
+updated by mirroring the POSIX behavior and are cross-checked against the
+manifest — a Windows validation pass is still owed.
+
 ## 0.8.0 — 2026-08-17
 
 **Explicit lifecycle command gates.** Agents now have mechanical,

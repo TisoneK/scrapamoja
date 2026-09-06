@@ -1,9 +1,12 @@
 # Agent Instructions — <PROJECT_NAME>
 
 <!-- Generated at bootstrap from .context/core/templates/AGENTS.md.
-Refreshed on core updates (fill <PROJECT_NAME> again). Optionally also
-copied to CLAUDE.md and .github/copilot-instructions.md so tools that
-auto-load those paths get the same digest. -->
+Refreshed on core updates (fill <PROJECT_NAME> again). This is the canonical
+entrypoint digest. Bootstrap also installs a CLAUDE.md pointer so Claude
+Code (which auto-loads CLAUDE.md, not this file) is routed here. If the
+project uses other agent tools, add a one-line "read AGENTS.md first"
+pointer to their entrypoint too — Copilot: .github/copilot-instructions.md,
+Cursor: .cursor/rules, Gemini: GEMINI.md, Codex/others: this AGENTS.md. -->
 
 This repo uses the `.context/` protocol: persistent agent memory plus a
 vendored copy of the full workflow, committed to git. **Before doing any
@@ -35,22 +38,37 @@ If you read nothing else, obey these rules:
    `.context/memory/sessions/`, skim them for current state.
 5. **Choose the mode explicitly.** Without a shared collaboration
    `session` + `issue`, `tasks/current.md` is the single-agent lock. In
-   collaboration mode, use an isolated git worktree/branch and the
-   immutable event trail; do not block peers on `tasks/current.md`. Before
-   each next action run `context-gates checkpoint`; before commits,
-   integration, and exit run the matching gate.
-6. **Append-only files are append-only:** `agents/sessions.md`,
-   `tasks/backlog.md`, `plans/decisions.md`, `flaws/log.md`,
-   `inefficiencies/log.md`. Add at the bottom; never edit or delete
-   past entries. Collaboration event files are stronger: immutable,
-   one event per file; emit a correction instead of editing one.
+   collaboration mode you and your teammates are one team, not rivals, and
+   the human is your supervisor: use an isolated git worktree/branch and the
+   immutable event trail; do not block teammates on `tasks/current.md`. Pick
+   a real name in `memory/agents/roster.md` (unique per group) and present
+   yourself by it — "John (S427)", never "peer". The everyday move is a
+   `note` (the office channel — say what you're on, flag a coworker, review a
+   diff); then `claim → work → release`. Save the `proposal → assessment → agreement`
+   ceremony for a genuine conflict (same paths, incompatible changes).
+   Before each next action run `context-gates checkpoint`; before commits,
+   integration, and exit run the matching gate. On Windows, use the `.cmd`
+   launchers (they run the `.ps1` ports; no execution-policy setup).
+6. **Know which kind of file you're in.** *Append-only* logs
+   (`agents/sessions.md`, `tasks/backlog.md`, `plans/decisions.md`,
+   `flaws/log.md`, `inefficiencies/log.md`) grow at the bottom — never edit
+   or delete past entries. *Update-in-place* registries
+   (`system/ai-models.md`, `system/environments.md`) have one entry per key:
+   correct them by **editing** the entry, never by appending a duplicate
+   (its old value is in git history). `context-mem check` flags a dup key.
+   Collaboration event files are stronger still: immutable, one event per
+   file; emit a correction instead of editing one.
 7. **No secrets in tracked files, ever.** Values go only in
    `.context/memory/secrets/` (self-gitignored). Never echo a secret or
    token in chat, logs, or commit messages.
 8. **Two surfaces, two prefixes:** editing product code = normal commit
    prefixes; editing `.context/` = `chore(context):` (reports:
    `docs(review):`). Never mix both surfaces in one commit. Collaboration
-   events are separate immutable context commits.
+   events are separate immutable context commits. And keep the surfaces
+   apart in *content* too: never cite `.context` vocabulary (an ADR number,
+   a bug ID, a `.context/` path) in a product docstring or comment — it's a
+   dangling pointer for anyone reading only the product repo. `context-mem
+   lint` flags it in your staged diff.
 9. **The session is not done until everything is committed AND pushed**,
    the session is logged in `.context/memory/agents/sessions.md`, and
    `.context/memory/tasks/current.md` is cleared. If the user has to

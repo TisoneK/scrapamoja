@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# context-sync.ps1 — Windows/PowerShell port of core/bin/context-sync.
+# context-sync.ps1 -- Windows/PowerShell port of core/bin/context-sync.
 #
 # The POSIX sh script (core/bin/context-sync) is the reference implementation
 # and runs on macOS/Linux. This port covers the commands a Windows agent hits
@@ -10,22 +10,25 @@
 # Requires PowerShell 5.1+ (Windows PowerShell or PowerShell 7 `pwsh`) and,
 # for `rollback`, git on PATH.
 #
-# Commands (project mode — run as:
-#     pwsh -File .context/core/bin/context-sync.ps1 <cmd>):
+# Commands (project mode -- run the launcher, no execution-policy setup:
+#     .context/core/bin/context-sync.cmd <cmd>):
 #   status               local core version + best reachable update source
 #   verify               check every core file against core/MANIFEST.sha256
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked
 #                        archive). Same-MAJOR updates apply directly; a MAJOR
 #                        bump needs -Major. Memory is never touched.
+#   migrate [SOURCE]     ONE-COMMAND bring-current: update core to newest,
+#                        backfill every missing zone/file, normalize, relock,
+#                        verify. Idempotent. Leaves only "fill the facts".
 #   rollback [VERSION]   restore core/ from this project's git history
 #                        (default VERSION: the one in memory/core.lock)
 #   lock                 record the current verified core version in
 #                        memory/core.lock (update/verify call this for you)
 #
-# Package-mode commands (manifest, bootstrap, harvest) are NOT ported —
+# Package-mode commands (manifest, bootstrap, harvest) are NOT ported --
 # run them with the sh script on macOS/Linux.
 #
-# Exit codes: 0 ok · 1 failure · 2 usage · 3 verify mismatch
+# Exit codes: 0 ok | 1 failure | 2 usage | 3 verify mismatch
 
 [CmdletBinding()]
 param(
@@ -121,7 +124,7 @@ function Find-Source { # $explicit -> core dir or $null
 }
 
 # Parse a MANIFEST.sha256 line into @{ Hash; Path } or $null.
-# Format (sha256sum / shasum -a 256): "<64 hex>  <relpath>" — one separator
+# Format (sha256sum / shasum -a 256): "<64 hex>  <relpath>" -- one separator
 # space plus a mode char (space for text, '*' for binary).
 function Parse-Manifest-Line {
   param([string]$line)
@@ -129,6 +132,28 @@ function Parse-Manifest-Line {
     return @{ Hash = $matches[1].ToLower(); Path = $matches[2] }
   }
   return $null
+}
+
+# Hash the CR-stripped content of $path (lowercase hex). One manifest stays
+# byte-compatible across LF checkouts (macOS/Linux) and CRLF copies (files
+# copied outside git on Windows, where .gitattributes does not reach);
+# LF-only files hash identically, so manifest values never change.
+function Get-LfHash {
+  param([string]$Path)
+  $ms = New-Object IO.MemoryStream
+  foreach ($b in [IO.File]::ReadAllBytes($Path)) { if ($b -ne 13) { $ms.WriteByte($b) } }
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try { ([BitConverter]::ToString($sha.ComputeHash($ms.ToArray())) -replace '-', '').ToLower() }
+  finally { $sha.Dispose(); $ms.Dispose() }
+}
+
+# Rewrite $path in place to LF (CR bytes removed).
+function Convert-ToLf {
+  param([string]$Path)
+  $ms = New-Object IO.MemoryStream
+  foreach ($b in [IO.File]::ReadAllBytes($Path)) { if ($b -ne 13) { $ms.WriteByte($b) } }
+  [IO.File]::WriteAllBytes($Path, $ms.ToArray())
+  $ms.Dispose()
 }
 
 # $dir -> $true clean, $false mismatch. Prints up to 20 problems to stderr.
@@ -140,14 +165,13 @@ function Verify-Tree {
   }
   $problems = @()
   foreach ($line in Get-Content -LiteralPath $manifest) {
-    if ($line.Trim() -eq '') { continue }
     $entry = Parse-Manifest-Line $line
     if (-not $entry) { continue }
     $file = Join-Path $dir ($entry.Path.Replace('/', [IO.Path]::DirectorySeparatorChar))
     if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
       $problems += "$($entry.Path): FAILED open or read"; continue
     }
-    $got = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLower()
+    $got = Get-LfHash $file
     if ($got -ne $entry.Hash) { $problems += "$($entry.Path): FAILED" }
   }
   if ($problems.Count -eq 0) { return $true }
@@ -163,7 +187,7 @@ function Write-Lock { # $version
   }
   $today = Get-Date -Format 'yyyy-MM-dd'
   $body = @(
-    '# written by context-sync — the last-known-good core version.'
+    '# written by context-sync -- the last-known-good core version.'
     '# Do not edit by hand. If core fails verify, `context-sync rollback`'
     '# restores the version recorded here from git history.'
     "version=$version"
@@ -203,16 +227,16 @@ function Cmd-Status {
     switch (Ver-Cmp $srcV $localV) {
       'newer' {
         if ((Ver-Part $srcV 1) -eq (Ver-Part $localV 1)) {
-          Say "source: $srcV  ($src) — UPDATE AVAILABLE (same MAJOR: safe to 'update')"
+          Say "source: $srcV  ($src) -- UPDATE AVAILABLE (same MAJOR: safe to 'update')"
         } else {
-          Say "source: $srcV  ($src) — MAJOR update: read its CHANGELOG.md, then 'update -Major' with the user's go-ahead"
+          Say "source: $srcV  ($src) -- MAJOR update: read its CHANGELOG.md, then 'update -Major' with the user's go-ahead"
         }
       }
-      'same'  { Say "source: $srcV  ($src) — up to date" }
-      'older' { Say "source: $srcV  ($src) — source is OLDER than local; nothing to do" }
+      'same'  { Say "source: $srcV  ($src) -- up to date" }
+      'older' { Say "source: $srcV  ($src) -- source is OLDER than local; nothing to do" }
     }
   } else {
-    Say "source: none reachable (no sibling package clone; set CONTEXT_PKG or pass a path) — skipping, this is fine"
+    Say "source: none reachable (no sibling package clone; set CONTEXT_PKG or pass a path) -- skipping, this is fine"
   }
 }
 
@@ -224,56 +248,112 @@ function Cmd-Verify {
     if ($target -eq $CORE_DIR) { Write-Lock (Core-Version $target) }
     exit 0
   }
-  Err 'CORE INTEGRITY FAILURE — core/ does not match its manifest.'
+  Err 'CORE INTEGRITY FAILURE -- core/ does not match its manifest.'
   Err 'Do not ''fix'' core in place. Run: context-sync rollback'
   Err 'Then log the incident in memory/flaws/log.md and continue.'
   exit 3
 }
 
+# Install every current-version scaffolding file the project may be missing.
+# Idempotent; never clobbers existing files. Reads the CURRENT core/templates,
+# so it is the single definition of what a fully-migrated project contains.
+function Backfill-Project {
+  $readme = Join-Path $CORE_DIR 'templates/context-README.md'
+  if (Test-Path -LiteralPath $readme) { Copy-Item -LiteralPath $readme -Destination (Join-Path $CONTEXT_DIR 'README.md') -Force -ErrorAction SilentlyContinue }
+  $attrs = Join-Path $CONTEXT_DIR '.gitattributes'
+  if (-not (Test-Path -LiteralPath $attrs)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/.gitattributes') -Destination $attrs -ErrorAction SilentlyContinue }
+  $claude = Join-Path $PROJECT_DIR 'CLAUDE.md'
+  if (-not (Test-Path -LiteralPath $claude)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/CLAUDE.md') -Destination $claude -ErrorAction SilentlyContinue }
+  $hist = Join-Path $CONTEXT_DIR 'history'
+  if (-not (Test-Path -LiteralPath $hist)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/history') -Destination $hist -Recurse -ErrorAction SilentlyContinue }
+  $arch = Join-Path $CONTEXT_DIR 'archive'
+  if (-not (Test-Path -LiteralPath $arch)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/archive') -Destination $arch -Recurse -ErrorAction SilentlyContinue }
+  $wf = Join-Path $MEMORY_DIR 'workflows'; $ag = Join-Path $MEMORY_DIR 'agents'
+  New-Item -ItemType Directory -Path $wf, $ag -Force -ErrorAction SilentlyContinue | Out-Null
+  $hc = Join-Path $wf 'history.conf'
+  if (-not (Test-Path -LiteralPath $hc)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/memory/workflows/history.conf') -Destination $hc -ErrorAction SilentlyContinue }
+  $grp = Join-Path $ag 'GROUP'
+  if (-not (Test-Path -LiteralPath $grp)) { "group=1`nopened=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n" | Set-Content -LiteralPath $grp -NoNewline }
+  $ros = Join-Path $ag 'roster.md'
+  if (-not (Test-Path -LiteralPath $ros)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/memory/agents/roster.md') -Destination $ros -ErrorAction SilentlyContinue }
+}
+
+# Replace .context/core with the source tree, LF-normalized and re-verified.
+function Swap-Core {
+  param([string]$src, [string]$srcV)
+  if (-not (Verify-Tree $src)) { Die 'update source fails its own manifest -- refusing to install a corrupt core' }
+  $stage = Join-Path $CONTEXT_DIR 'core.new'
+  if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+  Copy-Item -LiteralPath $src -Destination $stage -Recurse -Force
+  Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
+  if (-not (Verify-Tree $stage)) { Remove-Item -LiteralPath $stage -Recurse -Force; Die 'staged copy fails verify -- aborting, core untouched' }
+  try { Remove-Item -LiteralPath $CORE_DIR -Recurse -Force; Move-Item -LiteralPath $stage -Destination $CORE_DIR }
+  catch { Die 'swap failed -- restore .context/core from git (git checkout -- .context/core)' }
+  Write-Lock $srcV
+}
+
 function Cmd-Update {
   param([string[]]$uArgs)
   Need-Project 'update'
+  Backfill-Project
   $srcArg = ''
-  foreach ($a in $uArgs) {
-    if ($a -eq '--major') { $script:Major = $true } else { $srcArg = $a }
-  }
+  foreach ($a in $uArgs) { if ($a -eq '--major') { $script:Major = $true } else { $srcArg = $a } }
   $src = Find-Source $srcArg
   if (-not $src) { Die 'no update source found (sibling clone, CONTEXT_PKG, or a path argument)' }
   $srcV = Core-Version $src; $localV = Core-Version $CORE_DIR
   switch (Ver-Cmp $srcV $localV) {
-    'same'  { Say "already at $localV — nothing to do"; exit 0 }
-    'older' { Say "source ($srcV) is older than local ($localV) — refusing to downgrade"; exit 0 }
+    'same'  { Say "already at $localV -- nothing to do"; exit 0 }
+    'older' { Say "source ($srcV) is older than local ($localV) -- refusing to downgrade"; exit 0 }
   }
   if (((Ver-Part $srcV 1) -ne (Ver-Part $localV 1)) -and (-not $Major)) {
     Die "MAJOR version bump ($localV -> $srcV): read CHANGELOG.md migration notes, get the user's go-ahead, re-run with -Major"
   }
-  if (-not (Verify-Tree $src)) { Die 'update source fails its own manifest — refusing to install a corrupt core' }
-
-  $stage = Join-Path $CONTEXT_DIR 'core.new'
-  if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
-  Copy-Item -LiteralPath $src -Destination $stage -Recurse -Force
-  if (-not (Verify-Tree $stage)) {
-    Remove-Item -LiteralPath $stage -Recurse -Force
-    Die 'staged copy fails verify — aborting, core untouched'
-  }
-
-  try {
-    Remove-Item -LiteralPath $CORE_DIR -Recurse -Force
-    Move-Item -LiteralPath $stage -Destination $CORE_DIR
-  } catch {
-    Die 'swap failed — restore .context/core from git (git checkout -- .context/core)'
-  }
-  Write-Lock $srcV
-  # refresh the core-owned root file
-  $readme = Join-Path $CORE_DIR 'templates/context-README.md'
-  if (Test-Path -LiteralPath $readme) {
-    Copy-Item -LiteralPath $readme -Destination (Join-Path $CONTEXT_DIR 'README.md') -Force -ErrorAction SilentlyContinue
-  }
+  Swap-Core $src $srcV
   Say "core updated: $localV -> $srcV"
-  Say 'next: read the new entries in .context/core/CHANGELOG.md;'
-  Say '      if templates/kickoff.md or templates/AGENTS.md changed materially,'
-  Say '      regenerate .context/kickoff.md / AGENTS.md (facts from memory);'
-  Say "      commit as: chore(context): update core to $srcV"
+  # hand off to the just-installed script so backfill knows every new file
+  & (Join-Path $CORE_DIR 'bin/context-sync.ps1') migrate --backfill-only
+  exit $LASTEXITCODE
+}
+
+# migrate -- one-command bring-current: update core to the newest reachable
+# version, then backfill every missing file, LF-normalize, relock, verify.
+# Idempotent. Leaves only "fill the project facts".
+function Cmd-Migrate {
+  param([string[]]$mArgs)
+  Need-Project 'migrate'
+  $backfillOnly = $false; $srcArg = ''
+  foreach ($a in $mArgs) {
+    if ($a -eq '--backfill-only') { $backfillOnly = $true }
+    elseif ($a -eq '--major') { $script:Major = $true }
+    else { $srcArg = $a }
+  }
+  if (-not $backfillOnly) {
+    $src = Find-Source $srcArg
+    if ($src) {
+      $srcV = Core-Version $src; $localV = Core-Version $CORE_DIR
+      if ((Ver-Cmp $srcV $localV) -eq 'newer') {
+        if (((Ver-Part $srcV 1) -ne (Ver-Part $localV 1)) -and (-not $Major)) {
+          Die "MAJOR bump ($localV -> $srcV): read CHANGELOG.md, then re-run with -Major"
+        }
+        Say "updating core: $localV -> $srcV"
+        Swap-Core $src $srcV
+        & (Join-Path $CORE_DIR 'bin/context-sync.ps1') migrate --backfill-only
+        exit $LASTEXITCODE
+      }
+    }
+  }
+  Backfill-Project
+  Get-ChildItem -LiteralPath $CORE_DIR -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
+  Write-Lock (Core-Version $CORE_DIR)
+  $v = Core-Version $CORE_DIR
+  if (Verify-Tree $CORE_DIR) { $vs = 'core verified' } else { $vs = 'core FAILED verify -- run: context-sync rollback' }
+  Say "migration complete -- core $v; all zones/files present; $vs."
+  Say ''
+  Say 'One step left -- fill the project facts (facts from memory, no secrets):'
+  Say '  .context/kickoff.md          -- Project Facts (remote URL, default branch, name)'
+  Say '  AGENTS.md                    -- <PROJECT_NAME>'
+  Say '  memory/workflows/active.md   -- protocol by agent type, BOTH edition paths'
+  Say "then commit + push: chore(context): migrate to core $v"
   exit 0
 }
 
@@ -281,9 +361,9 @@ function Cmd-Rollback {
   param([string]$want)
   Need-Project 'rollback'
   if (-not $want) { $want = Lock-Version }
-  if (-not $want) { Die 'no version given and no memory/core.lock — pass a version: context-sync rollback 0.2.0' }
+  if (-not $want) { Die 'no version given and no memory/core.lock -- pass a version: context-sync rollback 0.2.0' }
   & git -C $PROJECT_DIR rev-parse --is-inside-work-tree *> $null
-  if ($LASTEXITCODE -ne 0) { Die 'project is not a git repo — cannot roll back' }
+  if ($LASTEXITCODE -ne 0) { Die 'project is not a git repo -- cannot roll back' }
   $found = ''
   $shas = & git -C $PROJECT_DIR log --format=%H -- .context/core/VERSION
   foreach ($sha in $shas) {
@@ -294,7 +374,10 @@ function Cmd-Rollback {
   if (-not $found) { Die "no commit in history has core VERSION $want" }
   Remove-Item -LiteralPath (Join-Path $PROJECT_DIR '.context/core') -Recurse -Force
   & git -C $PROJECT_DIR checkout $found -- .context/core
-  if ($LASTEXITCODE -ne 0) { Die 'git checkout failed — run: git checkout HEAD -- .context/core' }
+  if ($LASTEXITCODE -ne 0) { Die 'git checkout failed -- run: git checkout HEAD -- .context/core' }
+  # a CRLF checkout (core.autocrlf=true) restores hashes that do not match
+  # the manifest -- rewrite to LF so the rolled-back core verifies.
+  Get-ChildItem -LiteralPath (Join-Path $PROJECT_DIR '.context/core') -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
   Write-Lock $want
   Say "core rolled back to $want (from commit $($found.Substring(0, [Math]::Min(8, $found.Length))))"
   Say 'log the incident in memory/flaws/log.md, then commit as:'
@@ -309,6 +392,7 @@ switch ($Command) {
   'status'   { Cmd-Status ($argsRest | Select-Object -First 1); exit 0 }
   'verify'   { Cmd-Verify ($argsRest | Select-Object -First 1) }
   'update'   { Cmd-Update $argsRest }
+  'migrate'  { Cmd-Migrate $argsRest }
   'rollback' { Cmd-Rollback ($argsRest | Select-Object -First 1) }
   'lock' {
     Need-Project 'lock'
@@ -317,12 +401,12 @@ switch ($Command) {
     exit 0
   }
   { $_ -in 'manifest', 'bootstrap', 'harvest' } {
-    Die "'$Command' is not ported to PowerShell — run the sh script on macOS/Linux: sh core/bin/context-sync $Command"
+    Die "'$Command' is not ported to PowerShell -- run the sh script on macOS/Linux: sh core/bin/context-sync $Command"
   }
   { $_ -in '', $null, '-h', '--help', 'help' } {
     # print the command-doc comment (lines 13..28) as help, stripping '# '
     $self = Get-Content -LiteralPath $PSCommandPath
-    $self[12..27] | ForEach-Object { Say ($_ -replace '^# ?', '') }
+    $self[12..30] | ForEach-Object { Say ($_ -replace '^# ?', '') }
     exit 2
   }
   default { Die "unknown command: $Command (try: context-sync.ps1 help)" }
