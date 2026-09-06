@@ -329,3 +329,11 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** Tool-side token budget, not the repo. The biggest memory files (sessions.md ~40+ entries, backlog.md ~50 items) exceed it.
 - **Workaround / fix:** For kickoff Step 2 on this repo, read the tail of the big logs first (`tail -60 .context/memory/agents/sessions.md`), or grep the session number you care about.
 - **Prevent next time:** Read `.context/memory/agents/sessions.md` and `tasks/backlog.md` with a targeted `tail`/`grep` on this repo (they are the two files that exceed the read limit), not with a full-file read.
+
+---
+## 2026-09-06 — ZCode / GLM-5.3-Flash (Session 41)
+- **Problem:** `gates.conf` (initialized 2026-08-18 on the Mac) hardcodes POSIX venv paths (`.venv/bin/python`), so every `context-gates run` on Windows fails its configured command ("The term '.venv/bin/python' is not recognized...") even though the suite itself is green via `.venv/Scripts/python.exe`. The universal staged-diff checks pass; only the configured command fails.
+- **Cost:** one failed gate run to diagnose; manual gate-equivalent runs needed on this machine.
+- **Cause:** conf written per-machine when only the Mac ran sessions; the gates registry format has no OS-scoped command syntax.
+- **Workaround / fix:** on Windows run the configured commands manually: `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q` (session 41: 232 passed). Conf left unchanged so the Mac keeps passing.
+- **Prevent next time:** either (a) extend the gates registry format with per-OS lines (e.g. `windows|pre-commit|<cmd>`), or (b) point the conf at a small cross-platform wrapper script that picks `.venv/Scripts/python.exe` vs `.venv/bin/python` by OS. Upstream candidate for the gates registry format.

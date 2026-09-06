@@ -78,7 +78,7 @@ block (and its "last verified" date) every time you run on it again.
   - **The package repo `TisoneK/.context` is private.** The original external kickoff file contradicted itself on this (line 27 said private, line 81 said public) — ground truth is private. The in-repo `.context/kickoff.md` (generated session 5) records this correctly.
 
 ---
-## TisoneK-Windows (last verified 2026-07-19, session 17)
+## TisoneK-Windows (last verified 2026-09-06, session 41)
 - **Identify by:** hostname `DESKTOP-*`, `$env:USERNAME` = `tison`, workspace `C:\Users\tison\Dev\scrapamoja`
 - **OS:** Windows 11, PowerShell (pwsh)
 - **Runtimes:** system python = 3.14.2 (from `.venv\Scripts\python.exe`); `.venv\` exists at repo root
@@ -96,6 +96,13 @@ block (and its "last verified" date) every time you run on it again.
   - No `bore.pub` tunnel running; proxy vars not currently set
   - Playwright installed with Chromium headless
 
+- **Session 41 additions (2026-09-06, `.context` sync, core 0.16.1):**
+  - `pwsh -NoProfile -File .context/core/bin/context-sync.ps1 {verify,update,migrate}` — verified. **Run `migrate` after `update`**: the PS `update` swapped the core but skipped the 0.13+ zone backfill (logged in flaws/log.md); `migrate` is idempotent and completes it. Prefer the `.cmd` launchers per core 0.14+ (no execution-policy setup).
+  - The 0.8.0-era `context-sync.ps1` does NOT parse under Windows PowerShell 5.1 (UTF-8 punctuation, ANSI decoding); `pwsh` 7 (installed on this machine) works. Core 0.13.1+ ps1 files are ASCII-clean for 5.1.
+  - `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q -p no:cacheprovider` — verified session 41: **232 passed** (venv Python is 3.14.2).
+  - `pwsh -NoProfile -File .context/core/bin/context-gates.ps1 run pre-commit` — universal checks pass; the configured `.venv/bin/python` command fails on Windows (POSIX path). Run the suite manually and record it; gates.conf left untouched so the Mac keeps passing (see inefficiencies/log.md).
+  - **Global `core.autocrlf=true`**: on core 0.8.0 this produced a 13-file `context-sync verify` false-positive (CRLF checkout vs LF-hashed manifest) — diagnose with `git ls-files --eol`, do NOT rollback. Fixed by core 0.9.1+ CR-stripped hashing + the new `.context/.gitattributes` (verify passes on the CRLF tree as of 0.16.1).
+  - `git push` / `git pull` — work with existing credentials (unchanged).
 - **Session 29 additions (2026-07-25, ADR-11):**
   - `python3 -m venv .venv` + `.venv/bin/python -m pip install -e ".[dev]"` (with `PIP_ONLY_BINARY=:all:` then fallback) — works from system python3 3.12.13; `uv` is NOT on this sandbox (unlike the Mac block). Standalone venv is fine.
   - `.venv/bin/python -m pytest src/sites/betb2b/tests/ tests/unit/test_core_db.py --no-cov -p no:cacheprovider -q` → 189 passed (173 betb2b store + 5 betb2b models + 11 core_db). The green baseline.

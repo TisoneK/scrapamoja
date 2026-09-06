@@ -15,6 +15,7 @@ accordingly).
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-19 | 2026-07-20 | 2 |
 | Z.ai Code | unknown | 2026-07-25 | 2026-07-25 | 1 |
 | Buffy (Freebuff) | deepseek-v4-pro | 2026-08-01 | 2026-08-18 | 2 |
+| ZCode | GLM-5.3-Flash | 2026-09-06 | 2026-09-06 | 1 |
 
 ## Observations
 

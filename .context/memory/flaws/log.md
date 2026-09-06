@@ -291,3 +291,19 @@ Friction caused by the `.context/` system or the protocol itself. See
 - **Root cause:** In a long, fast-moving, interactive build the agent optimized for shipping each change (commit/push) and treated the session-log/current.md as an end-of-session artifact, but never reached a natural "end" — the session just kept going. The protocol's exit checklist assumes a bounded session; a long open-ended one has no trigger to flush memory.
 - **Suggested fix:** Flush `current.md` (and append an interim `sessions.md` note) at **major milestones**, not only at session end — e.g. after each shipped ADR or deployable increment. Cheap, and it keeps memory usable if the session is interrupted. Package-level: the Exit checklist could add "if the session spans multiple deployable increments, update `current.md` at each, not just at exit."
 - **Status:** open (this session's log + current.md now written; the incremental-flush habit is the real fix)
+
+---
+## 2026-09-06 — ZCode / GLM-5.3-Flash (Session 41)
+- **Flaw:** On a Windows checkout with `core.autocrlf=true`, the 0.8.0 `context-sync verify` reported CORE INTEGRITY FAILURE for 13 files missing `eol=lf` attribute coverage (`bin/*`, `VERSION`, `*.json`, `core.lock`, `.gitignore`, `gates.conf`) — CRLF checkout mangling, not corruption. The advised remediation (`rollback`) would have restored the same CRLF bytes — an unfixable loop.
+- **Symptom:** verify failed under BOTH the sh script (`sha256sum: 'CHANGELOG.md'$'\r'` parse errors on every line) and the ps1 port (13 FAILED lines) on a freshly-pulled, unmodified 0.8.0 core. Manifest hashes matched the committed git blobs exactly; only the working tree differed.
+- **Root cause:** the 0.8.0 verifier hashed raw on-disk bytes, and the project's root `.gitattributes` pinned only `*.py/*.yaml/*.md` to LF — attribute-less core files were checked out CRLF while the manifest hashed LF blobs.
+- **Suggested fix:** none needed upstream — fixed in core 0.9.0/0.9.1 (`.context/.gitattributes` + CR-stripped hashing). Confirmed fixed here after migrating to 0.16.1 (verify passes on the CRLF working tree). Kept as the documented local instance of the known defect; do NOT rollback on this signature — diagnose with `git ls-files --eol` first.
+- **Status:** fixed in package core 0.9.1 (observed fixed here on 0.16.1, 2026-09-06)
+
+---
+## 2026-09-06 — ZCode / GLM-5.3-Flash (Session 41)
+- **Flaw:** the PowerShell `context-sync update` (0.16.1's script) did not run the documented post-swap backfill. The 0.16.0 changelog says `update` "re-execs the just-installed script's `migrate --backfill-only`"; on this Windows run the core swapped to 0.16.1 and verified, but every backfill target (`.context/.gitattributes`, root `CLAUDE.md`, `agents/roster.md` + `GROUP`, `workflows/history.conf`, `history/`, `archive/`) was still missing afterwards.
+- **Symptom:** `update` printed only the swap + changelog reminder; `git status` showed no new memory/zone files; the explicit `context-sync.ps1 migrate` run immediately after created all of them and verified ("all zones/files present").
+- **Root cause:** unconfirmed — either the PS `update` skipped the re-exec step or it failed silently. The sh path was not exercised on this machine (no POSIX verify pass pre-update to compare).
+- **Suggested fix:** make the PS `update` backfill observable — print each installed backfill file (or a warning when the `migrate --backfill-only` re-exec does not happen); surface an "all zones/files present" confirmation from the backfill in `update`'s output. Windows runtime pass owed (0.15.0 noted the ps1 ports still owe one).
+- **Status:** open (workaround: after a PS `update` that crosses into 0.16.0+, always run `migrate` — it is idempotent)
