@@ -39,6 +39,17 @@ def _is_orm(conn: Any) -> bool:
     return conn is not None and not isinstance(conn, sqlite3.Connection)
 
 
+def _fallback_after_write(kind: str, payload: Dict[str, Any]) -> None:
+    """Post-write hook (store_fallback): queue the write for replay while in
+    fallback mode, and run the recovery cycle. Never raises — the write already
+    succeeded, and a fallback problem must not mask that."""
+    try:
+        from . import store_fallback
+        store_fallback.after_write(kind, payload)
+    except Exception:  # noqa: BLE001
+        logger.exception("fallback post-write hook failed (kind=%s)", kind)
+
+
 def is_read_only_error(exc: BaseException | None) -> bool:
     """True if ``exc`` (or a wrapped cause) is a Postgres read-only-transaction
     error — SQLSTATE ``25006`` (``read_only_sql_transaction``).
@@ -287,15 +298,22 @@ CREATE INDEX IF NOT EXISTS ix_odds_event       ON odds_snapshots(event_id, skin,
 CREATE INDEX IF NOT EXISTS ix_odds_market      ON odds_snapshots(event_id, skin, market_id, selection_name, captured_at);
 CREATE INDEX IF NOT EXISTS ix_h2h_event        ON h2h_games(event_id);
 CREATE INDEX IF NOT EXISTS ix_sub_games_event  ON sub_games(event_id);
+
+-- Writes queued while the primary store was unavailable, replayed FIFO when it
+-- recovers. Only the fallback path (store_fallback) reads/writes it; it stays
+-- empty in normal operation.
+CREATE TABLE IF NOT EXISTS fallback_outbox (
+    seq        INTEGER PRIMARY KEY,
+    kind       TEXT NOT NULL,           -- 'persist' (scrape result) | 'result' (match result)
+    payload    TEXT NOT NULL,           -- JSON
+    created_at TEXT NOT NULL
+);
 """
 
 
-def init_db(path: PathLike | None = None):
-    """Open the store + ensure the schema. Returns a sqlite3 connection, OR a
-    SQLAlchemy connection when ``DATABASE_URL`` is set (ADR-13 → Supabase)."""
-    if os.environ.get("DATABASE_URL"):
-        from . import store_orm
-        return store_orm.connect()
+def _connect_sqlite(path: PathLike):
+    """Open a local SQLite store connection (schema ensured). Shared by local
+    mode and the fallback mirror (store_fallback)."""
     p = Path(path)
     if p.parent and not p.parent.exists():
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -306,6 +324,28 @@ def init_db(path: PathLike | None = None):
     _ensure_columns(conn)
     conn.commit()
     return conn
+
+
+def init_db(path: PathLike | None = None):
+    """Open the store + ensure the schema. Returns a sqlite3 connection, OR a
+    SQLAlchemy connection when ``DATABASE_URL`` is set (deployed: Supabase).
+
+    If the remote store can't be reached (connection-class failure), fallback
+    mode hands back the local mirror instead — writes then continue locally and
+    replay later (store_fallback)."""
+    if os.environ.get("DATABASE_URL"):
+        from . import store_fallback, store_orm
+        if store_fallback.active():
+            # Fallback mode: the store IS local until a probe proves the
+            # primary writable again (no doomed write attempts per pass).
+            return store_fallback.mirror_connect(path)
+        try:
+            return store_orm.connect()
+        except Exception as exc:  # noqa: BLE001
+            if store_fallback.recover_connect_failure(exc, path):
+                return store_fallback.mirror_connect(path)
+            raise
+    return _connect_sqlite(path)
 
 
 # Additive columns introduced after the initial schema. `CREATE TABLE IF NOT
@@ -493,12 +533,19 @@ def persist_result(
     owns = conn is None
     conn = conn or init_db(path)
     if _is_orm(conn):
-        from . import store_orm
+        from . import store_fallback, store_orm
         try:
-            return store_orm.persist_result(conn, result)
+            run_id = store_orm.persist_result(conn, result)
+        except Exception as exc:  # noqa: BLE001
+            mirror = store_fallback.recover_write_failure("persist", exc, result, path)
+            if mirror is not None:
+                return mirror
+            raise
         finally:
             if owns:
                 conn.close()
+        store_fallback.maybe_finish_drain()
+        return run_id
     try:
         skin = result.get("skin") or ""
         at = result.get("extracted_at") or ""
@@ -683,6 +730,7 @@ def persist_result(
             "persist run %d (skin=%s): %d odds changes stored, %d unchanged skipped",
             run_id, skin, odds_ins, odds_skip,
         )
+        _fallback_after_write("persist", result)
         return run_id
     finally:
         if owns:
@@ -896,10 +944,19 @@ def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
     ``stat_game_id`` whenever seen; stamps final score/winner/status only on
     ``status == 3`` (finished) — which removes it from ``events_needing_results``."""
     if _is_orm(conn):
-        from . import store_orm
-        return store_orm.record_result(
-            conn, event_id, stat_game_id=stat_game_id, score_home=score_home,
-            score_away=score_away, winner=winner, status=status, at=at)
+        from . import store_fallback, store_orm
+        kwargs = dict(stat_game_id=stat_game_id, score_home=score_home,
+                      score_away=score_away, winner=winner, status=status, at=at)
+        try:
+            out = store_orm.record_result(conn, event_id, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            payload = {"event_id": str(event_id), **kwargs}
+            mirror = store_fallback.recover_write_failure("result", exc, payload)
+            if mirror is not None:
+                return None
+            raise
+        store_fallback.maybe_finish_drain()
+        return out
     sets, params = [], []
     if stat_game_id:
         sets.append("stat_game_id=?"); params.append(str(stat_game_id))
@@ -912,6 +969,9 @@ def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
     params.append(str(event_id))
     conn.execute(f"UPDATE events SET {', '.join(sets)} WHERE event_id=?", params)
     conn.commit()
+    _fallback_after_write("result", {"event_id": str(event_id), "stat_game_id": stat_game_id,
+                                     "score_home": score_home, "score_away": score_away,
+                                     "winner": winner, "status": status, "at": at})
 
 
 def list_jobs(conn, *, limit: int = 50, status: Optional[str] = None):

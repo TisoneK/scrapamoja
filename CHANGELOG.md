@@ -6,6 +6,20 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Added — the scraper keeps collecting when the shared database is unavailable (2026-09-07, session 43)
+
+The scheduled scraper now survives the shared database going down or being
+locked. When the free hosting quota locks the database to read-only — or it
+can't be reached at all — the scraper used to simply stop saving data and wait.
+It now switches to a local fallback database on the machine it runs on, keeps
+writing there, and remembers every write it made in a replay queue. It
+periodically checks whether the main database accepts writes again; the first
+check that succeeds switches collection back and replays everything that was
+queued, so no scrape results are lost during an outage or a quota restriction.
+The switch, the recovery, and how much is queued are all logged. Set
+`BETB2B_FALLBACK=0` to turn the behavior off and get the old fail-loudly
+instead.
+
 ### Fixed — the always-on scraper boots with live-odds polling OFF again (2026-09-07, session 42)
 
 The scheduled scraper worker on Railway was accidentally re-enabled to poll live

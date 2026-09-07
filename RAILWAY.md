@@ -182,6 +182,37 @@ needs **no Volume** and no proxy — just `DATABASE_URL`.
 
    Leave `BETB2B_PROXY_URL` **unset** — direct mode needs no proxy.
 
+### Local fallback store (when Supabase is down or restricted)
+
+When a write to Supabase fails — the free tier's over-quota **read-only**
+restriction, a connection drop, a provider restart — the worker does **not**
+drop the data anymore. It switches to a **local SQLite fallback store** on the
+fly, keeps writing there, queues every write for replay, and periodically probes
+Supabase with a throwaway write; the first one that lands flips writes back and
+replays the queue (the store's normal dedup makes replays harmless).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BETB2B_FALLBACK` | `1` (on) | Set `0` to disable (writes then fail loudly, as before). |
+| `BETB2B_FALLBACK_DB_PATH` | `BETB2B_DB_PATH` / `data/betb2b/odds.db` | The fallback SQLite file. **The worker has no Volume** — set this only if you mount one and need fallback data to survive redeploys. |
+| `BETB2B_FALLBACK_PROBE_SECONDS` | `300` | Min seconds between Supabase write-probes while in fallback mode. |
+| `BETB2B_FALLBACK_OUTBOX_MAX` | `5000` | Max queued writes; the oldest are dropped past the cap. |
+| `BETB2B_FALLBACK_DRAIN_MAX` | `500` | Max writes replayed to Supabase per drain pass. |
+
+Notes:
+
+- The fallback state is **per process** (worker and web each keep their own);
+  check the logs — every switch ("switching to the local fallback store",
+  "primary store recovered") and the outbox state are logged.
+- While in fallback mode, apps reading **Supabase directly** (the engine, the
+  website) see nothing new until the replay — the data is local-only in the
+  meantime.
+- Fallback data lives on the worker's ephemeral disk unless you point
+  `BETB2B_FALLBACK_DB_PATH` at a Volume path. A redeploy during a restriction
+  loses the mirror (already-written data) — the outbox queue included. That is
+  the accepted trade-off for not dropping writes at all; mount a Volume if it
+  matters.
+
 The process handles **SIGTERM** cleanly (finishes the current pass, closes the scraper),
 so redeploys don't half-write. Each pass is idempotent + change-only, so a restart just
 re-runs harmlessly. **Rate discipline (ADR-17):** the datacenter IP is unproven at high
