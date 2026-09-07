@@ -527,3 +527,57 @@ scraper doesn't write through it yet.
   2. **Proposed: an in-process last-odds cache** in the scheduler/persist path — remember `(price, is_suspended)` per `(event, scope, market, selection, line)` in memory so a poll doesn't re-`SELECT` `_last_odds` from Supabase each cycle. This is the big egress win **when live is turned back on** (paid tier). Cache is per-process (lost on restart → first poll after a restart still reads); that's fine. Backlog item added.
   3. **On Pro**, egress limit is far higher (250 GB), so this becomes a non-issue if the operator upgrades.
 - **Consequences:** the free tier is viable *as long as live stays off*; turning live on without the dedup cache will re-spend egress fast. Grace period (ADR-21 §5) covers the current overage to 2026-09-06. Two distinct free-tier ceilings now tracked: **DB size** (fixed by scheduled-only + retention) and **egress** (fixed by scheduled-only + the dedup cache). Both point the same way: keep live off on free, or go Pro for full live capture.
+
+---
+## ADR-24: Supabase outage/restriction → local fallback store with an outbox replay (2026-09-07, Session 43)
+
+- **Status:** accepted (shipped, `ce24540`)
+- **Context:** the Supabase free tier restricts an over-quota project to
+  **read-only** (SQLSTATE 25006; Fair-Use window until 2026-09-27 after the
+  second quota re-fill — see ADR-21/22). The ADR-21 §1b mitigation backed the
+  scheduler off and **dropped** every write during the window — weeks of
+  scheduled+results data lost by design. The operator asked for a fallback:
+  "if Supabase fails or gets restricted we switch to local storage db."
+- **Decision (`src/sites/betb2b/store_fallback.py` + `store.py` seams):**
+  1. **Fail over, don't fail silently.** A primary write/connect that fails
+     with a fallback-eligible error (read-only 25006, connection-class 08xx,
+     resource 53xxx, shutdown 57P0x) flips the process into **fallback mode**:
+     `store.init_db` then hands out a connection to a **local SQLite mirror**
+     (same store schema; `BETB2B_FALLBACK_DB_PATH` or the local-mode store
+     path). Deliberately NOT eligible: auth errors (28P01 — a config bug to
+     surface), integrity/programming errors (our bugs), pool timeouts.
+  2. **Outbox replay, not dual-source-of-truth.** Every write made in fallback
+     mode is also appended as JSON to a `fallback_outbox` table (FIFO) in the
+     mirror. On recovery each payload is replayed through the **store's own
+     persist path** (upsert dims + change-only dedup), so replay is
+     idempotent and line-movement chronology (payload `captured_at`) is
+     preserved. A mirrored-full-schema-replay was rejected: replaying raw rows
+     would break FK identity across the two DBs.
+  3. **Probe = a real write, throttled.** After each fallback write, a
+     throwaway `INSERT … ROLLBACK` on the primary (default every 300s) —
+     reads stay allowed on a restricted project, so only a write proves
+     recovery. First successful probe flips back and drains (bounded: 500
+     payloads / 60s per pass; leftovers drain on later primary writes via the
+     post-write hook). A drain failure re-activates fallback; the undrained
+     rows stay queued. Outbox cap 5000, oldest dropped (logged).
+  4. **Per-process state, two seams.** Worker and web each keep their own
+     mirror/outbox. `scraper_jobs` (the control queue) is NOT outboxed —
+     coordination must stay coherent across services; during an outage remote
+     job submission fails loudly while the always-on data pipeline continues
+     locally. `BETB2B_FALLBACK=0` restores the old fail-loudly behavior.
+- **Consequences:**
+  - Data written during a restriction now survives (queued for replay) — but
+    lives on the worker's **ephemeral disk** unless the operator points
+    `BETB2B_FALLBACK_DB_PATH` at a Volume; a redeploy mid-restriction loses
+    the mirror. Documented in RAILWAY.md as the accepted trade-off.
+  - While fallback is active, engine/website reads of Supabase see nothing
+    new until the replay — unchanged from the outage itself.
+  - The scheduler's ADR-21 §1b read-only backoff stays as a safety net but no
+    longer triggers for persist failures (fallback absorbs them); probe
+    traffic to a restricted Supabase is one rejected INSERT per 5 min.
+  - The mirror DB is never dropped after recovery (small in scheduled-only
+    mode); a future retention pass may clean it.
+  - Tests: 14 in `tests/test_betb2b_store_fallback.py` — the "primary" is a
+    real sqlite ORM store via `DATABASE_URL` with 25006 injected at the
+    `store_orm` seam; the full failover→outbox→probe→flip-back→replay cycle
+    is asserted end-to-end (no network).

@@ -344,3 +344,10 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** the ADR-22 fix enumerated deploy surfaces by memory instead of by grep, and no test pinned deploy-config defaults.
 - **Workaround / fix:** `9cb7fcf` — all deploy surfaces default live OFF; `test_deploy_configs_default_live_off` pins Procfile + railway.worker.json; RAILWAY.md warns dashboard-set variables override config fallbacks.
 - **Prevent next time:** when a decision changes a default, grep the whole repo for every surface carrying it (Procfiles, railway.*.json, Dockerfile CMD, compose files) and add a test asserting the new default per surface — docs and memory don't enforce.
+---
+## 2026-09-07 — ZCode / GLM-5.3-Flash (Session 43)
+- **Problem:** the gates.conf Windows trap (logged 2026-09-06, Session 41) re-cost a gate run this session: `context-gates run pre-commit` fails its configured pytest command (`.venv/bin/python` is a POSIX path) on this machine, so every gate invocation ends FAILED (127) even when the suite is green.
+- **Cost:** one failed gate run + one manual equivalent run per commit boundary (~1 min total this session).
+- **Cause:** gates.conf has no per-OS command syntax; the conf is shared with the Mac.
+- **Workaround / fix:** run `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov` manually and record the result (247 passed this session); conf left untouched so the Mac keeps passing.
+- **Prevent next time:** the fix belongs to the gates registry format (per-OS lines or a wrapper script) — upstream candidate, still open from Session 41.
