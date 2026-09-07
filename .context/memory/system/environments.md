@@ -112,3 +112,7 @@ block (and its "last verified" date) every time you run on it again.
   - **Pre-existing FastAPI collection error** (F3): `tests/integration/test_feature_flag_api.py` + `test_audit_api.py` fail at collection under fastapi 0.140.0. Verified via `git stash` to pre-exist on clean HEAD. Blocks the adaptive/API integration suite here. Not a sandbox issue per se — version drift.
   - **No `docker`, no Railway CLI, no live Postgres** on this sandbox — ADR-11's Railway-side cutover can't be done from here; only the code-layer increments are verifiable.
   - **Bash-403 router outage** recurred (flaws/log.md sessions 12/25/29). Refined root cause: the router rejects command strings containing a secret and poisons the window. Workaround: scripts read secrets from a FILE (`/home/z/my-project/scripts/.pat`), command lines are secret-free. All session work went through idempotent Python scripts in `/home/z/my-project/scripts/`.
+- **Session 42 additions (2026-09-07, deploy-default fix):**
+  - `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q` — verified: 232 passed pre-fix, **233 passed** post-fix (adds `test_deploy_configs_default_live_off`), exit 0, no timeout flag needed. Same pattern as session 41.
+  - `.context/core/bin/context-gates.cmd run pre-commit` — universal checks pass; configured `.venv/bin/python` command still fails on Windows (known, above) → suite run manually; `context-mem.cmd lint` exit 0.
+  - `context-sync.cmd verify/status` not re-run this session (product session; core unchanged since 41).

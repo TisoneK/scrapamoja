@@ -337,3 +337,10 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** conf written per-machine when only the Mac ran sessions; the gates registry format has no OS-scoped command syntax.
 - **Workaround / fix:** on Windows run the configured commands manually: `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q` (session 41: 232 passed). Conf left unchanged so the Mac keeps passing.
 - **Prevent next time:** either (a) extend the gates registry format with per-OS lines (e.g. `windows|pre-commit|<cmd>`), or (b) point the conf at a small cross-platform wrapper script that picks `.venv/Scripts/python.exe` vs `.venv/bin/python` by OS. Upstream candidate for the gates registry format.
+---
+## 2026-09-07 — ZCode / GLM-5.3-Flash (Session 42)
+- **Problem:** The scheduled-only deploy default drifted: Procfile said `SCHED_LIVE_INTERVAL:-0` but `railway.worker.json` (the surface the Railway worker actually boots from) still said `:-15`. Memory + tasks/current.md recorded "live OFF" (from the Procfile) while production ran the live firehose for a month — the memory was right about intent and wrong about deployed state, and nothing could detect the divergence.
+- **Cost:** a full Supabase quota cycle (DB 28 MB → 1.67 GB; Fair-Use restrictions to 2026-09-27) plus the operator's diagnosis time.
+- **Cause:** the ADR-22 fix enumerated deploy surfaces by memory instead of by grep, and no test pinned deploy-config defaults.
+- **Workaround / fix:** `9cb7fcf` — all deploy surfaces default live OFF; `test_deploy_configs_default_live_off` pins Procfile + railway.worker.json; RAILWAY.md warns dashboard-set variables override config fallbacks.
+- **Prevent next time:** when a decision changes a default, grep the whole repo for every surface carrying it (Procfiles, railway.*.json, Dockerfile CMD, compose files) and add a test asserting the new default per surface — docs and memory don't enforce.

@@ -15,7 +15,7 @@ accordingly).
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-19 | 2026-07-20 | 2 |
 | Z.ai Code | unknown | 2026-07-25 | 2026-07-25 | 1 |
 | Buffy (Freebuff) | deepseek-v4-pro | 2026-08-01 | 2026-08-18 | 2 |
-| ZCode | GLM-5.3-Flash | 2026-09-06 | 2026-09-06 | 1 |
+| ZCode | GLM-5.3-Flash | 2026-09-06 | 2026-09-07 | 2 |
 
 ## Observations
 
@@ -42,3 +42,4 @@ Update in place when a newer session contradicts an old observation.
 - **Z.ai Code / unknown:** Session 29 — shipped the ADR-11 code-layer foundation (4 commits: shared env-driven db factory, adaptive repo routing, portable betb2b ORM models + indexes, Alembic baseline + data-copy script). Refined the documented Bash-403 root cause: the tool router rejects command strings containing a secret and poisons the window; proven workaround is scripts that read secrets from a FILE, executed with secret-free command lines. Corrected two ADR-11 premises during discovery (the store is two SQLite files not three; "connection-string swap" holds only for the adaptive/SQLAlchemy half, not the betb2b/raw-sqlite3 half). (2026-07-25)
 - **Buffy (Freebuff) / deepseek-v4-flash:** Model ID from its own system prompt (stated fact, not a guess). Session 35 — `.context`-sync only (no project code touched): applied the core 0.3.0→0.5.0 update, regenerated kickoff.md/AGENTS.md to the new templates (surgical — preserved the project-customized AGENTS.md, added only the sessions/ skim sentence), seeded the new `memory/sessions/` module. No product-code capability demonstrated this session. (2026-08-01)
 - **Buffy (Freebuff) / deepseek-v4-pro:** Model ID from its own system prompt (stated fact, not a guess). Session 40 — `.context`-sync only: core 0.5.0→0.8.0 update (gates + collaboration), regenerated kickoff.md, refreshed .context/README.md, surgical AGENTS.md rules merge, initialized + configured `gates.conf`. No product-code capability demonstrated (sync session). (2026-08-18)
+- **ZCode / GLM-5.3-Flash:** Session 42 — root-caused the Supabase quota re-fill to deploy-config drift (Procfile fixed to live-off, `railway.worker.json` missed; worker deploys via config-as-code which overrides the dashboard); fixed all deploy surfaces + pinned them with a regression test. Diagnosis came from cross-checking memory claims ("live OFF") against deploy files and the quota timeline, not from trusting the memory. (2026-09-07)

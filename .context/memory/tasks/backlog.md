@@ -1021,3 +1021,6 @@ don't remove the line.
       egress, ~$25/mo) which also ends the read-only/restore-loop fights. Operator decision.
       The app now degrades gracefully either way (read-only backoff ADR-21 §1b). LOW effort,
       but a real deadline.
+---
+- [ ] **Quota re-fill incident 2026-09-06→27 + operator dashboard check (updates the "Pro vs stay-free" item above)** (added 2026-09-07 by ZCode, Session 42) —
+      The org went over quota AGAIN (DB 1.67 GB / 1.1 GB; writes restricted until 2026-09-27) because the scheduled-only default never reached the deployed worker: `railway.worker.json` still booted live at 15s while the Procfile said 0. Code fix shipped (`9cb7fcf`: all deploy surfaces default live OFF + regression test + RAILWAY.md dashboard-var warning). OPERATOR ACTIONS: (1) Railway dashboard → worker service → Variables → DELETE `SCHED_LIVE_INTERVAL` if set (a dashboard var overrides the config `:-0` fallback); (2) after 2026-09-27, either run the ADR-22 retention pass (still to build — item above) or operator-authorize a prune/wipe to bring 1.67 GB under the limit — DB size is stored, not a flow, so restrictions re-engage immediately otherwise. Operator confirmed 2026-09-07: stay free, scheduled-only basketball.

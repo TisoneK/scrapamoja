@@ -10,3 +10,4 @@ The human is the supervisor. context-mem check flags a duplicate.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Sam | S442 | GLM-5.3-Flash | Session 42 — deploy-default regression fix (live OFF) |
