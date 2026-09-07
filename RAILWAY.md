@@ -161,9 +161,24 @@ needs **no Volume** and no proxy — just `DATABASE_URL`.
    | `BETB2B_CONCURRENCY` | `8` (default) | bounded fetch concurrency (ADR-17) — ramp cautiously |
    | `SCHED_SKIN` | `linebet` | skin to schedule |
    | `SCHED_SPORT` | `basketball` | sport |
-   | `SCHED_LIVE_INTERVAL` | `15` | live pass cadence (s) — **start conservative** |
    | `SCHED_PREMATCH_INTERVAL` | `10800` | prematch pass cadence (s, 3h) |
    | `SCHED_REFRESH_WINDOW` | `10800` | re-scrape a prematch match only after this (s) |
+
+   **Leave `SCHED_LIVE_INTERVAL` unset.** The worker config file
+   (`railway.worker.json`) defaults it to `0`, which disables the live pass —
+   the 15s live-odds polling that fills the database ~1 GB+ per week and blows
+   past the Supabase free tier. Scheduled-only (prematch every 3h + results
+   every 10min) is the low-storage mode. Only set `SCHED_LIVE_INTERVAL=15`
+   deliberately, on a paid/raised Supabase quota, after the retention and
+   last-odds-cache work is in place.
+
+   ⚠️ **Do not set variables in the Railway dashboard that you want the config
+   file to default.** Railway config-as-code **overrides the dashboard**, and
+   the `${VAR:-default}` fallbacks in the start command only apply when the var
+   is absent from the environment — a dashboard-set `SCHED_LIVE_INTERVAL=15`
+   (or one left over from an earlier setup) silently re-enables the live pass
+   regardless of what the config file says. After any quota incident, check the
+   worker's **Variables** tab for stale values.
 
    Leave `BETB2B_PROXY_URL` **unset** — direct mode needs no proxy.
 

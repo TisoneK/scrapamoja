@@ -6,6 +6,19 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Fixed — the always-on scraper boots with live-odds polling OFF again (2026-09-07, session 42)
+
+The scheduled scraper worker on Railway was accidentally re-enabled to poll live
+(continuously changing) odds every 15 seconds — the mode that filled the shared
+database past the free hosting quota in August. When the low-storage default was
+introduced, only one of the two launch configurations was updated, so the worker
+service kept booting with live polling on. Both launch configurations now default
+to scheduled-only (pre-match odds every 3 hours + final results every 10 minutes);
+a new test fails if either config ever ships with live polling on by default.
+The deploy guide no longer instructs enabling live polling, and warns that
+variables set in the Railway dashboard override the config-file defaults — a
+stale dashboard variable can silently re-enable live polling.
+
 ### Added — ADR-11: shared PostgreSQL store foundation (2026-07-25, session 29)
 
 The data store can now move from per-file SQLite databases to a single shared

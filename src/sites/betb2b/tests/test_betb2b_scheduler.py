@@ -152,3 +152,40 @@ def test_scheduler_backs_off_and_warns_on_read_only(tmp_path, caplog):
     with caplog.at_level(logging.WARNING):
         asyncio.run(asyncio.wait_for(s.run(), timeout=5))
     assert any("READ-ONLY" in r.getMessage() for r in caplog.records)
+
+
+def test_deploy_configs_default_live_off():
+    """The Railway worker boots with the live pass DISABLED by default.
+
+    The live pass (15s odds polling) is the dominant data producer — an
+    accidentally-on default re-fills the database past the Supabase free tier
+    within weeks. The config-file default was once `15` while the Procfile said
+    `0`; the deployed worker uses the config file, so live ran unchecked. Pin
+    every deploy surface to live-off unless deliberately overridden by
+    SCHED_LIVE_INTERVAL in the environment.
+    """
+    import json
+    import re
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[4]
+
+    worker = json.loads((repo / "railway.worker.json").read_text(encoding="utf-8"))
+    cmd = worker["deploy"]["startCommand"]
+    m = re.search(r"--live-interval \$\{SCHED_LIVE_INTERVAL:-(\d+(?:\.\d+)?)\}", cmd)
+    assert m, f"worker startCommand has no --live-interval fallback: {cmd}"
+    assert float(m.group(1)) == 0.0, (
+        "railway.worker.json defaults SCHED_LIVE_INTERVAL to "
+        f"{m.group(1)} — must default to 0 (live pass off)"
+    )
+
+    procfile = (repo / "Procfile").read_text(encoding="utf-8")
+    worker_line = next(
+        ln for ln in procfile.splitlines() if ln.startswith("worker:")
+    )
+    m = re.search(r"--live-interval \$\{SCHED_LIVE_INTERVAL:-(\d+(?:\.\d+)?)\}", worker_line)
+    assert m, f"Procfile worker line has no --live-interval fallback: {worker_line}"
+    assert float(m.group(1)) == 0.0, (
+        "Procfile defaults SCHED_LIVE_INTERVAL to "
+        f"{m.group(1)} — must default to 0 (live pass off)"
+    )
