@@ -23,6 +23,10 @@ Env (all optional):
   BETB2B_DB_CRITICAL_PCT   critical level, % of limit (default 92)
   BETB2B_PRUNE_DAYS        prune odds history for events older than this (default 7)
   BETB2B_PRUNE_BATCH       events per delete batch (default 2000)
+  BETB2B_QUOTA_HARD=0      disable the automatic fact-history TRUNCATE escalation
+                           (default on: when the store is over its hard limit, the
+                           quota pass resets fact history itself — the operator
+                           playbook, run by the machine)
 """
 
 from __future__ import annotations
@@ -37,6 +41,7 @@ WARN_ENV = "BETB2B_DB_WARN_PCT"
 CRITICAL_ENV = "BETB2B_DB_CRITICAL_PCT"
 PRUNE_DAYS_ENV = "BETB2B_PRUNE_DAYS"
 PRUNE_BATCH_ENV = "BETB2B_PRUNE_BATCH"
+HARD_ENV = "BETB2B_QUOTA_HARD"
 
 
 def _num(env: str, default: float) -> float:
@@ -64,6 +69,14 @@ def prune_days() -> float:
 
 def prune_batch() -> int:
     return int(_num(PRUNE_BATCH_ENV, 2000))
+
+
+def hard_enabled() -> bool:
+    """Whether the quota pass may reset fact history itself when the store is
+    past the provider's hard limit (default: yes — the operator playbook,
+    run automatically; the delete ladder alone cannot reclaim the reported
+    size of an already-over store)."""
+    return os.environ.get(HARD_ENV, "1").strip().lower() not in {"0", "false", "no", "off"}
 
 
 def evaluate(used_bytes: Optional[int], *, limit: Optional[float] = None,

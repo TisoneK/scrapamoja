@@ -746,3 +746,33 @@ def prune_counts(conn: Connection, *, days: float = 7.0) -> Dict[str, int]:
             _events.c.start_time.isnot(None), _events.c.start_time < cutoff)
     ).scalar() or 0
     return out
+
+
+# Tables that are pure per-tick facts / run bookkeeping — everything the
+# fact-history reset may clear at once (single statement: Postgres requires a
+# referenced table and its referencing tables in the same TRUNCATE, even when
+# the referencing table is empty — odds_snapshots.run_id → scrape_runs).
+_FACT_TABLES = ("odds_snapshots", "scrape_runs", "event_states", "period_scores",
+                "h2h_games", "h2h_period_scores", "statistics", "sub_games")
+
+
+def truncate_facts(conn: Connection, *, commit: bool = True) -> Dict[str, Any]:
+    """Reset ALL fact/run history in one statement — the storage reset of last
+    resort when a store is already past its hard limit and batched DELETEs
+    cannot reclaim the reported size. Dimensions (sports, countries, leagues,
+    teams, markets) and the `events` rows (final scores/results, the grade
+    anchors) are NEVER touched. Postgres-only semantics (TRUNCATE); on SQLite
+    the same result is achieved with DELETE FROM each table."""
+    from sqlalchemy import text as _t
+    out: Dict[str, Any] = {"tables": list(_FACT_TABLES)}
+    if conn.dialect.name == "postgresql":
+        conn.execute(_t("TRUNCATE " + ", ".join(_FACT_TABLES)))
+    else:
+        # TRUNCATE inside a transaction is transactional on PG; DELETE keeps
+        # the same all-or-nothing behavior on SQLite.
+        for t in _FACT_TABLES:
+            conn.execute(_t(f"DELETE FROM {t}"))
+    if commit:
+        conn.commit()
+    out["truncated"] = True
+    return out

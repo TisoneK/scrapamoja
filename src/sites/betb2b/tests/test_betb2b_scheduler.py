@@ -333,3 +333,84 @@ def test_quota_pass_tolerates_unreachable_primary(tmp_path, monkeypatch, caplog)
     with caplog.at_level(logging.WARNING):
         asyncio.run(s._quota_pass())   # must not raise
     assert any("unreachable" in r.getMessage() for r in caplog.records)
+
+
+def test_truncate_facts_sqlite_keeps_events_and_results(tmp_path):
+    """The hard-reset resets every fact/run table in one go and KEEPS the
+    events rows (results/grade anchors) and the dimension rows."""
+    db = str(tmp_path / "tr.db")
+    conn = store.init_db(db)
+    res = {
+        "skin": "linebet", "action": "list_prematch", "url": "u",
+        "extracted_at": datetime.now(timezone.utc).isoformat(), "success": True,
+        "event_count": 1, "scrape_duration_seconds": 1.0, "template_version": "1.0.0",
+        "events": [{"event_id": "E1", "sport": "basketball", "sport_id": 3,
+                    "competition": "L", "home": "A", "away": "B", "status": "scheduled",
+                    "is_live": False,
+                    "markets": [{"name": "1x2", "market_type": "1x2", "raw_g": 1,
+                                 "scope": "FULL_MATCH",
+                                 "selections": [{"name": "1", "price": 1.5, "is_suspended": False}]}],
+                    }],
+    }
+    store.persist_result(res, db, conn=conn)
+    store.record_result(conn, "E1", score_home=100, score_away=95, winner=1,
+                        status=3, at=datetime.now(timezone.utc).isoformat())
+
+    out = store.truncate_facts(conn)
+
+    assert out["truncated"] is True
+    assert conn.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM event_states").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM scrape_runs").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0] > 0
+    assert conn.execute("SELECT COUNT(*) FROM markets").fetchone()[0] > 0
+    row = conn.execute("SELECT result_status, final_score_home FROM events "
+                       "WHERE event_id='E1'").fetchone()
+    assert row["result_status"] == 3 and row["final_score_home"] == 100
+    conn.close()
+
+
+def test_quota_pass_escalates_to_truncate_when_over_limit(tmp_path, monkeypatch, caplog):
+    """OVER the hard limit → the pass resets fact history itself (the operator
+    playbook, automatic) and asks for a fast 10-min re-check."""
+    import asyncio
+    import logging
+
+    from src.sites.betb2b import quota
+
+    db = str(tmp_path / "qe.db")
+    store.init_db(db).close()
+    s = BetB2BScheduler("linebet", db_path=db, scheduled_interval=0,
+                        live_interval=0, results_interval=0, quota_interval=0)
+
+    size_mb = {"v": 1.2 * quota.limit_mb()}
+
+    class _Conn:
+        def close(self):
+            pass
+
+    calls = {"truncate": 0, "prune": 0}
+
+    monkeypatch.setattr(store_orm, "connect", lambda: _Conn())
+    monkeypatch.setattr(store_orm, "db_bytes",
+                        lambda _c: int(size_mb["v"] * 1024 * 1024))
+    monkeypatch.setattr(store_orm, "truncate_facts",
+                        lambda _c, **kw: calls.__setitem__("truncate", calls["truncate"] + 1)
+                        or {"truncated": True, "tables": ["odds_snapshots"]})
+
+    with caplog.at_level(logging.WARNING):
+        ret = asyncio.run(s._quota_pass())
+
+    assert calls["truncate"] == 1
+    assert ret == 600.0  # fast re-check requested while over the limit
+    assert any("hard-reset" in r.getMessage() for r in caplog.records)
+
+    # env kill-switch → no escalation
+    monkeypatch.setenv("BETB2B_QUOTA_HARD", "0")
+
+    def _boom(*a, **kw):
+        raise AssertionError("truncate must not run when the hard reset is disabled")
+
+    monkeypatch.setattr(store_orm, "truncate_facts", _boom)
+    asyncio.run(s._quota_pass())  # must not raise / must not truncate

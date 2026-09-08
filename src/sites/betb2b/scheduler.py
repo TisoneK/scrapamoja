@@ -128,9 +128,10 @@ class BetB2BScheduler:
     async def _loop(self, name: str, fn, interval: float) -> None:
         while not self._stop.is_set():
             delay = interval
+            res = None
             try:
                 async with self._lock:          # single-flight across passes
-                    await fn()
+                    res = await fn()
             except Exception as exc:             # noqa: BLE001 — a pass must never kill the loop
                 if store.is_read_only_error(exc):
                     # Supabase restricts an over-quota project to read-only (the
@@ -148,6 +149,10 @@ class BetB2BScheduler:
                         self._ro_warned_at[name] = now
                 else:
                     logger.exception("scheduler %s pass failed", name)
+            if isinstance(res, (int, float)) and res > 0:
+                # A pass may request a sooner re-check than its cadence
+                # (the quota pass does this while the store is over-limit).
+                delay = float(res)
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=delay)
             except asyncio.TimeoutError:
@@ -217,36 +222,55 @@ class BetB2BScheduler:
         logger.info("results: %d pending → %d checked → %d finished captured",
                     len(pending), len(out), finished)
 
-    async def _quota_pass(self) -> None:
+    async def _quota_pass(self) -> Optional[float]:
         """Hosted-store size monitor. Read the primary's server-side size (the
         same number the provider's dashboard reports and its quota acts on),
-        warn at the warn level, and prune odds/fact history for events past
-        the prune age at the critical level — BEFORE the provider flips the
-        project read-only and writes start failing. Pruning keeps the events
-        rows (final scores/grades); only aged tick history goes. Connects to
-        the primary directly — even while fallback mode owns writes — because
-        the mirror's size is irrelevant to the provider's quota."""
+        warn at the warn level, and act automatically before the provider
+        flips the project read-only:
+
+          - at the critical level: prune fact history for events past the
+            prune age (batched; the events rows with their final results and
+            the grade anchors always survive);
+          - OVER the hard limit: reset ALL fact/run history in one statement
+            (the operator's dashboard playbook, run by the machine) — the
+            only action that reclaims reported size immediately, so the
+            provider sees a compliant store on its next re-check;
+          - while critical/over, re-check every 10 minutes instead of the
+            hourly cadence, so recovery and convergence are fast.
+
+        Returns a re-check delay (s) for the loop, or None for the cadence
+        default. Connects to the primary directly — even while fallback mode
+        owns writes — because the mirror's size is irrelevant to the
+        provider's quota. A store ALREADY flipped read-only cannot prune or
+        truncate itself (every DELETE/TRUNCATE hits 25006); this pass logs
+        that state and finishes the reset automatically the moment the store
+        becomes writable again."""
         from . import store_orm
         try:
             conn = store_orm.connect()
         except Exception as exc:  # noqa: BLE001 — unreachable primary: fallback owns writes
             logger.warning("quota: primary store unreachable (%s) — size unknown", exc)
-            return
+            return None
         try:
             used = store_orm.db_bytes(conn)
         finally:
             conn.close()
         if used is None:
             logger.debug("quota: hosted store size unavailable — skipping")
-            return
+            return None
         st = quota.evaluate(used)
         if st is None:
-            return
+            return None
         logger.info("quota: store %.1f MB / %.0f MB (%.0f%%) — level %s%s",
                     st["used_mb"], st["limit_mb"], st["pct"], st["level"],
                     " (OVER the limit — provider read-only likely)" if st["over"] else "")
         if st["level"] == "critical":
-            await self._prune_primary()
+            if st["over"] and quota.hard_enabled():
+                await self._truncate_primary()
+            else:
+                await self._prune_primary()
+            return 600.0
+        return None
 
     async def _prune_primary(self) -> None:
         """Bounded retention prune on the primary, driven by the quota monitor.
@@ -278,6 +302,35 @@ class BetB2BScheduler:
             "after the provider's vacuum" if total
             else "— nothing aged yet; the limit must be brought down manually "
                  "(dashboard TRUNCATE of odds history, keep events)")
+
+    async def _truncate_primary(self) -> None:
+        """Hard-reset escalation: the store is PAST the provider's hard limit
+        and a read-only flip is imminent (or the flip just lifted) — reset all
+        fact/run history in one statement so the reported size reclaims
+        immediately. Same playbook as the operator's dashboard wipe; events,
+        dimensions, and results always survive."""
+        from . import store_orm
+        try:
+            conn = store_orm.connect()
+        except Exception as exc:  # noqa: BLE001
+            logger.error("quota hard-reset: primary store unreachable (%s)", exc)
+            return
+        try:
+            out = store_orm.truncate_facts(conn)
+        except Exception as exc:  # noqa: BLE001 — read-only (25006) lands here
+            logger.error(
+                "quota hard-reset failed (%s) — the store is likely already "
+                "read-only; nothing can self-prune until it is writable again. "
+                "This pass re-checks every 10 minutes and completes the reset "
+                "automatically the moment the store recovers.", exc)
+            return
+        finally:
+            conn.close()
+        logger.warning(
+            "quota hard-reset: store was OVER the provider limit — truncated "
+            "fact/run history (%s); events, results, and dimensions are kept; "
+            "space reclaims immediately (TRUNCATE, no vacuum needed)",
+            ", ".join(out.get("tables", [])))
 
     # -- helpers --------------------------------------------------------- #
     def _filter_scheduled(self, pairs: List[Tuple[str, object]]) -> List[str]:

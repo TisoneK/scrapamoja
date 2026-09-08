@@ -88,6 +88,7 @@ __all__ = [
     "db_bytes",
     "prune_expired",
     "prune_counts",
+    "truncate_facts",
 ]
 
 PathLike = str | Path
@@ -1102,4 +1103,26 @@ def prune_counts(conn, *, days: float = 7.0) -> Dict[str, int]:
         (cutoff,),
     ).fetchone()
     out["events"] = int(row[0]) if row else 0
+    return out
+
+
+def truncate_facts(conn) -> Dict[str, Any]:
+    """Reset all fact/run history at once (see store_orm.truncate_facts):
+    the storage reset of last resort — dimensions and the `events` rows
+    (final results / grade anchors) always survive. Used by the quota pass's
+    hard-reset escalation when a store is past its provider limit, and by
+    `quota --truncate-facts` for the operator. Single statement on Postgres
+    (the FK catalog rule requires referenced + referencing tables together),
+    per-table DELETEs on SQLite."""
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.truncate_facts(conn)
+    tables = ("odds_snapshots", "event_states", "period_scores", "statistics",
+              "sub_games", "h2h_period_scores", "h2h_games", "scrape_runs")
+    out: Dict[str, Any] = {"tables": list(tables), "deleted": {}}
+    for table in tables:
+        cur = conn.execute(f"DELETE FROM {table}")
+        out["deleted"][table] = max(cur.rowcount or 0, 0)
+    conn.commit()
+    out["truncated"] = True
     return out

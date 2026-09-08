@@ -326,6 +326,11 @@ class BetB2BCLI:
         qt.add_argument("--prune", action="store_true",
                         help="At the critical level (or always with --force), delete fact rows "
                              "for events older than --prune-days. The events rows (results) are kept.")
+        qt.add_argument("--truncate-facts", action="store_true",
+                        help="Reset ALL fact/run history in one statement (the storage reset of "
+                             "last resort — reclaims reported size immediately). events, results, "
+                             "and dimensions are kept. Requires --force; implied by --prune when "
+                             "the store is over the limit.")
         qt.add_argument("--force", action="store_true",
                         help="With --prune: prune regardless of the reported level")
         qt.add_argument("--prune-days", type=float, default=None,
@@ -576,8 +581,23 @@ class BetB2BCLI:
         over_note = " — OVER: the provider likely flipped the store read-only" if st["over"] else ""
         print(f"level      : {st['level'].upper()}{over_note}")
         print(f"prunable   : {counts}  (events older than {prune_days:g} day(s))")
-        if st["level"] == "ok" and not (args.prune and args.force):
+        if st["level"] == "ok" and not ((args.prune and args.force) or args.truncate_facts):
             print("no prune needed at this level")
+            return 0
+        if args.truncate_facts and not args.force:
+            print("--truncate-facts is destructive (all fact/run history) — "
+                  "add --force to confirm")
+            return 2
+        if args.truncate_facts:
+            conn = store.init_db(db)
+            try:
+                out = store.truncate_facts(conn)
+            finally:
+                conn.close()
+            print(f"truncated  : {', '.join(out['tables'])}")
+            print("kept       : events (results/grades), sports, countries, "
+                  "leagues, teams, markets")
+            print("note       : space reclaims immediately (no vacuum needed)")
             return 0
         if not args.prune:
             print("dry run — re-run with --prune to delete the prunable fact rows "
