@@ -164,6 +164,7 @@ needs **no Volume** and no proxy — just `DATABASE_URL`.
    | `SCHED_PREMATCH_INTERVAL` | `10800` | prematch pass cadence (s, 3h) |
    | `SCHED_REFRESH_WINDOW` | `10800` | re-scrape a prematch match only after this (s) |
    | *(unset)* | — | **Quota monitor:** the worker checks the store's size every hour (`SCHED_QUOTA_INTERVAL` to change/disable) and auto-prunes odds/fact history older than 7 days (`BETB2B_PRUNE_DAYS`) when it reaches the critical level (92% of `BETB2B_DB_LIMIT_MB`, default 500 MB — the Supabase free-tier per-project limit). Warn-level logs start at 80%. Leave all of these unset unless tuning. |
+   | *(unset)* | — | **Hard-reset escalation:** while the store is OVER `BETB2B_DB_LIMIT_MB`, the worker resets fact/run history itself in one statement (events/results/dimensions kept) and re-checks every 10 min — completing automatically the moment a read-only restriction lifts. Set `BETB2B_QUOTA_HARD=0` to require a human for that step. |
 
    **Leave `SCHED_LIVE_INTERVAL` unset.** The worker config file
    (`railway.worker.json`) defaults it to `0`, which disables the live pass —

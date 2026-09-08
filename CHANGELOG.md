@@ -6,6 +6,20 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Added — the scraper can now reset its own history when the database is over the limit (2026-09-08, session 44 cont.)
+
+The size watch described below deletes old odds history gradually, which
+prevents the database from growing into the hosting limit — but it cannot
+quickly shrink a database that is already past it. When the watch finds the
+database over the hard limit, it now performs a full reset of its history in
+one step (match results and reference data are always kept) — the same
+manual emergency procedure the operator previously had to run by hand, now
+executed automatically. While the database is locked by the provider, every
+attempt simply waits; the reset completes itself the moment the lock lifts.
+The check runs every 10 minutes instead of hourly while over the limit, and
+the same reset is available as a deliberate command-line action. Set an
+environment variable to require a human for this step instead.
+
 ### Added — the scraper now watches the database size and trims old data before hitting the hosting limit (2026-09-08, session 44)
 
 Twice now the free hosting tier has locked the shared database to read-only
