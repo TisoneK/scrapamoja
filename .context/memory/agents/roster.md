@@ -11,3 +11,4 @@ The human is the supervisor. context-mem check flags a duplicate.
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
 | Sam | S442 | GLM-5.3-Flash | Session 42 — deploy-default regression fix (live OFF) |
+| Alex | S443 | GLM-5.3-Flash | Session 44 — security scan: secret-leak sweep of the public repo |
