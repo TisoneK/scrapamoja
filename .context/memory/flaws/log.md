@@ -95,7 +95,7 @@ Friction caused by the `.context/` system or the protocol itself. See
   (1) `cat >> file <<'EOF' ... EOF` heredocs to append the sessions.md
   entry failed with `tool call failed: Bash` even when a bare `echo ok`
   succeeded moments before - because the heredoc body contained `<email>`
-  and `TisoneK:Taalib01@bore.pub:50670` (the `:` / `@` are fine, but the
+  and `TisoneK:<redacted>@bore.pub:50670` (the `:` / `@` are fine, but the
   surrounding `403 Forbidden` from the tool router was triggered
   inconsistently).
   (2) The 403 outage hit right before the `git commit + push` step on
