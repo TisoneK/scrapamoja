@@ -26,7 +26,7 @@ Usage::
 
     # With proxy
     BETB2B_PROXY_URL=http://bore.pub:37582 \\
-    BETB2B_PROXY_USER=TisoneK BETB2B_PROXY_PASS=Taalib01 \\
+    BETB2B_PROXY_USER=<proxy-user> BETB2B_PROXY_PASS=<proxy-password> \\
     BETB2B_PROXY_COUNTRY=KE BETB2B_PROXY_ID=kenya \\
     python -m src.sites.betb2b.scripts.compare_match \\
         --skin linebet --sport basketball --event-id 352015844

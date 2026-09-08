@@ -515,12 +515,12 @@ Any allowed-country HTTP proxy works. The operator's setup:
 
 - `gost` HTTP proxy on a Windows host in Kisumu, KE
 - Exposed via `bore.pub` TCP tunnel on port 37582
-- Auth: `TisoneK:Taalib01`
+- Auth: `TisoneK:<proxy-password>`
 
 ```bash
 export BETB2B_PROXY_URL=http://bore.pub:37582
 export BETB2B_PROXY_USER=TisoneK
-export BETB2B_PROXY_PASS=Taalib01
+export BETB2B_PROXY_PASS=<proxy-password>
 export BETB2B_PROXY_COUNTRY=KE
 export BETB2B_PROXY_ID=kenya
 ```

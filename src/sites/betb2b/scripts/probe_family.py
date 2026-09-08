@@ -13,8 +13,8 @@ envelope — the endpoint exists and behaves the same across skins; the
 Usage::
 
     export BETB2B_PROXY_URL=http://bore.pub:1074
-    export BETB2B_PROXY_USER=TisoneK
-    export BETB2B_PROXY_PASS=Taalib01
+    export BETB2B_PROXY_USER=<proxy-user>
+    export BETB2B_PROXY_PASS=<proxy-password>
     python -m src.sites.betb2b.scripts.probe_family
 """
 

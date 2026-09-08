@@ -144,7 +144,7 @@ playwright install chromium
 # 2. Configure the proxy via env vars (no secrets in CLI args).
 export BETB2B_PROXY_URL=http://bore.pub:1074
 export BETB2B_PROXY_USER=TisoneK
-export BETB2B_PROXY_PASS=Taalib01
+export BETB2B_PROXY_PASS=<proxy-password>
 export BETB2B_PROXY_COUNTRY=KE
 export BETB2B_PROXY_ID=kenya
 
@@ -173,7 +173,7 @@ persists every capture for offline replay:
 ```bash
 export BETB2B_PROXY_URL=http://bore.pub:1074
 export BETB2B_PROXY_USER=TisoneK
-export BETB2B_PROXY_PASS=Taalib01
+export BETB2B_PROXY_PASS=<proxy-password>
 export BETB2B_PROXY_COUNTRY=KE
 export BETB2B_PROXY_ID=kenya
 
