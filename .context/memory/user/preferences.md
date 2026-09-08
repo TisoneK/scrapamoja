@@ -53,6 +53,9 @@ correction twice.
 ## Risk & approvals
 - Commit identity set to repo owner (Tisone Kironget) even when operated from another machine's account (stated, 2026-07-12)
 
+## Product direction
+- **Stay free-tier for now; graduate to paid/bigger hosting later, once the system is proven** — the free-tier constraints (scheduled-only, live OFF, 7-day prune, quota monitor) are deliberate cost controls, not the end state. When the system proves out, the plan is a paid Supabase tier or bigger hosting that can hold live data (stated, 2026-09-08). Graduation is config-level: raise/set `BETB2B_DB_LIMIT_MB`, set `SCHED_LIVE_INTERVAL=15` on the worker, and build the ADR-23 last-odds cache before turning live on — no structural rebuild needed.
+
 ## Security & secrecy
 - The repo is PUBLIC — treat "no sensitive data in the repo" as a standing requirement: any security session should sweep tracked files AND git history, and never echo secret values in chat, logs, or reports (stated, 2026-09-08)
 - When a credential is found committed, rotate it even if redacted from the tree — history exposure is assumed (stated, 2026-09-08)
