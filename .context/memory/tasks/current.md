@@ -5,7 +5,14 @@
 **Supabase state (2026-09-08):** DB **1668 MB / 500 MB per-project (over 3.3×)** — dashboard read-only; egress reset this cycle (0 / 5 GB). Project flagged for **auto-pause** by the inactivity scanner (survivable: unpause within 90 days). Fair-Use window to **2026-09-27**. The monitor canNOT self-prune a read-only store — the one-time operator prune stands.
 
 **⚠️ OPERATOR ACTIONS PENDING:**
-1. **One-time prune of the 1.67 GB** (dashboard SQL editor, works despite read-only): `TRUNCATE odds_snapshots;` + optionally `TRUNCATE scrape_runs, event_states, period_scores, h2h_games, h2h_period_scores, statistics, sub_games;` — keep `events` + dims. TRUNCATE (not DELETE) so the quota accounting actually drops. After it: store self-caps from now on.
+1. **One-time prune of the 1.67 GB** — CORRECTED 2026-09-08 (the plain SQL editor hits 25006 too): run the TRUNCATE **inside a read-write override**, the ADR-21 August-wipe playbook — in the dashboard SQL editor:
+   ```sql
+   SET default_transaction_read_only = off;   -- session-scoped; instance default stays
+   TRUNCATE odds_snapshots;
+   TRUNCATE scrape_runs, event_states, period_scores, h2h_games,
+             h2h_period_scores, statistics, sub_games;
+   ```
+   (If the SET alone doesn't clear it: `BEGIN; SET TRANSACTION READ WRITE; TRUNCATE …; COMMIT;`) Keep `events` + dims. TRUNCATE, not DELETE, so the accounting drops. Precedent: the 2026-08-05 wipe went 1,603 MB → 11 MB this way. **Do NOT** `ALTER DATABASE … default_transaction_read_only=off` (platform-wide bypass). Supabase lifts the read-only flag on its own cadence once size is under the limit — possibly a manual "restore" click on the dashboard banner. After it: the monitor self-caps from now on.
 2. Railway worker → Variables → **delete `SCHED_LIVE_INTERVAL`** if set; redeploy the worker (brings the quota pass live) and confirm the startup log shows live DISABLED + quota pass scheduled.
 
 **Next up (tasks/backlog.md):** ADR-20 addendum results-fetch capture (HIGH when writable); ADR-23 in-process last-odds cache before any live re-enable on a metered plan; egress monitoring only if it binds again.
