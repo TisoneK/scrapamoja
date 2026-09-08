@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -85,6 +85,9 @@ __all__ = [
     "line_movement",
     "cross_skin_odds",
     "counts",
+    "db_bytes",
+    "prune_expired",
+    "prune_counts",
 ]
 
 PathLike = str | Path
@@ -986,3 +989,117 @@ def list_jobs(conn, *, limit: int = 50, status: Optional[str] = None):
     return conn.execute(
         "SELECT * FROM scraper_jobs ORDER BY job_id DESC LIMIT ?", (limit,)
     ).fetchall()
+
+
+# --------------------------------------------------------------------------- #
+# Quota monitoring + retention (the free-tier store must never go over again)  #
+# --------------------------------------------------------------------------- #
+def db_bytes(conn) -> Optional[int]:
+    """The hosted store's size in bytes, read from the server itself.
+
+    Postgres: ``pg_database_size(current_database())`` — the same number the
+    provider's dashboard reports (which is what trips its size quota and its
+    read-only restriction). SQLite (local store or fallback mirror): the file
+    size via PRAGMA — no hosted quota, but keeping the quota pass observable
+    locally is free. Returns None only when the size cannot be determined.
+    """
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.db_bytes(conn)
+    try:
+        page_count = conn.execute("PRAGMA page_count").fetchone()
+        page_size = conn.execute("PRAGMA page_size").fetchone()
+        if page_count and page_size and page_count[0] and page_size[0]:
+            return int(page_count[0]) * int(page_size[0])
+    except Exception:  # noqa: BLE001 — a dead/unopenable store has no readable size
+        pass
+    return None
+
+
+def _prune_expired_sqlite(conn, *, days: float, batch: int) -> Dict[str, int]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    old_ids = [r["event_id"] for r in conn.execute(
+        "SELECT event_id FROM events "
+        "WHERE start_time IS NOT NULL AND start_time < ? LIMIT ?",
+        (cutoff, batch),
+    ).fetchall()]
+    return _prune_delete(conn, old_ids)
+
+
+def _prune_delete(conn, event_ids: List[str]) -> Dict[str, int]:
+    """Delete every per-event fact row for the given events. The events row
+    itself is KEPT — it carries the final result / grade anchor. Runs inside
+    the caller's transaction; caller commits."""
+    if not event_ids:
+        return {t: 0 for t in ("odds_snapshots", "event_states", "period_scores",
+                               "h2h_period_scores", "h2h_games", "statistics",
+                               "sub_games", "events_pruned")}
+    ph = ",".join("?" for _ in event_ids)
+    params = list(event_ids)
+    out: Dict[str, int] = {}
+    for table in ("odds_snapshots", "event_states", "period_scores",
+                  "statistics", "sub_games"):
+        cur = conn.execute(f"DELETE FROM {table} WHERE event_id IN ({ph})", params)
+        out[table] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+    # h2h_period_scores references h2h_games — children first.
+    cur = conn.execute(
+        f"DELETE FROM h2h_period_scores WHERE h2h_game_id IN "
+        f"(SELECT id FROM h2h_games WHERE event_id IN ({ph}))", params)
+    out["h2h_period_scores"] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+    cur = conn.execute(f"DELETE FROM h2h_games WHERE event_id IN ({ph})", params)
+    out["h2h_games"] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+    out["events_pruned"] = len(event_ids)
+    return out
+
+
+def prune_expired(conn, *, days: float = 7.0, batch: int = 2000,
+                  commit: bool = True) -> Dict[str, int]:
+    """Retention pass: delete per-event fact rows for events whose start_time
+    is older than ``days`` — the quota-killer table (odds tick history) first
+    among them. The `events` rows themselves are kept (final scores/results
+    live there). Batched: one call prunes at most ``batch`` events, so a
+    backlog prunes over several passes without a long-locking mega-DELETE.
+
+    Returns deleted-row counts per table (``events_pruned`` = events processed).
+    On Postgres the caller's transaction may need an explicit commit depending
+    on how the connection was opened; ``commit=True`` commits here.
+    """
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.prune_expired(conn, days=days, batch=batch, commit=commit)
+    out = _prune_expired_sqlite(conn, days=days, batch=batch)
+    if commit:
+        conn.commit()
+    return out
+
+
+def prune_counts(conn, *, days: float = 7.0) -> Dict[str, int]:
+    """Dry-run companion to ``prune_expired``: how many rows WOULD be deleted
+    per table (same event selection, nothing modified)."""
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.prune_counts(conn, days=days)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    tables = ("odds_snapshots", "event_states", "period_scores", "statistics",
+              "sub_games", "h2h_games")
+    out: Dict[str, int] = {}
+    for table in tables:
+        row = conn.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE event_id IN "
+            f"(SELECT event_id FROM events WHERE start_time IS NOT NULL AND start_time < ?)",
+            (cutoff,),
+        ).fetchone()
+        out[table] = int(row[0]) if row else 0
+    row = conn.execute(
+        "SELECT COUNT(*) FROM h2h_period_scores WHERE h2h_game_id IN "
+        "(SELECT id FROM h2h_games WHERE event_id IN "
+        "(SELECT event_id FROM events WHERE start_time IS NOT NULL AND start_time < ?))",
+        (cutoff,),
+    ).fetchone()
+    out["h2h_period_scores"] = int(row[0]) if row else 0
+    row = conn.execute(
+        "SELECT COUNT(*) FROM events WHERE start_time IS NOT NULL AND start_time < ?",
+        (cutoff,),
+    ).fetchone()
+    out["events"] = int(row[0]) if row else 0
+    return out

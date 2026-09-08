@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Connection, func, select
+from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import insert as _pg_insert
 from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 
@@ -671,3 +672,77 @@ def latest_odds(conn, event_id, *, skin=None):
     sub = sub.group_by(_odds.c.scope, _odds.c.market_id, _odds.c.selection_name, _odds.c.line).subquery()
     q = select(_odds).join(sub, _odds.c.snap_id == sub.c.mx)
     return [dict(r._mapping) for r in conn.execute(q).all()]
+
+
+# --------------------------------------------------------------------------- #
+# Quota monitoring + retention                                                #
+# --------------------------------------------------------------------------- #
+def db_bytes(conn: Connection) -> Optional[int]:
+    """The hosted store's size in bytes, from the server: Postgres
+    ``pg_database_size`` — the same number the provider's dashboard reports
+    and its size quota acts on. None when the server can't answer (e.g. a
+    non-Postgres engine)."""
+    try:
+        row = conn.execute(
+            sa_text("SELECT pg_database_size(current_database())")
+        ).scalar()
+        return int(row) if row is not None else None
+    except Exception:  # noqa: BLE001 — quota observability must never break a pass
+        logger.debug("db_bytes: pg_database_size unavailable", exc_info=True)
+        return None
+
+
+def prune_expired(conn: Connection, *, days: float = 7.0, batch: int = 2000,
+                  commit: bool = True) -> Dict[str, int]:
+    """Retention pass (see store.prune_expired): delete per-event fact rows
+    (odds tick history first) for events whose start_time is older than
+    ``days``. The events rows are KEPT — final results/grades live there.
+    Batched to avoid a long-locking mega-DELETE on the hosted store."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    old_ids = [
+        r[0] for r in conn.execute(
+            select(_events.c.event_id).where(
+                _events.c.start_time.isnot(None),
+                _events.c.start_time < cutoff,
+            ).limit(batch)
+        ).all()
+    ]
+    if not old_ids:
+        return {t: 0 for t in ("odds_snapshots", "event_states", "period_scores",
+                               "h2h_period_scores", "h2h_games", "statistics",
+                               "sub_games", "events_pruned")}
+    out: Dict[str, int] = {}
+    for t in (_odds, _states, _periods, _stats, _subgames):
+        res = conn.execute(t.delete().where(t.c.event_id.in_(old_ids)))
+        out[t.name] = max(res.rowcount or 0, 0)
+    res = conn.execute(_h2hp.delete().where(_h2hp.c.h2h_game_id.in_(
+        select(_h2h.c.id).where(_h2h.c.event_id.in_(old_ids)))))
+    out["h2h_period_scores"] = max(res.rowcount or 0, 0)
+    res = conn.execute(_h2h.delete().where(_h2h.c.event_id.in_(old_ids)))
+    out["h2h_games"] = max(res.rowcount or 0, 0)
+    out["events_pruned"] = len(old_ids)
+    if commit:
+        conn.commit()
+    return out
+
+
+def prune_counts(conn: Connection, *, days: float = 7.0) -> Dict[str, int]:
+    """Dry-run companion to ``prune_expired`` (see store.prune_counts):
+    rows that WOULD be deleted per table, nothing modified."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    old = select(_events.c.event_id).where(
+        _events.c.start_time.isnot(None), _events.c.start_time < cutoff).subquery()
+    out: Dict[str, int] = {}
+    for t in (_odds, _states, _periods, _stats, _subgames, _h2h):
+        out[t.name] = conn.execute(
+            select(func.count()).select_from(t).where(t.c.event_id.in_(select(old.c.event_id)))
+        ).scalar() or 0
+    out["h2h_period_scores"] = conn.execute(
+        select(func.count()).select_from(_h2hp).where(_h2hp.c.h2h_game_id.in_(
+            select(_h2h.c.id).where(_h2h.c.event_id.in_(select(old.c.event_id)))))
+    ).scalar() or 0
+    out["events"] = conn.execute(
+        select(func.count()).select_from(_events).where(
+            _events.c.start_time.isnot(None), _events.c.start_time < cutoff)
+    ).scalar() or 0
+    return out

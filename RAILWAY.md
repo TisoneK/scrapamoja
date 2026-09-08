@@ -163,6 +163,7 @@ needs **no Volume** and no proxy — just `DATABASE_URL`.
    | `SCHED_SPORT` | `basketball` | sport |
    | `SCHED_PREMATCH_INTERVAL` | `10800` | prematch pass cadence (s, 3h) |
    | `SCHED_REFRESH_WINDOW` | `10800` | re-scrape a prematch match only after this (s) |
+   | *(unset)* | — | **Quota monitor:** the worker checks the store's size every hour (`SCHED_QUOTA_INTERVAL` to change/disable) and auto-prunes odds/fact history older than 7 days (`BETB2B_PRUNE_DAYS`) when it reaches the critical level (92% of `BETB2B_DB_LIMIT_MB`, default 500 MB — the Supabase free-tier per-project limit). Warn-level logs start at 80%. Leave all of these unset unless tuning. |
 
    **Leave `SCHED_LIVE_INTERVAL` unset.** The worker config file
    (`railway.worker.json`) defaults it to `0`, which disables the live pass —
@@ -171,6 +172,16 @@ needs **no Volume** and no proxy — just `DATABASE_URL`.
    every 10min) is the low-storage mode. Only set `SCHED_LIVE_INTERVAL=15`
    deliberately, on a paid/raised Supabase quota, after the retention and
    last-odds-cache work is in place.
+
+   The quota monitor is the standing guard against a repeat of the storage
+   incidents: it reads the store's real size from the server every hour
+   (`python -m src.sites.betb2b.cli.main quota` runs the same check on demand),
+   warns well before the limit, and prunes automatically at the critical
+   level — the store stops growing into the read-only wall instead of waking
+   up restricted one morning. Note pruning frees page space for reuse
+   immediately, but the provider's reported size only drops after its vacuum;
+   a store already flipped read-only must be pruned from the provider
+   dashboard (TRUNCATE the odds/fact history tables, keep `events`).
 
    ⚠️ **Do not set variables in the Railway dashboard that you want the config
    file to default.** Railway config-as-code **overrides the dashboard**, and

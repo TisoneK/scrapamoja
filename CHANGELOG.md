@@ -6,6 +6,19 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Added — the scraper now watches the database size and trims old data before hitting the hosting limit (2026-09-08, session 44)
+
+Twice now the free hosting tier has locked the shared database to read-only
+because it silently grew past the size limit. The scheduled scraper now runs an
+hourly check that reads the database's real size straight from the server (the
+same number the hosting dashboard shows). It logs a clear warning once the store
+passes 80% of the limit, and past 92% it automatically deletes odds history for
+matches older than a week (their final scores are kept) — so the store stops
+growing into the wall instead of waking up locked one morning. The same check is
+available on demand from the command line, including a dry-run that reports how
+much could be trimmed and a preview of what would be deleted. All thresholds are
+tunable by environment variables; the monitor never touches final results.
+
 ### Added — the scraper keeps collecting when the shared database is unavailable (2026-09-07, session 43)
 
 The scheduled scraper now survives the shared database going down or being

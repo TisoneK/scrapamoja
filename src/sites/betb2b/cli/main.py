@@ -302,10 +302,37 @@ class BetB2BCLI:
                               "live pass — 'scheduled-only' low-storage mode (ADR-22).")
         sch.add_argument("--results-interval", type=float, default=600.0,
                          help="Seconds between finished-match results passes (default: 600 = 10min). <=0 disables.")
+        sch.add_argument("--quota-interval", type=float, default=3600.0,
+                         help="Seconds between hosted-store quota-monitor passes (default: 3600 = 1h). <=0 disables.")
         sch.add_argument("--refresh-window", type=float, default=10800.0,
                          help="Re-scrape a prematch match only after this many seconds (default: 3h)")
         sch.add_argument("--no-direct", action="store_true",
                          help="Use the browser/proxy path instead of direct mode")
+
+        # quota — one-shot hosted-store size check (+ prune at the critical level)
+        qt = sub.add_parser("quota",
+                            help="Show the hosted store's size vs the provider limit "
+                                 "(pg_database_size; local store = file size). With --prune, "
+                                 "also delete odds/fact history older than the prune age "
+                                 "regardless of level (dry-run by default prints counts only).")
+        qt.add_argument("--db", nargs="?", const="", default=None,
+                        help="Store path (default: $BETB2B_DB_PATH / DATABASE_URL if set)")
+        qt.add_argument("--limit-mb", type=float, default=None,
+                        help="Override the size limit in MB (default: $BETB2B_DB_LIMIT_MB / 500)")
+        qt.add_argument("--warn-pct", type=float, default=None,
+                        help="Override the warn level %% (default: $BETB2B_DB_WARN_PCT / 80)")
+        qt.add_argument("--critical-pct", type=float, default=None,
+                        help="Override the critical level %% (default: $BETB2B_DB_CRITICAL_PCT / 92)")
+        qt.add_argument("--prune", action="store_true",
+                        help="At the critical level (or always with --force), delete fact rows "
+                             "for events older than --prune-days. The events rows (results) are kept.")
+        qt.add_argument("--force", action="store_true",
+                        help="With --prune: prune regardless of the reported level")
+        qt.add_argument("--prune-days", type=float, default=None,
+                        help="Prune events whose start_time is older than this many days "
+                             "(default: $BETB2B_PRUNE_DAYS / 7)")
+        qt.add_argument("--prune-batch", type=int, default=None,
+                        help="Max events to prune in one pass (default: $BETB2B_PRUNE_BATCH / 2000)")
 
         # compare-match
         cm = sub.add_parser("compare-match", help="Compare match page UI data vs API endpoints")
@@ -359,6 +386,8 @@ class BetB2BCLI:
             return await self._cmd_probe(args)
         if args.command == "schedule":
             return await self._cmd_schedule(args)
+        if args.command == "quota":
+            return await self._cmd_quota(args)
         if args.command == "view":
             return self._cmd_view(args)
         if args.command == "compare-match":
@@ -490,9 +519,11 @@ class BetB2BCLI:
             args.skin, sport=args.sport, db_path=db, direct=not args.no_direct,
             scheduled_interval=args.scheduled_interval, live_interval=args.live_interval,
             refresh_window=args.refresh_window, results_interval=args.results_interval,
+            quota_interval=args.quota_interval,
         )
         print(f"scheduler: skin={args.skin} sport={args.sport} "
               f"scheduled={args.scheduled_interval:.0f}s live={args.live_interval:.0f}s "
+              f"quota={args.quota_interval:.0f}s "
               f"(SIGTERM/Ctrl-C to stop)", file=sys.stderr)
         # As a Railway worker (ADR-18) this runs forever until the platform sends
         # SIGTERM on redeploy/shutdown. Handle it (and SIGINT) gracefully → stop()
@@ -514,6 +545,54 @@ class BetB2BCLI:
         except (KeyboardInterrupt, asyncio.CancelledError):
             sched.stop()
         print("scheduler stopped", file=sys.stderr)
+        return 0
+
+    # ------------------------------------------------------------------ #
+    async def _cmd_quota(self, args: argparse.Namespace) -> int:
+        """One-shot hosted-store size check; optional bounded prune."""
+        from src.sites.betb2b import quota, store
+
+        prune_days = args.prune_days if args.prune_days is not None else quota.prune_days()
+        prune_batch = args.prune_batch if args.prune_batch is not None else quota.prune_batch()
+
+        db = args.db  # "" (bare --db) → service default; None → store default resolution
+        if db == "" or db is None:
+            from src.sites.betb2b.service import db_path
+            db = db_path()
+        conn = store.init_db(db)
+        try:
+            used = store.db_bytes(conn)
+            st = quota.evaluate(used, limit=args.limit_mb,
+                                warn=args.warn_pct, critical=args.critical_pct)
+            if st is None:
+                print("quota: store size unavailable", file=sys.stderr)
+                return 1
+            counts = store.prune_counts(conn, days=prune_days)
+        finally:
+            conn.close()
+
+        print(f"store size : {st['used_mb']:.1f} MB")
+        print(f"limit      : {st['limit_mb']:.0f} MB  ({st['pct']:.0f}% used)")
+        over_note = " — OVER: the provider likely flipped the store read-only" if st["over"] else ""
+        print(f"level      : {st['level'].upper()}{over_note}")
+        print(f"prunable   : {counts}  (events older than {prune_days:g} day(s))")
+        if st["level"] == "ok" and not (args.prune and args.force):
+            print("no prune needed at this level")
+            return 0
+        if not args.prune:
+            print("dry run — re-run with --prune to delete the prunable fact rows "
+                  "(--force to prune even below the critical level)")
+            return 0
+
+        conn = store.init_db(db)
+        try:
+            deleted = store.prune_expired(conn, days=prune_days, batch=prune_batch)
+        finally:
+            conn.close()
+        total = sum(v for k, v in deleted.items() if k != "events_pruned")
+        print(f"pruned     : {total} row(s) across {deleted.get('events_pruned', 0)} event(s) {deleted}")
+        print("note: freed pages are reused by new writes; the provider's "
+              "reported size shrinks after its vacuum cycle")
         return 0
 
     # ------------------------------------------------------------------ #

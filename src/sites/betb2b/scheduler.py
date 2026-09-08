@@ -10,6 +10,10 @@ is the bus):
   - **results** (~10min): finished-match final scores (ADR-16/20) — the Line/Live
     feeds drop a match once it ends, so this reads statisticfeed `v1/Game` for
     real matches past ~2.5h with no result yet and stamps score/winner on finish.
+  - **quota** (~1h): hosted-store size monitor — reads the server-side database
+    size, warns at the warn level, and prunes odds/fact history for events past
+    the prune age at the critical level, so the store never crosses the
+    provider's size quota (which flips it read-only and loses writes).
 
 Single-flight: passes share one lock, so only one scrape runs at a time (one
 httpx pool, no self-contention). Browser-free/proxy-free via direct mode.
@@ -23,7 +27,7 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-from . import store
+from . import quota, store
 from .cli.main import _load_skin
 from .extraction.models import BetB2BScrapeResult
 from .scraper import BetB2BScraper
@@ -59,6 +63,7 @@ class BetB2BScheduler:
         results_interval: float = 600.0,       # 10min — results pass cadence
         result_min_age: float = 9000.0,        # 2.5h — a match this old should be done
         read_only_backoff: float = 900.0,      # 15min — pause when the DB is read-only
+        quota_interval: float = 3600.0,        # 1h — hosted-store size monitor pass
     ) -> None:
         self.skin_name = skin_name
         self.sport = sport
@@ -72,6 +77,7 @@ class BetB2BScheduler:
         self.results_interval = results_interval
         self.result_min_age = result_min_age
         self.read_only_backoff = read_only_backoff
+        self.quota_interval = quota_interval
         self._scraper: Optional[BetB2BScraper] = None
         self._lock = asyncio.Lock()
         self._stop = asyncio.Event()
@@ -91,9 +97,10 @@ class BetB2BScheduler:
         """Run the passes until stop(); blocks."""
         if self._scraper is None:
             await self.start()
-        logger.info("scheduler start: skin=%s sport=%s scheduled=%.0fs live=%.0fs results=%.0fs refresh=%.0fs",
+        logger.info("scheduler start: skin=%s sport=%s scheduled=%.0fs live=%.0fs results=%.0fs refresh=%.0fs quota=%.0fs",
                     self.skin_name, self.sport, self.scheduled_interval,
-                    self.live_interval, self.results_interval, self.refresh_window)
+                    self.live_interval, self.results_interval, self.refresh_window,
+                    self.quota_interval)
         # A pass with interval <= 0 is DISABLED. The `live` pass is the dominant
         # data producer (15s polling of constantly-moving odds); disabling it
         # (SCHED_LIVE_INTERVAL=0) is the "scheduled-only" low-storage mode — see
@@ -103,6 +110,7 @@ class BetB2BScheduler:
             ("scheduled", self._scheduled_pass, self.scheduled_interval),
             ("live", self._live_pass, self.live_interval),
             ("results", self._results_pass, self.results_interval),
+            ("quota", self._quota_pass, self.quota_interval),
         ):
             if interval > 0:
                 loops.append(self._loop(name, fn, interval))
@@ -208,6 +216,68 @@ class BetB2BScheduler:
             conn.close()
         logger.info("results: %d pending → %d checked → %d finished captured",
                     len(pending), len(out), finished)
+
+    async def _quota_pass(self) -> None:
+        """Hosted-store size monitor. Read the primary's server-side size (the
+        same number the provider's dashboard reports and its quota acts on),
+        warn at the warn level, and prune odds/fact history for events past
+        the prune age at the critical level — BEFORE the provider flips the
+        project read-only and writes start failing. Pruning keeps the events
+        rows (final scores/grades); only aged tick history goes. Connects to
+        the primary directly — even while fallback mode owns writes — because
+        the mirror's size is irrelevant to the provider's quota."""
+        from . import store_orm
+        try:
+            conn = store_orm.connect()
+        except Exception as exc:  # noqa: BLE001 — unreachable primary: fallback owns writes
+            logger.warning("quota: primary store unreachable (%s) — size unknown", exc)
+            return
+        try:
+            used = store_orm.db_bytes(conn)
+        finally:
+            conn.close()
+        if used is None:
+            logger.debug("quota: hosted store size unavailable — skipping")
+            return
+        st = quota.evaluate(used)
+        if st is None:
+            return
+        logger.info("quota: store %.1f MB / %.0f MB (%.0f%%) — level %s%s",
+                    st["used_mb"], st["limit_mb"], st["pct"], st["level"],
+                    " (OVER the limit — provider read-only likely)" if st["over"] else "")
+        if st["level"] == "critical":
+            await self._prune_primary()
+
+    async def _prune_primary(self) -> None:
+        """Bounded retention prune on the primary, driven by the quota monitor.
+        Frees pages for reuse before the provider's hard limit; a store already
+        flipped read-only can't be pruned from here — say so and point at the
+        provider dashboard."""
+        from . import store_orm
+        try:
+            conn = store_orm.connect()
+        except Exception as exc:  # noqa: BLE001
+            logger.error("quota prune: primary store unreachable (%s)", exc)
+            return
+        try:
+            pruned = store_orm.prune_expired(
+                conn, days=quota.prune_days(), batch=quota.prune_batch())
+        except Exception as exc:  # noqa: BLE001 — read-only (25006) lands here
+            logger.error(
+                "quota prune failed (%s) — if the store is already read-only, "
+                "prune from the provider dashboard instead (odds/fact history "
+                "TRUNCATE; keep events)", exc)
+            return
+        finally:
+            conn.close()
+        total = sum(v for k, v in pruned.items() if k != "events_pruned")
+        logger.warning(
+            "quota prune: %d fact row(s) deleted for %d event(s) older than %.0f day(s) %s",
+            total, pruned.get("events_pruned", 0), quota.prune_days(),
+            "— freed pages are reused by new writes; the reported size shrinks "
+            "after the provider's vacuum" if total
+            else "— nothing aged yet; the limit must be brought down manually "
+                 "(dashboard TRUNCATE of odds history, keep events)")
 
     # -- helpers --------------------------------------------------------- #
     def _filter_scheduled(self, pairs: List[Tuple[str, object]]) -> List[str]:
