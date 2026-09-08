@@ -1038,3 +1038,20 @@ don't remove the line.
       could clear or reuse it.
 ---
 - [x] **ADR-22 retention pass — SHIPPED 2026-09-08 (Session 44, commit `0398c94`, ADR-25)** — retention is no longer a build item: `store.prune_expired` deletes fact history for events past `BETB2B_PRUNE_DAYS` (7), auto-run by the scheduler's hourly quota pass at the critical level (92% of `BETB2B_DB_LIMIT_MB`), and exposed one-shot via `python -m src.sites.betb2b.cli.main quota` (dry-run default, `--prune` to apply). Remaining from the original item: the **in-process last-odds cache (ADR-23)** for egress when live returns, and the operator's one-time prune of the CURRENT 1.67 GB overage (still restricted; dashboard TRUNCATE or post-reset prune).
+
+---
+- [ ] **Pre-commit secret scanner in gates.conf** (added 2026-09-08 by Alex (S443), Session 45) —
+      A real proxy credential sat in the public repo for ~7 weeks (9 occurrences in tracked
+      files, found by Session 45's sweep and redacted in `0053b9e`/`452adac`). Nothing in the
+      pipeline would have caught it at commit time. Add a pattern-battery or `gitleaks`/
+      `detect-secrets` scan as a pre-commit gate command. Windows caveat: gates.conf configured
+      commands currently fail there (see inefficiencies 2026-09-06) — pick a launcher that
+      works on both machines.
+---
+- [ ] **OPERATOR-GATED: git history rewrite for the redacted proxy credential** (added 2026-09-08 by Alex (S443), Session 45) —
+      The bore.pub password remains recoverable from git history (~15+ blobs, since 2026-07-18)
+      even though the current tree is clean (`0053b9e`, `452adac`). After the operator ROTATES
+      the credential (primary action — do this regardless), an optional `git filter-repo
+      --replace-text` + force-push would purge historical blobs. Force-push rewrites all SHAs:
+      coordinate with every clone (Sam's checkout, other machines, Railway if it builds from
+      git) and weigh against post-rotation risk. Report: `reviews/2026-09-08-review-2.md`.

@@ -351,3 +351,10 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** gates.conf has no per-OS command syntax; the conf is shared with the Mac.
 - **Workaround / fix:** run `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov` manually and record the result (247 passed this session); conf left untouched so the Mac keeps passing.
 - **Prevent next time:** the fix belongs to the gates registry format (per-OS lines or a wrapper script) — upstream candidate, still open from Session 41.
+---
+## 2026-09-08 — Alex (S443) / GLM-5.3-Flash (Session 45)
+- **Problem:** Two friction points during the secret sweep. (1) Bash `grep -E` pattern batteries on Git Bash/Windows silently dropped matches for quoting-heavy patterns (URL-embedded credentials) — the same patterns found everything when re-run from a Python driver; a naive agent would have reported "clean" on the strength of the first battery. (2) `context-mem.cmd lint` produced no output at all when run standalone (exit fast, nothing printed) — unusable as a pre-commit check on this machine; had to self-police the `.context`-vocabulary-in-product rule instead.
+- **Cost:** ~15 min of double-work re-running the battery in Python after noticing the first pass's holes; the lint check is simply unavailable here.
+- **Cause:** (1) nested single/double-quote escaping in Git Bash on Windows mangles complex `-E` alternations. (2) Not diagnosed (time-boxed); possibly the ps1 port expects args differently than `check`.
+- **Workaround / fix:** for any secret/regex sweep on this machine, drive `git ls-files` / `git cat-file --batch` from a short Python script (see session 45's `.triage_s443.py` / `.hist_scan_s443.py` pattern, deleted post-session); skip `context-mem lint` and review staged product diffs manually for `.context` vocabulary.
+- **Prevent next time:** record the Python-driver pattern as the standard sweep method here; upstream, `context-mem lint` deserves a Windows runtime pass (same category as the gates.conf trap).

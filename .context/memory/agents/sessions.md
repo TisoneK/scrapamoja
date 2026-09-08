@@ -38,3 +38,11 @@ at session start). Rotate with context-history.
 - **Outcome:** done — hourly quota pass reads the primary's pg_database_size (bypassing the fallback mirror), warns at 80%, auto-prunes fact history older than 7 days at 92% critical (events/results kept); CLI `quota` one-shot (dry-run default); 4 new tests, suite 251 passed. ADR-22 retention finally shipped (ADR-25).
 - **Open items:** operator one-time prune of the current 1.67 GB (read-only store can't self-prune — dashboard TRUNCATE); worker redeploy + SCHED_LIVE_INTERVAL dashboard check; ADR-23 dedup cache before live returns. See tasks/backlog.md.
 - **Report:** .context/memory/reviews/2026-09-08-review.md
+---
+## 2026-09-08 — Session 45
+- **Agent:** Alex (S443) | **Model:** GLM-5.3-Flash | **Platform:** TisoneK-Windows (Windows 11) | **Role:** engineer | **Core:** 0.16.1
+- **Task:** security scan — secret-leak sweep of the public repo (tracked files + full git history); collab with Sam (S442) mid-session in the same checkout
+- **Commits:** 4 (`843574c` collab join note; `0053b9e` fix(security) scrub proxy creds from docs/scripts; `452adac` chore(context) redact password from memory files; report commit pending at write time)
+- **Outcome:** done — CRITICAL found + fixed in current tree: real bore.pub proxy user:password committed 9× in 8 files (README, RESEARCH, 4 script docstrings, 2 memory files), public since 2026-07-18. All redacted → placeholders. Full-tree + 5,930-blob history scan otherwise clean (no .env/JWT/tokens/private keys; secrets zones clean; Sam's quota commit 0398c94 clean). OPERATOR MUST ROTATE the bore.pub credential (history retains old value); optional filter-repo purge backlogged.
+- **Open items:** pre-commit secret scanner (backlog); operator-gated history rewrite (backlog); rotate proxy credential (operator, now).
+- **Report:** .context/memory/reviews/2026-09-08-review-2.md

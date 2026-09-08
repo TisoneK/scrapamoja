@@ -52,3 +52,7 @@ correction twice.
 
 ## Risk & approvals
 - Commit identity set to repo owner (Tisone Kironget) even when operated from another machine's account (stated, 2026-07-12)
+
+## Security & secrecy
+- The repo is PUBLIC — treat "no sensitive data in the repo" as a standing requirement: any security session should sweep tracked files AND git history, and never echo secret values in chat, logs, or reports (stated, 2026-09-08)
+- When a credential is found committed, rotate it even if redacted from the tree — history exposure is assumed (stated, 2026-09-08)

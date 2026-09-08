@@ -116,3 +116,7 @@ block (and its "last verified" date) every time you run on it again.
   - `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q` — verified: 232 passed pre-fix, **233 passed** post-fix (adds `test_deploy_configs_default_live_off`), exit 0, no timeout flag needed. Same pattern as session 41.
   - `.context/core/bin/context-gates.cmd run pre-commit` — universal checks pass; configured `.venv/bin/python` command still fails on Windows (known, above) → suite run manually; `context-mem.cmd lint` exit 0.
   - `context-sync.cmd verify/status` not re-run this session (product session; core unchanged since 41).
+- **Session 45 additions (2026-09-08, security sweep):**
+  - `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov` — verified: **247 passed** (251 by session 44's report includes tests Sam added; 247 observed from this checkout pre/post my redactions — same tree, so treat 247 as this machine's current count; discrepancy noted, not blocking).
+  - `.context/core/bin/context-mem.cmd lint` — runs silent/no-output standalone on this machine (unusable as a check this session; see inefficiencies 2026-09-08).
+  - Secret-sweep method that works here: Python driver over `git ls-files` (tree) + `git cat-file --batch-all-objects --batch-check` (all blobs, incl. unreachable) with masked output. Bash `grep -E` batteries lose quoting-heavy patterns on Git Bash/Windows — do not trust them for security sweeps.

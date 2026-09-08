@@ -307,3 +307,10 @@ Friction caused by the `.context/` system or the protocol itself. See
 - **Root cause:** unconfirmed — either the PS `update` skipped the re-exec step or it failed silently. The sh path was not exercised on this machine (no POSIX verify pass pre-update to compare).
 - **Suggested fix:** make the PS `update` backfill observable — print each installed backfill file (or a warning when the `migrate --backfill-only` re-exec does not happen); surface an "all zones/files present" confirmation from the backfill in `update`'s output. Windows runtime pass owed (0.15.0 noted the ps1 ports still owe one).
 - **Status:** open (workaround: after a PS `update` that crosses into 0.16.0+, always run `migrate` — it is idempotent)
+---
+## 2026-09-08 — Alex (S443) / GLM-5.3-Flash (Session 45)
+- **Flaw:** The protocol's append-only rule (never edit past entries) and the secret-handling rule (no secret values in tracked files, cannot be overridden) collided: Session 45 found a real password quoted inside two append-only memory files (`flaws/log.md`, `history/group-001.md`) and had to choose which rule to break.
+- **Symptom:** No documented resolution path — an agent strictly honoring append-only would leave a live credential in a public repo; an agent redacting it violates append-only with no sanctioned way to record that.
+- **Root cause:** The append-only rule lacks a secret-redaction exception clause.
+- **Suggested fix:** Add one sentence to the append-only rule (core rules + AGENTS digest): "Exception: secret values may be surgically redacted from any tracked file, including append-only logs — replace only the secret substring with a placeholder, keep entry text intact, and record the deviation in the session entry."
+- **Status:** open (Session 45 applied the redaction under the secret-handling rule's supremacy and documented the deviation in sessions.md + the report)
