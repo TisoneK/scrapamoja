@@ -365,3 +365,10 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** I over-read Supabase's quota email ("full access through the dashboard") as including SQL writes; the correct fact was already in ADR-21 (§2/§4): the August wipe needed a one-off `SET TRANSACTION READ WRITE` override, and "the SET TRANSACTION READ WRITE gotcha is real for any tooling that writes through the pooled Supabase role".
 - **Workaround / fix:** the override IS the path (see tasks/current.md operator block): session-level `SET default_transaction_read_only = off;` (or `BEGIN; SET TRANSACTION READ WRITE; … COMMIT;`), then TRUNCATE. Session-scoped only — the ADR-21 prohibition on `ALTER DATABASE … default_transaction_read_only=off` (persistent, platform-wide) stands.
 - **Prevent next time:** before telling the operator any write path works on a restricted store, check ADR-21's playbook first — it already contains the working override and the gotcha note. Over-reading marketing language in provider emails ("full access") over the repo's own field-tested notes was the mistake.
+---
+## 2026-09-08 — Kai (S444) / GLM-5.3-Flash (Session 46)
+- **Problem:** `pytest -q` summary line ("N passed in Xs") does not survive the Git Bash pipe on this machine — `pytest ... | tail -3` shows only progress dots, and `grep passed` matched nothing, so the standard one-shot evidence command reported nothing.
+- **Cost:** two extra pytest invocations (~1 min) before falling back to exit code + dot count.
+- **Cause:** output buffering/pipe behavior between pytest and the Git Bash capture; not diagnosed further (time-boxed).
+- **Workaround / fix:** run `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q > file 2>&1`, then `echo "exit=$?"` + count dots/inspect the file — or just trust `exit=0` plus the dot count (3×72 + 35 = 251). Session 43's manual-gate-equivalent workaround still stands for the failing gates.conf command.
+- **Prevent next time:** when a suite run's summary text matters, redirect to a file; when only pass/fail matters, `echo $?` immediately after the run is sufficient evidence.

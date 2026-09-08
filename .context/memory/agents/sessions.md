@@ -46,3 +46,12 @@ at session start). Rotate with context-history.
 - **Outcome:** done — CRITICAL found + fixed in current tree: real bore.pub proxy user:password committed 9× in 8 files (README, RESEARCH, 4 script docstrings, 2 memory files), public since 2026-07-18. All redacted → placeholders. Full-tree + 5,930-blob history scan otherwise clean (no .env/JWT/tokens/private keys; secrets zones clean; Sam's quota commit 0398c94 clean). OPERATOR MUST ROTATE the bore.pub credential (history retains old value); optional filter-repo purge backlogged.
 - **Open items:** pre-commit secret scanner (backlog); operator-gated history rewrite (backlog); rotate proxy credential (operator, now).
 - **Report:** .context/memory/reviews/2026-09-08-review-2.md
+---
+## 2026-09-08 — Session 46 (Kai/S444)
+- **Agent:** Kai (S444) | **Model:** GLM-5.3-Flash | **Platform:** TisoneK-Windows (Windows 11) | **Role:** engineer | **Core:** 0.17.0
+- **Task:** operator: "sync context" — core sync + 0.17.0 migration fill; context-only scope. An active peer worked the quota subsystem in the same checkout throughout (`7d6374e` prune-path correction, `f5ee4c0`/`5b0fb00` hard-limit escalation); coordinated via roster check-in + collab note, staged only explicit paths, zero file overlap.
+- **Commits:** 8 (`92cda3f` check-in; `2e2ee2f` note; `50dbc2d` core migrate 0.17.0; `a1f726c` kickoff regen; `0c454ab` AGENTS digest; `c4c2e09` collaboration README; `d0c529d` report; exit commit pending at write time)
+- **Outcome:** done — core 0.16.1→0.17.0 migrated + verified; universal check-in adopted (first session on the 0.17.0 rule); kickoff.md regenerated with facts refilled; AGENTS.md digest refreshed (rules 4/5/9); missing `memory/collaboration/README.md` installed (backfill gap, flaw logged); peer product commits interleaved cleanly on main.
+- **Open items:** upstream backfill per-file existence check (flaws/log.md); Dependabot triage backlogged (now 12 alerts, 3 high — down from 46).
+- **Notes:** none
+- **Report:** .context/memory/reviews/2026-09-08-review-3.md
