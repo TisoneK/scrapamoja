@@ -30,3 +30,11 @@ at session start). Rotate with context-history.
 - **Outcome:** done — failover on 25006/connection-class failures to a local mirror (same schema), FIFO outbox, throttled write-probe recovery, bounded idempotent drain through the store's own dedup paths. Suite 247 passed (233 + 14).
 - **Open items:** ADR-22 retention pass (unchanged); fallback mirror is ephemeral on the worker unless `BETB2B_FALLBACK_DB_PATH` points at a Volume; outbox cap revisit if live polling returns. See tasks/backlog.md + ADR-24.
 - **Report:** .context/memory/reviews/2026-09-07-review-2.md
+---
+## 2026-09-08 — Session 44 (Sam/S442)
+- **Agent:** ZCode (Sam, S442) | **Model:** GLM-5.3-Flash | **Platform:** TisoneK-Windows (Windows 11) | **Role:** engineer | **Core:** 0.16.1
+- **Task:** operator: "create a monitor for the database so that we never hit the threshold in the first place" — built as a complete session (roster, ADR, review, gates). Collab mode: Alex (S443) joined mid-session (secret-leak sweep; no overlap).
+- **Commits:** 2 product+context (`0398c94` feat(betb2b) quota monitor + auto-prune; `e8e3f18`-era chore(context) memory) + collab notes
+- **Outcome:** done — hourly quota pass reads the primary's pg_database_size (bypassing the fallback mirror), warns at 80%, auto-prunes fact history older than 7 days at 92% critical (events/results kept); CLI `quota` one-shot (dry-run default); 4 new tests, suite 251 passed. ADR-22 retention finally shipped (ADR-25).
+- **Open items:** operator one-time prune of the current 1.67 GB (read-only store can't self-prune — dashboard TRUNCATE); worker redeploy + SCHED_LIVE_INTERVAL dashboard check; ADR-23 dedup cache before live returns. See tasks/backlog.md.
+- **Report:** .context/memory/reviews/2026-09-08-review.md

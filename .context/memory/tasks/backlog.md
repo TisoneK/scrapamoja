@@ -1036,3 +1036,5 @@ don't remove the line.
       the ADR-23 last-odds cache work. (3) The mirror DB is never cleaned after a successful
       drain — harmless in scheduled-only mode (small), but a future retention pass (ADR-22)
       could clear or reuse it.
+---
+- [x] **ADR-22 retention pass — SHIPPED 2026-09-08 (Session 44, commit `0398c94`, ADR-25)** — retention is no longer a build item: `store.prune_expired` deletes fact history for events past `BETB2B_PRUNE_DAYS` (7), auto-run by the scheduler's hourly quota pass at the critical level (92% of `BETB2B_DB_LIMIT_MB`), and exposed one-shot via `python -m src.sites.betb2b.cli.main quota` (dry-run default, `--prune` to apply). Remaining from the original item: the **in-process last-odds cache (ADR-23)** for egress when live returns, and the operator's one-time prune of the CURRENT 1.67 GB overage (still restricted; dashboard TRUNCATE or post-reset prune).

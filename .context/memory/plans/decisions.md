@@ -581,3 +581,14 @@ scraper doesn't write through it yet.
     real sqlite ORM store via `DATABASE_URL` with 25006 injected at the
     `store_orm` seam; the full failover→outbox→probe→flip-back→replay cycle
     is asserted end-to-end (no network).
+
+---
+## ADR-25: Quota monitor + auto-prune — the store polices its own size (2026-09-08, Session 44)
+- **Status:** accepted (shipped, `0398c94`)
+- **Context:** the second quota re-fill (2026-09-06; ADR-21/22 history) plus the operator ask: "create a monitor for the database so that we never hit the threshold in the first place." The ADR-22 retention pass had never been built; the ADR-24 fallback catches writes during a restriction but cannot stop the store from growing into the provider's read-only wall in the first place.
+- **Decision (`quota.py` + scheduler quota pass + store/db_bytes/prune + CLI `quota`):**
+  1. The scheduler runs a **quota pass** (hourly; `SCHED_QUOTA_INTERVAL`, <=0 disables) that reads the **primary's server-side size** — `pg_database_size`, the same number the provider's dashboard reports and its quota acts on. It connects to the primary **even while ADR-24 fallback mode owns writes**: the mirror's size is irrelevant to the provider's quota.
+  2. **Levels:** ok <80% ≤ warn <92% ≤ critical (`BETB2B_DB_WARN_PCT`/`BETB2B_DB_CRITICAL_PCT`; `BETB2B_DB_LIMIT_MB` default 500 = the Supabase free per-project limit).
+  3. **Auto-prune at critical:** `store.prune_expired` deletes fact rows (`odds_snapshots`, `event_states`, `period_scores`, `h2h_*`, `statistics`, `sub_games`) for events whose `start_time` is older than `BETB2B_PRUNE_DAYS` (7) — batched so no mega-DELETE. **`events` rows always survive**: final results/grades live there (the engine reads results, not tick history — the ADR-22 gate).
+  4. **One-shot CLI** `quota`: size, level, prunable counts (dry-run default), `--prune`/`--force` to apply; `schedule --quota-interval` tunes/disables the pass.
+- **Consequences:** in scheduled-only mode the store now self-caps — growth stops at the critical level instead of sailing into read-only. A store ALREADY flipped read-only cannot prune itself (DELETEs hit 25006); the pass logs a pointer to the dashboard TRUNCATE, and the existing 1.67 GB overage still needs the operator's one-time prune (unchanged decision). DELETEs stop growth immediately but the provider's reported size only shrinks after its vacuum. Egress remains unmonitored (would need the provider's management API — future work only if the engine's read cadence makes it binding again).
