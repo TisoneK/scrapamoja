@@ -64,3 +64,4 @@ at session start). Rotate with context-history.
 - **Open items:** none new — Supabase cycle-reset watch (2026-09-27) and backlog unchanged; 3.12+ install on this box would avoid the two-flag dance (operator choice was 3.11).
 - **Notes:** none
 - **Report:** .context/memory/reviews/2026-09-14-review.md
+- **Correction (same session):** the Commits line's "6" was off-by-one at write time — 5 shipped (`0283558` exit included); the 6th is this correction commit itself.
