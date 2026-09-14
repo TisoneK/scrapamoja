@@ -10,4 +10,5 @@ The human is the supervisor. context-mem check flags a duplicate.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Leo | S445 | qwen3.8-flash | context sync — initializing fresh clone at Lameck/Tisone/scrapamoja |
 
