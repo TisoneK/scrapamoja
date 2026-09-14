@@ -75,3 +75,12 @@ at session start). Rotate with context-history.
 - **Notes:** none
 - **Report:** .context/memory/reviews/2026-09-14-review-2.md
 - **Correction (same session):** the "everything was already in sync" claim was wrong — it checked only local signals; `context-sync status`'s "no sibling package clone — this is fine" was taken as "no update available". Operator corrected: the package upstream is renamed **`TisoneK/context-ledger`** (old `TisoneK/.context` URL redirects; repo is now PUBLIC). Checked the remote: **core 1.1.1 available vs local 0.17.0 — MAJOR** (0.18 `.context_ledger/`+`ledger-*` rename, 1.0.0 office regroup, 1.1.x roster-status/close/compaction/linkage). Recorded, not applied (MAJOR needs operator go-ahead). Stale facts fixed in kickoff.md/active.md/environments.md; flaw + preference logged; report corrected; re-checked-in at `ba16e0e`.
+---
+## 2026-09-14 — Session 48 (Miles/S446) — EXTENSION (post-clock-out, operator go "Migrate")
+- **Same session, same identity** per the 1.0.6/1.1.0 re-check-in rule — the S447 check-in (`bdee442`) was signed pre-migration under the old edition's rules; corrected to S446 in `90c460d` and this entry extends Session 48 rather than opening a 49th.
+- **Task:** migrate the core 0.17.0 → 1.1.1 → 1.1.2 (Context Ledger rename + office architecture) on the operator's explicit go
+- **Commits:** 18 (`bdee442`..`845b49e`) + this wrap round (report + extension + clock-out)
+- **Outcome:** done — the MIGRATION.md dance ran as documented (update -Major → migrate → rename); memory regrouped into `memory/office/`; dir + tools renamed (`.context/`→`.context_ledger/`, `context-*`→`ledger-*`); entry points regenerated/re-merged (kickoff, AGENTS digest, CLAUDE.md, collab + flaws READMEs); the manual instruction sweep completed (active.md, override retired, gates/history comments, backlog refs, preferences, environments banner); same-day PATCH 1.1.2 applied; `ledger-mem closeout` swept 23 backlog tombstones (open work only now, 61 items); suite **253 passed / exit 0** both pre- and post-migration. Migration traps + sweep quirks detailed in the report.
+- **Open items:** first product session: run `ledger-mem lint --tree` once and strip any leaks (new 1.1.0 rule); standing: 09-27 Supabase cycle-reset watch, ADR-20 addendum, ADR-23 cache, Dependabot triage (16 alerts), pre-commit secret scanner, history-rewrite decision.
+- **Notes:** none
+- **Report:** .context_ledger/memory/office/reviews/2026-09-14-review-3.md

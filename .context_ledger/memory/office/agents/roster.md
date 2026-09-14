@@ -49,7 +49,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Miles | S446 | qwen3.8-flash | MIGRATING core 0.17.0 → 1.1.1 (operator go "Migrate") — update/migrate/rename applied | Working | Fill-facts: kickoff + roster done; AGENTS digest, sweeps, verify & wrap remain |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
