@@ -14,7 +14,7 @@ don't remove the line.
 - [x] **Install Python 3.12+ toolchain on Baos-Mac-mini** (added 2026-07-12 by Claude Code; done 2026-07-12, `bb0e636`) —
       Installed `uv` (user-space) → uv-managed CPython 3.12.13 → `.venv/` → `uv pip
       install --only-binary :all: -e ".[dev]"`. Verified commands in
-      `.context/system/environments.md`. Still TODO: `playwright install` (browsers)
+      `.context_ledger/memory/system/environments.md`. Still TODO: `playwright install` (browsers)
       and running the pytest/ruff/mypy baseline.
 - [ ] **Migrate `datetime.utcnow()` (1081 uses) to tz-aware `datetime.now(timezone.utc)`** (added 2026-07-12 by Claude Code) —
       Deprecated in Python 3.12 (the project's floor). NOT a blind sed: `utcnow()`
@@ -628,7 +628,7 @@ don't remove the line.
       (score 0-0, status=1); resolve team ids→names via teams. Cross-skin: send
       ONE consensus/best line per match. Wire as `betb2b scrape … --ingest $URL`
       / a `betb2b ingest` command reusing multi-skin+poll. ENGINE_URL + token in
-      `.context/memory/secrets/` (never tracked). The store now keeps h2h periods
+      `.context_ledger/memory/secrets/` (never tracked). The store now keeps h2h periods
       (`d0117eb`) so FULL is buildable now; scoped waits on the G-map above. HIGH.
 
 ---- [~] **Map ALL basketball modes: (G,GS,T) taxonomy + sub-game fetching** (added 2026-07-21 by Claude Code, Session 26; supersedes the earlier "map quarter/half/team G ids" item; **(3) DONE 2026-08-01 Session 38**) —
@@ -685,7 +685,7 @@ don't remove the line.
       on until `5f6e6db`. Command:
       `python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --subgames --ingest`
       (needs `$SCOREWISE_ENGINE_URL` + `$SCOREWISE_API_KEY` — values in
-      `.context/memory/secrets/`). Record the actual scope histogram; every
+      `.context_ledger/memory/secrets/`). Record the actual scope histogram; every
       per-scope count in the Session 27 record is unreproducible (see the
       CORRECTION appended to `plans/decisions.md`). High — it is the first
       unblocked step for ADR-7.
