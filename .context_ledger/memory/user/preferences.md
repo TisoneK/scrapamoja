@@ -32,9 +32,9 @@ correction twice.
 - On the Lameck-Windows box (`C:\Users\Lameck\Tisone\scrapamoja`), build the dev venv on **Python 3.11** even though the project floor is 3.12 — operator directive over the machine's 3.14 default; suite is green on 3.11 with the two-flag install recipe recorded in `system/environments.md` (stated, 2026-09-14)
 
 ## Communication
-- Conventional Commits with scope; `chore(context):` for `.context/` updates (stated, 2026-07-12)
+- Conventional Commits with scope; `chore(ledger):` for `.context_ledger/` updates (prefix was `chore(context):` until the core 1.1.1 rename, 2026-09-14) (stated, 2026-07-12)
 - Agent must log inefficiencies in real time, not wait to be prompted (correction, 2026-07-19)
-- Agent must update `.context/memory/` files autonomously before ending session — user should not have to request this (correction, 2026-07-19)
+- Agent must update `.context_ledger/memory/` files autonomously before ending session — user should not have to request this (correction, 2026-07-19; path renamed at core 1.1.1)
 
 ## Autonomy & initiative
 - Do NOT ask rhetorical questions or seek permission when the right action is obvious — just execute (correction, 2026-07-20)
@@ -42,7 +42,7 @@ correction twice.
 - Cross-reference recorded platform facts (Windows, macOS, etc.) against every tool, script, and command the protocol asks you to run — if something won't work on this platform, log it as a flaw before being told (correction, 2026-07-20)
 
 ## Context protocol compliance
-- `.context/` is the primary workflow, not a backup — internalize it as the source of truth over built-in agent workflows (correction, 2026-07-20)
+- `.context_ledger/` is the primary workflow, not a backup — internalize it as the source of truth over built-in agent workflows (correction, 2026-07-20; dir renamed from `.context/` at core 1.1.1)
 - Record every user correction as a preference in this file immediately — never let corrections pile up unrecorded across sessions (correction, 2026-07-20)
 - Before investigating/probing a known problem (e.g. the betb2b feed 406), READ the context first (ADRs, RECON.md, backlog) — much is already solved and documented; don't re-derive it. The 406 root cause + decision is ADR-4 (rotating SW-injected `x-dt` header; don't chase it — use DOM/HTML-harvest) (correction, 2026-07-21)
 - "Sync context" means checking the **actual package upstream remote** — `TisoneK/context-ledger` (renamed from `TisoneK/.context`, 2026-09; now public). A `context-sync status` "no reachable source / this is fine" is a LOCAL finding only; clone or `ls-remote` the recorded URL and compare core versions before claiming sync complete (correction, 2026-09-14)

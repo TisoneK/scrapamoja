@@ -21,23 +21,6 @@ Example:
 
 *(none yet)*
 
-- **~~`kickoff.md` Step 1 — `sh .context/core/bin/context-sync verify`~~** → **SUPERSEDED 2026-08-01 (Session 35):** core **0.4.0+ ships a PowerShell port** — `pwsh -File .context/core/bin/context-sync.ps1 verify|status|update|rollback` — so Windows agents use the port instead of the manual PowerShell verification below. The manual script is kept only as a fallback for a project still on a pre-0.4.0 core. (set by agent, 2026-07-20; superseded by the core 0.4.0 ps1 port, noted 2026-08-01)
-  ```powershell
-  # Fallback only (pre-0.4.0 core): compare SHA256 of every file in .context/core/ against its MANIFEST.sha256
-  $manifest = Get-Content ".context/core/MANIFEST.sha256"
-  $fail = $false
-  foreach ($line in $manifest) {
-    $hash, $path = $line -split '\s+', 2
-    $path = $path.TrimStart('*').TrimStart(' ')
-    $actual = (Get-FileHash ".context/core/$path" -Algorithm SHA256).Hash.ToLower()
-    if ($actual -ne $hash.ToLower()) { Write-Warning "MISMATCH: $path"; $fail = $true }
-  }
-  if (-not $fail) { Write-Host "CORE INTEGRITY PASSED" }
-  ```
-  ```powershell
-  # Status fallback: check core version + git log
-  Get-Content ".context/core/VERSION" | Select-Object -First 1
-  git log --oneline -5 -- .context/core/
-  ```
+- **`kickoff.md` Step 1 — Windows core-check commands** → **No change needed since core 1.1.1** — the protocol ships `.cmd` launchers for every tool (`ledger-sync.cmd`, `ledger-gates.cmd`, `ledger-mem.cmd`, `ledger-collab.cmd`, `ledger-history.cmd`) that run the `.ps1` ports with `-ExecutionPolicy Bypass`; the 0.17-era override (PowerShell port + manual SHA fallback) is fully retired, including its pre-0.4.0 manual verification snippet. (set by agent, 2026-07-20; superseded by the 0.4.0 ps1 port 2026-08-01; retired by core 1.1.1 `.cmd` launchers, 2026-09-14)
 
 - **`kickoff.md` Step 1 — `git pull --ff-only`** → **No change needed** — git works fine from PowerShell on Windows. (set by agent, 2026-07-20)
