@@ -10,4 +10,5 @@ The human is the supervisor. context-mem check flags a duplicate.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Miles | S446 | qwen3.8-flash | upstream correction — core 1.1.1 available (MAJOR, Context Ledger); migration awaits operator go-ahead |
 
