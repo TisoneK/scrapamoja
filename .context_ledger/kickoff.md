@@ -54,7 +54,7 @@ Generation rules for the bootstrapping agent:
 - **Live application:** N/A
 - **Git identity:** Tisone Kironget `tisonkironget@gmail.com`
 - **Protocol:** vendored at `.context_ledger/core/` (version: see `.context_ledger/core/VERSION`)
-- **Package upstream (core updates + flaw back-ports):** https://github.com/TisoneK/context-ledger.git (renamed from `TisoneK/.context` 2026-09 — old URL redirects; package is public; sibling clone on Lameck-Windows at `C:SERSamecktisone.context`)
+- **Package upstream (core updates + flaw back-ports):** https://github.com/TisoneK/context-ledger.git (renamed from `TisoneK/.context` 2026-09 — old URL redirects; package is public; sibling clone on Lameck-Windows at `C:\Users\Lameck\Tisone\.context`)
 - **Edition routing:** local agents → `.context_ledger/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox agents → `.context_ledger/core/rules/ai-engineering-protocol.md`
 
 ## Session Parameters
