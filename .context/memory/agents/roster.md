@@ -10,5 +10,4 @@ The human is the supervisor. context-mem check flags a duplicate.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Miles | S446 | qwen3.8-flash | context sync (second sync pass, Lameck-Windows) |
 
