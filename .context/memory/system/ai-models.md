@@ -16,6 +16,7 @@ accordingly).
 | Z.ai Code | unknown | 2026-07-25 | 2026-07-25 | 1 |
 | Buffy (Freebuff) | deepseek-v4-pro | 2026-08-01 | 2026-08-18 | 2 |
 | ZCode | GLM-5.3-Flash | 2026-09-06 | 2026-09-08 | 4 |
+| ZCode | qwen3.8-flash | 2026-09-14 | 2026-09-14 | 1 |
 
 ## Observations
 
@@ -45,3 +46,4 @@ Update in place when a newer session contradicts an old observation.
 - **ZCode / GLM-5.3-Flash:** Session 42 — root-caused the Supabase quota re-fill to deploy-config drift (Procfile fixed to live-off, `railway.worker.json` missed; worker deploys via config-as-code which overrides the dashboard); fixed all deploy surfaces + pinned them with a regression test. Diagnosis came from cross-checking memory claims ("live OFF") against deploy files and the quota timeline, not from trusting the memory. (2026-09-07)
 - **ZCode / GLM-5.3-Flash:** Session 45 — full-tree + all-blob git-history secret scan. Capability note: the reliable scan driver was Python over `git ls-files` / `git cat-file --batch-all-objects`; bash grep pattern batteries lost secrets to shell-quoting holes (silent false negatives). Also: multi-agent coordination in one checkout works via collab notes when each agent stages only its own paths. (2026-09-08)
 - **ZCode / GLM-5.3-Flash:** Session 46 — context sync under live co-tenancy: migrated core to 0.17.0 while a peer shipped product code in the same checkout; clean interleave achieved by explicit-path staging only + a scope note on the collab channel. Verified pytest summary lines can vanish in Git Bash pipes on this box — use exit code + dot count as suite evidence. (2026-09-08)
+- **ZCode / qwen3.8-flash:** Model id taken from the agent's own system prompt (stated fact, not a guess). Session 47 — `.context`-sync only on a new Windows box (Lameck-Windows): cloned, core verified, fresh 3.11 venv stood up under operator direction with the two-flag recipe (see environments block). No product-code capability demonstrated (sync session); the recorded Windows traps (pytest summary suppression, gates.conf POSIX path) behaved exactly as logged by predecessors — the memory's workarounds transferred to a machine never used on this project before. (2026-09-14)

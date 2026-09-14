@@ -372,3 +372,10 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** output buffering/pipe behavior between pytest and the Git Bash capture; not diagnosed further (time-boxed).
 - **Workaround / fix:** run `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q > file 2>&1`, then `echo "exit=$?"` + count dots/inspect the file — or just trust `exit=0` plus the dot count (3×72 + 35 = 251). Session 43's manual-gate-equivalent workaround still stands for the failing gates.conf command.
 - **Prevent next time:** when a suite run's summary text matters, redirect to a file; when only pass/fail matters, `echo $?` immediately after the run is sufficient evidence.
+---
+## 2026-09-14 — Leo (S445) / qwen3.8-flash (Session 47)
+- **Problem:** Standing up a dev env on the brand-new Lameck-Windows box took three install attempts. (1) `pip install -e ".[dev]"` refused outright: `requires-python >= 3.12` vs the machine's pythons (3.14 default, 3.11 secondary — no 3.12 present). (2) With `--ignore-requires-python`, the install died generating metadata for the **latest numpy**, whose meson build hard-rejects 3.11 — the flag cleared the *project's* floor but not dependency floors, and pip chose the sdist because numpy had stopped shipping cp311 wheels. (3) `PIP_ONLY_BINARY=:all:` + the flag finally worked by making pip backtrack to the newest numpy/scipy with 3.11 wheels.
+- **Cost:** ~2 failed installs (~4 min of wheel downloads burned on the first pass) before the working recipe.
+- **Cause:** operator directive to use py 3.11 against a 3.12-floor project; `--ignore-requires-python` is project-scoped only, a subtlety not recorded anywhere.
+- **Workaround / fix:** recorded the exact recipe + rationale in `system/environments.md` (Lameck-Windows block): `py -3.11 -m venv .venv` then `PIP_ONLY_BINARY=:all: pip install --ignore-requires-python -e ".[dev]"`.
+- **Prevent next time:** on any Windows box without a 3.12+ interpreter, go straight to the recorded recipe; and remember both gates are independent — the project floor needs the flag, dependency wheels need the binary-only policy.

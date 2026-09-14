@@ -120,3 +120,20 @@ block (and its "last verified" date) every time you run on it again.
   - `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov` — verified: **251 passed** (final exit-gate run, 2026-09-08, after Sam's quota tests landed).
   - `.context/core/bin/context-mem.cmd lint` — runs silent/no-output standalone on this machine (unusable as a check this session; see inefficiencies 2026-09-08).
   - Secret-sweep method that works here: Python driver over `git ls-files` (tree) + `git cat-file --batch-all-objects --batch-check` (all blobs, incl. unreachable) with masked output. Bash `grep -E` batteries lose quoting-heavy patterns on Git Bash/Windows — do not trust them for security sweeps.
+
+---
+## Lameck-Windows (last verified 2026-09-14, session 47)
+- **Identify by:** hostname `DESKTOP-3LRR8MD`, `$USERNAME` = `Lameck`, workspace `C:\Users\Lameck\Tisone\scrapamoja` (second Windows box; distinct user + path from the TisoneK-Windows block above)
+- **OS:** Windows 11 (build 26200), Git Bash + ZCode agent shell
+- **Runtimes:** `py -0p` → **3.14.7** (`C:\Python314`, default) and **3.11.0** (`AppData\Local\Programs\Python\Python311`). No 3.12/3.13 installed; no `uv` on PATH.
+- **Toolchain decision (operator, 2026-09-14):** this clone runs **Python 3.11** despite the project floor `requires-python >= 3.12` — via the override below. A 3.14 venv was not tried.
+- **Package manager:** pip in a standalone `.venv\` at repo root (gitignored; the clone arrived without one)
+- **Verified commands (all run from repo root):**
+  - `py -3.11 -m venv .venv` — creates the 3.11 venv
+  - `PIP_ONLY_BINARY=:all: .venv/Scripts/python.exe -m pip install --ignore-requires-python -e ".[dev]"` — **both flags required**: `--ignore-requires-python` clears the project's own 3.12 floor; `PIP_ONLY_BINARY=:all:` makes pip pick the newest wheels with cp311 builds instead of source-building the latest numpy (whose meson build hard-fails: "requires Python >=3.12"). Exit 0, full dev extras installed.
+  - `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q -p no:cacheprovider` — verified session 47: **253 passed** (exit 0; dot-counted via file redirect — the "N passed" summary line is suppressed on this platform family, same trap as TisoneK-Windows). The whole suite imports and passes on 3.11.
+  - `sh .context/core/bin/context-sync verify|status` and `sh .../context-gates checkpoint` — the Git Bash `sh` path works fine here (no `.cmd` launcher needed); verify green on the CRLF checkout (core 0.9.1+ hashing).
+  - `git push` / `git pull` — work with the Windows credential manager out of the box (first push from this box: instant).
+- **Quirks / gotchas:**
+  - gates.conf's configured pytest command is the POSIX `.venv/bin/python` path → `context-gates run pre-commit|exit` FAIL 127 on any Windows box (logged trap, re-hit session 47). Run the suite manually as the equivalent; do not edit gates.conf (shared with the Mac).
+  - `.baseline`-style redirect files land untracked in the tree — clean them up before exit (Step 19).

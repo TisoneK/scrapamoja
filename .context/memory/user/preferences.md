@@ -29,6 +29,7 @@ correction twice.
 ## Workflow
 - Push to main directly after each commit; one logical change per commit (kickoff, 2026-07-12)
 - Full autonomous sweep sessions: discovery + review + fix all safe issues (kickoff, 2026-07-12)
+- On the Lameck-Windows box (`C:\Users\Lameck\Tisone\scrapamoja`), build the dev venv on **Python 3.11** even though the project floor is 3.12 — operator directive over the machine's 3.14 default; suite is green on 3.11 with the two-flag install recipe recorded in `system/environments.md` (stated, 2026-09-14)
 
 ## Communication
 - Conventional Commits with scope; `chore(context):` for `.context/` updates (stated, 2026-07-12)
