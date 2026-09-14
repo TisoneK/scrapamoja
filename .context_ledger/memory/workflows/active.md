@@ -7,7 +7,7 @@ user changes the rules; note the change in your session entry.
 - **Protocol:** by agent type — local agents → `.context_ledger/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox agents → `.context_ledger/core/rules/ai-engineering-protocol.md`
 - **Protocol location:** on disk — vendored in `.context_ledger/core/` (no network fetch needed; version in `.context_ledger/core/VERSION`, last verified in `../core.lock`)
 - **Package upstream (for flaw back-ports + core updates):** https://github.com/TisoneK/context-ledger.git (renamed from `TisoneK/.context`, 2026-09; now public; a `ledger-sync status` "no reachable source" line means no *local* clone — check this remote before claiming up-to-date; sibling clone on Lameck-Windows at `C:\Users\Lameck\Tisone\.context`)
-- **Since:** 2026-09-14 (core 1.1.1 — Context Ledger rename + office architecture, migrated from 0.17.0 by Session 48; prior history under the `.context/` flat layout; 0.2.0 two-zone since 2026-07-17)
+- **Since:** 2026-09-14 (core 1.1.2 — Context Ledger rename + office architecture arrived at 1.1.1, PATCH to 1.1.2 same day; prior history under the `.context/` flat layout; 0.2.0 two-zone since 2026-07-17)
 - **Default role:** engineer — unless a session says otherwise; see `.context_ledger/core/roles/`
 - **Scope:** discovery + review + fix all safe issues
 - **Target:** general sweep
