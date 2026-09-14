@@ -67,7 +67,7 @@ block (and its "last verified" date) every time you run on it again.
 - **Package manager:** system `apt` (not used this session); `pip` available via system python3
 - **Verified commands (all run from repo root `/home/z/my-project/scrapamoja`):**
   - `git clone https://github.com/TisoneK/scrapamoja.git` — public project repo, no auth needed for clone
-  - `git clone "https://x-access-token:${GIT_TOKEN}@github.com/TisoneK/.context.git" ../.context` — private package repo; PAT required (fine-grained, scoped to both TisoneK repos). Strip token from `.git/config` immediately after: `git -C ../.context remote set-url origin https://github.com/TisoneK/.context.git`
+  - `git clone "https://x-access-token:${GIT_TOKEN}@github.com/TisoneK/.context.git" ../.context` — private package repo; PAT required (fine-grained, scoped to both TisoneK repos). Strip token from `.git/config` immediately after: `git -C ../.context remote set-url origin https://github.com/TisoneK/.context.git` **(stale since the 2026-09 rename: the package is now `TisoneK/context-ledger`, PUBLIC — a tokenless `git clone https://github.com/TisoneK/context-ledger.git` works from any sandbox; the old URL redirects)**
   - `git config user.name "Tisone Kironget" && git config user.email "tisonkironget@gmail.com"` — fresh sandbox has no git identity; set per `user/identity.md`
   - `git push origin main` — requires PAT even though the project repo is public (cloud/sandbox agent has no other creds). Dance: temporarily set remote URL with `x-access-token:${GIT_TOKEN}@`, push, then strip the token back to the plain URL.
   - `curl -s -H "Authorization: Bearer ${GIT_TOKEN}" https://api.github.com/user` — PAT validity check (returns login `TisoneK` for a working token)
@@ -75,7 +75,7 @@ block (and its "last verified" date) every time you run on it again.
 - **Quirks / gotchas:**
   - **No persistent state.** Every session starts from an empty workspace — both repos must be cloned fresh each time. The `.context/` memory lives in git, so nothing is lost, but anything not committed/pushed is gone when the session ends.
   - **PAT is the only credential.** No SSH keys, no `gh` CLI, no credential manager. A fine-grained PAT scoped to `TisoneK/scrapamoja` (Contents: RW) and `TisoneK/.context` (Contents: R) is required for any session that clones the package or pushes to the project. Never write the PAT to any file; pass it as an env var, strip it from `.git/config` after each push, and rotate after the session.
-  - **The package repo `TisoneK/.context` is private.** The original external kickoff file contradicted itself on this (line 27 said private, line 81 said public) — ground truth is private. The in-repo `.context/kickoff.md` (generated session 5) records this correctly.
+  - **The package repo `TisoneK/.context` is private.** The original external kickoff file contradicted itself on this (line 27 said private, line 81 said public) — ground truth is private. The in-repo `.context/kickoff.md` (generated session 5) records this correctly. **(Corrected 2026-09-14: renamed to `TisoneK/context-ledger`, now PUBLIC — verified by a tokenless clone from Lameck-Windows. No PAT is needed for package clones anymore; project pushes still use the user's own credentials or their sandbox token.)**
 
 ---
 ## TisoneK-Windows (last verified 2026-09-06, session 41)
@@ -135,6 +135,7 @@ block (and its "last verified" date) every time you run on it again.
   - `sh .context/core/bin/context-sync verify|status` and `sh .../context-gates checkpoint` — the Git Bash `sh` path works fine here (no `.cmd` launcher needed); verify green on the CRLF checkout (core 0.9.1+ hashing).
   - `git push` / `git pull` — work with the Windows credential manager out of the box (first push from this box: instant).
   - **Session 48 (context sync, 2026-09-14):** `.context/core/bin/context-gates.cmd {checkpoint,run pre-commit}` and `context-mem.cmd check` / `context-history.cmd status` — verified via the `.cmd` launchers (both Windows boxes work with either launcher style; Git Bash `sh` also fine per S47). Pre-commit configured pytest command fails exactly as logged (POSIX `.venv/bin/python`) — manual `.venv/Scripts/python.exe` equivalent is the accepted evidence; `gh` CLI is NOT installed here (no Dependabot-count refresh without auth).
+  - **Package sibling clone (added S48):** `git clone https://github.com/TisoneK/context-ledger.git "C:\Users\Lameck\Tisone\.context"` — tokenless (repo public); lands on the `context-sync status` find-loop's legacy candidate `../.context` and makes upstream drift checking work on this box. On this date it reported **core 1.1.1 available vs local 0.17.0 (MAJOR)**.
 - **Quirks / gotchas:**
   - gates.conf's configured pytest command is the POSIX `.venv/bin/python` path → `context-gates run pre-commit|exit` FAIL 127 on any Windows box (logged trap, re-hit session 47). Run the suite manually as the equivalent; do not edit gates.conf (shared with the Mac).
   - `.baseline`-style redirect files land untracked in the tree — clean them up before exit (Step 19).

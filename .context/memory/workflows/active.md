@@ -6,7 +6,7 @@ user changes the rules; note the change in your session entry.
 
 - **Protocol:** by agent type — local agents → `.context/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox agents → `.context/core/rules/ai-engineering-protocol.md`
 - **Protocol location:** on disk — vendored in `.context/core/` (no network fetch needed; version in `.context/core/VERSION`, last verified in `memory/core.lock`)
-- **Package upstream (for flaw back-ports + core updates):** https://github.com/TisoneK/.context.git
+- **Package upstream (for flaw back-ports + core updates):** https://github.com/TisoneK/context-ledger.git (renamed from `TisoneK/.context`, 2026-09; now public; a `context-sync status` "no reachable source" line means no *local* clone — check this remote before claiming up-to-date)
 - **Since:** 2026-07-17 (migrated to core 0.2.0 two-zone layout; prior history under the 0.1.x flat layout)
 - **Default role:** engineer — unless a session says otherwise; see `.context/core/roles/`
 - **Scope:** discovery + review + fix all safe issues
