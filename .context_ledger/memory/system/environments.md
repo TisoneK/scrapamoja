@@ -18,6 +18,14 @@ block (and its "last verified" date) every time you run on it again.
 4. **Machine facts only.** Secret values go in `secrets/`; user
    preferences in `user/`; project-wide decisions in `plans/`.
 
+> **Migration banner (core 1.1.1, 2026-09-14):** the protocol dir was
+> renamed `.context/` → `.context_ledger/` and every tool
+> `context-*` → `ledger-*`. The "Verified commands" in the per-machine
+> blocks below that still say `.context/core/bin/context-*` are
+> **pre-migration history** — rerun them with the `ledger-*` names
+> before trusting. The `Lameck-Windows` block carries the first
+> post-migration verified set.
+
 ---
 ## Baos-Mac-mini (last verified 2026-08-18, session 40)
 - **Identify by:** hostname `Baos-Mac-mini.local`, `$USER` = `bao`, workspace `/Users/bao/Code/scrapamoja`
@@ -139,3 +147,6 @@ block (and its "last verified" date) every time you run on it again.
 - **Quirks / gotchas:**
   - gates.conf's configured pytest command is the POSIX `.venv/bin/python` path → `context-gates run pre-commit|exit` FAIL 127 on any Windows box (logged trap, re-hit session 47). Run the suite manually as the equivalent; do not edit gates.conf (shared with the Mac).
   - `.baseline`-style redirect files land untracked in the tree — clean them up before exit (Step 19).
+
+**Post-migration (core 1.1.1, 2026-09-14 — this block is the ledger-era reference):**
+- **Verified commands (this box):** `.context_ledger/core/bin/ledger-sync.cmd {verify,status}` · `ledger-mem.cmd check` · `ledger-history.cmd status` · `ledger-gates.cmd {checkpoint,run pre-commit,run exit}` — all green via the `.cmd` launchers from Git Bash. The migration dance itself (`context-sync update -Major` → `ledger-sync migrate` → `ledger-sync rename`) ran here first: old `context-sync` refuses a cross-MAJOR bump without `-Major`, and its self-re-exec error after the swap is documented-expected (MIGRATION.md). `sed`-style path sweeps mangle Windows paths when the replacement contains `\U`/`\L` (GNU sed case directives) — verify any swept line with a diff, and the rename sweep also rewrote historical package names (`TisoneK/.context` → `TisoneK/.context_ledger` — a name that never existed; repaired in kickoff.md).
