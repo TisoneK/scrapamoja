@@ -10,6 +10,25 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 1.1.2 — 2026-09-14
+
+**`ledger-mem prune` reads the closed marker where it lives.** The
+compaction advisor (1.1.0) scanned every line of a log entry for the
+words `RESOLVED` / `superseded` / `fixed in package`, so it flagged the
+seeded template comment (whose placeholder Status line literally reads
+"superseded by ADR-M") and any accepted entry that merely *describes*
+the compaction rule — prose mentioning those words. Acting on the report
+would have moved live, accepted entries into the archive. The marker is
+now scoped to an entry's own `**Status:**` line (plus a `**Fixed in
+package:**` line, the documented correction convention), and `<!-- -->`
+template comments are never segmented at all. The schema's compaction
+bullet states the same scoping, so hand-compaction follows the rule the
+tool reports. No other behavior change.
+
+- **Migration:** none. `ledger-sync update` to 1.1.2.
+
+---
+
 ## 1.1.1 — 2026-09-13
 
 **A comment cleaned by the rule 1.1.0 just enforced.** The one-way-linkage
