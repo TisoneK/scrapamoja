@@ -55,3 +55,12 @@ at session start). Rotate with context-history.
 - **Open items:** upstream backfill per-file existence check (flaws/log.md); Dependabot triage backlogged (now 12 alerts, 3 high — down from 46).
 - **Notes:** none
 - **Report:** .context/memory/reviews/2026-09-08-review-3.md
+---
+## 2026-09-14 — Session 47 (Leo/S445)
+- **Agent:** Leo (S445) | **Model:** qwen3.8-flash | **Platform:** Lameck-Windows (Windows 11, DESKTOP-3LRR8MD) | **Role:** engineer | **Core:** 0.17.0
+- **Task:** operator: "Initialize https://github.com/TisoneK/scrapamoja.git here and sync context" — fresh clone on a NEW machine (`C:\Users\Lameck\Tisone\scrapamoja`), full protocol entry + context sync; mid-session operator directive: stand the venv up on **py 3.11** despite the 3.12 floor.
+- **Commits:** 6 (`41022e2` core.lock re-stamp; `3d2084f` check-in; `2c4f546` report; `546c5ab` system memory; exit commit pending at write time)
+- **Outcome:** done — clone synced to `5ec14bf` (nothing new since Session 46); core 0.17.0 verified intact, no update available/needed; memory read in full + check-in/clock-out per the 0.17.0 rule; 3.11 venv built after two failed install attempts (recipe: `--ignore-requires-python` + `PIP_ONLY_BINARY=:all:`, now in the Lameck-Windows environments block); baseline **253 passed / exit 0** (was 251 — two tests added since, consistent with the post-`f5ee4c0` area); Dependabot now 16 alerts (was 12, per push-time remote notice). Context-only — zero product code touched.
+- **Open items:** none new — Supabase cycle-reset watch (2026-09-27) and backlog unchanged; 3.12+ install on this box would avoid the two-flag dance (operator choice was 3.11).
+- **Notes:** none
+- **Report:** .context/memory/reviews/2026-09-14-review.md
