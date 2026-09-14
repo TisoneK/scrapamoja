@@ -11,7 +11,6 @@ don't remove the line.
 -->
 
 ---
-- [x] **Install Python 3.12+ toolchain on Baos-Mac-mini** (added 2026-07-12 by Claude Code; done 2026-07-12, `bb0e636`) —
       Installed `uv` (user-space) → uv-managed CPython 3.12.13 → `.venv/` → `uv pip
       install --only-binary :all: -e ".[dev]"`. Verified commands in
       `.context_ledger/memory/system/environments.md`. Still TODO: `playwright install` (browsers)
@@ -55,7 +54,6 @@ don't remove the line.
       the selectors in `dom_selectors` don't match the actual rendered cells. All 3/3 working
       skins hit this (linebet, helabet, megapari). Medium-High priority — without markets the
       scraper produces event stubs with no odds.
-- [x] **Investigate paripesa 0 basketball events** (added 2026-07-18 by GitHub Copilot; **resolved 2026-07-19**) —
       Root cause found: skin domain was `paripesa.bet` which redirects to a bonus landing page
       (`bonus.rdrctpar24.lol`), not the actual BetB2B SPA. Fixed by changing domain to
       `paripesa.cool` in skin YAML. H2H endpoint now works (19 games, 12 teams, HTTP 200).
@@ -73,7 +71,6 @@ don't remove the line.
       `@pytest.mark.integration`/`network` and deselect by default, and fix the fixture
       teardown deadlocks. High (blocks any real baseline). Repro:
       `.venv/bin/python -m pytest --no-cov --continue-on-collection-errors --timeout=60 --timeout-method=signal -q`.
-- [x] **`pytest.ini` config is silently ignored (wrong section header)** (added 2026-07-12 by Claude Code; fixed 2026-07-20, `d8f4a55`) —
       `pytest.ini` used `[tool:pytest]` (the setup.cfg-style header) instead of `[pytest]`,
       so pytest did not read it — markers, `addopts`, `testpaths`, `asyncio_mode`,
       `filterwarnings` all silently dropped. Fixed by renaming to `[pytest]`.
@@ -224,7 +221,6 @@ don't remove the line.
       classes and the flat fields. Re-validate the stealth pipeline's tests
       (`tests/stealth/test_proxy_manager.py`). MEDIUM — architectural; do
       deliberately, one caller at a time, with tests green.
-- [x] **Capture linebet HAR through the Kenyan ngrok proxy (Stage 4)** (added 2026-07-17 by Claude Opus 4.8, Session 11; DONE 2026-07-17 Session 11 cont., commit `9878dcf` — captured via `bore` tunnel not ngrok; found the odds feed is SW-mediated/invisible, see RECON.md + the two new follow-ups below) —
       The proxy abstraction is done; the remaining step is the actual capture,
       blocked on the user standing up a `gost` HTTP proxy on their Kenyan Windows
       box exposed via `ngrok tcp`. When they send host:port + basic-auth
@@ -292,7 +288,6 @@ don't remove the line.
       works-today fallback. HIGH — this is the linebet scraper's core unblock.
 
 ---
-- [x] **Reverse-engineer linebet `/LineFeed/` odds via IndexedDB header replay** — **SUPERSEDED / SOLVED 2026-07-18** (Session 11 cont.): the odds feed does NOT need IndexedDB/x-hd headers. It's `GET /service-api/LiveFeed/Get1x2_VZip` (+ siblings), a plain XHR that replays from httpx with base betting headers + cookies + an allowed-country proxy (proven: 200/Success=true, and identical without x-hd). Full details in `src/sites/linebet/RECON.md` "SOLVED" + ADR-3. Replaces the IndexedDB-replay plan below.
 - [ ] **Build the linebet `hybrid` scraper (cookie-harvest → httpx LiveFeed polling)** (added 2026-07-18 by Claude Opus 4.8, Session 11 cont.) —
       Everything needed is now known (RECON.md "SOLVED" + ADR-3). Implement:
         1. Browser bootstrap through an allowed-country proxy (`ProxyManager` +
@@ -313,7 +308,6 @@ don't remove the line.
       whole exercise was for. Extraction mode = `hybrid` per ADR-3.
 
 ---
-- [x] **Generalize the linebet scraper into a `betb2b` family base scraper** — DONE 2026-07-18 Session 12 (`src/sites/betb2b/` shipped: config + markets + sports + extraction + session + httpx client + scraper + CLI + scripts + 8 skin YAMLs + 24 unit tests + README; live validation pending — see `tasks/current.md`). Original entry: (added 2026-07-18 by Claude Opus 4.8, Session 11 cont.) —
       VERIFIED 2026-07-18: linebet is one skin of the BetB2B/1xbet platform, and the
       recon generalizes across the family. Probing `/service-api/LineFeed/Get1x2_VZip`
       through the Kenya proxy returned the IDENTICAL `feed/NotAcceptableException` 406
@@ -378,7 +372,6 @@ don't remove the line.
       against captured HTML but not yet via the integrated CLI this session).
 
 ---
-- [x] **Rework live DOM selectors for in-play state (linebet)** (added 2026-07-21 by Super Z, Session 25 setup; **DONE 2026-07-21 Session 25**, commits `58f9a46`+`26b08d5`) —
       Root cause differed from the handoff: on a fresh live capture (via Kenya
       proxy) the current `dashboard-champ`/`dashboard-game-block__team`
       selectors already extract 10 clean events with numeric IDs — the Session
@@ -413,7 +406,6 @@ don't remove the line.
       prematch-only. See `tasks/current.md` Session 25 Phase 1.
 
 ---
-- [x] **Wire `GetGameZip` market enrichment into DOM-extracted events** (added 2026-07-21 by Super Z, Session 25 setup; **DONE 2026-07-21 Session 25**, commit `99be8ac`) —
       Correction to the handoff: the enrichment was NOT missing — it already
       existed as `scraper._enrich_dom_events_with_odds` (wired into `scrape()`,
       default-on via `skin.enrich_dom_with_odds`). It fetched 0 in Session 24
@@ -453,7 +445,6 @@ don't remove the line.
       `tasks/current.md` Session 25 Phase 2.
 
 ---
-- [x] **Confirm integrated live `scrape` end-to-end through the proxy** (added 2026-07-21 by Claude Code, Session 25; **DONE 2026-07-21** same session — operator restarted the tunnel on port 52147) —
       **Confirmed green:** `python -m src.sites.betb2b.cli scrape --skin linebet
       --sport basketball --action list_live` through the Kenya proxy →
       **10 live events, 10/10 clean team names (0 rejected), 10/10 with live
@@ -478,7 +469,6 @@ don't remove the line.
       Expect ≥1 live event with clean teams + score + ≥1 market. NOTE the
       entry point is `python -m src.sites.betb2b.cli` (NOT `.cli.main` — that
       has no `__main__` guard and silently no-ops). MED.
-- [x] **Map remaining GetGameZip market-group ids to names** — **DONE 2026-08-05 (Session 39)**.
       Solved by fetching the SPA's own `bets_model` template files from
       `traincdn/genfiles/cms/betstemplates/bets_model_short_en_<0..77>.json` and indexing them
       by **`GS` (groupShortId)**, not feed `G` (the 2026-07-28 recon's indexing error). Union =
@@ -574,7 +564,6 @@ don't remove the line.
       re-rendering the DOM every cycle. MED.
 
 ---
-- [x] **DOM extractor under-captures: virtual scroll renders only ~1 screenful** (added 2026-07-21 by Claude Code, Session 25; **RESOLVED 2026-07-21 via HTML harvest, not scroll** — `6150884`) —
       Fix was NOT scroll (measured live: window-scroll doesn't move the SPA's
       virtualized inner list — stayed at 10). Instead, browser-free HTML
       harvest: httpx GET the sport page, extract event ids from the raw HTML
@@ -616,7 +605,6 @@ don't remove the line.
       them to DEFAULT_MARKET_GROUPS. Then the store's `markets` table gets real
       names and the exporter can select each scope's line. MED — blocks non-full
       scopes. FULL_MATCH works today.
-- [x] **Build the scorewise-engine ingest exporter (ADR-7)** — DONE 2026-07-21 (fb4b41d exporter + d94d74f ingest client/CLI + 5bd38cc sub-games; engine Pydantic schema accepts all 9 scopes). Remaining: live POST against the running engine (needs URL+token in secrets/). Original: (added 2026-07-21 by Claude Code, Session 26) —
       `src/sites/betb2b/export/scorewise.py`: `event_to_predict_requests(event)
       -> List[PredictRequest]` (one per available scope) + an httpx ingest client
       that POSTs `{source:"betb2b-scraper", scraped_at, matches:[...]}` to
@@ -679,7 +667,6 @@ don't remove the line.
       Also: **31 of 37 markets on this event are still `G=NNNN`** (player props + uncertain group ids: G=27,91,92,176,228,230,232,234,236,238,920,922,930,934,936,1144,1148,2663,2665,2766,2768,3017-3023,7733,7735,9854,10487-10489). Identify per-group from the raw (line/selection structure) — do NOT guess; several are player-prop / exotic markets not needed by the engine. The engine-critical total family is already mapped (`f321319`). MED.
 
 ---
-- [x] **Run a real scrape with `--subgames --ingest` and record the true per-scope counts** (added 2026-07-22 by Claude Code, Session 28; **done same session**, via the user's bore.pub proxy) — **RESULT: 65 requests from 11 events, all 9 scopes** (11 FULL_MATCH, 7 FIRST_HALF, 5 SECOND_HALF, 6/5/5/5 quarters, 11 HOME_TEAM_TOTAL, 10 AWAY_TEAM_TOTAL); 721 non-FULL_MATCH markets extracted where every prior run had zero. Ingest → HTTP 200, 36 succeeded / 29 failed (the 29 are the requests with no H2H — only 4 of 11 events had any). But only 11 records stored — see ADR-10. Original text follows. —
       The half and quarter scopes have NEVER been exercised end-to-end against live
       data: `_enrich_with_subgames` was gated on a feature flag nothing could turn
       on until `5f6e6db`. Command:
@@ -689,7 +676,6 @@ don't remove the line.
       per-scope count in the Session 27 record is unreproducible (see the
       CORRECTION appended to `plans/decisions.md`). High — it is the first
       unblocked step for ADR-7.
-- [x] **Re-investigate the HOME/AWAY_TEAM_TOTAL storage asymmetry** (added 2026-07-22 by Claude Code, Session 28; **RESOLVED same session**) — Cause found: the engine keys its prediction store by `match_id` alone, so every scope overwrites the last. 11/11 matches stored exactly one record and it was the last scope sent. Session 27's 1-HOME/9-AWAY is that exact signature. Not engine state, not market data, not the exporter. See ADR-10. Original text follows. —
       Session 27 saw 10 HOME_TEAM_TOTAL ingested but 1 stored (vs 9 AWAY) and
       concluded "engine state". The exporter is symmetric and the code side is now
       test-covered (`test_betb2b_export.py`), so if it recurs on a clean run the
@@ -705,7 +691,6 @@ don't remove the line.
       project's `ignore` list (E501, B008, C901) is NOT being applied. That is part
       of why `ruff check src/sites/betb2b/` reports 563 errors. Mechanical fix, but
       re-baseline the count afterwards before anyone treats it as a target. Low.
-- [x] **scorewise-engine: key the prediction store by `(match_id, scope)`, not `match_id`** (added 2026-07-22 by Claude Code, Session 28; **RESOLVED same session**) — The fix (`152bd48`) already existed and was pushed 2h33m before the run that measured the old behaviour; it was not deployed, because the Railway build failed and a failed build leaves the previous deployment serving. Root Directory was the repo root, which has no Python project (the app is at `repos/engine/`). Operator fixed the setting. **Verified end-to-end: 65 requests sent → 65 stored, all 9 scopes, 11 matches carrying 3–9 scopes each.** See the ADR-10 RESOLVED entry. Original text follows. —
       **Different repo — this is the blocker on ADR-7's whole premise.** The scraper
       sends up to 9 scoped predictions per match; the engine keeps only the last one
       written, so 54 of every 65 are discarded on arrival (proven: 11/11 matches
@@ -805,7 +790,6 @@ don't remove the line.
       Low — performance, not correctness.
 
 ---
-- [x] **Feed the empty `statistics` table (ADR-11 verification)** (added 2026-07-25 by Claude Code; **done same day**, `777330b`) —
       The `statistics` table was schema/model/store-INSERT complete but empty in
       every DB across all history: the only stats source was `match_detail.py`'s
       browser-DOM extractor (imported only by `scripts/compare_match.py`, never by
@@ -830,7 +814,6 @@ don't remove the line.
       `country_id` nulls that today only H2H populates. Low-Medium.
 
 ---
-- [x] **Broaden event discovery — per-league GetChampZip** (added 2026-07-26 by Claude Code; **done same day**, `82a3976`) —
       "Why so few games?" investigation. The scraper discovered events only from
       the sport landing-page HTML (~37 noisy 9–10-digit ids → ~12 events). Found
       live that the **per-league** feed `GET /service-api/{Line,Live}Feed/GetChampZip?champ=<id>&top=false`
@@ -856,7 +839,6 @@ don't remove the line.
       "all games", but larger and uncertain.
 
 ---
-- [x] **Remote-control API for the scraper (ADR-12)** (added 2026-07-27 by Claude Code; **done same day**, `3fc3274`) —
       `/api/scraper/*` on the existing Railway FastAPI service: POST /runs (queue a
       scrape), GET /runs[/{id}], skins/sports/counts, odds/{event_id}. x-api-key auth
       (SCRAPER_API_KEY, fail-closed). Scrapes run as single-flight background jobs
@@ -885,7 +867,6 @@ don't remove the line.
       Additive, not a rewrite. LOW until there's a reason.
 
 ---
-- [x] **ADR-13 store cutover: scraper writes to Supabase Postgres (SQLAlchemy)** (added 2026-07-27 by Claude Code; **done same day**, `2712f4b`) —
       DONE: `store.py` dispatches by connection type → `store_orm.py` (SQLAlchemy Core
       over the ORM tables) when `DATABASE_URL` is set; raw-sqlite3 path unchanged.
       Also fixed the URL/driver plumbing (`1762304`: bare postgres:// → +psycopg,
@@ -915,7 +896,6 @@ don't remove the line.
       (`POST /api/scraper/runs`) and watch progress via Realtime. MED (after the cutover).
 
 ---
-- [x] **Build browser-less "direct mode" — proxy-free odds pipeline (ADR-15)** (added 2026-07-27 by Claude Code; **done same day**) —
       DONE: `direct` feature/flag (CLI `--direct`, API env `BETB2B_DIRECT=1`) → discovery via
       `GetSportsZip` (`top=false`, full league list) → `GetChampZip` → `GetGameZip`, no browser/
       cookies/proxy; H2H+stats run cookie-less too. Live-verified proxy-free: 32 leagues / 102
@@ -946,7 +926,6 @@ don't remove the line.
       CLI, a `worker:` Procfile process (env-configurable via `SCHED_*`), and RAILWAY.md setup docs.
       Smoke-verified: worker ran scheduled+live passes (27+31 persisted), SIGTERM → clean exit 0 in 6.6s.
       The remaining step (creating the Railway service in the dashboard) is a one-time manual op.
-- [x] **Parallel/batch fetch + persist batching (h2h/dedup/teams)** (added 2026-07-28 by Claude Code; **DONE 2026-07-28 Session 31/32**) —
       Both halves shipped (ADR-17): (a) FETCH — `6fb782e` — bounded-concurrency `gather` over
       GetGameZip + H2H + stats (semaphore = `BETB2B_CONCURRENCY`, default 8 direct / 1 non-direct,
       clamped [1,32]; client serial spacing disabled when concurrency>1). Live-verified proxy-free:
@@ -960,7 +939,6 @@ don't remove the line.
       disappears from DB output. Add a `market_categories` column (or JSON blob) to the events
       write path in both stores, mirroring how `sub_games` is handled (named-column upserts),
       plus a store test. MEDIUM.
-- [x] **Live-validate the new-builder GetGameZip params — DONE 2026-08-01 Session 37**
       (added 2026-08-01 Session 36) — probed live via `src/sites/betb2b/scripts/probe_newbuilder.py`
       against a real Euroleague game through the operator proxy (KE egress). **Result: flag stays
       OFF** — new-builder yields FEWER markets (22 GE groups vs 27 from flat `E[]`) with exotic
@@ -1037,7 +1015,6 @@ don't remove the line.
       drain — harmless in scheduled-only mode (small), but a future retention pass (ADR-22)
       could clear or reuse it.
 ---
-- [x] **ADR-22 retention pass — SHIPPED 2026-09-08 (Session 44, commit `0398c94`, ADR-25)** — retention is no longer a build item: `store.prune_expired` deletes fact history for events past `BETB2B_PRUNE_DAYS` (7), auto-run by the scheduler's hourly quota pass at the critical level (92% of `BETB2B_DB_LIMIT_MB`), and exposed one-shot via `python -m src.sites.betb2b.cli.main quota` (dry-run default, `--prune` to apply). Remaining from the original item: the **in-process last-odds cache (ADR-23)** for egress when live returns, and the operator's one-time prune of the CURRENT 1.67 GB overage (still restricted; dashboard TRUNCATE or post-reset prune).
 
 ---
 - [ ] **Pre-commit secret scanner in gates.conf** (added 2026-09-08 by Alex (S443), Session 45) —
