@@ -84,3 +84,12 @@ at session start). Rotate with context-history.
 - **Open items:** first product session: run `ledger-mem lint --tree` once and strip any leaks (new 1.1.0 rule); standing: 09-27 Supabase cycle-reset watch, ADR-20 addendum, ADR-23 cache, Dependabot triage (16 alerts), pre-commit secret scanner, history-rewrite decision.
 - **Notes:** none
 - **Report:** .context_ledger/memory/office/reviews/2026-09-14-review-3.md
+---
+## 2026-09-15 — Session 49 (Kai/S447)
+- **Agent:** Kai (S447) | **Model:** qwen3.8-flash | **Platform:** Lameck-Windows (Windows 11, DESKTOP-3LRR8MD) | **Role:** engineer | **Core:** 1.1.3
+- **Task:** operator forwarded Supabase's auto-pause email for `betb2b` and directed: run workers on local machines via **an env-only setting** ("pause all remote workers and use local machines" → "we need a setting to just change the environment in the env").
+- **Commits:** 5 (`7fcd06f` check-in; `52e28b4` core 1.1.3 PATCH; `f1c1514` office compaction; `757b153` throttle-test flake fix; `d4ed1a3` feature + runbook)
+- **Outcome:** done (work) — assessed the pause as the predicted consequence of the 2026-09-08 over-quota restriction (harmless; 90-day unpause; self-heal plan unchanged). Shipped `BETB2B_STORE_MODE` = `auto|local|mirror|remote` (`store.init_db` + `store_fallback.force_active`): `mirror` writes to the local mirror + outbox from the first pass and auto-replays when the primary returns — the pause-window mode. 9 new tests; suite **262 passed / exit 0**; local-mode smoke real-run OK. Fixed an uptime-dependent test flake (`_last_probe_at=0.0` broke on machines booted < ~2.8 h). Door sweeps redone after operator catch: core 1.1.3 applied, resolved Session-41 flaw archived (new `flaws/archive.md`), Session-48 double entry merged; office 9/20, no close due.
+- **Open items:** OPERATOR PENDING — stop the Railway worker service from the dashboard (no CLI on this box), then start the local worker with `BETB2B_STORE_MODE=mirror` (RAILWAY.md recipe); 09-27 Supabase cycle-reset watch unchanged; gates.conf POSIX-venv-path portability noted.
+- **Notes:** none
+- **Report:** .context_ledger/memory/office/reviews/2026-09-15-review.md
