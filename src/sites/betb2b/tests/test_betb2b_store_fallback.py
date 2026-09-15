@@ -10,6 +10,7 @@ quota. No network.
 from __future__ import annotations
 
 import sqlite3
+import time
 from datetime import datetime, timezone
 
 import pytest
@@ -255,7 +256,9 @@ def test_probe_throttle_blocks_hammering(fb_env, monkeypatch):
     calls = []
     monkeypatch.setattr(store_fallback, "_probe_primary_writable",
                         lambda: calls.append(1) or True)
-    store_fallback._state["_last_probe_at"] = 0.0
+    # A stamp long in the past, relative to monotonic() — 0.0 would mean
+    # "recent" on a machine with uptime under the throttle window.
+    store_fallback._state["_last_probe_at"] = time.monotonic() - 1e9
     store_fallback.maybe_probe_and_drain()      # throttle re-armed → probes once
     assert calls == [1]
     store_fallback.maybe_probe_and_drain()      # still inside the throttle window
