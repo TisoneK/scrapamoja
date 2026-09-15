@@ -49,6 +49,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Kai | S447 | qwen3.8-flash | Operator: env-only switch to run workers on local machines while Supabase pauses | Working | Check-in; surveying store/env wiring |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
