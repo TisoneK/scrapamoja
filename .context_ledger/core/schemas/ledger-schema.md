@@ -561,6 +561,6 @@ cannot pick the wrong edition (the kickoff routes by type).
 - **Fallback:** if a session cannot parse or trust the current core
   (failed verify, half-applied update), roll back to the locked
   version — `ledger-sync rollback` restores `core/` from the project's
-  own git history — then log the incident in `memory/flaws/log.md` and
+  own git history — then log the incident in `memory/office/flaws/log.md` and
   continue on the restored version. The session proceeds; the flaw
   flows upstream.

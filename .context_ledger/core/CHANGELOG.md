@@ -10,6 +10,37 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 1.1.3 — 2026-09-14
+
+**Harvest reaches office-era projects, and the core's own path pointers
+catch up to 1.0.0.** Three stale references from before the office
+architecture shipped, all confirmed against the layout:
+
+- `ledger-sync harvest` (package-mode, the flaw back-port collector) read
+  each project's `memory/flaws/log.md` and
+  `memory/inefficiencies/log.md` — the **pre-office** locations. Since
+  1.0.0 those logs live under `memory/office/`, and the during-sync
+  migration moves the old flat trees there, so harvest collected
+  *nothing* from every migrated project: fleet flaws marked `open` and
+  `Upstream: candidate` entries silently stopped reaching the package.
+  Harvest now reads the office paths first, falling back to the flat
+  layout for a project still mid-migration (`overrides/rules.md` stays at
+  the memory root in both). Package regression added (`tests/run-tests.sh`
+  35 → 36): a scratch package + sibling project harvests one entry from
+  each office log.
+- The integrity-failure and rollback advisories in both `ledger-sync`
+  ports, and the schema's rollback fallback, pointed a session at
+  `memory/flaws/log.md` — the same stale path in operator-facing text;
+  corrected to `memory/office/flaws/log.md`.
+- The `workflows/active.md` template's Deliverable example cited
+  `memory/reviews/`; corrected to `memory/office/reviews/`.
+
+No other behavior change.
+
+- **Migration:** none. `ledger-sync update` to 1.1.3.
+
+---
+
 ## 1.1.2 — 2026-09-14
 
 **`ledger-mem prune` reads the closed marker where it lives.** The
