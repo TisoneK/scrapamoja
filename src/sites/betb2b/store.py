@@ -39,6 +39,41 @@ def _is_orm(conn: Any) -> bool:
     return conn is not None and not isinstance(conn, sqlite3.Connection)
 
 
+# --------------------------------------------------------------------------- #
+# Store mode — the env-only environment switch
+# --------------------------------------------------------------------------- #
+STORE_MODE_ENV = "BETB2B_STORE_MODE"
+_STORE_MODES = ("auto", "local", "mirror", "remote")
+
+
+def store_mode() -> str:
+    """Where the store's writes should land, from ``BETB2B_STORE_MODE``:
+
+    * ``auto`` (unset/empty — the default): the historical behaviour —
+      ``DATABASE_URL`` decides (set → hosted Postgres with the local fallback;
+      unset → plain local SQLite).
+    * ``local``: run purely on this machine. ``DATABASE_URL`` is ignored and
+      never probed; the store is the local SQLite file (``BETB2B_DB_PATH``,
+      default ``data/betb2b/odds.db``). Nothing syncs back to the hosted
+      store automatically.
+    * ``mirror``: the hosted primary is known-unavailable (e.g. paused or
+      over-quota). Every write goes to the local fallback mirror + replay
+      outbox IMMEDIATELY — no doomed connect attempt first. When the primary
+      becomes reachable again (probed after fallback writes), the outbox
+      drains into it. Requires ``DATABASE_URL`` (the replay target).
+    * ``remote``: strict hosted mode — fail fast if ``DATABASE_URL`` is
+      missing instead of silently scraping into a local file nobody will
+      sync. Fallback stays armed for transient primary failures.
+
+    An unrecognised value raises — a typo'd switch must not silently pick a
+    data destination."""
+    raw = (os.environ.get(STORE_MODE_ENV) or "auto").strip().lower()
+    if raw not in _STORE_MODES:
+        raise ValueError(
+            f"{STORE_MODE_ENV}={raw!r} is not one of {_STORE_MODES}")
+    return raw
+
+
 def _fallback_after_write(kind: str, payload: Dict[str, Any]) -> None:
     """Post-write hook (store_fallback): queue the write for replay while in
     fallback mode, and run the recovery cycle. Never raises — the write already
@@ -334,22 +369,37 @@ def init_db(path: PathLike | None = None):
     """Open the store + ensure the schema. Returns a sqlite3 connection, OR a
     SQLAlchemy connection when ``DATABASE_URL`` is set (deployed: Supabase).
 
+    ``BETB2B_STORE_MODE`` overrides the choice (see :func:`store_mode`):
+    ``local`` forces the local SQLite file, ``mirror`` goes to the fallback
+    mirror + outbox from the first write, ``remote`` requires ``DATABASE_URL``.
+
     If the remote store can't be reached (connection-class failure), fallback
     mode hands back the local mirror instead — writes then continue locally and
     replay later (store_fallback)."""
-    if os.environ.get("DATABASE_URL"):
-        from . import store_fallback, store_orm
-        if store_fallback.active():
-            # Fallback mode: the store IS local until a probe proves the
-            # primary writable again (no doomed write attempts per pass).
+    mode = store_mode()  # raises on an unrecognised value
+    if mode == "local":
+        return _connect_sqlite(path)
+    if mode == "mirror":
+        from . import store_fallback
+        store_fallback.force_active(STORE_MODE_ENV, path)
+        return store_fallback.mirror_connect(path)
+    if not os.environ.get("DATABASE_URL"):
+        if mode == "remote":
+            raise RuntimeError(
+                f"{STORE_MODE_ENV}=remote requires DATABASE_URL (the hosted store) — "
+                "unset, so this process would write to a local file nobody replays")
+        return _connect_sqlite(path)
+    from . import store_fallback, store_orm
+    if store_fallback.active():
+        # Fallback mode: the store IS local until a probe proves the
+        # primary writable again (no doomed write attempts per pass).
+        return store_fallback.mirror_connect(path)
+    try:
+        return store_orm.connect()
+    except Exception as exc:  # noqa: BLE001
+        if store_fallback.recover_connect_failure(exc, path):
             return store_fallback.mirror_connect(path)
-        try:
-            return store_orm.connect()
-        except Exception as exc:  # noqa: BLE001
-            if store_fallback.recover_connect_failure(exc, path):
-                return store_fallback.mirror_connect(path)
-            raise
-    return _connect_sqlite(path)
+        raise
 
 
 # Additive columns introduced after the initial schema. `CREATE TABLE IF NOT

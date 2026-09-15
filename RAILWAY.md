@@ -231,6 +231,43 @@ re-runs harmlessly. **Rate discipline (ADR-17):** the datacenter IP is unproven 
 volume — keep the live cadence ≥ ~10–15s and concurrency ~8 to start; watch for
 `429/403/203`; the proxy path (set `BETB2B_PROXY_URL` + `--no-direct`) is the fallback.
 
+### Running on a local machine — `BETB2B_STORE_MODE` (env-only switch)
+
+One environment variable decides whether the same command talks to the hosted
+store or this machine. Useful when the hosted project is paused or restricted
+and you want to keep scraping in the meantime (stop the Railway worker first —
+two writers, one bus).
+
+| Value | Behaviour |
+|---|---|
+| *(unset / `auto`)* | Historical: `DATABASE_URL` set → hosted (fallback arms itself on failure); unset → local SQLite. |
+| `local` | Pure local: `DATABASE_URL` is ignored and never contacted; the store is `BETB2B_DB_PATH` (`data/betb2b/odds.db`). Nothing syncs back automatically. |
+| `mirror` | Hosted primary known-down: writes go to the local mirror **and** the replay outbox immediately — no doomed connect attempts — and the existing probe/drain cycle replays everything into Supabase once it is reachable again. Requires `DATABASE_URL` (the replay target). |
+| `remote` | Strict hosted: fails fast if `DATABASE_URL` is missing (guards a deploy against silently writing to a local file). Fallback still covers transient failures. |
+
+The pause-window recipe (PowerShell, repo root, venv active — `DATABASE_URL` is
+the Supabase pooler URL, the same value the worker uses):
+
+```powershell
+$env:BETB2B_STORE_MODE = "mirror"
+$env:DATABASE_URL      = "<pooler URL>"
+python -m src.sites.betb2b.cli schedule linebet --sport basketball `
+  --scheduled-interval 10800 --results-interval 600
+```
+
+Notes:
+
+- The mirror + outbox live in one SQLite file on this machine, so data captured
+  before a restart is **replayed by the first successful probe after the next
+  start** — keep the worker running across the recovery, or simply run it once
+  more in `mirror` mode when Supabase is back and watch the log for
+  `primary store recovered — replaying N queued write(s)`; only then unset the
+  mode.
+- For a multi-day pause, raise `BETB2B_FALLBACK_OUTBOX_MAX` (default 5000 —
+  past the cap the **oldest** queued writes are dropped).
+- While only the local mirror has the data, the engine and website (reading
+  Supabase directly) see nothing new — same as during any fallback window.
+
 ### Do NOT run it inside the web service
 Single-flight is **per-process** — the scheduler and a manual API job can both run at once
 against the same Supabase. That's harmless thanks to change-only dedup, but don't do it

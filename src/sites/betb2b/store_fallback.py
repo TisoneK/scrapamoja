@@ -211,6 +211,37 @@ def active() -> bool:
     return bool(_state["active"])
 
 
+def force_active(reason: str = "manual", explicit: Any = None) -> bool:
+    """Switch into fallback mode WITHOUT waiting for a write to fail — the
+    ``BETB2B_STORE_MODE=mirror`` entry point: the primary is known to be down
+    (paused / over-quota), so route straight to mirror + outbox. Raises when
+    the setup can't honour that contract (no ``DATABASE_URL`` to replay into,
+    or ``BETB2B_FALLBACK=0``) — a mis-set switch must not silently pick a
+    different data path."""
+    if not os.environ.get("DATABASE_URL"):
+        raise RuntimeError(
+            "fallback mode needs DATABASE_URL (the primary to replay the "
+            "outbox into) — set it, or use BETB2B_STORE_MODE=local instead")
+    if not enabled():
+        raise RuntimeError(
+            f"{ENABLE_ENV}=0 disables the fallback store — unset it to use "
+            "BETB2B_STORE_MODE=mirror")
+    if _state["active"]:
+        return True
+    _resolve_mirror_path(explicit)
+    with _lock:
+        if _state["active"]:
+            return True
+        _state.update(active=True, reason=f"forced: {reason}",
+                      since=datetime.now(timezone.utc).isoformat())
+    logger.warning(
+        "fallback mode activated by configuration (%s): the primary store is "
+        "assumed unavailable — writes go to the local mirror at %s and queue "
+        "for replay; recovery is probed after each fallback write",
+        reason, _mirror_path)
+    return True
+
+
 def _activate(reason: str, exc: BaseException) -> None:
     detail = f"{type(exc).__name__}: {exc}"
     with _lock:
