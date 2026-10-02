@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from .environment_detector import detect_environment, Environment
 from .config_schemas import ConfigSchema, get_schema, validate_config_by_schema
 from .config_cache import ConfigCache
+from .config_io import unwrap_export
 
 
 @dataclass
@@ -102,8 +103,17 @@ class ConfigLoader:
                         environment=environment
                     )
             
+            # An explicitly requested file must exist; and it is never answered from the
+            # per-environment cache (that holds a different source's configuration).
+            if config_path and not Path(config_path).exists():
+                return ConfigLoadResult(
+                    success=False,
+                    errors=[f"Configuration file not found: {config_path}"],
+                    environment=environment
+                )
+            
             # Check cache first
-            if use_cache:
+            if use_cache and not config_path:
                 cached_config = self.cache.get(environment)
                 if cached_config:
                     return ConfigLoadResult(
@@ -211,9 +221,9 @@ class ConfigLoader:
             
             with open(file_path, 'r', encoding='utf-8') as f:
                 if file_path.suffix.lower() == '.json':
-                    return json.load(f)
+                    return unwrap_export(json.load(f))
                 elif file_path.suffix.lower() in ['.yaml', '.yml']:
-                    return yaml.safe_load(f) or {}
+                    return unwrap_export(yaml.safe_load(f) or {})
                 else:
                     # Try to parse as JSON first, then YAML
                     content = f.read()
@@ -328,6 +338,9 @@ class ConfigLoader:
                         warnings=validation_result['warnings'],
                         source="dict"
                     )
+            
+            # Cache it, so get_config_value()/set_config_value() see what was loaded
+            self.cache.set(environment, config)
             
             # Calculate load time
             end_time = datetime.utcnow()

@@ -39,7 +39,7 @@ from src.sites.base.config_cache import (
     ConfigCache, CacheStrategy, get as cache_get, set as cache_set
 )
 from src.sites.base.config_io import (
-    ConfigIO, ExportOptions, ImportOptions, export_config, import_config
+    ConfigIO, ConfigFormat, ExportOptions, ImportOptions, export_config, import_config
 )
 from src.sites.base.config_migration import (
     ConfigMigration, MigrationStep, migrate_config, get_migration_plan
@@ -151,13 +151,14 @@ class TestEnvironmentDetector(ConfigTestBase):
     def test_detect_environment(self):
         """Test environment detection."""
         environment = detect_environment()
-        assert environment in [env.value for env in Environment]
+        assert environment in list(Environment)
     
     @patch.dict('os.environ', {'SCRAPER_ENV': 'production'})
     def test_environment_override(self):
         """Test environment override via environment variable."""
-        environment = detect_environment()
-        assert environment == 'production'
+        # a fresh detector: the module-level one caches its first answer
+        environment = EnvironmentDetector().detect_environment(force_redetect=True)
+        assert environment == Environment.PRODUCTION
     
     def test_environment_checkers(self):
         """Test environment checker functions."""
@@ -555,7 +556,7 @@ class TestConfigIO(ConfigTestBase):
         result = io.import_config(config_file, options)
         
         assert result.success is True
-        assert 'configs' in result.imported_configs
+        assert result.imported_configs['site_id'] == sample_config['site_id']
     
     def test_convenience_functions(self, temp_dir, sample_config):
         """Test convenience functions."""

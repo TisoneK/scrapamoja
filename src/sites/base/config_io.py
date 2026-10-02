@@ -100,6 +100,18 @@ class ExportResult:
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
+def unwrap_export(data: Any) -> Any:
+    """The configuration inside an export envelope; anything else is returned unchanged.
+
+    ``ConfigIO.export_config`` writes ``{"exported_at", "format", "mode", "configs", "metadata"}``;
+    importing or loading that file must give back the configuration that was exported.
+    """
+    if isinstance(data, dict) and isinstance(data.get("configs"), dict) \
+            and {"exported_at", "format"} <= data.keys():
+        return data["configs"]
+    return data
+
+
 class ConfigIO:
     """Configuration I/O manager."""
     
@@ -229,7 +241,7 @@ class ConfigIO:
             if not handler:
                 raise ValueError(f"Unsupported format: {options.format}")
             
-            config = self._read_config(input_path, options.format)
+            config = unwrap_export(self._read_config(input_path, options.format))
             
             # Validate if requested
             validation_results = {}

@@ -62,6 +62,11 @@ class ValidationResult:
     validation_time_ms: float = 0.0
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
+    @property
+    def success(self) -> bool:
+        """Alias of ``valid`` -- the load/merge/migrate results call it ``success``."""
+        return self.valid
+
 
 class ConfigValidator:
     """Configuration validation engine."""
@@ -145,12 +150,20 @@ class ConfigValidator:
                     result.valid = result.valid and schema_result['valid']
             
             # Validate each field with custom rules
-            for field_name, field_value in config.items():
-                field_result = self._validate_field(field_name, field_value, schema)
+            # A missing field is only checked by its "required" rules; the other rules
+            # (type, range, pattern...) describe a value that is not there.
+            absent = [name for name, rules in self._custom_rules.items()
+                      if name not in config and any(r.name.startswith("required_") for r in rules)]
+            fields = list(config.items()) + [(name, None) for name in absent]
+            for field_name, field_value in fields:
+                field_result = self._validate_field(field_name, field_value, schema,
+                                                    only_required=field_name in absent)
                 result.field_results[field_name] = field_result
                 
                 # Collect field-level results
                 for validation in field_result.get('validations', []):
+                    if validation.get('valid', False):
+                        continue                      # the rule passed -- nothing to report
                     if validation['severity'] == ValidationSeverity.ERROR.value:
                         result.errors.append(validation)
                         result.valid = False
@@ -163,6 +176,8 @@ class ConfigValidator:
             for rule in self._global_rules:
                 try:
                     rule_result = rule.validate(config)
+                    if rule_result.get('valid', False):
+                        continue                      # the rule passed -- nothing to report
                     if rule_result['severity'] == ValidationSeverity.ERROR.value:
                         result.errors.append(rule_result)
                         result.valid = False
@@ -204,7 +219,8 @@ class ConfigValidator:
             )
     
     def _validate_field(self, field_name: str, field_value: Any, 
-                        schema: Optional[ConfigSchema] = None) -> Dict[str, Any]:
+                        schema: Optional[ConfigSchema] = None,
+                        only_required: bool = False) -> Dict[str, Any]:
         """Validate a specific field."""
         field_result = {
             'field_name': field_name,
@@ -239,11 +255,14 @@ class ConfigValidator:
         # Apply custom rules for this field
         if field_name in self._custom_rules:
             for rule in self._custom_rules[field_name]:
+                if only_required and not rule.name.startswith("required_"):
+                    continue
                 try:
                     rule_result = rule.validate(field_value)
                     field_result['validations'].append(rule_result)
                     
-                    if rule_result['severity'] == ValidationSeverity.ERROR.value:
+                    if not rule_result.get('valid', False) \
+                            and rule_result['severity'] == ValidationSeverity.ERROR.value:
                         field_result['valid'] = False
                 except Exception as e:
                     field_result['validations'].append({

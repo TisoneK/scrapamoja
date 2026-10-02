@@ -228,9 +228,9 @@ class ConfigMigration:
             # Validate result if requested
             if self._validate_after_migration and not failed_steps:
                 validation_result = validate_config(current_config)
-                if not validation_result['valid']:
-                    errors.extend(validation_result['errors'])
-                    warnings.extend(validation_result['warnings'])
+                if not validation_result.valid:
+                    errors.extend(e.get('message', str(e)) for e in validation_result.errors)
+                    warnings.extend(w.get('message', str(w)) for w in validation_result.warnings)
             
             # Calculate migration time
             end_time = datetime.utcnow()
@@ -367,25 +367,22 @@ class ConfigMigration:
     
     def _get_migration_path(self, from_version: str, to_version: str) -> List[MigrationStep]:
         """Get migration path from one version to another."""
-        # This is a simplified implementation
-        # In a real scenario, this would use semantic version comparison
-        # and dependency resolution
-        
-        all_versions = sorted(self._migrations.keys())
-        
-        try:
-            from_index = all_versions.index(from_version)
-            to_index = all_versions.index(to_version)
-        except ValueError:
-            raise ValueError(f"Version not found: {from_version} or {to_version}")
-        
-        if from_index < to_index:
-            # Forward migration
-            path_versions = all_versions[from_index + 1:to_index + 1]
+        # A step is registered under the version it migrates TO, so the baseline version
+        # (1.0.0) has no step of its own: moving a -> b applies every step with a < v <= b
+        # (rolling back, b < v <= a, newest first).
+        def key(version: str):
+            try:
+                return tuple(int(part) for part in version.split("."))
+            except ValueError:
+                raise ValueError(f"Invalid version: {version}")
+
+        start, end = key(from_version), key(to_version)
+        versions = sorted(self._migrations, key=key)
+        if start <= end:
+            path_versions = [v for v in versions if start < key(v) <= end]
         else:
-            # Rollback migration
-            path_versions = all_versions[to_index:from_index]
-        
+            path_versions = [v for v in reversed(versions) if end < key(v) <= start]
+
         return [self._migrations[version] for version in path_versions]
     
     def _validate_dependencies(self, migration_path: List[MigrationStep]) -> bool:

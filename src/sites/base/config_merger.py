@@ -30,6 +30,8 @@ class MergeResult:
     merged_config: Dict[str, Any] = field(default_factory=dict)
     conflicts: List[Dict[str, Any]] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
+    environment: str = ""
     merge_strategy: str = ""
     merge_time_ms: float = 0.0
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
@@ -151,7 +153,7 @@ class ConfigMerger:
                             )
                 
                 # Merge configuration
-                merged_config = self._merge_two_configs(
+                merged_config = self.merge_two_configs(
                     merged_config, 
                     override_config, 
                     strategy
@@ -198,6 +200,12 @@ class ConfigMerger:
                 merge_time_ms=merge_time_ms
             )
     
+    def _update_performance_stats(self, result: MergeResult) -> None:
+        stats = self._performance_stats
+        stats['total_merges'] += 1
+        stats['total_time_ms'] += result.merge_time_ms
+        stats['average_time_ms'] = stats['total_time_ms'] / stats['total_merges']
+
     def merge_two_configs(self, base_config: Dict[str, Any], 
                         override_config: Dict[str, Any],
                         strategy: Union[MergeStrategy, str]) -> Dict[str, Any]:
@@ -445,7 +453,7 @@ class ConfigMerger:
         
         # Merge remaining configs
         for i in range(1, len(configs)):
-            merged_config = self._merge_two_configs(merged_config, configs[i], strategy)
+            merged_config = self.merge_two_configs(merged_config, configs[i], strategy)
         
         # Resolve conflicts
         if plan['conflicts']:
@@ -524,7 +532,7 @@ class ConfigMerger:
             if isinstance(merge_strategy, str):
                 strategy = MergeStrategy(merge_strategy.lower())
             
-            return self._merge_two_configs({field_name: base_value}, {field_name: override_value}, strategy)
+            return self.merge_two_configs({field_name: base_value}, {field_name: override_value}, strategy)
         
         return field_merger
     
@@ -584,7 +592,7 @@ class ConfigMerger:
             if isinstance(merge_strategy, str):
                 strategy = MergeStrategy(merge_strategy.lower())
             
-            return self._merge_two_configs(base_value, override_value, strategy)
+            return self.merge_two_configs(base_value, override_value, strategy)
         
         return dict_merger
     
