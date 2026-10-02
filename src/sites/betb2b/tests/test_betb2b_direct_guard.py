@@ -94,3 +94,43 @@ def test_guard_check_raises_on_a_challenge_page(tmp_path):
     ok = httpx.Response(200, json={"Success": True, "Value": []},
                         request=httpx.Request("GET", "https://x/y"))
     s._guard_check(ok)                        # a normal JSON answer passes untouched
+
+
+def test_probe_reports_zero_cookies_as_not_harvested(monkeypatch, tmp_path, capsys):
+    """`probe` used to hard-code session_harvested=true even with 0 cookies."""
+    import argparse
+    from types import SimpleNamespace
+    import src.sites.betb2b as pkg
+    from src.sites.betb2b.cli.main import BetB2BCLI
+
+    guard = SecurityGuard("linebet", rules=BETB2B_RULES, interactive=False,
+                          ledger=BlockLedger(tmp_path / "l.json"))
+
+    class FakeScraper:
+        def __init__(self, skin, **kw):
+            self.session_manager = SimpleNamespace(
+                guard=guard, session_age=None,
+                get_session=self._session)
+            self.sport_scraper = SimpleNamespace(slug="basketball", sport_id=3)
+            self.sport_ctx = SimpleNamespace(bootstrap_path="/en/line/basketball")
+
+        async def _session(self):
+            return SimpleNamespace(cookies=[], user_agent="UA")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def get_info(self):
+            return {"proxy_endpoint": None}
+
+    monkeypatch.setattr(pkg, "BetB2BScraper", FakeScraper)
+    out = tmp_path / "probe.json"
+    args = argparse.Namespace(skin="linebet", sport="basketball", settle=0.0, output=str(out))
+    asyncio.run(BetB2BCLI()._cmd_probe(args))
+    import json
+    res = json.loads(out.read_text())
+    assert res["cookie_count"] == 0 and res["session_harvested"] is False
+    assert res["security"]["site"] == "linebet" and res["security"]["cooldown_seconds_left"] == 0

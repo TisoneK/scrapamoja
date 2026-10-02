@@ -212,6 +212,18 @@ async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
     print(f"  [{skin_name}] stat ids backfilled: {len(found)}/{len(ids)}", file=sys.stderr)
 
 
+def _guard_state(guard) -> dict:
+    """What the security guard currently knows about this skin (for `probe`)."""
+    try:
+        left, last = guard.ledger.cooldown_left(guard.site)
+        st = guard.ledger.state(guard.site)
+        return {"site": guard.site, "cooldown_seconds_left": round(left),
+                "last_block": last.value if last else st.last_type,
+                "consecutive_blocks": st.consecutive_blocks, "browser_tier": st.browser_tier}
+    except Exception:  # noqa: BLE001 — diagnostics must never fail the probe
+        return {}
+
+
 async def _update_results(scraper, db_target: str, skin_name: str) -> None:
     """Score updates for stored matches that should have finished: fetch their
     final result (statisticfeed ``v1/Game``) and record it. Best-effort — the
@@ -972,8 +984,11 @@ class BetB2BCLI:
                     "domain": skin.domain,
                     "sport": scraper.sport_scraper.slug or "all",
                     "sport_id": scraper.sport_scraper.sport_id,
-                    "session_harvested": True,
+                    # Only "harvested" if cookies actually came back: a challenged or
+                    # empty bootstrap used to be reported as a success with 0 cookies.
+                    "session_harvested": len(session.cookies) > 0,
                     "cookie_count": len(session.cookies),
+                    "security": _guard_state(scraper.session_manager.guard),
                     "session_age_seconds": (
                         scraper.session_manager.session_age.total_seconds()
                         if scraper.session_manager.session_age else None
@@ -993,6 +1008,9 @@ class BetB2BCLI:
                 "session_harvested": False,
                 "error": str(exc),
             }
+            guard = getattr(locals().get("scraper"), "session_manager", None)
+            if guard is not None:
+                probe_result["security"] = _guard_state(guard.guard)
             print(json.dumps(probe_result, indent=2), file=sys.stderr)
             return 1
 
