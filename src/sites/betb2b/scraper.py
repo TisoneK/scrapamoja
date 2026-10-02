@@ -765,6 +765,8 @@ class BetB2BScraper:
         sem = asyncio.Semaphore(self.concurrency)
         done = 0
 
+        sub_game_ids: set = set()
+
         async def _one(eid: str) -> Optional[List[Event]]:
             nonlocal done
             out: Optional[List[Event]] = None
@@ -772,6 +774,11 @@ class BetB2BScraper:
                 try:
                     gcap = await self.feed_client.fetch_game(eid, root=root)
                     if not self._capture_failed(gcap):
+                        _v = (getattr(gcap, "decoded", None) or {}).get("Value")
+                        if isinstance(_v, dict):
+                            for _sg in _v.get("SG") or []:
+                                if isinstance(_sg, dict) and _sg.get("I"):
+                                    sub_game_ids.add(str(_sg["I"]))
                         game_events = self.extraction_rules.extract_from_captured(gcap)
                         for ge in game_events:
                             await self._enrich_with_subgames(ge, gcap, root=root)
@@ -810,7 +817,15 @@ class BetB2BScraper:
             logger.warning("skin=%s fetch_events: %d/%d ids FAILED after %d retries "
                            "(timeouts/blocks) — not 'no data'", self.skin.name,
                            len(pending), total, self.retries)
-        return [ev for eid in ids for ev in results.get(eid, [])]
+        # A sub-game (quarter/half/special) that the champ list also lists as a
+        # "game" is NOT a match: its parent's SG[] names it, and it is already
+        # folded into the parent as scoped markets. Don't store it as an event.
+        out = [ev for eid in ids for ev in results.get(eid, [])]
+        kept = [ev for ev in out if str(ev.event_id) not in sub_game_ids]
+        if len(kept) != len(out):
+            logger.info("skin=%s dropped %d sub-game listings stored as events",
+                        self.skin.name, len(out) - len(kept))
+        return kept
 
     async def _discover_events_direct(self, *, is_live: bool) -> List[Event]:
         """Full direct pass = discover all ids, then fetch them all (used by the

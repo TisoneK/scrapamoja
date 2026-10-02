@@ -50,6 +50,7 @@ _ADDED_COLUMNS_PG = [
     ("events", "winner", "INTEGER"),
     ("events", "result_status", "INTEGER"),
     ("events", "result_captured_at", "TIMESTAMPTZ"),
+    ("events", "superseded_by", "TEXT"),
 ]
 
 

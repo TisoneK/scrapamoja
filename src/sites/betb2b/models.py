@@ -135,6 +135,9 @@ class Event(Base):
     winner: Mapped[Optional[int]] = mapped_column(Integer)             # entity.winner (1/2/0)
     result_status: Mapped[Optional[int]] = mapped_column(Integer)      # entity.status (3=finished)
     result_captured_at: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
+    # The bookmaker RE-LISTS a match under a new id (old id then returns nothing).
+    # Same teams + start + league, older id → superseded_by = the newest id.
+    superseded_by: Mapped[Optional[str]] = mapped_column(Text)
     __table_args__ = (
         Index("ix_events_league", "league_id"),
         Index("ix_events_sport", "sport_id"),

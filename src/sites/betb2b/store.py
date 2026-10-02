@@ -114,6 +114,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "init_db",
+    "mark_superseded",
     "is_read_only_error",
     "persist_result",
     "latest_odds",
@@ -181,7 +182,8 @@ CREATE TABLE IF NOT EXISTS events (
     final_score_away   INTEGER,             -- entity.score2
     winner             INTEGER,             -- entity.winner (1=home/2=away/0=none)
     result_status      INTEGER,             -- entity.status (3=finished)
-    result_captured_at TEXT
+    result_captured_at TEXT,
+    superseded_by      TEXT                 -- re-listed under a newer id (same teams+start+league)
 );
 
 CREATE TABLE IF NOT EXISTS markets (
@@ -420,6 +422,7 @@ _ADDED_COLUMNS = [
     ("events", "winner", "INTEGER"),
     ("events", "result_status", "INTEGER"),
     ("events", "result_captured_at", "TEXT"),
+    ("events", "superseded_by", "TEXT"),
 ]
 
 
@@ -574,6 +577,37 @@ def _last_periods(conn, event_id: str, skin: str) -> Dict[Any, tuple]:
 # --------------------------------------------------------------------------- #
 # Persist
 # --------------------------------------------------------------------------- #
+_SUPERSEDE_SQL = """
+UPDATE events SET superseded_by = (
+    SELECT MAX(e2.event_id) FROM events e2
+    WHERE e2.home_name = events.home_name AND e2.away_name = events.away_name
+      AND e2.start_time = events.start_time
+      AND COALESCE(e2.league_id, -1) = COALESCE(events.league_id, -1)
+      AND e2.event_id > events.event_id)
+WHERE superseded_by IS NULL AND EXISTS (
+    SELECT 1 FROM events e2
+    WHERE e2.home_name = events.home_name AND e2.away_name = events.away_name
+      AND e2.start_time = events.start_time
+      AND COALESCE(e2.league_id, -1) = COALESCE(events.league_id, -1)
+      AND e2.event_id > events.event_id)
+"""
+
+
+def mark_superseded(conn) -> int:
+    """Link RE-LISTED matches. The bookmaker re-lists a game under a new (higher)
+    id; the old id then returns no data. Same teams + start time + league and an
+    older id => ``superseded_by`` = the newest id. Non-destructive (rows are kept,
+    only linked); idempotent. Returns the number of rows newly linked."""
+    if _is_orm(conn):
+        from sqlalchemy import text as _t
+        n = conn.execute(_t(_SUPERSEDE_SQL)).rowcount
+        conn.commit()
+        return int(n or 0)
+    n = conn.execute(_SUPERSEDE_SQL).rowcount
+    conn.commit()
+    return int(n or 0)
+
+
 def persist_result(
     result: Dict[str, Any], path: PathLike | None = None, *,
     conn: Optional[Any] = None,
@@ -590,6 +624,10 @@ def persist_result(
         from . import store_fallback, store_orm
         try:
             run_id = store_orm.persist_result(conn, result)
+            try:
+                mark_superseded(conn)
+            except Exception:  # noqa: BLE001 — linking is advisory; never fail a persist
+                logger.exception("mark_superseded failed")
         except Exception as exc:  # noqa: BLE001
             mirror = store_fallback.recover_write_failure("persist", exc, result, path)
             if mirror is not None:
@@ -780,6 +818,10 @@ def persist_result(
                             (run_id, event_id, skin, str(k), str(v), at),
                         )
         conn.commit()
+        try:
+            mark_superseded(conn)
+        except Exception:  # noqa: BLE001 — linking is advisory; never fail a persist
+            logger.exception("mark_superseded failed")
         logger.info(
             "persist run %d (skin=%s): %d odds changes stored, %d unchanged skipped",
             run_id, skin, odds_ins, odds_skip,
