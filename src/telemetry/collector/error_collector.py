@@ -16,6 +16,7 @@ from ..models import ErrorData
 from ..configuration.telemetry_config import TelemetryConfiguration
 from ..exceptions import TelemetryCollectionError
 from ..configuration.logging import get_logger
+from statistics import mean
 
 
 @dataclass

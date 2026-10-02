@@ -21,7 +21,7 @@ from ..models.selector_models import (
 )
 from ..processor.metrics_processor import MetricsProcessor, ProcessedMetric
 from ..processor.aggregator import Aggregator, AggregatedMetric
-from ..report_generator import ReportGenerator, ReportType, ReportFormat, ReportSection
+from .report_generator import ReportGenerator, ReportType, ReportFormat, ReportSection
 
 
 class TrendDirection(Enum):

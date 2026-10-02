@@ -23,7 +23,7 @@ from ..processor.metrics_processor import MetricsProcessor, ProcessedMetric
 from ..processor.aggregator import Aggregator, AggregatedMetric
 from ..collector.strategy_collector import StrategyCollector, StrategyMetrics
 from ..collector.context_collector import ContextCollector, ContextData
-from ..report_generator import ReportGenerator, ReportType, ReportFormat, ReportSection
+from .report_generator import ReportGenerator, ReportType, ReportFormat, ReportSection
 
 
 class UsageMetricType(Enum):

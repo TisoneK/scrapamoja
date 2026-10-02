@@ -6,6 +6,7 @@ including initialization, startup, shutdown, and health monitoring.
 """
 
 import asyncio
+from contextlib import asynccontextmanager
 import logging
 from datetime import datetime, timezone
 from enum import Enum
@@ -14,16 +15,16 @@ from dataclasses import dataclass, field
 import signal
 import weakref
 
-from ..interfaces.storage import ITelemetryStorage
-from ..interfaces.collector import ITelemetryCollector
-from ..interfaces.processor import ITelemetryProcessor
-from ..interfaces.alert_engine import IAlertEngine
-from ..interfaces.report_generator import IReportGenerator
-from ..configuration.telemetry_config import TelemetryConfiguration
-from ..configuration.validation import validate_configuration, apply_corrections
-from ..error_handling import get_error_handler, ErrorContext
-from ..optimization import get_performance_optimizer
-from ..exceptions import TelemetryError, TelemetryConfigurationError
+from .interfaces.storage import ITelemetryStorage
+from .interfaces.collector import ITelemetryCollector
+from .interfaces.processor import ITelemetryProcessor
+from .interfaces.alert_engine import IAlertEngine
+from .interfaces.report_generator import IReportGenerator
+from .configuration.telemetry_config import TelemetryConfiguration
+from .configuration.validation import validate_configuration, apply_corrections
+from .error_handling import get_error_handler, ErrorContext
+from .optimization import get_performance_optimizer
+from .exceptions import TelemetryError, TelemetryConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -276,10 +277,10 @@ class TelemetryLifecycleManager:
         if component_name == 'storage':
             storage_type = self.config.storage.type
             if storage_type == 'json':
-                from ..storage.json_storage import JSONStorage
+                from .storage.json_storage import JSONStorage
                 return JSONStorage(self.config.storage.directory)
             elif storage_type == 'influxdb':
-                from ..storage.influxdb_storage import InfluxDBStorage
+                from .storage.influxdb_storage import InfluxDBStorage
                 return InfluxDBStorage(
                     url=self.config.storage.influxdb.url,
                     token=self.config.storage.influxdb.token,
@@ -288,19 +289,19 @@ class TelemetryLifecycleManager:
                 )
         
         elif component_name == 'collector':
-            from ..collector.metrics_collector import MetricsCollector
+            from .collector.metrics_collector import MetricsCollector
             return MetricsCollector(self.components['storage'])
         
         elif component_name == 'processor':
-            from ..processor.batch_processor import BatchProcessor
+            from .processor.batch_processor import BatchProcessor
             return BatchProcessor(self.components['storage'])
         
         elif component_name == 'alert_engine':
-            from ..alerting.alert_engine import AlertEngine
+            from .alerting.alert_engine import AlertEngine
             return AlertEngine(self.config.alerting)
         
         elif component_name == 'report_generator':
-            from ..reporting.report_generator import ReportGenerator
+            from .reporting.report_generator import ReportGenerator
             return ReportGenerator(self.components['storage'])
         
         return None

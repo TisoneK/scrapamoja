@@ -22,6 +22,7 @@ from ..interfaces import Alert, AlertSeverity
 from ..configuration.telemetry_config import TelemetryConfiguration
 from ..exceptions import TelemetryAlertingError
 from ..configuration.logging import get_logger
+from collections import defaultdict
 
 
 class NotificationChannel(Enum):

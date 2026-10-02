@@ -19,6 +19,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from ..models.selector_models import SeverityLevel
+from datetime import timedelta
 
 
 class LogLevel(Enum):
@@ -514,6 +515,10 @@ def get_storage_logger() -> StorageTelemetryLogger:
     if _storage_logger is None:
         _storage_logger = StorageTelemetryLogger()
     return _storage_logger
+
+
+# The storage modules (archival, backup, cleanup, integrity, ...) import this name from here.
+get_telemetry_logger = get_storage_logger
 
 
 def setup_storage_logging(

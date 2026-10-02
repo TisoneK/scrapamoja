@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from functools import wraps
 import weakref
 
-from ..exceptions import (
+from .exceptions import (
     TelemetryError,
     TelemetryStorageError,
     TelemetryCollectionError,

@@ -20,7 +20,7 @@ from ..models.selector_models import SeverityLevel
 from ..storage.retention_manager import RetentionPolicy, RetentionAction
 from ..storage.tiered_storage import StorageTier, TieringPolicy
 from ..storage.backup import BackupType, BackupPolicy
-from .logging import get_storage_logger
+from ..storage.logging import get_storage_logger
 
 
 class StorageConfigType(Enum):

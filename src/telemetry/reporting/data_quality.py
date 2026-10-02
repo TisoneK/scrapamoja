@@ -12,7 +12,7 @@ import statistics
 import uuid
 
 from ..models.selector_models import SeverityLevel
-from ..report_generator import ReportGenerator
+from .report_generator import ReportGenerator
 
 
 class QualityDimension(Enum):

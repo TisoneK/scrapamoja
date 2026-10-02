@@ -19,6 +19,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from ..models.selector_models import SeverityLevel
+from datetime import timedelta
 
 
 class LogLevel(Enum):

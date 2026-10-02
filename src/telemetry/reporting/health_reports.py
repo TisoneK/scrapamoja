@@ -23,7 +23,7 @@ from ..processor.metrics_processor import MetricsProcessor, ProcessedMetric
 from ..processor.aggregator import Aggregator, AggregatedMetric
 from ..collector.quality_collector import QualityCollector, QualityMetrics
 from ..collector.error_collector import ErrorCollector, ErrorData
-from ..report_generator import ReportGenerator, ReportType, ReportFormat, ReportSection
+from .report_generator import ReportGenerator, ReportType, ReportFormat, ReportSection
 
 
 class HealthMetricType(Enum):

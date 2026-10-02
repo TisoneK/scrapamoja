@@ -24,7 +24,7 @@ from ..processor.aggregator import Aggregator, AggregatedMetric
 from ..collector.performance_collector import PerformanceCollector
 from ..collector.quality_collector import QualityCollector
 from ..collector.strategy_collector import StrategyCollector
-from ..report_generator import ReportGenerator, ReportType, ReportFormat, ReportSection
+from .report_generator import ReportGenerator, ReportType, ReportFormat, ReportSection
 
 
 class RecommendationCategory(Enum):

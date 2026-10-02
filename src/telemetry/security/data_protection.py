@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 
 from ..exceptions import TelemetryError
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
