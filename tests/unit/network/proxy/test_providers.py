@@ -29,10 +29,10 @@ def test_static_provider_returns_copy():
 
 def test_manual_from_url():
     provider = ManualEndpointProvider.from_url(
-        "http://u:p@1.2.3.4:8080", id="kenya", country="KE"
+        "http://u:p@1.2.3.4:8080", id="allowed", country="KE"
     )
     ep = provider.endpoints()[0]
-    assert ep.id == "kenya"
+    assert ep.id == "allowed"
     assert ep.country == "KE"
     assert ep.username == "u"
 

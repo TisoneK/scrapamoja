@@ -17,7 +17,7 @@ Usage (operator proxy env vars, no secrets in CLI args — the URL may carry
 creds directly, as ``http://user:pass@bore.pub:<port>``)::
 
     export BETB2B_PROXY_URL=http://<proxy-user>:<proxy-password>@bore.pub:<port>
-    export BETB2B_PROXY_COUNTRY=KE BETB2B_PROXY_ID=kenya
+    export BETB2B_PROXY_COUNTRY=<CC, optional> BETB2B_PROXY_ID=proxy
     python -m src.sites.betb2b.scripts.probe_newbuilder --skin linebet --sport basketball
 """
 

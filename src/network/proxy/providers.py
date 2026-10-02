@@ -63,7 +63,7 @@ class StaticProvider(ProxyProvider):
 class ManualEndpointProvider(ProxyProvider):
     """A single, manually-specified endpoint.
 
-    Used for the operator-supplied Kenya proxy (a ``gost`` HTTP proxy exposed via
+    Used for the operator-supplied allowed-country proxy (a ``gost`` HTTP proxy exposed via
     ngrok). Construct from a URL or from explicit host/port/credentials.
     """
 
@@ -93,7 +93,7 @@ class ManualEndpointProvider(ProxyProvider):
         username: Optional[str] = None,
         password: Optional[str] = None,
         country: Optional[str] = None,
-        id: str = "kenya-ngrok",
+        id: str = "ngrok-proxy",
     ) -> "ManualEndpointProvider":
         """Build a provider for an ngrok-exposed HTTP proxy (host:port + auth)."""
         return cls(

@@ -84,21 +84,21 @@ class TestRouting:
         m = ProxyManager(
             providers=[StaticProvider([
                 ProxyEndpoint.direct(),
-                _ep("kenya", country="KE"),
+                _ep("allowed", country="KE"),
             ])],
-            routing_rules=[RoutingRule("linebet.com", "kenya")],
+            routing_rules=[RoutingRule("linebet.com", "allowed")],
             default_target="direct",
         )
-        assert m.acquire(site="linebet.com").id == "kenya"
+        assert m.acquire(site="linebet.com").id == "allowed"
         assert m.acquire(site="github.com").id == "direct"
 
     def test_route_wildcard_and_url(self):
         m = ProxyManager(
-            providers=[StaticProvider([ProxyEndpoint.direct(), _ep("kenya")])],
-            routing_rules=[RoutingRule("*.linebet.com", "kenya")],
+            providers=[StaticProvider([ProxyEndpoint.direct(), _ep("allowed")])],
+            routing_rules=[RoutingRule("*.linebet.com", "allowed")],
             default_target="direct",
         )
-        assert m.acquire(site="https://m.linebet.com/en/live").id == "kenya"
+        assert m.acquire(site="https://m.linebet.com/en/live").id == "allowed"
 
     def test_route_by_source_group(self):
         m = ProxyManager(

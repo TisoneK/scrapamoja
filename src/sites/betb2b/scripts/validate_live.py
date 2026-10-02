@@ -22,7 +22,7 @@ Usage::
     export BETB2B_PROXY_USER=<proxy-user>
     export BETB2B_PROXY_PASS=<proxy-password>
     export BETB2B_PROXY_COUNTRY=KE
-    export BETB2B_PROXY_ID=kenya
+    export BETB2B_PROXY_ID=proxy
 
     python -m src.sites.betb2b.scripts.validate_live --skin linebet
 """
@@ -131,7 +131,7 @@ async def main() -> int:
                 netloc += f":{p.port}"
             proxy_url = urlunparse(p._replace(netloc=netloc))
 
-        endpoint_id = os.environ.get("BETB2B_PROXY_ID", "kenya")
+        endpoint_id = os.environ.get("BETB2B_PROXY_ID", "proxy")
         country = os.environ.get("BETB2B_PROXY_COUNTRY", "KE")
 
         pm = build_proxy_manager({

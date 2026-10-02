@@ -29,7 +29,7 @@ def _unreachable():
 
 
 def _manager():
-    proxy = SimpleNamespace(id="kenya", is_direct=False)
+    proxy = SimpleNamespace(id="allowed", is_direct=False)
     # These tests exercise the egress-country GATE, which only runs when the
     # skin has a non-empty allow-list (the default is now empty = allow any).
     from dataclasses import replace

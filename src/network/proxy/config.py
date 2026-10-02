@@ -3,7 +3,7 @@
 Keeps proxy configuration canonical to this package (rather than threading it
 through the central ``AppConfig``): a dict — loadable from YAML or env — fully
 describes the pool, rotation strategy, and per-site routing. This is what makes
-Stages 4 (add the Kenya endpoint) and 5 (route ``linebet.* -> kenya``)
+Stages 4 (add the allowed-country endpoint) and 5 (route ``linebet.* -> proxy``)
 declarative instead of hardcoded.
 
 Schema::
@@ -13,15 +13,15 @@ Schema::
       "default_target": "direct",          # endpoint id / source group (optional)
       "endpoints": [
         {"id": "direct", "scheme": "direct"},
-        {"id": "kenya", "url": "http://user:pass@7.tcp.ngrok.io:19472",
+        {"id": "proxy", "url": "http://user:pass@7.tcp.ngrok.io:19472",
          "country": "KE", "source": "ngrok"},
         # or explicit fields instead of url:
         {"id": "dc1", "scheme": "http", "host": "1.2.3.4", "port": 8080,
          "username": "u", "password": "p", "source": "datacenter"},
       ],
       "routing": [
-        {"pattern": "linebet.*", "target": "kenya"},
-        {"pattern": "flashscore.*", "target": "kenya"},
+        {"pattern": "linebet.*", "target": "proxy"},
+        {"pattern": "flashscore.*", "target": "proxy"},
         {"pattern": "github.com", "target": "direct"},
       ],
     }

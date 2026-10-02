@@ -3,7 +3,7 @@
 > **Research window:** 2026-07-17 → 2026-07-19
 > **Live-confirmed skins:** linebet (KE), with family-wide probe across
 > melbet, betwinner, 22bet, megapari, 888starz, helabet, paripesa, 1xbet, 1win.
-> **Method:** Playwright bootstrap through a residential Kenyan proxy
+> **Method:** Playwright bootstrap through a residential proxy in an allowed country
 > (`gost` HTTP proxy on a Windows host in Kisumu → `bore.pub` TCP tunnel →
 > the framework's `ProxyManager`), then `httpx` replay of captured feed
 > calls, plus in-page `fetch` probes from inside the bootstrapped SPA.
@@ -36,7 +36,7 @@ The operator does **not** get a separate backend. All skins share:
 
 Empirically verified 2026-07-18 by probing
 `/service-api/LineFeed/Get1x2_VZip` across 8 family domains through the
-Kenya proxy — all returned the *identical*
+allowed-country proxy — all returned the *identical*
 `{"type":"feed/NotAcceptableException",...}` 406 envelope from the same
 shared feed microservice. The 406 means the endpoint exists and behaves
 the same; the bare probe just lacked the per-skin cookies/headers.
@@ -45,7 +45,7 @@ the same; the bare probe just lacked the per-skin cookies/headers.
 
 | Skin | Domain | `partner` | `gr` | `country` (KE) | Geo | Notes |
 |------|--------|----------|------|----------------|-----|-------|
-| linebet | `linebet.com` | 189 | 650 | 87 | KE | Reverse-engineered against this. Kenya-confirmed. |
+| linebet | `linebet.com` | 189 | 650 | 87 | KE | Reverse-engineered against this. Confirmed from an allowed country. |
 | melbet | `melbet.com` | 82 | 650 | 87 | KE | Same backend, different branding. |
 | betwinner | `betwinner.com` | 119 | 650 | 87 | KE | |
 | 22bet | `22bet.com` | 1 | 650 | 87 | KE | |
@@ -329,7 +329,7 @@ drop a 50-line module in [`sports/`](sports/) and register it in
 ### Layer 1: Geo-gating at the nginx edge
 
 From a US / datacenter IP you get `HTTP 203 → /en/block` before any app
-code runs. From an allowed-country IP (Kenya confirmed) the full SPA
+code runs. From an allowed-country IP (confirmed) the full SPA
 loads (`200`). The detected country flows through the config API as the
 `g=` query param (`g=KE`; `g=US` on the block page).
 
@@ -522,7 +522,7 @@ export BETB2B_PROXY_URL=http://bore.pub:37582
 export BETB2B_PROXY_USER=TisoneK
 export BETB2B_PROXY_PASS=<proxy-password>
 export BETB2B_PROXY_COUNTRY=KE
-export BETB2B_PROXY_ID=kenya
+export BETB2B_PROXY_ID=proxy
 ```
 
 ### The family probe

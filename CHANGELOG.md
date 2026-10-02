@@ -6,6 +6,15 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Changed — no country is special: wording and default labels made neutral (2026-10-02)
+
+Docs, comments, examples and the skin files described one country as if it
+were the way in. Any allowed-country connection that the site has not
+penalised works; the tunnel's exit country is incidental. The proxy label in
+the skin files, the examples, and the `validate_live` script's default is now
+`proxy` instead of a country name (it is only a label, and the command line
+already used `proxy`; if you set `BETB2B_PROXY_ID` yourself nothing changes).
+
 ### Added — the scraper now tells blocks apart and answers each properly; persistent browser profiles (2026-10-02)
 
 A website that turns us away is now recognised for what it is — a country block,

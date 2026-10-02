@@ -176,7 +176,7 @@ per-match data endpoint (`GetGameZip`) works even from many datacenter IPs:
 python -m src.sites.betb2b.scripts.validate_live --skin linebet --sport basketball
 
 # Proxy fallback — ONLY if your IP is WAF-blocked. Any supported-country
-# residential/other proxy works (Kenya, South Africa, …). Bore tunnels rotate:
+# residential/other proxy in an allowed country works. Bore tunnels rotate:
 export BETB2B_PROXY_URL=http://<host>:<port>
 export BETB2B_PROXY_USER=<user>      # if the proxy needs auth
 export BETB2B_PROXY_PASS=<pass>
@@ -366,7 +366,7 @@ python -m src.sites.betb2b.cli.main compare-match --skin linebet --sport basketb
 ```
 
 **Known observations (2026-07-20 testing):**
-- Women's Chinese basketball (linebet, Kenya egress): statisticfeed APIs return 404 for statistics/timeline, 204 (empty) for H2H. NBA major league matches expected to return data.
+- Women's Chinese basketball (linebet, allowed-country egress): statisticfeed APIs return 404 for statistics/timeline, 204 (empty) for H2H. NBA major league matches expected to return data.
 - Get1x2_VZip consistently returns 406 (auth-header rotation) — markets from GetGameZip/E[]/AE[] paths.
 - GetGameZip (live) reliably returns ~24KB+ data with scores, periods, markets. GetGameZip (line) for live events returns only ~100 bytes.
 - **Period scores gap RESOLVED 2026-07-20:** `SC.PS[]` is now extracted via `_extract_period_scores()` in `rules.py` and populated into `Event.period_scores`.
@@ -550,7 +550,7 @@ BETB2B_PROXY_URL=http://bore.pub:<port> \
 BETB2B_PROXY_USER=<user> \
 BETB2B_PROXY_PASS=<pass> \
 BETB2B_PROXY_COUNTRY=KE \
-BETB2B_PROXY_ID=kenya \
+BETB2B_PROXY_ID=proxy \
 python -m src.sites.betb2b.scripts.validate_live --skin <blocked-skin>
 ```
 

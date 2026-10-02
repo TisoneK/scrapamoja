@@ -6,10 +6,10 @@ domain: betwinner.com
 partner: 1             # betwinner partner id (confirm against live capture)
 gr: 1                  # betwinner project-group id (confirm)
 country: 87
-geo: KE
+geo: KE            # informational label; NOT an egress requirement
 language: en
 enabled: true
-proxy_endpoint_id: kenya
+proxy_endpoint_id: proxy
 notes: |
   BetB2B family — betwinner.com. Verified 2026-07-18 as same-backend.
   Per-skin partner/gr ids are best-effort — confirm with a live capture.

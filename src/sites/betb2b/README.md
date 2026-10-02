@@ -7,7 +7,7 @@ paripesa, … — with per-skin config in YAML.
 > A real-world example of Scrapamoja's "one framework, many sites"
 > thesis. linebet was reverse-engineered first (`src/sites/linebet/RECON.md`);
 > the findings generalize across 8+ family members (verified 2026-07-18 via
-> the Kenya proxy). The extraction mode is
+> an allowed-country proxy). The extraction mode is
 > `hybrid`.
 
 ## Why a family scraper?
@@ -188,7 +188,7 @@ export BETB2B_PROXY_URL=http://bore.pub:1074
 export BETB2B_PROXY_USER=TisoneK
 export BETB2B_PROXY_PASS=<proxy-password>
 export BETB2B_PROXY_COUNTRY=KE
-export BETB2B_PROXY_ID=kenya
+export BETB2B_PROXY_ID=proxy
 
 # 3. List the shipped skins.
 python -m src.sites.betb2b.cli skins
@@ -217,7 +217,7 @@ export BETB2B_PROXY_URL=http://bore.pub:1074
 export BETB2B_PROXY_USER=TisoneK
 export BETB2B_PROXY_PASS=<proxy-password>
 export BETB2B_PROXY_COUNTRY=KE
-export BETB2B_PROXY_ID=kenya
+export BETB2B_PROXY_ID=proxy
 
 python -m src.sites.betb2b.scripts.validate_live --skin linebet
 # → /home/z/my-project/download/betb2b_validate_linebet/
@@ -245,7 +245,7 @@ country: 87
 geo: KE
 language: en
 enabled: true
-proxy_endpoint_id: kenya
+proxy_endpoint_id: proxy
 allowed_countries: ["KE"]
 notes: |
   MyBookmaker skin — confirmed same-backend 2026-XX-XX.
@@ -450,7 +450,7 @@ python -m src.sites.betb2b.scripts.probe_family
 - **Geo-block.** All BetB2B skins geo-block at the nginx edge
   (`HTTP 203 → /en/block` from disallowed countries). A proxy is
   **optional** — if your egress IP is already in an allowed country
-  (e.g. running from Kenya for a KE skin), the scraper works fine
+  (e.g. running from an allowed country), the scraper works fine
   in direct mode (`proxy_manager=None`). Set `BETB2B_PROXY_URL` and
   related env vars only when your egress country is blocked.
 - **1xbet.com is Cloudflare-fronted.** The flagship domain sits

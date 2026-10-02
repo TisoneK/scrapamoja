@@ -2,7 +2,7 @@
 
 Endpoint: `GET /service-api/LiveFeed/Get1x2_VZip?count=10&lng=en&gr=650&mode=4&country=87&top=true&partner=189&virtualSports=true&noFilterBlockEvent=true`
 
-One trimmed live event (public odds; captured 2026-07-18 via Kenya proxy). Key legend is in `../../RECON.md`.
+One trimmed live event (public odds; captured 2026-07-18 via an allowed-country proxy). Key legend is in `../../RECON.md`.
 
 ```json
 {

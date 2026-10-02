@@ -15,9 +15,9 @@ def test_default_is_direct_only():
 
 
 def test_build_endpoint_from_url():
-    ep = build_endpoint({"id": "kenya", "url": "http://u:p@h:8080",
+    ep = build_endpoint({"id": "allowed", "url": "http://u:p@h:8080",
                          "country": "KE", "source": "ngrok"})
-    assert ep.id == "kenya"
+    assert ep.id == "allowed"
     assert ep.country == "KE"
     assert ep.source is ProxySource.NGROK
     assert ep.has_credentials
@@ -41,18 +41,18 @@ def test_full_config_with_routing():
         "default_target": "direct",
         "endpoints": [
             {"id": "direct", "scheme": "direct"},
-            {"id": "kenya", "url": "http://u:p@ng:19472", "country": "KE",
+            {"id": "allowed", "url": "http://u:p@ng:19472", "country": "KE",
              "source": "ngrok"},
         ],
         "routing": [
             # leading-wildcard matches the apex domain AND subdomains (m.linebet.com)
-            {"pattern": "*linebet.com", "target": "kenya"},
+            {"pattern": "*linebet.com", "target": "allowed"},
             {"pattern": "github.com", "target": "direct"},
         ],
     })
     assert m.strategy is RotationStrategy.HEALTH_WEIGHTED
-    assert m.acquire(site="linebet.com").id == "kenya"
-    assert m.acquire(site="https://m.linebet.com/en/live").id == "kenya"
+    assert m.acquire(site="linebet.com").id == "allowed"
+    assert m.acquire(site="https://m.linebet.com/en/live").id == "allowed"
     assert m.acquire(site="github.com").id == "direct"
     assert m.acquire(site="unknown.com").id == "direct"  # default_target
 

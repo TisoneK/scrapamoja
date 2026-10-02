@@ -66,10 +66,10 @@ def test_build_proxy_from_env_builds_manager(monkeypatch):
     # "'env' is not a valid ProxySource" at job runtime (live on Railway).
     monkeypatch.setenv("BETB2B_PROXY_URL", "http://user:pass@bore.pub:15224")
     monkeypatch.setenv("BETB2B_PROXY_COUNTRY", "KE")
-    monkeypatch.setenv("BETB2B_PROXY_ID", "kenya")
+    monkeypatch.setenv("BETB2B_PROXY_ID", "allowed")
     pm, endpoint_id = build_proxy_from_env()
-    assert pm is not None and endpoint_id == "kenya"
-    ep = pm.get("kenya")                    # resolves without raising
+    assert pm is not None and endpoint_id == "allowed"
+    ep = pm.get("allowed")                    # resolves without raising
     assert ep is not None and ep.host == "bore.pub" and ep.port == 15224
 
 

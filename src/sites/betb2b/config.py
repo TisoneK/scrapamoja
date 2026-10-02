@@ -125,7 +125,7 @@ class BetB2BSkinConfig:
         gr: the ``gr=`` project-group id (linebet = 650). Identifies the
             skin inside the shared BetB2B backend.
         country: the internal BetB2B country id used in the ``country=``
-            query param (NOT an ISO code — linebet Kenya = 87). Defaults
+            query param (NOT an ISO code; 87 is the feed's internal id and every skin uses it — not a requirement on where you run). Defaults
             to 87 which is the value seen live for linebet KE.
         geo: ISO 3166-1 alpha-2 country code for proxy routing and the
             config-API ``g=`` param (e.g. ``"KE"``).
@@ -458,7 +458,7 @@ DEFAULT_SKIN_CONFIG = BetB2BSkinConfig(
     partner=189,
     gr=650,
     country=87,
-    geo="KE",
+    geo="KE",   # informational label; NOT an egress requirement (allowed_countries decides)
     language="en",
     enabled=True,
     notes=(

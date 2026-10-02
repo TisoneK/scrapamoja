@@ -11,7 +11,7 @@ country: 87
 geo: KE
 language: en
 enabled: true
-proxy_endpoint_id: kenya
+proxy_endpoint_id: proxy
 notes: |
   BetB2B family — melbet.com. Verified 2026-07-18 as same-backend
   (identical 406 feed/NotAcceptableException envelope on bare probe).

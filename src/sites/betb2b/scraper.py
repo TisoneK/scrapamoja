@@ -29,10 +29,10 @@ Usage::
 
     skin = BetB2BSkinConfig.from_yaml("src/sites/betb2b/skins/linebet.yaml")
     pm = build_proxy_manager({
-        "endpoints": [{"id": "kenya",
+        "endpoints": [{"id": "proxy",
                        "url": "http://USER:PASS@bore.pub:1074",
                        "country": "KE", "source": "ngrok"}],
-        "routing": [{"pattern": "*.linebet.com", "target": "kenya"}],
+        "routing": [{"pattern": "*.linebet.com", "target": "proxy"}],
     })
 
     async with BetB2BScraper(skin, proxy_manager=pm) as scraper:

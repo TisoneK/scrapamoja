@@ -190,15 +190,15 @@ def test_cooldown_is_per_egress_so_a_direct_block_does_not_rest_the_proxied_rout
     direct.guard.on_block(direct.guard.inspect(203, "https://linebet.com/en/block"))
     with pytest.raises(SiteInCooldown):
         direct.guard.preflight()
-    ep = ProxyEndpoint(id="kenya", scheme="http", host="h", port=1, country="KE")
+    ep = ProxyEndpoint(id="allowed", scheme="http", host="h", port=1, country="KE")
     proxied = BetB2BSessionManager(skin, proxy=ep)
     proxied.guard.preflight()                                              # untouched
-    assert proxied.guard.site == "linebet@kenya"
+    assert proxied.guard.site == "linebet@allowed"
 
 
 def test_block_through_a_configured_proxy_blames_the_proxy(skin, tmp_path, caplog):
     from src.network.proxy import ProxyEndpoint
-    ep = ProxyEndpoint(id="kenya", scheme="http", host="h", port=1, country="KE")
+    ep = ProxyEndpoint(id="allowed", scheme="http", host="h", port=1, country="KE")
     mgr = BetB2BSessionManager(skin, proxy=ep)
     caplog.set_level("WARNING")
     mgr._explain_block(mgr.guard.inspect(203, "https://linebet.com/en/block"))

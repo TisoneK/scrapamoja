@@ -9,7 +9,7 @@ country: 87
 geo: KE
 language: en
 enabled: true
-proxy_endpoint_id: kenya
+proxy_endpoint_id: proxy
 notes: |
   BetB2B family — 22bet.com. Verified 2026-07-18 as same-backend.
   Per-skin partner/gr ids are best-effort — confirm with a live capture.

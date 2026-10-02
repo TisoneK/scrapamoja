@@ -279,7 +279,7 @@ class BetB2BSessionManager:
         elif not os.environ.get("BETB2B_PROXY_URL"):
             logger.warning(
                 "skin=%s blocked on the DIRECT egress. The browser path needs an allowed-country "
-                "proxy (set BETB2B_PROXY_URL/USER/PASS, e.g. the Kenya tunnel); feed endpoints "
+                "proxy (set BETB2B_PROXY_URL/USER/PASS, e.g. a tunnel that exits in an allowed country); feed endpoints "
                 "usually work direct.", self.skin.name)
         else:
             logger.warning("skin=%s blocked on the DIRECT egress although BETB2B_PROXY_URL is set — "

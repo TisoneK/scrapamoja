@@ -9,12 +9,12 @@ name: linebet
 domain: linebet.com
 partner: 189            # the `partner=` / `ref=` query param (linebet = 189)
 gr: 650                 # the `gr=` project-group id (linebet = 650)
-country: 87             # internal BetB2B country id (87 = Kenya)
+country: 87             # internal BetB2B country id (87 = the feed's internal country id; every skin uses it)
 geo: KE                 # ISO country for proxy routing / config API
 language: en
 enabled: true
-proxy_endpoint_id: kenya
+proxy_endpoint_id: proxy
 notes: |
-  Default skin — linebet.com (Kenya-confirmed 2026-07-18).
+  Default skin — linebet.com (confirmed from an allowed country 2026-07-18).
   Same backend as melbet/betwinner/22bet/megapari/888starz/helabet/paripesa.
   See src/sites/linebet/RECON.md for the full reverse-engineering writeup.

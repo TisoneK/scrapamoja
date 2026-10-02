@@ -6,10 +6,10 @@ domain: 888starz.bet
 partner: 1             # 888starz partner id (confirm against live capture)
 gr: 1                  # 888starz project-group id (confirm)
 country: 87
-geo: KE
+geo: KE            # informational label; NOT an egress requirement
 language: en
 enabled: true
-proxy_endpoint_id: kenya
+proxy_endpoint_id: proxy
 notes: |
   BetB2B family — 888starz.bet. Verified 2026-07-18 as same-backend.
   Per-skin partner/gr ids are best-effort — confirm with a live capture.

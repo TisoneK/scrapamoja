@@ -58,7 +58,7 @@ The `ref`, `fcountry`, and `gr` query params are sourced from each skin's YAML c
 | **melbet** | melbet.com | **61** | **6** | 87 |
 | paripesa | paripesa.bet | 1 | 1 | 87 |
 
-All skins share country=87 (Kenya). The `fcountry` may differ for skins in other
+All skins share country=87 (the feed's internal country id — a request parameter, not a requirement on where you run). The `fcountry` may differ for skins in other
 jurisdictions. The endpoint path is universal across all BetB2B skins since they
 share the same backend infrastructure.
 
@@ -69,7 +69,7 @@ share the same backend infrastructure.
 Eight BetB2B skins were tested via hybrid bootstrap (Playwright → session cookies →
 httpx with real betting headers) against the same NBA Summer League game ID `737455106`.
 
-### Working (5/8) — H2H confirmed from Kenya without proxy
+### Working (5/8) — H2H confirmed from an allowed-country egress without proxy
 
 | Skin | Bootstrap domain | Final domain | Status | Games | Teams | Boostrap | Notes |
 |------|------------------|-------------|--------|-------|-------|----------|-------|
@@ -86,7 +86,7 @@ the BetB2B backend is fully shared and the endpoint is universal.
 - **22bet**: Not a code fix — bootstrap timing varies (30-90s). Skin YAML is correct at `22bet.com`; the geo-redirect to `22bet.co.ke` is handled by Playwright automatically. The prior 90s timeout was a transient network/load issue.
 - **paripesa**: **YAML fix applied** — domain changed from `paripesa.bet` (which redirects to a bonus landing page on `bonus.rdrctpar24.lol`) to `paripesa.cool` (which serves the actual BetB2B SPA). Discovery path: `paripesa.com` → `paripesa.cool` (302 redirect, SPA detected).
 
-### Blocked from Kenya (3/8) — need proxy
+### Blocked from that egress (3/8) — need proxy
 
 | Skin | Domain | Error |
 |------|--------|-------|
@@ -94,7 +94,7 @@ the BetB2B backend is fully shared and the endpoint is universal.
 | **megapari** | megapari.com | `net::ERR_CONNECTION_TIMED_OUT` |
 | **melbet** | melbet.com | `net::ERR_CONNECTION_TIMED_OUT` |
 
-These domains are geo-blocked from Kenya egress. Will need proxy routing through
+These domains are geo-blocked from that egress. Will need proxy routing through
 an allowed country (likely the skin's target market) to confirm H2H.
 
 ### Key conclusions (updated)
@@ -104,7 +104,7 @@ an allowed country (likely the skin's target market) to confirm H2H.
 3. **paripesa uses `.cool` TLD** — Not `.bet` or `.com`. The correct domain is `paripesa.cool`.
 4. **Geo-redirects strip path prefixes** — 22bet.com → 22bet.co.KE removes `/en/` from path. Playwright handles this, but may affect SPA hydration timing.
 5. **Same data regardless of ref/gr** — betwinner/helabet (`ref=1, gr=1`) return identical data to linebet (`ref=189, gr=650`)
-6. **3 skins still blocked** — 888starz, megapari, melbet are geo-blocked from Kenya. Need proxy investigation.
+6. **3 skins still blocked** — 888starz, megapari, melbet are geo-blocked from that egress. Need proxy investigation.
 
 ### Headers (for httpx replay)
 
@@ -212,7 +212,7 @@ required** (harvested from browser bootstrap).
 
 ### Prerequisites
 - Python 3.12+ with `playwright` installed
-- Access to linebet.com from an allowed country (Kenya works without proxy)
+- Access to linebet.com from an allowed country (an allowed country works without proxy)
 
 ### Script approach
 

@@ -1,6 +1,6 @@
 # Linebet — how it works (live recon, 2026-07-17)
 
-First successful **live** capture of linebet.com, via a residential Kenyan proxy
+First successful **live** capture of linebet.com, via a residential proxy in an allowed country
 (`gost` HTTP proxy on a Windows box in Kisumu → `bore` TCP tunnel → this machine's
 `ProxyManager`). All prior sessions were WAF/geo-blocked from datacenter IPs. This
 documents what the live site actually does. Companion data:
@@ -19,7 +19,7 @@ documents what the live site actually does. Companion data:
 
 - **Access is geo-gated at the nginx edge.** From a US/datacenter IP you get
   `HTTP 203 → /en/block` before any app code runs. From an allowed-country IP
-  (Kenya confirmed) the full SPA loads (`200`). The detected country flows through
+  (confirmed from an allowed country) the full SPA loads (`200`). The detected country flows through
   the config API as the `g=` query param (`g=KE`; `g=US` on the block page).
 - **Odds come from `/service-api/{LiveFeed,LineFeed}/Get1x2_VZip`** (+ siblings):
   `LiveFeed` = in-play (`/en/live`), `LineFeed` = prematch/scheduled
@@ -37,7 +37,7 @@ documents what the live site actually does. Companion data:
 
 linebet is one skin of the **BetB2B** platform. The findings here are **family-wide**,
 confirmed empirically by probing `/service-api/LineFeed/Get1x2_VZip` across domains
-through the Kenya proxy:
+through the allowed-country proxy:
 
 - **Same backend / same endpoint / same schema** (all returned the *identical*
   `{"type":"feed/NotAcceptableException",...}` 406 envelope from the shared feed
@@ -112,13 +112,13 @@ from src.network.proxy import build_proxy_manager
 from src.network.har.export import HarExporter, HarExporterConfig
 from pathlib import Path
 
-kenya = build_proxy_manager({"endpoints": [
-    {"id": "kenya", "url": "http://USER:PASS@<tunnel-host>:<port>",
-     "country": "KE", "source": "ngrok"}]}).get("kenya")
+proxy = build_proxy_manager({"endpoints": [
+    {"id": "proxy", "url": "http://USER:PASS@<tunnel-host>:<port>",
+     "country": "<CC>", "source": "ngrok"}]}).get("proxy")
 
 await HarExporter(HarExporterConfig(
     url="https://linebet.com/en", live_url="https://linebet.com/en/live",
-    proxy=kenya, output=Path("linebet_kenya.har"))).run()
+    proxy=proxy, output=Path("linebet.har"))).run()
 ```
 
 The proxy endpoint is any allowed-country HTTP proxy (a `gost` proxy exposed via a
@@ -203,7 +203,7 @@ Plus **session cookies** (harvested from a browser bootstrap — 21–22 cookies
 
 ### Proof — direct httpx replay (no browser)
 
-Replaying `Get1x2_VZip` from `httpx` through the Kenya proxy, with the base betting
+Replaying `Get1x2_VZip` from `httpx` through the allowed-country proxy, with the base betting
 headers + harvested cookies:
 
 ```
