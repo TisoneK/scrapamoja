@@ -1,5 +1,3 @@
-# Current Task — none
+# Current Task — Session 50 (Ada / S448), continued after operator follow-up
 
-**Status:** idle — last session: 2026-10-02 Session 50 (Ada/S448: local-SQLite-default scrape + optional Neon store, skip-processed, retry/fallback skins, DB audit fixes, offline e2e test; ADR-26/27). Product work committed + pushed; ledger caught up late. The Session 49 (Kai/S447) lock was stale and has been cleared.
-
-**Next up (see office/tasks/backlog.md):** live re-verification once a skin answers (stat-id capture, retry/fallback, unexplained empty ids); shared per-skin cooldown + budget; strip 265 ADR citations from product code; rotate the proxy password; Neon quota limit; docs reconcile (Supabase/Railway, ids-identical claim).
+**Status:** active — operator asked (1) strip all product-code ADR/ledger citations (`ledger-mem lint --tree`, 265 hits), and (2) do the session bookkeeping end to end per protocol (report, notes, memory updates, exit checklist). Single-agent mode; the Session 49 lock was stale (operator-confirmed).
