@@ -6,6 +6,35 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Changed — scrapes are saved on your machine by default, and matches are scraped once (2026-10-02)
+
+Every scrape now saves its results into the local database file
+(`data/betb2b/odds.db`, or wherever `BETB2B_DB_PATH` points) without having to
+ask; `--no-db` turns that off. Setting `DATABASE_URL` to any hosted Postgres
+makes the same runs read and write a shared database instead, so several
+machines can work from one store. A match that is already stored is no longer
+fetched again (add `--skip-processed SECONDS` to allow a refresh after that
+long), matches that have already started are left to the live scrape, and
+finished matches get their final score recorded after each run.
+
+Defaults can now live in a local, untracked `src/sites/betb2b/.env` file:
+the skin, sport, action, request limits, retry settings and a list of backup
+skins.
+
+### Fixed — fewer silent gaps, no junk matches (2026-10-02)
+
+- A match request that times out or is blocked is now retried with a short
+  wait, can be tried on another brand's site, and is reported instead of being
+  quietly counted as "no data". Parallel requests default to 4 instead of 8.
+- A run against a blocked or unreachable site is recorded as failed, not as a
+  successful run with no events.
+- The bookmaker sometimes lists the same match again under a new number. The
+  old entry is now linked to the newer one rather than looking like a second
+  match. Quarter, half and special-bet listings and the generic
+  "Home (Points) / Away (Points)" entries are no longer stored as matches.
+- Each match's statistics-feed id is now kept, so its final score can be
+  matched up later.
+
 ### Added — the scraper can now reset its own history when the database is over the limit (2026-09-08, session 44 cont.)
 
 The size watch described below deletes old odds history gradually, which
