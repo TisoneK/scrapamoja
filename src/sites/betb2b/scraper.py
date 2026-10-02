@@ -758,7 +758,7 @@ class BetB2BScraper:
     async def fetch_events(self, ids, *, is_live: bool = False) -> List[Event]:
         """GetGameZip a specific set of event ids → parsed :class:`Event`s
         (+ sub-games). The state-aware pass supplies the ids; discovery is
-        separate (:meth:`discover_ids`). No browser/cookies/proxy (ADR-15).
+        separate (:meth:`discover_ids`). No browser/cookies/proxy.
 
         A fetch FAILS (as opposed to returning no events) on an exception or an
         unusable capture (HTTP error, dropped connection, WAF challenge page).
@@ -1036,7 +1036,7 @@ class BetB2BScraper:
     # H2H enrichment
     # ------------------------------------------------------------------ #
     async def _enrich_with_stat_ids(self, events: List[Event]) -> None:
-        """Capture each event's statisticfeed ``entity.id`` (ADR-20) while it is
+        """Capture each event's statisticfeed ``entity.id`` while it is
         fresh: ``v1/Game?id=<event id>`` resolves for recent/upcoming games, and
         the id is what the results pass needs later (it does NOT resolve for old
         games). Best-effort, bounded concurrency; sets ``Event.stat_game_id``."""

@@ -194,7 +194,7 @@ class Event:
     # verified (G,T) core map has no entry. Exact exotic per-group labels stay
     # deferred (never guess). Empty when the feed carries no MEC.
     market_categories: List[Dict[str, Any]] = field(default_factory=list)
-    stat_game_id: Optional[str] = None   # statisticfeed entity.id (ADR-20): lets the results pass resolve the final score
+    stat_game_id: Optional[str] = None   # statisticfeed entity.id: lets the results pass resolve the final score
 
     def to_dict(self) -> Dict[str, Any]:
         return {
