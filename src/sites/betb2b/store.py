@@ -583,13 +583,15 @@ UPDATE events SET superseded_by = (
     WHERE e2.home_name = events.home_name AND e2.away_name = events.away_name
       AND e2.start_time = events.start_time
       AND COALESCE(e2.league_id, -1) = COALESCE(events.league_id, -1)
-      AND e2.event_id > events.event_id)
+      AND e2.event_id > events.event_id
+      AND (e2.venue IS NOT NULL OR events.venue IS NULL))
 WHERE superseded_by IS NULL AND EXISTS (
     SELECT 1 FROM events e2
     WHERE e2.home_name = events.home_name AND e2.away_name = events.away_name
       AND e2.start_time = events.start_time
       AND COALESCE(e2.league_id, -1) = COALESCE(events.league_id, -1)
-      AND e2.event_id > events.event_id)
+      AND e2.event_id > events.event_id
+      AND (e2.venue IS NOT NULL OR events.venue IS NULL))
 """
 
 
@@ -597,7 +599,9 @@ def mark_superseded(conn) -> int:
     """Link RE-LISTED matches. The bookmaker re-lists a game under a new (higher)
     id; the old id then returns no data. Same teams + start time + league and an
     older id => ``superseded_by`` = the newest id. Non-destructive (rows are kept,
-    only linked); idempotent. Returns the number of rows newly linked."""
+    only linked); idempotent. A replacement must be as complete as the row it
+    replaces (a venue-less stub — e.g. a one-market sub-game with a higher id — never
+    supersedes a real match). Returns the number of rows newly linked."""
     if _is_orm(conn):
         from sqlalchemy import text as _t
         n = conn.execute(_t(_SUPERSEDE_SQL)).rowcount

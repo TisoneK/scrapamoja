@@ -45,11 +45,11 @@ def test_blocked_discovery_is_a_failed_run(skin):
     assert s._discovery_failed is True
 
 
-def _put(conn, eid, home, away, start, league):
+def _put(conn, eid, home, away, start, league, venue="Arena"):
     conn.execute(
         "INSERT INTO events (event_id, league_id, home_name, away_name, start_time, "
-        "first_seen, last_seen) VALUES (?,?,?,?,?,?,?)",
-        (eid, league, home, away, start, "2026-10-02", "2026-10-02"))
+        "venue, first_seen, last_seen) VALUES (?,?,?,?,?,?,?,?)",
+        (eid, league, home, away, start, venue, "2026-10-02", "2026-10-02"))
 
 
 def test_relisted_match_is_linked_not_deleted(tmp_path, monkeypatch):
@@ -62,6 +62,8 @@ def test_relisted_match_is_linked_not_deleted(tmp_path, monkeypatch):
     _put(conn, "757884023", "Yukatel Denizli", "Tofas", "2026-10-03T10:00", 1107661)  # relisted
     _put(conn, "900000001", "Yukatel Denizli", "Tofas", "2026-10-10T10:00", 1107661)  # rematch, other date
     _put(conn, "900000002", "Yukatel Denizli", "Tofas", "2026-10-03T10:00", 999)      # other league
+    _put(conn, "757880276", "Jena", "Chemnitz", "2026-10-04T14:30", 24593)               # real match
+    _put(conn, "757880281", "Jena", "Chemnitz", "2026-10-04T14:30", 24593, venue=None)  # venue-less sub-game stub
     conn.commit()
 
     assert store.mark_superseded(conn) == 1
@@ -69,7 +71,8 @@ def test_relisted_match_is_linked_not_deleted(tmp_path, monkeypatch):
     assert rows["757618816"] == "757884023"       # old id points at the live one
     assert rows["757884023"] is None              # newest is untouched
     assert rows["900000001"] is None and rows["900000002"] is None   # different match
-    assert len(rows) == 4                          # nothing deleted
+    assert rows["757880276"] is None              # a stub with a higher id never supersedes the match
+    assert len(rows) == 6                          # nothing deleted
     assert store.mark_superseded(conn) == 0        # idempotent
 
 
