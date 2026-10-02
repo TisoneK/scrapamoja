@@ -26,6 +26,7 @@ from .path_planning import PathPlanning
 from .route_adaptation import RouteAdaptation
 from .context_manager import ContextManager
 from .route_optimizer import RouteOptimizationEngine
+from .models import RouteStep
 
 
 class NavigationService(INavigationService):

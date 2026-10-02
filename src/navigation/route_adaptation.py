@@ -16,6 +16,7 @@ from .models import PathPlan, NavigationContext, NavigationEvent, NavigationOutc
 from .exceptions import NavigationExecutionError
 from .integrations.stealth_integration import StealthSystemIntegration
 from .logging_config import get_navigation_logger, set_correlation_id, generate_correlation_id
+from .models import RouteStep
 
 
 class AdaptationStrategy(Enum):

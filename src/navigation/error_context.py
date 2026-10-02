@@ -18,6 +18,7 @@ import asyncio
 
 from .models import NavigationContext, NavigationEvent, NavigationOutcome
 from .logging_config import get_navigation_logger
+from datetime import timedelta
 
 
 @dataclass

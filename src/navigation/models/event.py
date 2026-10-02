@@ -57,7 +57,7 @@ class EventPerformanceMetrics:
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class NavigationEvent:
     """Recorded navigation action with context and outcome"""
     

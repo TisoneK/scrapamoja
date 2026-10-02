@@ -150,3 +150,33 @@ class DetectionTriggeredError(NavigationException):
         context: Optional[Dict[str, Any]] = None
     ):
         super().__init__(message, error_code, context)
+
+
+class NavigationServiceError(NavigationException):
+    """Exception for failures of the navigation service itself (initialisation, lifecycle)"""
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "NAVIGATION_SERVICE_ERROR",
+        context: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, error_code, context)
+
+
+class RouteAdaptationError(NavigationException):
+    """Exception for route adaptation failures"""
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "ROUTE_ADAPTATION_ERROR",
+        context: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, error_code, context)
+
+
+# Names the package's public API (src/navigation/__init__.py) and the route optimizer use
+# for the classes above.
+NavigationError = NavigationException
+OptimizationError = RouteOptimizationError

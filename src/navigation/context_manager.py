@@ -17,6 +17,7 @@ from .models import NavigationContext, PageState, AuthenticationState, Navigatio
 from .exceptions import ContextManagementError
 from .logging_config import get_navigation_logger, set_correlation_id, generate_correlation_id
 from .schema_validation import navigation_validator
+from .models import NavigationEvent
 
 
 class ContextManager(IContextManager):
