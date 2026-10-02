@@ -21,6 +21,10 @@ run_id: ContextVar[Optional[str]] = ContextVar('run_id', default=None)
 selector_name: ContextVar[Optional[str]] = ContextVar('selector_name', default=None)
 
 
+_RESERVED_RECORD_ATTRS = frozenset(
+    logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {"message", "asctime"}
+
+
 class JSONFormatter(logging.Formatter):
     """Custom JSON formatter for structured logging."""
     
@@ -146,9 +150,16 @@ class SelectorEngineLogger:
         # Add provided kwargs
         context.update(kwargs)
         
+        # exc_info/stack_info are logging's own keyword arguments, not record attributes
+        log_kwargs = {k: context.pop(k) for k in ("exc_info", "stack_info") if k in context}
+        # any other name that is already a LogRecord attribute would raise KeyError("Attempt to
+        # overwrite ... in LogRecord") and turn a log line into a crash inside an error handler
+        for key in [k for k in context if k in _RESERVED_RECORD_ATTRS]:
+            context[f"ctx_{key}"] = context.pop(key)
+        
         # Log the message using extra= parameter
         logger_method = getattr(self.logger, level)
-        logger_method(message, extra=context)
+        logger_method(message, extra=context, **log_kwargs)
 
 
 class CorrelationContext:
