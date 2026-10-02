@@ -182,3 +182,24 @@ def test_profile_name_env(monkeypatch):
     assert profile_name_for("linebet") is None
     monkeypatch.setenv("BETB2B_PROFILE", "mine")
     assert profile_name_for("linebet") == "mine"
+
+
+def test_cooldown_is_per_egress_so_a_direct_block_does_not_rest_the_proxied_route(skin):
+    from src.network.proxy import ProxyEndpoint
+    direct = BetB2BSessionManager(skin)
+    direct.guard.on_block(direct.guard.inspect(203, "https://linebet.com/en/block"))
+    with pytest.raises(SiteInCooldown):
+        direct.guard.preflight()
+    ep = ProxyEndpoint(id="kenya", scheme="http", host="h", port=1, country="KE")
+    proxied = BetB2BSessionManager(skin, proxy=ep)
+    proxied.guard.preflight()                                              # untouched
+    assert proxied.guard.site == "linebet@kenya"
+
+
+def test_block_through_a_configured_proxy_blames_the_proxy(skin, tmp_path, caplog):
+    from src.network.proxy import ProxyEndpoint
+    ep = ProxyEndpoint(id="kenya", scheme="http", host="h", port=1, country="KE")
+    mgr = BetB2BSessionManager(skin, proxy=ep)
+    caplog.set_level("WARNING")
+    mgr._explain_block(mgr.guard.inspect(203, "https://linebet.com/en/block"))
+    assert "the proxy is the problem" in caplog.text

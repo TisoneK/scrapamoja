@@ -251,6 +251,24 @@ class BetB2BSessionManager:
             page = context.pages[0] if context.pages else await context.new_page()
             yield page
 
+    def _explain_block(self, verdict: BlockVerdict) -> None:
+        """Say what a country/IP block means for *this* egress, so the log is actionable."""
+        if verdict.type not in (BlockType.GEO_BLOCK, BlockType.IP_BANNED):
+            return
+        if self.proxy is not None and not self.proxy.is_direct:
+            logger.warning(
+                "skin=%s still blocked THROUGH proxy %r — the proxy is the problem (tunnel down or "
+                "rotated, or its egress country/IP is not allowed). Check the proxy; this skin is "
+                "rested on this egress only.", self.skin.name, self.proxy.id)
+        elif not os.environ.get("BETB2B_PROXY_URL"):
+            logger.warning(
+                "skin=%s blocked on the DIRECT egress. The browser path needs an allowed-country "
+                "proxy (set BETB2B_PROXY_URL/USER/PASS, e.g. the Kenya tunnel); feed endpoints "
+                "usually work direct.", self.skin.name)
+        else:
+            logger.warning("skin=%s blocked on the DIRECT egress although BETB2B_PROXY_URL is set — "
+                           "run without --direct / pass the proxy to the browser path.", self.skin.name)
+
     async def _resolve_block(self, page: Any, verdict: BlockVerdict, tier: BrowserTier) -> None:
         """Walk the policy ladder for a block seen on ``page``.
 
@@ -268,6 +286,7 @@ class BetB2BSessionManager:
             elif decision.action in (Action.ESCALATE_BROWSER, Action.REFRESH_SESSION):
                 raise _Retry()
             else:
+                self._explain_block(verdict)
                 raise self.guard.blocked(verdict, decision)
             if clearance.cleared:
                 logger.info("skin=%s block cleared after %.0fs (%s)", self.skin.name,
