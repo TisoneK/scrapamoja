@@ -113,6 +113,11 @@ dedup and batched/bounded-concurrency I/O keep it cheap.
 
 ### Local by default, remote optional
 
+Configuration lives in an untracked `.env` next to this README. Start from the shipped
+template — `cp src/sites/betb2b/.env.example src/sites/betb2b/.env` — and fill in only what
+you need; every key is documented there (store, CLI defaults, retry and fallback settings,
+engine, optional proxy). It is safe to commit the example, never the `.env`.
+
 `scrape` persists to **local SQLite** by default (`$BETB2B_DB_PATH`, else
 `data/betb2b/odds.db`); `--no-db` opts out. Re-runs skip work already stored:
 
