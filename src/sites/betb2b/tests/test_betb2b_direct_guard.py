@@ -175,3 +175,27 @@ def test_direct_calls_are_paced_per_second_not_just_limited_in_flight(monkeypatc
     starts.sort()
     assert len(starts) == 12
     assert starts[-1] - starts[0] >= 11 * 0.02        # not 12 requests in the same instant
+
+
+def test_direct_calls_share_one_pooled_client(monkeypatch, tmp_path):
+    """A fresh client per call means a fresh TCP+TLS handshake per call — the pattern a
+    per-source new-connection limit punishes. All direct calls reuse one pooled client."""
+    s = make_scraper(tmp_path)
+    s.session_manager.pacer.interval = 0
+    built = []
+
+    def factory(**kw):
+        kw.pop("proxy", None)
+        built.append(1)
+        return REAL_CLIENT(transport=httpx.MockTransport(lambda req: httpx.Response(204)), **kw)
+
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+
+    async def go():
+        await s._enrich_with_h2h(events(5))
+        await s._enrich_with_stats(events(5))
+        for i in range(6):
+            await s.fetch_result_checked(str(100 + i))
+        await s.close()                      # no-op when never started; must not raise
+    asyncio.run(go())
+    assert len(built) == 1                   # not 1 + 1 + 6

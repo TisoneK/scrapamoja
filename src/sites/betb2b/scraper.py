@@ -43,6 +43,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 from datetime import datetime, timezone
@@ -179,6 +180,7 @@ class BetB2BScraper:
         self.retry_backoff = max(0.0, _env_num("BETB2B_RETRY_BACKOFF", 2.0, float))
         self.last_fetch_stats: Dict[str, Any] = {}
         self._discovery_failed = False
+        self._direct_http: Optional[httpx.AsyncClient] = None
 
         # Resolve the sport strategy (None → AllSportsScraper).
         self.sport_scraper: SportScraper = resolve_sport(sport)
@@ -263,6 +265,9 @@ class BetB2BScraper:
         if not self._started:
             return
         await self.feed_client.close()
+        if self._direct_http is not None:
+            await self._direct_http.aclose()
+            self._direct_http = None
         # Flush any buffered telemetry events.
         self.telemetry.flush()
         self._started = False
@@ -598,11 +603,9 @@ class BetB2BScraper:
         }
         try:
             self._guard_gate()
-            async with httpx.AsyncClient(
-                proxy=proxy_url, timeout=30.0, follow_redirects=True, headers=headers,
-            ) as client:
+            async with self._shared_http() as client:
                 await self.session_manager.pacer.wait()
-                resp = await client.get(url)
+                resp = await client.get(url, headers=headers, timeout=30.0)
                 self._guard_check(resp)
                 html = resp.text if resp.status_code == 200 else ""
         except (SiteBlocked, SiteInCooldown) as exc:
@@ -1027,9 +1030,7 @@ class BetB2BScraper:
         }
         try:
             self._guard_gate("stats")
-            async with httpx.AsyncClient(
-                proxy=proxy_url, timeout=15.0, follow_redirects=True,
-            ) as client:
+            async with self._shared_http() as client:
                 await self.session_manager.pacer.wait()
                 resp = await client.get(url, params=params, headers=headers)
             self._guard_check(resp, "stats")
@@ -1050,6 +1051,23 @@ class BetB2BScraper:
     # ------------------------------------------------------------------ #
     # H2H enrichment
     # ------------------------------------------------------------------ #
+    # -- one pooled HTTP client for the direct calls ------------------- #
+    @contextlib.asynccontextmanager
+    async def _shared_http(self):
+        """Yield the scraper's single pooled ``httpx`` client (created on first use, closed in
+        :meth:`close`). The direct calls used to open a fresh client — a fresh TCP+TLS
+        handshake — per call or per batch; a firewall that limits NEW connections per source
+        address punishes exactly that, while keep-alive reuse costs the site almost nothing."""
+        c = self._direct_http
+        if c is None or c.is_closed:
+            proxy_url = self.proxy_endpoint.to_httpx_proxy() if self.proxy_endpoint is not None else None
+            n = self.concurrency + 2
+            c = self._direct_http = httpx.AsyncClient(
+                proxy=proxy_url, timeout=15.0, follow_redirects=True,
+                limits=httpx.Limits(max_connections=n, max_keepalive_connections=n, keepalive_expiry=60.0),
+            )
+        yield c
+
     # -- security guard (same rules as the feed client) ---------------- #
     def _guard_gate(self, scope: Optional[str] = None) -> None:
         """Raise :class:`SiteInCooldown` while this skin (or, with ``scope``, just that endpoint
@@ -1134,9 +1152,7 @@ class BetB2BScraper:
         sem = asyncio.Semaphore(self.concurrency)   # Bounded concurrency
         halted = False   # a block stops the whole batch (one warning, not one per match)
 
-        async with httpx.AsyncClient(
-            proxy=proxy_url, timeout=15.0, follow_redirects=True,
-        ) as client:
+        async with self._shared_http() as client:
             async def _one(ev: Event) -> None:
                 nonlocal halted
                 eid = str(ev.event_id)
@@ -1238,9 +1254,7 @@ class BetB2BScraper:
         sem = asyncio.Semaphore(self.concurrency)   # Bounded concurrency
         halted = False   # a block stops the whole batch (one warning, not one per match)
 
-        async with httpx.AsyncClient(
-            proxy=proxy_url, timeout=15.0, follow_redirects=True,
-        ) as client:
+        async with self._shared_http() as client:
             async def _one(ev: Event) -> None:
                 nonlocal enriched, halted
                 eid = str(ev.event_id)
