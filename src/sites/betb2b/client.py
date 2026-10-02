@@ -216,12 +216,20 @@ class BetB2BFeedClient:
         content_type = resp.headers.get("content-type", "")
         self.guard_response(resp, url, content_type)
         rules = BetB2BExtractionRules(self.skin)
-        return rules.decode_response(
+        cap = rules.decode_response(
             url=url,
             status=resp.status_code,
             content_type=content_type,
             raw_bytes=resp.content,
         )
+        if resp.status_code == 200 and cap.decoded:
+            # API contract watch: a changed response *structure* is recorded as evidence
+            endpoint = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
+            drift = self.session_manager.guard.evidence.check_shape(self.skin.name, endpoint, cap.decoded)
+            if drift:
+                logger.warning("skin=%s %s response shape changed: +%d new paths (see `python -m src.security evidence`)",
+                               self.skin.name, endpoint, drift["added_total"])
+        return cap
 
     async def fetch_game(
         self,

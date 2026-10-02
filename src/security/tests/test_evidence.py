@@ -98,3 +98,25 @@ def test_cli_prints_the_summary(tmp_path, monkeypatch, capsys):
     assert main(["evidence"]) == 0
     out = capsys.readouterr().out
     assert "betwinner" in out and "block" in out
+
+
+def test_shape_watch_baseline_then_drift(tmp_path, monkeypatch):
+    from src.security.evidence import EvidenceLog, shape_of
+    import src.security.evidence as ev
+    monkeypatch.setattr(ev, "WARMUP_RESPONSES", 3)
+    log = EvidenceLog(tmp_path)
+    a = {"Success": True, "Value": {"O1": "A", "E": [{"C": 1.5, "T": 9}]}}
+    assert shape_of(a) == {"Success:bool", "Value.O1:str", "Value.E[].C:number", "Value.E[].T:number"}
+    assert log.check_shape("s", "GetGameZip", a) is None                   # first sight: baseline
+    for _ in range(3):                                                     # warm-up: baseline learns
+        log.check_shape("s", "GetGameZip", a)
+    # different VALUES, same structure -> no drift (odds change on every request)
+    assert log.check_shape("s", "GetGameZip", {"Success": False, "Value": {"O1": "Z", "E": [{"C": 9.9, "T": 1}]}}) is None
+    # a new field, and a vanished top-level key -> drift, recorded as evidence
+    d = log.check_shape("s", "GetGameZip", {"Success": True, "Value": {"O1": "A", "E": [{"C": 1, "T": 2, "New": "x"}]}})
+    assert d["added"] == ["Value.E[].New:str"]
+    # a reply that merely LACKS keys (an error reply) is not drift
+    assert log.check_shape("s", "GetGameZip", {"Value": {"O1": "A"}}) is None
+    assert any(r["kind"] == "drift" for r in log.read(days=1))
+    # an optional field appearing later is absorbed by the union baseline
+    assert log.check_shape("s", "GetGameZip", {"Success": True, "Value": {"O1": "A", "E": [{"C": 1, "T": 2, "New": "x"}]}}) is None

@@ -34,6 +34,9 @@ KEEP_DAYS = 7
 # times per process; later repeats are only counted (see the closing summary record).
 FULL_RECORDS_PER_SIGNATURE = 3
 MAX_BODY_CHARS = 2000
+# A response shape is only called drift once this many responses have taught the baseline which
+# fields are optional (a single match lacks e.g. period scores that the next one has).
+WARMUP_RESPONSES = 30
 
 
 def default_dir() -> Path:
@@ -136,6 +139,39 @@ class EvidenceLog:
     def _iso(self) -> str:
         return datetime.fromtimestamp(self._clock(), timezone.utc).isoformat(timespec="seconds")
 
+    def check_shape(self, site: str, endpoint: str, decoded: Any) -> Optional[Dict[str, Any]]:
+        """Compare this response's structure with the baseline kept for (site, endpoint).
+
+        The baseline is the union of every shape seen, so optional fields that appear only for
+        some matches do not alarm. New paths are written as a ``drift`` record (the API contract changed) and
+        returned. Vanished keys are deliberately not reported: error replies legitimately lack them. The first sighting only saves
+        the baseline. Never raises.
+        """
+        try:
+            if not isinstance(decoded, (dict, list)) or not decoded:
+                return None
+            shape = shape_of(decoded)
+            safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in f"{site}__{endpoint}")
+            path = self.dir / "shapes" / f"{safe}.json"
+            saved = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+            base = set(saved["paths"]) if saved else None
+            seen = saved["seen"] if saved else 0
+            if base is not None and shape <= base:
+                if seen < WARMUP_RESPONSES or seen % 50 == 0:      # cheap counter, rarely rewritten
+                    path.write_text(json.dumps({"seen": seen + 1, "paths": sorted(base)}), encoding="utf-8")
+                return None
+            added = sorted(shape - base) if base is not None else []
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"seen": seen + 1, "paths": sorted((base or set()) | shape)}),
+                            encoding="utf-8")
+            if base is None or seen < WARMUP_RESPONSES:
+                return None            # still learning which fields are optional
+            diff = {"added": added[:40], "added_total": len(added)}
+            self._append({"ts": self._iso(), "kind": "drift", "site": site, "endpoint": endpoint, **diff})
+            return diff
+        except Exception:  # noqa: BLE001
+            return None
+
     # -- reading ------------------------------------------------------------ #
     def read(self, days: int = 1, site: Optional[str] = None) -> List[Dict[str, Any]]:
         out: List[Dict[str, Any]] = []
@@ -165,6 +201,8 @@ class EvidenceLog:
                 continue
             v = r.get("verdict") or {}
             err = (r.get("error") or "").split(":")[0]
+            if r.get("kind") == "drift":
+                err = r.get("endpoint", "")
             key = (r.get("site"), r.get("kind"), r.get("status"), v.get("type"), v.get("vendor"), err)
             g = groups.setdefault(key, {"site": key[0], "kind": key[1], "status": key[2],
                                         "type": key[3], "vendor": key[4], "error": err or None,
@@ -175,6 +213,29 @@ class EvidenceLog:
             body = (r.get("response") or {}).get("body")
             g["example"] = {"url": r.get("url"), "body": (body if isinstance(body, str) else json.dumps(body))[:160] if body else None}
         return sorted(groups.values(), key=lambda g: (-g["count"], str(g["site"])))
+
+
+def shape_of(obj: Any, prefix: str = "") -> set:
+    """The *structure* of a decoded JSON body as ``{"Value.E[].C:float", ...}``.
+
+    Values change on every request (odds, scores), so a hash can never tell "the API changed"
+    from "the match moved". Key paths and value types can: lists are collapsed to ``[]`` and the
+    shapes of all their items are unioned.
+    """
+    out: set = set()
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            out |= shape_of(v, f"{prefix}.{k}" if prefix else str(k))
+    elif isinstance(obj, list):
+        for item in obj:
+            out |= shape_of(item, prefix + "[]")
+        if not obj:
+            out.add(prefix + "[]")
+    else:
+        kind = "null" if obj is None else "bool" if isinstance(obj, bool) else \
+            "number" if isinstance(obj, (int, float)) else "str" if isinstance(obj, str) else "other"
+        out.add(f"{prefix}:{kind}")
+    return out
 
 
 def _strip_query(url: str) -> str:
