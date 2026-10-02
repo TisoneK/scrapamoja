@@ -45,6 +45,11 @@ def test_blocked_discovery_is_a_failed_run(skin):
     assert s._discovery_failed is True
 
 
+def _load_skin_linebet():
+    from src.sites.betb2b.cli.main import _load_skin
+    return _load_skin("linebet")
+
+
 def _put(conn, eid, home, away, start, league, venue="Arena"):
     conn.execute(
         "INSERT INTO events (event_id, league_id, home_name, away_name, start_time, "
@@ -188,3 +193,41 @@ def test_no_data_is_not_treated_as_unreachable(skin):
         e = _ev("A", "B"); e.event_id = str(100 + i); evs.append(e)
     asyncio.run(s._enrich_with_stat_ids(evs))
     assert len(calls) == 20          # every event is still tried
+
+
+@pytest.mark.parametrize("entry,expected", [
+    ({"I": 1, "O1": "Lleida", "O2": "Burgos"}, False),                       # a real match
+    ({"I": 2, "O1": "NBA. 2026/27. MVP", "O2": ""}, True),                   # outright: empty second side
+    ({"I": 3, "O1": "NBA Cup. 2026. Winner"}, True),                         # O2 absent counts as empty
+    ({"I": 4, "O1": "NBA. Regular season", "O2": None}, True),               # explicit null second side
+    ({"I": 5, "O1": "Home (Points)", "O2": "Away (Points)"}, True),          # generic placeholder listing
+    ({"I": 6, "O1": "Home Guard", "O2": "Away Wolves"}, False),              # real clubs with similar words
+    ({"I": 7}, False),                                                       # a stub without O1 is never judged
+])
+def test_non_match_listing_detection(entry, expected):
+    from src.sites.betb2b.extraction.rules import is_non_match_listing
+    assert is_non_match_listing(entry) is expected
+
+
+def test_discovery_skips_outrights_before_any_per_match_request(monkeypatch, tmp_path):
+    """Outrights ('NBA 2026/27 MVP', O2 empty) and placeholder listings never become events, yet
+    were fetched on every run — a quarter of all requests. Discovery now drops them from the
+    league list alone."""
+    from types import SimpleNamespace
+    from src.sites.betb2b.scraper import BetB2BScraper
+    s = BetB2BScraper(_load_skin_linebet(), sport="basketball", direct=True)
+
+    async def sports(root="line"):
+        return SimpleNamespace(status=200, decoded={"Success": True, "Value": [
+            {"I": 3, "L": [{"LI": 1, "GC": 4, "L": "League"}]}]})
+
+    async def champ(li, root="line"):
+        return SimpleNamespace(status=200, decoded={"Success": True, "Value": {"G": [
+            {"I": 10, "S": 111, "O1": "Lleida", "O2": "Burgos"},
+            {"I": 11, "S": 222, "O1": "NBA. 2026/27. MVP", "O2": ""},
+            {"I": 12, "S": 333, "O1": "Home (Points)", "O2": "Away (Points)"},
+            {"I": 13, "S": 444, "O1": "Jena", "O2": "Chemnitz"}]}})
+
+    s.feed_client.fetch_sports, s.feed_client.fetch_champ = sports, champ
+    pairs = asyncio.run(s.discover_ids())
+    assert [i for i, _ in pairs] == ["10", "13"]          # only the two real matches

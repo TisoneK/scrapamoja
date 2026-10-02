@@ -57,7 +57,7 @@ from src.security import SiteBlocked, SiteInCooldown
 from .client import BetB2BFeedClient
 from .config import BetB2BSkinConfig
 from .extraction.models import BetB2BScrapeResult, CapturedFeedResponse, Event, H2HData, Sport
-from .extraction.rules import BetB2BExtractionRules
+from .extraction.rules import BetB2BExtractionRules, is_non_match_listing
 from .session import BetB2BSessionManager
 from .sports import SportScraper, SportScraperContext, resolve_sport
 from .telemetry_integration import BetB2BTelemetry
@@ -751,6 +751,7 @@ class BetB2BScraper:
         leagues = leagues[:int(getattr(self.skin, "max_leagues", 60) or 60)]
 
         out: dict = {}  # event_id -> start_epoch (S)
+        skipped_non_match = 0
         for i, (li, _gc, _name) in enumerate(leagues, 1):
             self._emit_phase(f"discovering leagues ({i}/{len(leagues)})")
             try:
@@ -758,10 +759,17 @@ class BetB2BScraper:
                 value = (getattr(ccap, "decoded", None) or {}).get("Value") or {}
                 for g in value.get("G") or []:
                     gi = g.get("I") if isinstance(g, dict) else None
-                    if gi:
-                        out.setdefault(str(gi), g.get("S"))
+                    if not gi:
+                        continue
+                    if is_non_match_listing(g):    # outright/futures or placeholder: never a match
+                        skipped_non_match += 1
+                        continue
+                    out.setdefault(str(gi), g.get("S"))
             except Exception as exc:  # noqa: BLE001
                 logger.debug("skin=%s GetChampZip li=%s failed: %s", self.skin.name, li, exc)
+        if skipped_non_match:
+            logger.info("skin=%s discovery skipped %d non-match listings (outrights/placeholders) "
+                        "without fetching them", self.skin.name, skipped_non_match)
         logger.info("skin=%s direct discovery: %d leagues → %d events (root=%s)",
                     self.skin.name, len(leagues), len(out), root)
         return list(out.items())

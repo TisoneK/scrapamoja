@@ -247,13 +247,28 @@ def _coerce_status(sc: Dict[str, Any], is_live: bool) -> Tuple[EventStatus, Opti
 _PLACEHOLDER_NAME = re.compile(r"^\s*(home|away|team\s*[12])\s*(\(.*\))?\s*$", re.IGNORECASE)
 
 
+def is_placeholder_names(home: Optional[str], away: Optional[str]) -> bool:
+    """True when BOTH participant names are generic (``Home (Points)`` / ``Away (Points)``,
+    ``Team 1`` / ``Team 2``): a special-market listing, not a match. Both sides must be
+    generic, so a real team named e.g. "Home Guard" is never dropped."""
+    return bool(_PLACEHOLDER_NAME.match(home or "") and _PLACEHOLDER_NAME.match(away or ""))
+
+
 def is_placeholder_event(event: Event) -> bool:
-    """True for special-market listings that are not real matches — the feed
-    carries them with generic participant names such as ``Home (Points)`` /
-    ``Away (Points)``. Both sides must be generic, so a real team named e.g.
-    "Home Guard" is never dropped."""
-    return bool(_PLACEHOLDER_NAME.match(event.home or "")
-                and _PLACEHOLDER_NAME.match(event.away or ""))
+    """True for special-market listings that are not real matches (see
+    :func:`is_placeholder_names`)."""
+    return is_placeholder_names(event.home, event.away)
+
+
+def is_non_match_listing(entry: Dict[str, Any]) -> bool:
+    """True for a league-list entry (``GetChampZip`` ``G[]``) that cannot be a match, judged
+    from the list alone so the per-match request can be skipped: an outright/futures market
+    (a participant list with an EMPTY second side, e.g. "NBA 2026/27 MVP") or a generic
+    placeholder listing. An entry without ``O1`` at all is not judged (kept)."""
+    if not isinstance(entry, dict) or "O1" not in entry:
+        return False
+    away = str(entry.get("O2") or "").strip()
+    return (not away) or is_placeholder_names(entry.get("O1"), away)
 
 
 class BetB2BExtractionRules:
