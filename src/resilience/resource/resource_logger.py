@@ -12,7 +12,7 @@ from datetime import datetime
 
 from ..correlation import get_correlation_id
 from ..models.resource import Resource, ResourceStatus, ResourceType, ResourceAction
-from .resilience_logger import ResilienceLogger
+from ..logging.resilience_logger import ResilienceLogger
 
 
 class ResourceLogger:

@@ -10,7 +10,7 @@ import time
 from typing import Dict, Any, Optional, List, Callable
 from datetime import datetime, timedelta
 
-from ..browser.browser_manager import BrowserManager, BrowserMetrics, BrowserConfiguration
+from ..resource.browser_manager import BrowserManager, BrowserMetrics, BrowserConfiguration
 from ..resource.resource_manager import ResourceManager, Resource, ResourceType
 from ..checkpoint.checkpoint_manager import CheckpointManager, Checkpoint, CheckpointType
 from ..abort.abort_manager import AbortManager, AbortPolicy

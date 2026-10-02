@@ -15,7 +15,7 @@ from ..models.abort import (
     AbortPolicy, AbortDecision, AbortAction, AbortTrigger, AbortSeverity,
     ExecutionResult, RollbackInfo
 )
-from .resilience_logger import ResilienceLogger
+from ..logging.resilience_logger import ResilienceLogger
 
 
 class AbortLogger:

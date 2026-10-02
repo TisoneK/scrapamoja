@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 from dataclasses import dataclass, field
+from enum import Enum
 
 from ..models.abort import AbortTrigger, AbortSeverity, AbortMetrics
 from ..logging.resilience_logger import get_logger

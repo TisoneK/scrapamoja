@@ -12,7 +12,7 @@ from datetime import datetime
 
 from ..correlation import get_correlation_id
 from ..models.checkpoint import Checkpoint, CheckpointStatus, CheckpointType
-from .resilience_logger import ResilienceLogger
+from ..logging.resilience_logger import ResilienceLogger
 
 
 class CheckpointLogger:
