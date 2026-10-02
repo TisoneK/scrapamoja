@@ -327,3 +327,11 @@ Friction caused by the `.context/` system or the protocol itself. See
 - **Root cause:** the tree sweep exempts only `.context_ledger/` itself; the staged-diff mode and the templates' own entry points were never reconciled.
 - **Suggested fix:** exempt the managed entry points (`AGENTS.md`, `CLAUDE.md`, `.gitattributes`, and the kickoff pointer) from the `.context_ledger/` path rule in `ledger-mem lint --tree` (still flag ADR-N / bug IDs there), or mark a managed block with a lint-ignore marker the templates carry.
 - **Status:** open upstream; worked around here (ADR numbers stripped from the entry points too; routing paths kept).
+---
+## 2026-10-02 — Noor (S449) / claude-sonnet-5-5 (Session 51)
+- **Flaw:** my clock-out edit truncated `office/agents/roster.md` to 0 bytes and I committed + pushed it, deleting every row on the board (including a peer's). Cause: `open(p,'w').write("\n".join(... open(p).read() ...))` — opening for write truncates before the generator reads.
+- **Symptom:** the next check-in could not find the peer's row anchor (`ValueError`); `git show` of the clock-out commit showed the roster at 0 bytes (78 deletions).
+- **Root cause:** read-modify-write on one file in a single expression; I did not review `git diff` of the roster before committing, which the protocol requires (exactly my own row, `-1` on clock-out).
+- **Fix:** restored from the previous commit, re-added my row, pushed. The peer's row survives.
+- **Prevent next time:** read the file into a variable first, write second; and check `git diff --stat` of the roster shows exactly one deleted line before committing a clock-out.
+- **Status:** fixed here; suggested upstream: `ledger-mem check` should fail on an empty/headerless roster.
