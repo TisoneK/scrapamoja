@@ -50,7 +50,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Kai | S447 | qwen3.8-flash | Operator: env-only switch to run workers locally during the Supabase pause | Done | Shipped: BETB2B_STORE_MODE (auto/local/mirror/remote) + 9 tests, suite 262 green; core 1.1.3 + office compaction. Operator still to stop the Railway worker |
-| Ada | S448 | claude-sonnet-5-5 | Engineer: strip the 265 product-code ADR citations (ledger-mem lint --tree) and do the end-to-end session bookkeeping properly — checked back in after clock-out | Working | Phase 1 re-read done; stripping citations next |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

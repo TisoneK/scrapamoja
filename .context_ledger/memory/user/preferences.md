@@ -31,6 +31,15 @@ correction twice.
 - Full autonomous sweep sessions: discovery + review + fix all safe issues (kickoff, 2026-07-12)
 - On the Lameck-Windows box (`C:\Users\Lameck\Tisone\scrapamoja`), build the dev venv on **Python 3.11** even though the project floor is 3.12 — operator directive over the machine's 3.14 default; suite is green on 3.11 with the two-flag install recipe recorded in `system/environments.md` (stated, 2026-09-14)
 
+## Data & scraping behaviour
+- **Local SQLite is the default store; a remote database is optional and configured by env** (`DATABASE_URL`) — never a shared JSON file (stated, 2026-10-02)
+- **A stored match is scraped once**; re-fetch only to update scores (live scrape, results) (stated, 2026-10-02)
+- **Proxies are for bypassing the website (browser path), never for API calls** — do not route API/feed requests through a proxy (correction, 2026-10-02)
+- **Verify before judging data** — don't call rows duplicates/junk until checked against the live feed (the "duplicates" were relisted matches and sub-games, not period splits) (correction, 2026-10-02)
+- **Be gentle with the reverse-engineered endpoints** — they were hard to find; prefer offline/recorded verification and low request rates over repeated live hammering (stated, 2026-10-02)
+- **Per-skin defaults live in `src/sites/betb2b/.env`** (gitignored); give the operator a file with every field to fill (stated, 2026-10-02)
+- **No Supabase assumptions** — the operator never named it for the new store; use provider-neutral wording (Neon / "any Postgres") (correction, 2026-10-02)
+
 ## Communication
 - Conventional Commits with scope; `chore(ledger):` for `.context_ledger/` updates (prefix was `chore(context):` until the core 1.1.1 rename, 2026-09-14) (stated, 2026-07-12)
 - Agent must log inefficiencies in real time, not wait to be prompted (correction, 2026-07-19)
@@ -42,6 +51,7 @@ correction twice.
 - Cross-reference recorded platform facts (Windows, macOS, etc.) against every tool, script, and command the protocol asks you to run — if something won't work on this platform, log it as a flaw before being told (correction, 2026-07-20)
 
 ## Context protocol compliance
+- **Follow the ledger from the first turn, even for conversational requests** — roster check-in, gates, lint, session log, ADRs, report, backlog tables, `ai-models` row, preferences; the operator had to ask "are you following ledger rules?" and "do actual bookkeeping end to end following protocol" (correction, 2026-10-02)
 - `.context_ledger/` is the primary workflow, not a backup — internalize it as the source of truth over built-in agent workflows (correction, 2026-07-20; dir renamed from `.context/` at core 1.1.1)
 - Record every user correction as a preference in this file immediately — never let corrections pile up unrecorded across sessions (correction, 2026-07-20)
 - Before investigating/probing a known problem (e.g. the betb2b feed 406), READ the context first (ADRs, RECON.md, backlog) — much is already solved and documented; don't re-derive it. The 406 root cause + decision is ADR-4 (rotating SW-injected `x-dt` header; don't chase it — use DOM/HTML-harvest) (correction, 2026-07-21)

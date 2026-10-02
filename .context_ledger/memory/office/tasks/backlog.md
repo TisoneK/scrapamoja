@@ -5,6 +5,33 @@ reorder. When an item is done, check it off and note the session/commit —
 don't remove the line.
 
 <!-- TEMPLATE — copy below the last entry:
+
+## Open Items
+
+### High Priority
+
+| ID | Summary |
+|----|---------|
+| B-2026-10-02-1 | Live-verify the betb2b pipeline once a skin answers (linebet = Gcore JS challenge; betwinner/melbet/22bet time out from the dev IP after bursts). One gentle run (`scrape --direct --skip-processed`, concurrency 4) should confirm: stat-id capture (`v1/Game?id=<event id>` for UPCOMING matches — unverified, ADR-20's addendum says it may not resolve), retry + skin-fallback behaviour, and why so many discovered ids return no event. Do not hammer — the endpoints were hard to reverse-engineer. |
+| B-2026-10-02-2 | Shared per-skin cooldown + hourly request budget: after N timeouts every part of the scraper (discovery, fetch, stat ids, results) should pause that skin for a set time; today each backs off separately. Plus an optional requests-per-hour cap. Protects the costly endpoints. |
+
+### Medium Priority
+
+| ID | Summary |
+|----|---------|
+| B-2026-10-02-3 | Rotate the bore.pub proxy password — it was shared in an agent chat. Lives in `memory/secrets/betb2b-proxy` and the (gitignored, commented-out) `src/sites/betb2b/.env`. Operator rule: the proxy is for the website/browser bypass only, never for API calls. |
+| B-2026-10-02-4 | Storage-quota monitor limit for Neon — partial: `BETB2B_DB_LIMIT_MB=1000` is now set in the local `.env` and shipped in `.env.example`; any DEPLOYED worker/service env (Railway or other) still defaults to 500 MB (the Supabase limit) and needs it set. Neon free = 1 GB storage / 100 compute-hours. |
+| B-2026-10-02-5 | `ledger-mem lint --tree` can never pass in this repo: it flags the `.context_ledger/` routing paths inside `AGENTS.md`/`CLAUDE.md` (the ledger's own entry-point files). 262 ADR citations were stripped from product files this session (0 left); the 40 entry-point path hits remain. See the flaws log for the suggested upstream fix. |
+
+### Low Priority
+
+| ID | Summary |
+|----|---------|
+| B-2026-10-02-6 | `reset` CLI for the local/remote store: only `quota --truncate-facts` exists and it keeps `events` (so skip-processed would still skip everything). The operator wiped Neon by hand via SQL. A guarded `reset --all --force` (row counts + confirmation) would replace that. |
+| B-2026-10-02-7 | Reconcile docs still saying Supabase/Railway, the Supabase-specific numbers in `RAILWAY.md`, and AGENTS.md's "same events and ids across sister sites" (ADR-27: ids are mostly, not always, identical; relisting). Storage is now Neon (ADR-26). |
+| B-2026-10-02-8 | Cross-sport check of relist linking (`superseded_by`) and the sub-game filter — verified on basketball only. |
+| B-2026-10-02-9 | Delete the local safety branch `backup/pre-reset-main` once the operator is sure the four dropped `.context` rename commits are not needed (they were superseded by upstream's `.context_ledger` history). |
+
 ---
 - [ ] **<short title>** (added YYYY-MM-DD by <agent>) — <enough context that
       a fresh agent can act on this without any chat history. Severity if known.>
@@ -1032,13 +1059,3 @@ don't remove the line.
       --replace-text` + force-push would purge historical blobs. Force-push rewrites all SHAs:
       coordinate with every clone (Sam's checkout, other machines, Railway if it builds from
       git) and weigh against post-rotation risk. Report: `reviews/2026-09-08-review-2.md`.
-
----
-- [ ] **Live-verify the new betb2b pipeline once a skin answers** (added 2026-10-02 by Ada/S448) — linebet is behind a Gcore JS challenge and melbet/22bet/betwinner time out from the dev IP (burst throttling suspected). One gentle run (`scrape --direct --skip-processed`, concurrency 4) should confirm: stat-id capture (`v1/Game?id=<event id>` for UPCOMING matches — unverified; ADR-20 addendum says it may not resolve), retry/fallback behaviour, and the unexplained share of discovered ids returning no event. HIGH. Do not hammer: the endpoints were hard to reverse-engineer.
-- [ ] **Shared per-skin cooldown + hourly request budget** (added 2026-10-02 by Ada/S448) — after N timeouts every part of the scraper should pause that skin for a set time (discovery, fetch, stat ids, results currently back off separately). Plus an optional requests-per-hour cap. MED-HIGH (protects the costly endpoints).
-- [ ] **Strip 265 ADR citations from product code** (added 2026-10-02 by Ada/S448) — `ledger-mem lint --tree` (core 1.1.0 rule: product code must not cite ADR/ledger vocabulary). Mostly in tests, `src/sites/linebet/RECON.md`, `tests/unit/test_core_db.py`. Mechanical but wide (~50 files); replace with plain-words reasons. MED.
-- [ ] **Rotate the bore.pub proxy password** (added 2026-10-02 by Ada/S448) — the password was shared in an agent chat session. It lives in `memory/secrets/betb2b-proxy` and the (gitignored, commented-out) `src/sites/betb2b/.env`. Also: proxy is for the website bypass only, never API calls (operator rule). MED.
-- [ ] **Set the quota monitor limit for Neon** (added 2026-10-02 by Ada/S448) — `BETB2B_DB_LIMIT_MB` defaults to 500 (Supabase); Neon free is 1 GB storage (100 compute-hours). Set in `src/sites/betb2b/.env` / deploy env. LOW-MED.
-- [ ] **`reset` CLI command for the remote/local store** (added 2026-10-02 by Ada/S448) — only `quota --truncate-facts` exists (keeps `events`, so skip-processed would still skip everything). Operator wiped Neon by hand via SQL. A guarded `reset --all --force` (with row counts + confirmation) would replace that. LOW.
-- [ ] **Reconcile docs that still say Supabase/Railway and "ids identical across skins"** (added 2026-10-02 by Ada/S448) — AGENTS.md, RAILWAY.md, README parts; ADR-27 supersedes the id-identity claim; storage is now Neon (ADR-26). LOW.
-- [ ] **Cross-sport check of relist linking and the sub-game filter** (added 2026-10-02 by Ada/S448) — verified on basketball only. LOW.
