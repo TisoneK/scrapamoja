@@ -132,8 +132,8 @@ python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --ski
 **Resilience.** A match fetch that times out or hits a WAF page is *failed*, not
 "no data". Failed ids are retried (`BETB2B_RETRIES`, exponential
 `BETB2B_RETRY_BACKOFF`), then retried on other skins in order
-(`--fallback-skins` / `BETB2B_FALLBACK_SKINS` — event ids are identical across
-skins; recovered rows are stored under the skin that served them). Parallelism is
+(`--fallback-skins` / `BETB2B_FALLBACK_SKINS` — event ids are mostly, not always,
+identical across skins (a match can be re-listed under a new id); recovered rows are stored under the skin that served them). Parallelism is
 `BETB2B_CONCURRENCY` (default 4). Ids that still fail stay unstored and are
 retried on the next `--skip-processed` run.
 

@@ -195,7 +195,7 @@ See `reviews/2026-07-21-review.md` + `tasks/current.md` Session 25 plan.
 - White-label platform provider (Curaçao), powers 18+ betting brands
 - Frontend: Microfrontend shell + betting app loaded via CDN (`v3.traincdn.com`). NOT Nuxt.js SSR (no `window.__NUXT__`)
 - Backend: `/service-api/LiveFeed/` and `/service-api/LineFeed/` REST endpoints returning terse-key JSON
-- All sister sites share the same odds feed, events, and markets; differences are branding + risk margins
+- All sister sites share the same odds feed, events, and markets; differences are branding + risk margins. Event ids are mostly, **not always**, identical across skins and over time: the bookmaker re-lists a match under a new (higher) id and the old id then returns nothing, and quarter/half/special "sub-games" appear in the league list as if they were matches. The store links re-listed matches (`events.superseded_by`) and drops sub-game ids
 - Anti-bot: Cloudflare WAF, JS challenges, rate limiting, TLS fingerprinting, geo-blocking per skin
 - API endpoints: `Get1x2_VZip`, `GetSportsShortZip`, `WebGetTopChampsZip`, `GetTopGamesStatZip`
 - Response format: `{"Success": true, "Value": [{I, O1, O2, SN, SI, L, LI, S, SC, E[], AE[]}]}`

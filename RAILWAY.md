@@ -1,5 +1,7 @@
 # Railway Deployment — Scrapamoja
 
+> **Status (2026-10): legacy reference.** The Railway subscription has ended and the shared store moved to a Neon Postgres (any Postgres works: set `DATABASE_URL`; see "Local by default, remote optional" in `src/sites/betb2b/README.md`). Wherever this guide says Supabase, read "the hosted Postgres". The steps remain valid for any similar container host; the storage-quota numbers below describe the old free plan (the monitor's limit is `BETB2B_DB_LIMIT_MB`).
+
 This guide deploys the **FastAPI control plane** (`src/api/main.py`) to Railway as a long-running web service. The CLI (`src/main.py`) is for one-off scrape jobs — it ships inside the image for `railway run` use but is NOT the deployed process.
 
 ---
