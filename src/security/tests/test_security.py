@@ -206,3 +206,49 @@ def test_guard_without_a_browser_skips_the_browser_rungs():
     v = g.inspect(200, "https://y/feed", {"content-type": "text/html"},
                   "<html><head><title>Gcore</title></head><body>Browser Validation</body></html>")
     assert g.on_block(v).action is Action.WAIT_FOR_CLEARANCE
+
+
+class _Clock:
+    def __init__(self):
+        self.t = 1_000_000.0
+
+    def __call__(self):
+        return self.t
+
+
+def test_timeouts_in_a_row_rest_the_site_and_success_resets_the_streak(tmp_path):
+    from src.security import BETB2B_RULES, BlockLedger, BlockType, SecurityGuard, SiteInCooldown
+    clock = _Clock()
+    g = SecurityGuard("s", rules=BETB2B_RULES, interactive=False, fail_threshold=3, fail_cooldown=100,
+                      ledger=BlockLedger(tmp_path / "l.json", clock=clock))
+    assert g.note_failure() is False and g.note_failure() is False
+    g.on_success()                                   # an answer breaks the streak
+    assert g.note_failure() is False and g.note_failure() is False
+    assert g.note_failure() is True                  # the 3rd in a row rests the site
+    with pytest.raises(SiteInCooldown) as ei:
+        g.preflight()
+    assert ei.value.last is BlockType.UNREACHABLE and 90 < ei.value.seconds_left <= 100
+    clock.t += 101
+    g.preflight()                                    # cooldown over
+    assert g.note_failure() is True                  # still failing -> rests again, twice as long
+    clock.t += 150
+    with pytest.raises(SiteInCooldown):
+        g.preflight()
+
+
+def test_hourly_budget_caps_requests_and_resets_with_the_window(tmp_path):
+    from src.security import BETB2B_RULES, BlockLedger, SecurityGuard, SiteInCooldown
+    clock = _Clock()
+    g = SecurityGuard("s", rules=BETB2B_RULES, interactive=False, hourly_budget=3,
+                      ledger=BlockLedger(tmp_path / "l.json", clock=clock))
+    for _ in range(3):
+        g.preflight()
+    with pytest.raises(SiteInCooldown) as ei:
+        g.preflight()
+    assert 3500 < ei.value.seconds_left <= 3600
+    clock.t += 3601
+    g.preflight()                                    # new hour, new budget
+    unlimited = SecurityGuard("u", rules=BETB2B_RULES, interactive=False,
+                              ledger=BlockLedger(tmp_path / "u.json", clock=clock))
+    for _ in range(50):
+        unlimited.preflight()                        # budget 0 = off (the default)

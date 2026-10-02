@@ -34,6 +34,9 @@ class SiteState:
     attempts: Dict[str, int] = field(default_factory=dict)   # per block type, since last success
     browser_tier: int = 0
     total_blocks: int = 0
+    consecutive_failures: int = 0     # timeouts / dropped connections in a row (not blocks)
+    window_start: float = 0.0         # request-budget window
+    window_count: int = 0
 
 
 class BlockLedger:
@@ -98,9 +101,43 @@ class BlockLedger:
         self.state(site).browser_tier = tier
         self._save()
 
+    def record_failure(self, site: str, threshold: int, base_cooldown: float,
+                       max_cooldown: float = 6 * 3600.0) -> float:
+        """A transport failure (timeout / dropped connection). After ``threshold`` in a row
+        the site is rested for ``base_cooldown`` seconds, doubling for each further
+        failure streak. Returns the cooldown started (0 if none)."""
+        st = self.state(site)
+        st.consecutive_failures += 1
+        if threshold <= 0 or st.consecutive_failures < threshold:
+            return 0.0
+        over = st.consecutive_failures - threshold
+        seconds = min(max_cooldown, base_cooldown * (2 ** min(over, 10)))
+        st.last_type, st.last_block_at = BlockType.UNREACHABLE.value, self._clock()
+        st.cooldown_until = self._clock() + seconds
+        self._save()
+        return seconds
+
+    def charge(self, site: str, budget: int, window: float = 3600.0) -> float:
+        """Count one request against an hourly budget; returns the seconds until the window
+        resets when the budget is spent (0 = fine). ``budget <= 0`` means unlimited."""
+        if budget <= 0:
+            return 0.0
+        st, now = self.state(site), self._clock()
+        if now - st.window_start >= window:
+            st.window_start, st.window_count = now, 0
+        if st.window_count >= budget:
+            return max(1.0, st.window_start + window - now)
+        st.window_count += 1
+        self._charges = getattr(self, "_charges", 0) + 1
+        if self._charges % 25 == 0:      # persist often enough to survive a crash, not on every request
+            self._save()
+        return 0.0
+
     def record_success(self, site: str) -> None:
         """A clean response: forget the streak but keep the tier that worked."""
         st = self._sites.get(site)
+        if st is not None and st.consecutive_failures:
+            st.consecutive_failures = 0
         if st is None or (st.consecutive_blocks == 0 and not st.attempts):
             return
         st.consecutive_blocks = 0

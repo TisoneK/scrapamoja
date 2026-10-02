@@ -184,6 +184,8 @@ class BetB2BFeedClient:
         try:
             resp = await self._client.get(url, headers=headers)
         except httpx.HTTPError as exc:
+            if isinstance(exc, httpx.TransportError):      # no answer at all: counts toward resting the skin
+                self.session_manager.guard.note_failure()
             logger.error(
                 "skin=%s feed=%s HTTP error: %s", self.skin.name, feed, exc,
             )

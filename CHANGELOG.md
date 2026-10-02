@@ -38,6 +38,19 @@ Defaults can now live in a local, untracked `src/sites/betb2b/.env` file:
 the skin, sport, action, request limits, retry settings and a list of backup
 skins.
 
+### Fixed — a struggling or blocking site is left alone, by every part of the scraper (2026-10-02)
+
+The statistics, head-to-head, final-score and landing-page requests used to
+ignore the protection the rest of the scraper respects, so one challenge page
+could be fetched and mis-read once per match. They now share the same rules:
+a challenge stops the batch with one message and puts the site on a rest
+period. In the no-browser mode a challenge goes straight to resting (or the
+backup skins) instead of being retried silently. A site that simply stops
+answering (timeouts, dropped connections) is rested after a run of such
+failures — default six in a row, five minutes, doubling — and an optional
+per-hour request cap is available (`BETB2B_HOURLY_BUDGET`). `probe` now says
+honestly when no cookies were obtained.
+
 ### Fixed — fewer silent gaps, no junk matches (2026-10-02)
 
 - A match request that times out or is blocked is now retried with a short

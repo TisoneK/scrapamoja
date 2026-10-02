@@ -608,6 +608,7 @@ class BetB2BScraper:
             logger.warning("skin=%s HTML harvest skipped: %s", self.skin.name, exc)
             return []
         except httpx.HTTPError as exc:
+            self._guard_failure(exc)
             logger.warning("skin=%s HTML harvest GET %s failed: %s", self.skin.name, url, exc)
             return []
 
@@ -1040,6 +1041,7 @@ class BetB2BScraper:
             logger.debug("skin=%s result fetch id=%s stopped by the guard: %s", self.skin.name, ident, exc)
             return None, True                           # FAILED (not "no data"): trips the callers' breaker
         except Exception as exc:  # noqa: BLE001 — best-effort
+            self._guard_failure(exc)
             logger.debug("skin=%s result fetch id=%s failed: %s", self.skin.name, ident, exc)
             return None, True
 
@@ -1050,6 +1052,12 @@ class BetB2BScraper:
     def _guard_gate(self) -> None:
         """Raise :class:`SiteInCooldown` while this skin is cooling down after a block."""
         self.session_manager.guard.preflight()
+
+    def _guard_failure(self, exc: BaseException) -> None:
+        """A direct call got no answer (timeout / dropped connection): count it toward resting
+        the skin, shared with every other component."""
+        if isinstance(exc, httpx.TransportError):
+            self.session_manager.guard.note_failure()
 
     def _guard_check(self, resp: httpx.Response) -> None:
         """Classify a direct ``httpx`` response; raises :class:`SiteBlocked` on a block
@@ -1178,6 +1186,7 @@ class BetB2BScraper:
                             logger.warning("skin=%s statisticfeed enrichment stopped: %s",
                                            self.skin.name, exc)
                     except httpx.HTTPError as exc:
+                        self._guard_failure(exc)
                         logger.warning(
                             "skin=%s H2H HTTP error for event=%s: %s",
                             self.skin.name, eid, exc,
@@ -1268,6 +1277,7 @@ class BetB2BScraper:
                             logger.warning("skin=%s statisticfeed enrichment stopped: %s",
                                            self.skin.name, exc)
                     except httpx.HTTPError as exc:
+                        self._guard_failure(exc)
                         logger.warning(
                             "skin=%s stats HTTP error for event=%s: %s",
                             self.skin.name, eid, exc,

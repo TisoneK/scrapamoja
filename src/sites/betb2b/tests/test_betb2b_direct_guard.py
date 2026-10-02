@@ -134,3 +134,22 @@ def test_probe_reports_zero_cookies_as_not_harvested(monkeypatch, tmp_path, caps
     res = json.loads(out.read_text())
     assert res["cookie_count"] == 0 and res["session_harvested"] is False
     assert res["security"]["site"] == "linebet" and res["security"]["cooldown_seconds_left"] == 0
+
+
+def test_timeouts_across_components_rest_the_skin_for_everyone(monkeypatch, tmp_path):
+    """Timeouts seen by the direct calls count toward ONE shared cooldown, so after a few the
+    feed client (a different component) refuses to touch the skin too."""
+    from src.security import SiteInCooldown
+    s = make_scraper(tmp_path)
+    s.session_manager.guard.fail_threshold = 4
+    hits = []
+
+    def handler(req):
+        hits.append(1)
+        raise httpx.ConnectTimeout("dropped", request=req)
+
+    serve(monkeypatch, handler)
+    asyncio.run(s._enrich_with_h2h(events(40)))
+    assert len(hits) <= 4 + s.concurrency            # not 40 doomed 15-second waits
+    with pytest.raises(SiteInCooldown):              # another component sees the same rest
+        s.session_manager.guard.preflight()

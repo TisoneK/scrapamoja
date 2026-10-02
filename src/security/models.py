@@ -23,6 +23,7 @@ class BlockType(str, Enum):
     IP_BANNED = "ip_banned"          # IP/ASN reputation or penalty block
     ACCESS_DENIED = "access_denied"  # bare 403/406 with no vendor signature
     AUTH_EXPIRED = "auth_expired"    # session cookies/tokens stale (401/419/440)
+    UNREACHABLE = "unreachable"      # connect/read timeouts, dropped connections: the site is not answering
 
 
 class Action(str, Enum):

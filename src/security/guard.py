@@ -41,9 +41,14 @@ class SecurityGuard:
         has_failover: bool = False,
         has_proxy_pool: bool = False,
         has_browser: bool = True,
+        fail_threshold: int = 6,
+        fail_cooldown: float = 300.0,
+        hourly_budget: int = 0,
     ):
         self.site = site
         self.rules = rules
+        self.fail_threshold, self.fail_cooldown = fail_threshold, fail_cooldown
+        self.hourly_budget = hourly_budget      # requests per hour per site; 0 = unlimited
         self.ledger = ledger or BlockLedger()
         self.interactive = resolver.interactive_allowed() if interactive is None else interactive
         self.policy = policy or BlockPolicy()
@@ -65,9 +70,23 @@ class SecurityGuard:
 
     # -- gate ----------------------------------------------------------- #
     def preflight(self) -> None:
+        """Call before every request: raises :class:`SiteInCooldown` while the site is
+        resting (after blocks, or a run of timeouts) or its hourly budget is spent."""
         left, last = self.ledger.cooldown_left(self.site)
         if left > 0:
             raise SiteInCooldown(self.site, left, last)
+        over = self.ledger.charge(self.site, self.hourly_budget)
+        if over > 0:
+            raise SiteInCooldown(self.site, over, BlockType.RATE_LIMITED)
+
+    def note_failure(self) -> bool:
+        """A request FAILED to get any answer (timeout / dropped connection). After a run
+        of them the site is rested for everyone sharing this guard. True if that began."""
+        seconds = self.ledger.record_failure(self.site, self.fail_threshold, self.fail_cooldown)
+        if seconds:
+            logger.warning("site=%s unreachable (%d failures in a row) -> resting %.0fs", self.site,
+                           self.ledger.state(self.site).consecutive_failures, seconds)
+        return bool(seconds)
 
     @property
     def tier(self) -> BrowserTier:

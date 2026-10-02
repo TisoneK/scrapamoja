@@ -61,6 +61,13 @@ def profile_name_for(skin_name: str) -> Optional[str]:
     return raw or f"betb2b-{skin_name}"
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
 class BetB2BSessionManager:
     """Manages the harvested browser session for one skin.
 
@@ -107,6 +114,9 @@ class BetB2BSessionManager:
             rules=BETB2B_RULES,
             has_failover=bool(os.environ.get("BETB2B_FALLBACK_SKINS")),
             has_browser=has_browser,
+            fail_threshold=_env_int("BETB2B_FAIL_THRESHOLD", 6),
+            fail_cooldown=float(_env_int("BETB2B_FAIL_COOLDOWN", 300)),
+            hourly_budget=_env_int("BETB2B_HOURLY_BUDGET", 0),
         )
         self._profiles: Optional[Any] = None
         self.profile_name = profile_name_for(skin.name)
