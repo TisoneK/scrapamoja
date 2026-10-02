@@ -13,3 +13,9 @@ Promoted: ADR-26, ADR-27, inefficiencies entries, backlog rows, preferences, fla
 - Web search/fetch tools were unavailable (their backend errored), so the docs were read directly: the in-app browser on `docs.gcore.com`, and the public docs repo `g-core/product-documentation` via the GitHub trees API + raw files (`waap/waap-policies/anti-automation-and-bot-protection.mdx`, `waap/threat-intelligence/tls-fingerprinting.mdx`, `waap/frequently-asked-questions/javascript-injection.mdx`, `waap/waap-rules/advanced-rules*.mdx`). Detail is in ADR-28.
 - Operator's observation (validated once per browser; new tab no re-validation; other browser re-validates) = cookie + fingerprint per browser profile.
 - Seen in the in-app browser: validation page → `/en/block` "not available in your country" (US, 135.180.70.225). Earlier the feed URL (not the website) passed the same validation and returned JSON in that browser.
+
+## Open-items round (after Session 51)
+- Order worked: B-11 guard direct calls → B-13 no-browser rungs → B-14 probe → B-2 shared rest/budget → live run → pacing → B-6 reset → B-7 docs. B-12 (needs an allowed-country egress + the operator) and the proxy pool were not done.
+- Dead end avoided: a first idea was to treat every transport failure as a whole-skin rest; the live run showed the optional statistics service timing out while the odds feed was fine, so failures got a `scope` (stats) and in-flight failures stopped doubling the rest.
+- Tests initially "passed first time" — checked by running them against the OLD scraper (they failed there), so they test the change.
+- The live run was on the code BEFORE the scoped-rest and pacing fixes; its log is the evidence for ADR-30. Afterwards all three hosts refused TCP connections (connect time 0) — not a challenge page and not a timeout on a slow answer.
