@@ -6,6 +6,27 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Fixed — about 85 modules that could not be loaded at all now load (2026-10-02)
+
+A check that tries to load every module found that roughly a hundred of them
+failed on startup, so features built on them (navigation, the selector
+dashboard API, telemetry storage and reporting, the plugin permission system,
+several resilience tools) could never have run. The causes were ordinary:
+names used without being imported, import paths with the wrong number of
+dots, classes defined but not exported from their package, a field order a
+data class does not allow, a repeated argument in the plugin permission
+definitions (a hard error on its own), and dashboard routes that declared a
+service object as a web query parameter. All of those are fixed, and the
+dashboard API now starts and answers requests. The few that remain need a
+design decision (for example the abort-handling classes that other code
+imports but nobody wrote) and are listed, with reasons, in a test that fails
+if any new module stops loading or a listed one starts working.
+
+Scraping also no longer fetches season-long outright markets (such as "NBA
+2026/27 MVP") or generic "Home (Points) / Away (Points)" listings: they were
+requested on every run and never became matches, about a quarter of all
+requests.
+
 ### Changed — no country is special: wording and default labels made neutral (2026-10-02)
 
 Docs, comments, examples and the skin files described one country as if it
