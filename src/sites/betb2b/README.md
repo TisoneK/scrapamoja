@@ -124,6 +124,14 @@ python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --ski
 #   the results update that runs after each scrape (--no-results to skip).
 ```
 
+**Resilience.** A match fetch that times out or hits a WAF page is *failed*, not
+"no data". Failed ids are retried (`BETB2B_RETRIES`, exponential
+`BETB2B_RETRY_BACKOFF`), then retried on other skins in order
+(`--fallback-skins` / `BETB2B_FALLBACK_SKINS` — event ids are identical across
+skins; recovered rows are stored under the skin that served them). Parallelism is
+`BETB2B_CONCURRENCY` (default 4). Ids that still fail stay unstored and are
+retried on the next `--skip-processed` run.
+
 **Shared remote store (optional).** Point `DATABASE_URL` at any hosted Postgres
 (Neon, a VPS, self-hosted…) and every machine running the scraper reads/writes
 the same database, so `--skip-processed` skips events *any* of them handled.

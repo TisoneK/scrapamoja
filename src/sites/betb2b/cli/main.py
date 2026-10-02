@@ -131,6 +131,43 @@ def db_path() -> str:
     return _p()
 
 
+async def _fallback_fetch(failed_ids, fallback_skins, args, db_target, primary: str) -> None:
+    """Retry ids that failed on the primary skin against other skins, in order.
+
+    Event ids are identical across skins, so a GetGameZip the primary skin
+    dropped can be served by another. Each recovered batch is stored under the
+    skin that actually served it (odds margins differ per brand). Best-effort.
+    """
+    from src.sites.betb2b import BetB2BScraper
+    from src.sites.betb2b.extraction.models import BetB2BScrapeResult
+    from src.sites.betb2b.store import persist_result
+
+    print(f"  [{primary}] {len(failed_ids)} ids failed to fetch"
+          + (f" — trying fallback skins: {', '.join(fallback_skins)}" if fallback_skins
+             else " (set --fallback-skins / $BETB2B_FALLBACK_SKINS to recover them elsewhere)"),
+          file=sys.stderr)
+    remaining = list(failed_ids)
+    for name in fallback_skins:
+        if not remaining:
+            break
+        try:
+            skin = _load_skin(name)
+            async with BetB2BScraper(skin, sport=args.sport, direct=True) as sc:
+                events = await sc.fetch_events(remaining)
+            got = {str(e.event_id) for e in events}
+            remaining = [i for i in remaining if i not in got]
+            print(f"  [{name}] recovered {len(got)} of the failed ids", file=sys.stderr)
+            if events and db_target:
+                result = BetB2BScrapeResult(skin=skin.name, action=args.action,
+                                            url=skin.base_url, events=events).to_dict()
+                persist_result(result, db_target)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  [{name}] WARNING: fallback failed: {exc}", file=sys.stderr)
+    if remaining:
+        print(f"  [{primary}] {len(remaining)} ids still unfetched after fallbacks "
+              f"(they stay unstored and will be retried next run)", file=sys.stderr)
+
+
 async def _update_results(scraper, db_target: str, skin_name: str) -> None:
     """Score updates for stored matches that should have finished: fetch their
     final result (statisticfeed ``v1/Game``) and record it. Best-effort — the
@@ -296,6 +333,12 @@ class BetB2BCLI:
                                  "matches already started. Live scrapes are never "
                                  "filtered (they update scores). Direct mode only; "
                                  "needs the store (not --no-db).")
+        scrape.add_argument("--fallback-skins", default=_env("BETB2B_FALLBACK_SKINS", ""),
+                            metavar="SKIN,SKIN",
+                            help="If some matches fail to fetch (timeouts/blocks), retry just "
+                                 "those ids on these skins in order (event ids are identical "
+                                 "across skins). Each fallback result is stored under the skin "
+                                 "that served it. Default: $BETB2B_FALLBACK_SKINS. Direct mode.")
         scrape.add_argument("--no-results", action="store_true",
                             help="Don't update final scores of finished stored matches "
                                  "after the scrape.")
@@ -503,6 +546,7 @@ class BetB2BCLI:
         if getattr(args, "subgames", False):
             skin = skin.with_overrides(features={**skin.features, "subgames": True})
         no_db = getattr(args, "no_db", False)
+        failed_ids: list = []
         db_target = getattr(args, "db", None) or db_path()
         id_filter = None
         skip = getattr(args, "skip_processed", None)
@@ -524,6 +568,7 @@ class BetB2BCLI:
             )
             if not no_db and not getattr(args, "no_results", False):
                 await _update_results(scraper, db_target, skin_name)
+            failed_ids = list((getattr(scraper, "last_fetch_stats", None) or {}).get("failed_ids", []))
 
         if not no_db:
             try:
@@ -537,6 +582,11 @@ class BetB2BCLI:
                 )
             except Exception as exc:  # noqa: BLE001
                 print(f"  [{skin_name}] WARNING: --db persist failed: {exc}", file=sys.stderr)
+
+        if failed_ids:
+            fb = [x.strip() for x in (getattr(args, "fallback_skins", "") or "").split(",") if x.strip()]
+            await _fallback_fetch(failed_ids, [x for x in fb if x != skin_name], args,
+                                  None if no_db else db_target, skin_name)
 
         # Opt-in ingest to the scorewise-engine (one PredictRequest per scope).
         ingest = getattr(args, "ingest", None)

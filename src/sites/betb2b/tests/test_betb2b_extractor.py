@@ -736,14 +736,15 @@ def test_fetch_events_bounded_concurrency(skin: BetB2BSkinConfig) -> None:
         max_inflight = max(max_inflight, inflight)
         await asyncio.sleep(0.02)   # hold the slot so overlap is observable
         inflight -= 1
-        return eid                   # sentinel "capture" carrying the id
+        from types import SimpleNamespace
+        return SimpleNamespace(status=200, decoded={"Value": {}}, eid=eid)  # usable capture carrying the id
 
     async def noop(*a, **k):
         return None
 
     s.feed_client.fetch_game = fake_fetch_game
     s.extraction_rules.extract_from_captured = lambda cap: [Event(
-        event_id=str(cap), sport=Sport.BASKETBALL, competition="L", home="A", away="B")]
+        event_id=str(cap.eid), sport=Sport.BASKETBALL, competition="L", home="A", away="B")]
     s._enrich_with_subgames = noop
 
     ids = [str(i) for i in range(20)]
@@ -773,7 +774,7 @@ def test_parse_result_entity() -> None:
 def test_scraper_concurrency_env_and_direct_default(skin: BetB2BSkinConfig, monkeypatch) -> None:
     from src.sites.betb2b.scraper import BetB2BScraper
     # direct → default 8; non-direct → sequential 1
-    assert BetB2BScraper(skin, direct=True).concurrency == 8
+    assert BetB2BScraper(skin, direct=True).concurrency == 4
     assert BetB2BScraper(skin, direct=False).concurrency == 1
     # env override + clamp to [1, 32]
     monkeypatch.setenv("BETB2B_CONCURRENCY", "16")
@@ -1273,3 +1274,39 @@ def test_build_event_missing_getgamezip_fields(rules: BetB2BExtractionRules) -> 
         {"I": 2, "O1": "A", "O2": "B", "MIO": "bad", "WP": [], "O1IMG": "x.png"}, "u")
     assert e2.venue is None and e2.wp_home is None
     assert e2.home_team_image == "x.png"  # str form tolerated
+
+
+def test_fetch_events_retries_failures_and_reports_leftovers(skin: BetB2BSkinConfig) -> None:
+    """A fetch that times out / is blocked is retried with backoff; ids that
+    still fail are reported in last_fetch_stats (not silently dropped)."""
+    import asyncio
+    from types import SimpleNamespace
+    from src.sites.betb2b.extraction.models import Event
+    from src.sites.betb2b.scraper import BetB2BScraper
+
+    s = BetB2BScraper(skin, direct=True)
+    s.retries, s.retry_backoff = 2, 0.0
+    calls: dict = {}
+
+    async def fake_fetch_game(eid, root="line", **kw):
+        calls[eid] = calls.get(eid, 0) + 1
+        if eid == "dead":
+            raise TimeoutError("dropped")                       # never recovers
+        if eid == "flaky" and calls[eid] < 3:
+            return SimpleNamespace(status=0, decoded=None, eid=eid)   # blocked twice
+        return SimpleNamespace(status=200, decoded={"Value": {}}, eid=eid)
+
+    async def noop(*a, **k):
+        return None
+
+    s.feed_client.fetch_game = fake_fetch_game
+    s.extraction_rules.extract_from_captured = lambda cap: [Event(
+        event_id=str(cap.eid), sport=Sport.BASKETBALL, competition="L", home="A", away="B")]
+    s._enrich_with_subgames = noop
+
+    events = asyncio.run(s.fetch_events(["ok", "flaky", "dead"]))
+
+    assert {e.event_id for e in events} == {"ok", "flaky"}      # flaky recovered
+    assert calls == {"ok": 1, "flaky": 3, "dead": 3}            # only failures retried
+    assert s.last_fetch_stats["failed_ids"] == ["dead"]
+    assert s.last_fetch_stats["requested"] == 3

@@ -74,6 +74,13 @@ _VALID_ACTIONS = {
 }
 
 
+def _env_num(name: str, default, cast=float):
+    try:
+        return cast(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
 class BetB2BScraper:
     """Hybrid base scraper for the BetB2B / 1xbet family.
 
@@ -156,7 +163,7 @@ class BetB2BScraper:
         # default (8) per the datacenter-IP rate discipline — ramp via
         # `BETB2B_CONCURRENCY`, watch for 429/403/203. Non-direct (browser) mode
         # stays sequential (1) to protect the harvested session.
-        default_conc = 8 if self._direct else 1
+        default_conc = 4 if self._direct else 1
         if concurrency is None:
             try:
                 concurrency = int(os.environ.get("BETB2B_CONCURRENCY", str(default_conc)))
@@ -164,6 +171,13 @@ class BetB2BScraper:
                 concurrency = default_conc
         self.concurrency = max(1, min(concurrency, 32))
         self.id_filter = id_filter
+        # Resilience: ids whose GetGameZip fails (timeout / dropped connection /
+        # WAF challenge page) are retried with exponential backoff; whatever
+        # still fails is reported in ``last_fetch_stats`` so a caller can fail
+        # over to another skin (the event ids are identical across skins).
+        self.retries = max(0, _env_num("BETB2B_RETRIES", 2, int))
+        self.retry_backoff = max(0.0, _env_num("BETB2B_RETRY_BACKOFF", 2.0, float))
+        self.last_fetch_stats: Dict[str, Any] = {}
 
         # Resolve the sport strategy (None → AllSportsScraper).
         self.sport_scraper: SportScraper = resolve_sport(sport)
@@ -718,7 +732,13 @@ class BetB2BScraper:
     async def fetch_events(self, ids, *, is_live: bool = False) -> List[Event]:
         """GetGameZip a specific set of event ids → parsed :class:`Event`s
         (+ sub-games). The state-aware pass supplies the ids; discovery is
-        separate (:meth:`discover_ids`). No browser/cookies/proxy (ADR-15)."""
+        separate (:meth:`discover_ids`). No browser/cookies/proxy (ADR-15).
+
+        A fetch FAILS (as opposed to returning no events) on an exception or an
+        unusable capture (HTTP error, dropped connection, WAF challenge page).
+        Failed ids are retried up to ``self.retries`` times with exponential
+        backoff; the rest are left in ``self.last_fetch_stats["failed_ids"]``.
+        """
         root = "live" if is_live else "line"
         ids = [str(i) for i in ids][:int(getattr(self.skin, "max_harvest", 200) or 200)]
         total = len(ids)
@@ -727,24 +747,52 @@ class BetB2BScraper:
         sem = asyncio.Semaphore(self.concurrency)
         done = 0
 
-        async def _one(eid: str) -> List[Event]:
+        async def _one(eid: str) -> Optional[List[Event]]:
             nonlocal done
-            out: List[Event] = []
+            out: Optional[List[Event]] = None
             async with sem:
                 try:
                     gcap = await self.feed_client.fetch_game(eid, root=root)
-                    game_events = self.extraction_rules.extract_from_captured(gcap)
-                    for ge in game_events:
-                        await self._enrich_with_subgames(ge, gcap, root=root)
-                    out = game_events
+                    if not self._capture_failed(gcap):
+                        game_events = self.extraction_rules.extract_from_captured(gcap)
+                        for ge in game_events:
+                            await self._enrich_with_subgames(ge, gcap, root=root)
+                        out = game_events
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("skin=%s GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
             done += 1                                   # single-threaded loop → no lock needed
             self._emit_phase(f"scraping events ({done}/{total})")
             return out
 
-        results = await asyncio.gather(*[_one(eid) for eid in ids])
-        return [ev for sub in results for ev in sub]
+        results: Dict[str, List[Event]] = {}
+        pending = list(ids)
+        retried = 0
+        for attempt in range(self.retries + 1):
+            if attempt:
+                delay = self.retry_backoff * (2 ** (attempt - 1))
+                logger.info("skin=%s retry %d/%d: %d failed ids after %.1fs",
+                            self.skin.name, attempt, self.retries, len(pending), delay)
+                retried += len(pending)
+                await asyncio.sleep(delay)
+            outs = await asyncio.gather(*[_one(eid) for eid in pending])
+            still: List[str] = []
+            for eid, o in zip(pending, outs):
+                if o is None:
+                    still.append(eid)
+                else:
+                    results[eid] = o
+            pending = still
+            if not pending:
+                break
+        self.last_fetch_stats = {
+            "requested": total, "failed": len(pending), "failed_ids": list(pending),
+            "retried": retried,
+        }
+        if pending:
+            logger.warning("skin=%s fetch_events: %d/%d ids FAILED after %d retries "
+                           "(timeouts/blocks) — not 'no data'", self.skin.name,
+                           len(pending), total, self.retries)
+        return [ev for eid in ids for ev in results.get(eid, [])]
 
     async def _discover_events_direct(self, *, is_live: bool) -> List[Event]:
         """Full direct pass = discover all ids, then fetch them all (used by the
