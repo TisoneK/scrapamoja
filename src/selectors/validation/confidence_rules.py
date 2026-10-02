@@ -199,6 +199,9 @@ class ConfidenceValidator:
             
             # Determine overall validity
             is_valid = len(violations) == 0 or all(v["severity"] in ["info", "warning"] for v in violations)
+            # A failed resolution, or a score in the "failed" band, is never valid
+            if validation_level == "failed" or not getattr(result, "success", True):
+                is_valid = False
             
             # Create result
             validation_result = ConfidenceValidationResult(

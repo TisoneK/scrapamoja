@@ -80,7 +80,7 @@ class PluginLifecycleManager:
         self._plugin_contexts: Dict[str, PluginContext] = {}
         
         # Lifecycle management
-        self._initialization_lock = threading.RLock()
+        self._initialization_lock = asyncio.Lock()  # used with `async with`
         self._execution_lock = threading.RLock()
         self._cleanup_lock = threading.RLock()
         

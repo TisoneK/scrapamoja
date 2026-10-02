@@ -6,6 +6,7 @@ strategy success history, and performance metrics as specified in the data model
 """
 
 import re
+from types import SimpleNamespace
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
@@ -320,17 +321,44 @@ class ConfidenceScorer(IConfidenceScorer):
     
     def _validate_rule(self, element_info: ElementInfo, rule: Any) -> ValidationResult:
         """Validate element content against a single rule."""
+        rule_type_label = 'unknown'
         try:
-            rule_type = getattr(rule, 'type', ValidationType.REGEX)
+            if isinstance(rule, dict):
+                # Rules arrive from YAML/JSON as plain dicts; accept them like ValidationRule.
+                rule = SimpleNamespace(
+                    type=rule.get('type', ValidationType.REGEX),
+                    pattern=rule.get('pattern', ''),
+                    required=rule.get('required', True),
+                    weight=rule.get('weight', 1.0),
+                )
+            raw_type = getattr(rule, 'type', ValidationType.REGEX)
+            rule_type_label = getattr(raw_type, 'value', str(raw_type))
             
-            if rule_type == ValidationType.REGEX:
-                return self._validate_regex_rule(element_info, rule)
-            elif rule_type == ValidationType.DATA_TYPE:
-                return self._validate_data_type_rule(element_info, rule)
-            elif rule_type == ValidationType.SEMANTIC:
-                return self._validate_semantic_rule(element_info, rule)
-            elif rule_type == ValidationType.CUSTOM:
-                return self._validate_custom_rule(element_info, rule)
+            if element_info is None:
+                return ValidationResult(
+                    rule_type=rule_type_label, passed=False, score=0.0,
+                    message="Cannot validate rule: element info is missing (null element)"
+                )
+            try:
+                rule_type = ValidationType(raw_type)
+            except ValueError:
+                return ValidationResult(
+                    rule_type=rule_type_label, passed=False, score=0.0,
+                    message=f"Invalid rule type: {raw_type!r}"
+                )
+            
+            validators = {
+                ValidationType.REGEX: self._validate_regex_rule,
+                ValidationType.DATA_TYPE: self._validate_data_type_rule,
+                ValidationType.SEMANTIC: self._validate_semantic_rule,
+                ValidationType.CUSTOM: self._validate_custom_rule,
+            }
+            if rule_type in validators:
+                # score is the quality of the match (0..1); the rule's weight is how much
+                # that rule counts in the weighted average -- they are separate quantities.
+                result = validators[rule_type](element_info, rule)
+                result.weight = getattr(rule, 'weight', 1.0)
+                return result
             else:
                 return ValidationResult(
                     rule_type=rule_type.value,
@@ -341,7 +369,7 @@ class ConfidenceScorer(IConfidenceScorer):
                 
         except Exception as e:
             return ValidationResult(
-                rule_type=getattr(rule, 'type', 'unknown'),
+                rule_type=rule_type_label,
                 passed=False,
                 score=0.0,
                 message=f"Rule validation error: {e}"
@@ -357,15 +385,15 @@ class ConfidenceScorer(IConfidenceScorer):
                 return ValidationResult(
                     rule_type=ValidationType.REGEX.value,
                     passed=True,
-                    score=rule.weight,
-                    message="Text matches regex pattern"
+                    score=1.0,
+                    message="Text matches pattern"
                 )
             else:
                 return ValidationResult(
                     rule_type=ValidationType.REGEX.value,
                     passed=False,
                     score=0.0,
-                    message="Text does not match regex pattern"
+                    message="Text does not match pattern"
                 )
                 
         except re.error as e:
@@ -387,7 +415,7 @@ class ConfidenceScorer(IConfidenceScorer):
                     return ValidationResult(
                         rule_type=ValidationType.DATA_TYPE.value,
                         passed=True,
-                        score=rule.weight,
+                        score=1.0,
                         message="Content is a valid float"
                     )
                 except ValueError:
@@ -403,7 +431,7 @@ class ConfidenceScorer(IConfidenceScorer):
                     return ValidationResult(
                         rule_type=ValidationType.DATA_TYPE.value,
                         passed=True,
-                        score=rule.weight,
+                        score=1.0,
                         message="Content is a valid integer"
                     )
                 except ValueError:
@@ -417,7 +445,7 @@ class ConfidenceScorer(IConfidenceScorer):
                 return ValidationResult(
                     rule_type=ValidationType.DATA_TYPE.value,
                     passed=True,
-                    score=rule.weight,
+                    score=1.0,
                     message="Content is a valid string"
                 )
             elif rule.pattern == "boolean":
@@ -425,7 +453,7 @@ class ConfidenceScorer(IConfidenceScorer):
                     return ValidationResult(
                         rule_type=ValidationType.DATA_TYPE.value,
                         passed=True,
-                        score=rule.weight,
+                        score=1.0,
                         message="Content is a valid boolean"
                     )
                 else:
@@ -461,7 +489,7 @@ class ConfidenceScorer(IConfidenceScorer):
                     return ValidationResult(
                         rule_type=ValidationType.SEMANTIC.value,
                         passed=True,
-                        score=rule.weight,
+                        score=1.0,
                         message="Content appears to be a team name"
                     )
                 else:
@@ -476,7 +504,7 @@ class ConfidenceScorer(IConfidenceScorer):
                     return ValidationResult(
                         rule_type=ValidationType.SEMANTIC.value,
                         passed=True,
-                        score=rule.weight,
+                        score=1.0,
                         message="Content appears to be a score"
                     )
                 else:
@@ -491,7 +519,7 @@ class ConfidenceScorer(IConfidenceScorer):
                     return ValidationResult(
                         rule_type=ValidationType.SEMANTIC.value,
                         passed=True,
-                        score=rule.weight,
+                        score=1.0,
                         message="Content appears to be a time"
                     )
                 else:
@@ -506,7 +534,7 @@ class ConfidenceScorer(IConfidenceScorer):
                     return ValidationResult(
                         rule_type=ValidationType.SEMANTIC.value,
                         passed=True,
-                        score=rule.weight,
+                        score=1.0,
                         message="Content appears to be a date"
                     )
                 else:
@@ -521,7 +549,7 @@ class ConfidenceScorer(IConfidenceScorer):
                     return ValidationResult(
                         rule_type=ValidationType.SEMANTIC.value,
                         passed=True,
-                        score=rule.weight,
+                        score=1.0,
                         message="Content appears to be odds"
                     )
                 else:
@@ -561,7 +589,7 @@ class ConfidenceScorer(IConfidenceScorer):
                         return ValidationResult(
                             rule_type=ValidationType.CUSTOM.value,
                             passed=bool(result),
-                            score=rule.weight if result else 0.0,
+                            score=1.0 if result else 0.0,
                             message="Custom validation completed"
                         )
                 except Exception as e:

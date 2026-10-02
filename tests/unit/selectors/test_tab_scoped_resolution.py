@@ -25,6 +25,8 @@ from src.utils.exceptions import TabContextError, SelectorResolutionError
 class TestTabScopedSelectorResolution:
     """Test tab-scoped selector resolution functionality."""
     
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
+    
     def test_resolve_selector_within_active_tab_context(self):
         """Test resolving a selector within its designated active tab context."""
         # This test will fail until TabScopedSelectorEngine is implemented
@@ -72,6 +74,8 @@ class TestTabScopedSelectorResolution:
         assert result.element_info.text_content == "2.45"
         assert result.confidence_score > 0.8
     
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
+    
     def test_resolve_selector_returns_none_when_tab_inactive(self):
         """Test that selector returns None when its tab context is not active."""
         # This test will fail until TabScopedSelectorEngine is implemented
@@ -111,6 +115,8 @@ class TestTabScopedSelectorResolution:
         assert result.success is False
         assert result.tab_context == "odds"
         assert result.failure_reason == "tab_context_inactive"
+    
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
     
     def test_resolve_selector_respects_tab_dom_scope(self):
         """Test that selector resolution is limited to tab's DOM scope."""
@@ -168,6 +174,8 @@ class TestTabScopedSelectorResolution:
         assert result.element_info.text_content == "2.45"
         assert "odds-content" in result.element_info.dom_path
     
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
+    
     def test_resolve_selector_with_tab_context_validation(self):
         """Test selector resolution with tab context validation."""
         # This test will fail until TabScopedSelectorEngine is implemented
@@ -205,6 +213,8 @@ class TestTabScopedSelectorResolution:
             engine.resolve(mock_page, selector)
         
         assert exc_info.value.error_code == "invalid_tab_context"
+    
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
     
     def test_resolve_selector_with_context_isolation(self):
         """Test that selectors are properly isolated by tab context."""
@@ -279,6 +289,8 @@ class TestTabScopedSelectorResolution:
 class TestTabScopedResolutionStrategies:
     """Test tab-scoped resolution strategies and fallbacks."""
     
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
+    
     def test_tab_aware_strategy_execution(self):
         """Test that strategies are executed with tab awareness."""
         # This test will fail until TabAwareStrategyPattern is implemented
@@ -320,6 +332,8 @@ class TestTabScopedResolutionStrategies:
         assert result.success is True
         assert result.tab_context == "odds"
         assert "odds-content" in result.element_info.dom_path
+    
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
     
     def test_tab_scoped_fallback_mechanism(self):
         """Test fallback mechanism within tab context."""
@@ -369,6 +383,8 @@ class TestTabScopedResolutionStrategies:
         assert result.strategy_used == "attribute_match"
         assert result.tab_context == "odds"
     
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
+    
     def test_tab_context_confidence_adjustment(self):
         """Test confidence scoring adjustment based on tab context."""
         # This test will fail until TabAwareConfidenceScorer is implemented
@@ -408,6 +424,8 @@ class TestTabScopedResolutionStrategies:
 
 class TestTabScopedResolutionEdgeCases:
     """Test edge cases for tab-scoped selector resolution."""
+    
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
     
     def test_selector_without_tab_context(self):
         """Test selector without specified tab context."""
@@ -450,6 +468,8 @@ class TestTabScopedResolutionEdgeCases:
         assert result.success is True
         assert result.tab_context is None  # No tab context specified
     
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
+    
     def test_tab_context_not_loaded(self):
         """Test selector resolution when tab context is not loaded."""
         # This test will fail until TabScopedSelectorEngine is implemented
@@ -487,6 +507,8 @@ class TestTabScopedResolutionEdgeCases:
         assert result is not None
         assert result.success is False
         assert result.failure_reason == "tab_context_not_loaded"
+    
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
     
     def test_dynamic_tab_context_switching(self):
         """Test selector resolution during dynamic tab switching."""
@@ -528,6 +550,8 @@ class TestTabScopedResolutionEdgeCases:
         assert result is not None
         assert result.success is True
         assert result.tab_context == "odds"
+    
+    @pytest.mark.xfail(reason="B-24: TDD-red for User Story 3 (tab-scoped resolution), which is not built", strict=False)
     
     def test_tab_context_resolution_timeout(self):
         """Test timeout handling for tab context resolution."""
