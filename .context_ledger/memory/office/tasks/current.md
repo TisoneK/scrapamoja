@@ -1,5 +1,3 @@
-# Current Task — none
+# Current Task — Session 50 (Ada / S448), open-items round
 
-**Status:** idle — last session: 2026-10-02 Session 51 (Noor/S449): browser profiles + website-security package (ADR-29). Product work committed + pushed; ledger bookkeeping complete.
-
-**Next up (see office/tasks/backlog.md, High first):** live re-verification on an unchallenged skin · shared per-skin cooldown + hourly budget (partly covered now by the guard's ledger) · guard the direct-httpx calls in scraper.py (B-2026-10-02-11) · live-verify profile warm-up from an allowed-country egress (B-2026-10-02-12).
+**Status:** active — operator: work the open backlog items except the proxy pool (B-2026-10-02-13). Order: (1) guard the direct-httpx calls in scraper.py (B-11), (2) shared cooldown/budget vs the new security ledger (B-2), (3) gentle live verification on an unchallenged skin (B-1), (4) B-12 live warm-up if an allowed-country egress is available; proxy-password rotation and linebet decision are operator actions.
