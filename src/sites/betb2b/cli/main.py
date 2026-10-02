@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -168,11 +169,43 @@ async def _fallback_fetch(failed_ids, fallback_skins, args, db_target, primary: 
               f"(they stay unstored and will be retried next run)", file=sys.stderr)
 
 
+async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
+    """Resolve the statisticfeed id for stored events that lack one (stored
+    before stat ids were captured). Self-healing: a bounded batch per run."""
+    from src.sites.betb2b import store
+    conn = store.init_db(db_target)
+    try:
+        ids = store.events_missing_stat_id(conn)
+    finally:
+        conn.close()
+    if not ids:
+        return
+    sem = asyncio.Semaphore(scraper.concurrency)
+    found = []
+
+    async def _one(eid):
+        async with sem:
+            res = await scraper.fetch_result(eid)
+        if res and res.get("stat_game_id"):
+            found.append((eid, res))
+
+    await asyncio.gather(*[_one(e) for e in ids])
+    conn = store.init_db(db_target)
+    try:
+        at = datetime.now(timezone.utc).isoformat()
+        for eid, res in found:
+            store.record_result(conn, eid, stat_game_id=res["stat_game_id"],
+                                score_home=res.get("score_home"), score_away=res.get("score_away"),
+                                winner=res.get("winner"), status=res.get("status"), at=at)
+    finally:
+        conn.close()
+    print(f"  [{skin_name}] stat ids backfilled: {len(found)}/{len(ids)}", file=sys.stderr)
+
+
 async def _update_results(scraper, db_target: str, skin_name: str) -> None:
     """Score updates for stored matches that should have finished: fetch their
     final result (statisticfeed ``v1/Game``) and record it. Best-effort — the
     only re-fetch a stored match gets."""
-    from datetime import datetime, timezone
     from src.sites.betb2b import store
     try:
         conn = store.init_db(db_target)
@@ -568,6 +601,10 @@ class BetB2BCLI:
             )
             if not no_db and not getattr(args, "no_results", False):
                 await _update_results(scraper, db_target, skin_name)
+                try:
+                    await _backfill_stat_ids(scraper, db_target, skin_name)
+                except Exception as exc:  # noqa: BLE001 — best-effort
+                    print(f"  [{skin_name}] WARNING: stat id backfill failed: {exc}", file=sys.stderr)
             failed_ids = list((getattr(scraper, "last_fetch_stats", None) or {}).get("failed_ids", []))
 
         if result.get("error"):

@@ -683,8 +683,8 @@ def persist_result(
             conn.execute(
                 "INSERT INTO events "
                 "(event_id, sport_id, league_id, country_id, home_team_id, away_team_id, "
-                " home_name, away_name, start_time, venue, stage, first_seen, last_seen) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                " home_name, away_name, start_time, venue, stage, first_seen, last_seen, stat_game_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
                 "ON CONFLICT(event_id) DO UPDATE SET "
                 "  sport_id=COALESCE(excluded.sport_id, events.sport_id), "
                 "  league_id=COALESCE(excluded.league_id, events.league_id), "
@@ -694,10 +694,11 @@ def persist_result(
                 "  start_time=COALESCE(excluded.start_time, events.start_time), "
                 "  venue=COALESCE(excluded.venue, events.venue), "
                 "  stage=COALESCE(excluded.stage, events.stage), "
+                "  stat_game_id=COALESCE(events.stat_game_id, excluded.stat_game_id), "
                 "  last_seen=excluded.last_seen",
                 (event_id, sport_id, league_id, country_id, home_id, away_id,
                  ev.get("home"), ev.get("away"), ev.get("start_time"),
-                 ev.get("venue"), ev.get("stage"), at, at),
+                 ev.get("venue"), ev.get("stage"), at, at, ev.get("stat_game_id")),
             )
 
             # --- facts: live state (only when it changed) ---
@@ -1021,6 +1022,24 @@ def events_last_seen(conn, event_ids) -> Dict[str, Any]:
     return out
 
 
+def known_sub_game_ids(conn, ids) -> set:
+    """Which of ``ids`` are already recorded as a sub-game of some stored event
+    (``sub_games.sub_game_id``) — i.e. quarter/half/special groups, not matches."""
+    ids = [str(i) for i in ids]
+    out: set = set()
+    for i in range(0, len(ids), 400):
+        chunk = ids[i:i + 400]
+        if _is_orm(conn):
+            from sqlalchemy import text as _t
+            binds = {f"p{n}": v for n, v in enumerate(chunk)}
+            sql = "SELECT sub_game_id FROM sub_games WHERE sub_game_id IN (%s)" % ",".join(f":p{n}" for n in binds)
+            out.update(r[0] for r in conn.execute(_t(sql), binds))
+        else:
+            q = "SELECT sub_game_id FROM sub_games WHERE sub_game_id IN (%s)" % ",".join("?" * len(chunk))
+            out.update(r[0] for r in conn.execute(q, chunk))
+    return out
+
+
 def unprocessed_ids(pairs, path: PathLike | None = None, *,
                     refresh_window: float = float('inf'),
                     skip_started: bool = True) -> List[str]:
@@ -1033,11 +1052,14 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
     conn = init_db(path)
     try:
         last_seen = events_last_seen(conn, [i for i, _ in pairs])
+        sub_ids = known_sub_game_ids(conn, [i for i, _ in pairs])
     finally:
         conn.close()
     now = time.time()
     keep: List[str] = []
     for eid, start in pairs:
+        if eid in sub_ids:        # a quarter/half/special group, not a match
+            continue
         try:
             if skip_started and start is not None and float(start) <= now:
                 continue
@@ -1058,6 +1080,19 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
         if age >= refresh_window:
             keep.append(eid)
     return keep
+
+
+def events_missing_stat_id(conn, *, limit: int = 150) -> List[str]:
+    """Event ids of real matches (two teams) with no statisticfeed id yet — the
+    backfill queue for events stored before stat ids were captured. Newest first,
+    since ``v1/Game?id=<event id>`` only resolves for recent/upcoming games."""
+    sql = ("SELECT event_id FROM events WHERE stat_game_id IS NULL "
+           "AND away_name IS NOT NULL AND away_name <> '' AND superseded_by IS NULL "
+           "ORDER BY start_time DESC LIMIT {n}").format(n=int(limit))
+    if _is_orm(conn):
+        from sqlalchemy import text as _t
+        return [r[0] for r in conn.execute(_t(sql))]
+    return [r[0] for r in conn.execute(sql)]
 
 
 def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):

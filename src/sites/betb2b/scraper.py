@@ -369,6 +369,10 @@ class BetB2BScraper:
         if self.skin.features.get("stats", True) and events and action != "raw_capture":
             await self._enrich_with_stats(events)
 
+        # Statisticfeed game id for every event, so final scores can be resolved later.
+        if events and action != "raw_capture" and self.skin.features.get("stat_ids", True):
+            await self._enrich_with_stat_ids(events)
+
         # Did the session get harvested?
         session_harvested = self.session_manager.has_session
 
@@ -1017,6 +1021,26 @@ class BetB2BScraper:
     # ------------------------------------------------------------------ #
     # H2H enrichment
     # ------------------------------------------------------------------ #
+    async def _enrich_with_stat_ids(self, events: List[Event]) -> None:
+        """Capture each event's statisticfeed ``entity.id`` (ADR-20) while it is
+        fresh: ``v1/Game?id=<event id>`` resolves for recent/upcoming games, and
+        the id is what the results pass needs later (it does NOT resolve for old
+        games). Best-effort, bounded concurrency; sets ``Event.stat_game_id``."""
+        todo = [e for e in events if e and not e.stat_game_id and str(e.event_id).isdigit()]
+        if not todo:
+            return
+        sem = asyncio.Semaphore(self.concurrency)
+
+        async def _one(ev: Event) -> None:
+            async with sem:
+                res = await self.fetch_result(str(ev.event_id))
+            if res and res.get("stat_game_id"):
+                ev.stat_game_id = str(res["stat_game_id"])
+
+        await asyncio.gather(*[_one(e) for e in todo])
+        got = sum(1 for e in todo if e.stat_game_id)
+        logger.info("skin=%s stat ids: %d/%d events resolved", self.skin.name, got, len(todo))
+
     async def _enrich_with_h2h(self, events: List[Event]) -> None:
         """Enrich events with H2H data from the statisticfeed endpoint.
 

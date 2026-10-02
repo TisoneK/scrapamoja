@@ -97,3 +97,58 @@ def test_sub_game_listing_is_not_stored_as_a_match(skin):
 
     events = asyncio.run(s.fetch_events(["757880276", "757880281"]))
     assert [e.event_id for e in events] == ["757880276"]    # the sub-game id is dropped
+
+
+def test_stat_game_id_is_persisted_and_backfill_queue(tmp_path, monkeypatch):
+    from src.sites.betb2b import store
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("BETB2B_STORE_MODE", "local")
+    db = str(tmp_path / "o.db")
+    a = _ev("Lleida", "Burgos"); a.event_id = "1"; a.stat_game_id = "68659e8b"
+    b = _ev("Jena", "Chemnitz"); b.event_id = "2"
+    from src.sites.betb2b.extraction.models import BetB2BScrapeResult
+    store.persist_result(BetB2BScrapeResult(skin="melbet", action="list_prematch",
+                                            url="u", events=[a, b]).to_dict(), db)
+    conn = store.init_db(db)
+    got = dict(conn.execute("SELECT event_id, stat_game_id FROM events").fetchall())
+    assert got == {"1": "68659e8b", "2": None}
+    assert store.events_missing_stat_id(conn) == ["2"]        # only the one without an id
+    # a later scrape that lacks the id never erases a stored one
+    a2 = _ev("Lleida", "Burgos"); a2.event_id = "1"
+    store.persist_result(BetB2BScrapeResult(skin="melbet", action="list_prematch",
+                                            url="u", events=[a2]).to_dict(), db)
+    assert dict(conn.execute("SELECT event_id, stat_game_id FROM events").fetchall())["1"] == "68659e8b"
+
+
+def test_enrich_with_stat_ids_sets_ids(skin):
+    from src.sites.betb2b.scraper import BetB2BScraper
+    s = BetB2BScraper(skin, direct=True)
+
+    async def fake_result(ident):
+        return {"stat_game_id": "S" + ident} if ident != "404" else None
+
+    s.fetch_result = fake_result
+    evs = []
+    for i in ("10", "404"):
+        e = _ev("A", "B"); e.event_id = i; evs.append(e)
+    asyncio.run(s._enrich_with_stat_ids(evs))
+    assert [e.stat_game_id for e in evs] == ["S10", None]
+
+
+def test_known_sub_game_ids_are_not_refetched_as_matches(tmp_path, monkeypatch):
+    from src.sites.betb2b import store
+    from src.sites.betb2b.extraction.models import BetB2BScrapeResult
+    import time
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("BETB2B_STORE_MODE", "local")
+    db = str(tmp_path / "o.db")
+    parent = _ev("Jena", "Chemnitz"); parent.event_id = "757880276"
+    parent.sub_games = [
+        {"sub_game_id": "757880277", "name": None, "period": "1st quarter"},
+        {"sub_game_id": "757880281", "name": None, "period": None},      # unlabelled special group
+    ]
+    store.persist_result(BetB2BScrapeResult(skin="melbet", action="list_prematch",
+                                            url="u", events=[parent]).to_dict(), db)
+    future = time.time() + 3600
+    pairs = [("757880276", future), ("757880277", future), ("757880281", future), ("999", future)]
+    assert store.unprocessed_ids(pairs, db) == ["999"]   # stored match + its sub-games are skipped

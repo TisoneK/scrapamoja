@@ -416,7 +416,8 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
             event_id=event_id, sport_id=sport_id, league_id=league_id, country_id=country_id,
             home_team_id=home_id, away_team_id=away_id, home_name=ev.get("home"),
             away_name=ev.get("away"), start_time=_dt(ev.get("start_time")),
-            venue=ev.get("venue"), stage=ev.get("stage"), first_seen=at, last_seen=at)
+            venue=ev.get("venue"), stage=ev.get("stage"), first_seen=at, last_seen=at,
+            stat_game_id=ev.get("stat_game_id"))
         estmt = estmt.on_conflict_do_update(index_elements=["event_id"], set_={
             "sport_id": func.coalesce(estmt.excluded.sport_id, _events.c.sport_id),
             "league_id": func.coalesce(estmt.excluded.league_id, _events.c.league_id),
@@ -426,6 +427,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
             "start_time": func.coalesce(estmt.excluded.start_time, _events.c.start_time),
             "venue": func.coalesce(estmt.excluded.venue, _events.c.venue),
             "stage": func.coalesce(estmt.excluded.stage, _events.c.stage),
+            "stat_game_id": func.coalesce(_events.c.stat_game_id, estmt.excluded.stat_game_id),
             "last_seen": estmt.excluded.last_seen})
         conn.execute(estmt)
 

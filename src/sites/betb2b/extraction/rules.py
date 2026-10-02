@@ -559,8 +559,9 @@ class BetB2BExtractionRules:
                 continue
             name = (s.get("TG") or "").strip() or None
             period = (s.get("PN") or "").strip() or None
-            if not name and not period:
-                continue  # nothing to label it with
+            # Unlabelled sub-games (special single-market groups) are KEPT: their id
+            # must be recorded so the champ-list entry for them is never mistaken
+            # for a match.
             out.append({
                 "sub_game_id": str(sid),
                 "name": name,

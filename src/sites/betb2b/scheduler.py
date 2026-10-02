@@ -361,6 +361,8 @@ class BetB2BScheduler:
             await sc._enrich_with_h2h(events)
         if events and sc.skin.features.get("stats", True):
             await sc._enrich_with_stats(events)
+        if events and sc.skin.features.get("stat_ids", True):
+            await sc._enrich_with_stat_ids(events)
 
     def _persist(self, action: str, events) -> None:
         sc = self._scraper
