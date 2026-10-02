@@ -379,3 +379,11 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** operator directive to use py 3.11 against a 3.12-floor project; `--ignore-requires-python` is project-scoped only, a subtlety not recorded anywhere.
 - **Workaround / fix:** recorded the exact recipe + rationale in `system/environments.md` (Lameck-Windows block): `py -3.11 -m venv .venv` then `PIP_ONLY_BINARY=:all: pip install --ignore-requires-python -e ".[dev]"`.
 - **Prevent next time:** on any Windows box without a 3.12+ interpreter, go straight to the recorded recipe; and remember both gates are independent — the project floor needs the flag, dependency wheels need the binary-only policy.
+
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50)
+- **Problem:** Read `kickoff.md` at the start, then ran a very long product session without Phase 1 (memory read), roster check-in, gate checkpoints, `ledger-mem lint`, session log, ADRs or `current.md` — the operator had to ask "are you following ledger rules?" mid-session. Also ran `git reset --hard origin/main` (after the operator approved resetting) before reading the ledger, discarding 4 local commits (kept on `backup/pre-reset-main`), and used the stale helper names (`context-gates`) from the project's AGENTS.md.
+- **Cost:** a large retroactive ledger catch-up; the stale Session 49 lock went unnoticed, risking a clash with a live peer; ADR citations leaked into 3 product lines.
+- **Cause:** the task arrived as conversational requests ("let's work on the scraper"); AGENTS.md's pointer to the ledger was treated as a one-time read instead of a gate on every turn, and each follow-up looked "too small" for Phase 1 (Pitfall #28).
+- **Workaround / fix:** caught up: roster, gates (pre-commit green), `ledger-mem lint`, ADR-26/27, session entry, backlog; stripped own leaks.
+- **Prevent next time:** on ANY session in a ledger repo — before the first edit — check in on the roster, run `ledger-gates checkpoint`, read `tasks/current.md` for a live lock, then proceed; run `pre-commit` + `ledger-mem lint` before each product commit. AGENTS.md still names `context-gates`/`.context/...` in places — the real helpers are `ledger-*`.

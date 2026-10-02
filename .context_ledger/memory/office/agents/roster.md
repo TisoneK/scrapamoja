@@ -50,7 +50,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Kai | S447 | qwen3.8-flash | Operator: env-only switch to run workers locally during the Supabase pause | Done | Shipped: BETB2B_STORE_MODE (auto/local/mirror/remote) + 9 tests, suite 262 green; core 1.1.3 + office compaction. Operator still to stop the Railway worker |
-| Ada | S448 | claude-sonnet-5-5 | Engineer: betb2b store/scrape pipeline (SQLite default, Neon remote, skip-processed, resilience) — checked in LATE (mid-session) after the operator flagged skipped ledger rules | Working | Catching up the protocol: ledger entries + gates; product work already pushed to main |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

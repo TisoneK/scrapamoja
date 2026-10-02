@@ -93,3 +93,13 @@ at session start). Rotate with context-history.
 - **Open items:** OPERATOR PENDING — stop the Railway worker service from the dashboard (no CLI on this box), then start the local worker with `BETB2B_STORE_MODE=mirror` (RAILWAY.md recipe); 09-27 Supabase cycle-reset watch unchanged; gates.conf POSIX-venv-path portability noted.
 - **Notes:** none
 - **Report:** .context_ledger/memory/office/reviews/2026-09-15-review.md
+
+---
+## 2026-10-02 — Session 50 (Ada/S448)
+- **Agent:** Ada (S448) | **Model:** claude-sonnet-5-5 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** engineer | **Core:** 1.1.3
+- **Task:** make local SQLite the default betb2b store with an optional shared remote DB; skip already-processed matches (re-fetch only to update scores); harden the scraper; audit the Neon DB and fix what's wrong; prove the data flows end to end.
+- **Commits (product):** `48aced2` `bbd7aa4` `da7d62b` `0c0d58e` `d135e61` `197a9d1` `7d57a94` `a80750f` `ee7c5dd` `f8e16ea` `88fa3ed` `32659f9` `6d43fec`; ledger: check-in + this wrap round.
+- **Outcome:** done (work) — scrape persists to SQLite by default; Neon via `DATABASE_URL`/mirror; `--skip-processed` + results update; `src/sites/betb2b/.env` config; retry/backoff + skin fallback; relist linking (`superseded_by`), sub-game/placeholder filtering, stat-id capture; offline e2e test (raw SQLite + ORM path) which caught 3 real bugs. Neon cleaned (10 junk events deleted, 4 relists linked, 2 failed runs corrected) after the operator wiped it on their own terminal. Suite 270+ green.
+- **Open items:** live re-verification of stat-id capture and of the whole pipeline — linebet (Gcore JS challenge), melbet/22bet/betwinner (connect timeouts) were all unreachable from this IP by the end; proxy tunnel was down (502) and the operator ruled the proxy out for API calls; 265 pre-existing ADR citations in product code (`ledger-mem lint --tree`); rotate the proxy password (shared in chat); shared cooldown/hourly budget per skin; `reset` CLI; Neon quota limit config.
+- **Notes:** PROTOCOL SLIPS (operator flagged mid-session, see inefficiencies): read kickoff then skipped Phase 1/roster/gates/session log for most of a long session; checked in late; used destructive `git reset --hard` on local main (backed up as `backup/pre-reset-main`) before reading the ledger. Operator confirmed the Session 49 lock was stale.
+- **Report:** none (findings recorded in ADR-26/27 + backlog)
