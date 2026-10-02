@@ -186,3 +186,23 @@ def test_failing_over_also_rests_the_site(tmp_path, clock, monkeypatch):
     assert d.action is Action.FAILOVER_SITE
     with pytest.raises(SiteInCooldown):
         g.preflight()
+
+
+def test_guard_without_a_browser_skips_the_browser_rungs():
+    """Direct mode has no page: a JS challenge must not get 'wait' / 'stronger browser' /
+    'human' rungs it cannot act on — it goes straight to failover or cooldown."""
+    import tempfile, pathlib
+    from src.security import Action, BETB2B_RULES, BlockLedger, SecurityGuard
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    for failover, expected in ((False, Action.COOLDOWN), (True, Action.FAILOVER_SITE)):
+        g = SecurityGuard("x", rules=BETB2B_RULES, interactive=True, has_browser=False,
+                          has_failover=failover, ledger=BlockLedger(tmp / f"{failover}.json"))
+        v = g.inspect(200, "https://x/feed", {"content-type": "text/html"},
+                      "<html><head><title>Gcore</title></head><body>Browser Validation</body></html>")
+        assert g.on_block(v).action is expected                     # first challenge, no retries
+    # with a browser the same first challenge still gets patience first
+    g = SecurityGuard("y", rules=BETB2B_RULES, interactive=True, has_browser=True,
+                      ledger=BlockLedger(tmp / "b.json"))
+    v = g.inspect(200, "https://y/feed", {"content-type": "text/html"},
+                  "<html><head><title>Gcore</title></head><body>Browser Validation</body></html>")
+    assert g.on_block(v).action is Action.WAIT_FOR_CLEARANCE

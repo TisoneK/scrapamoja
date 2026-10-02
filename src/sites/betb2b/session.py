@@ -79,6 +79,7 @@ class BetB2BSessionManager:
         proxy_verify_attempts: int = 3,
         proxy_verify_backoff: float = 3.0,
         security_guard: Optional[SecurityGuard] = None,
+        has_browser: bool = True,
     ) -> None:
         self.skin = skin
         self.proxy = proxy
@@ -105,6 +106,7 @@ class BetB2BSessionManager:
             f"{skin.name}@{egress}" if egress else skin.name,
             rules=BETB2B_RULES,
             has_failover=bool(os.environ.get("BETB2B_FALLBACK_SKINS")),
+            has_browser=has_browser,
         )
         self._profiles: Optional[Any] = None
         self.profile_name = profile_name_for(skin.name)

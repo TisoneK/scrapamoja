@@ -40,6 +40,7 @@ class SecurityGuard:
         interactive: Optional[bool] = None,
         has_failover: bool = False,
         has_proxy_pool: bool = False,
+        has_browser: bool = True,
     ):
         self.site = site
         self.rules = rules
@@ -53,6 +54,13 @@ class SecurityGuard:
             unavailable.add(Action.FAILOVER_SITE)
         if not has_proxy_pool:
             unavailable.add(Action.ROTATE_PROXY)
+        if not has_browser:
+            # Direct (browser-free) mode cannot wait on a page, open a stronger browser,
+            # hand a window to a person, or re-bootstrap cookies: those rungs are skipped,
+            # so a block goes straight to failover or cooldown instead of being retried
+            # silently a few more times.
+            unavailable.update({Action.WAIT_FOR_CLEARANCE, Action.ESCALATE_BROWSER,
+                                Action.HUMAN_HANDOFF, Action.REFRESH_SESSION})
         self.policy.unavailable = frozenset(unavailable)
 
     # -- gate ----------------------------------------------------------- #

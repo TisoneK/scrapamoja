@@ -211,7 +211,7 @@ class BetB2BFeedClient:
             self.session_manager.clear()
 
         content_type = resp.headers.get("content-type", "")
-        self._guard_response(resp, url, content_type)
+        self.guard_response(resp, url, content_type)
         rules = BetB2BExtractionRules(self.skin)
         return rules.decode_response(
             url=url,
@@ -333,7 +333,7 @@ class BetB2BFeedClient:
     _ACTED_ON = (BlockType.GEO_BLOCK, BlockType.JS_CHALLENGE, BlockType.CAPTCHA,
                  BlockType.IP_BANNED, BlockType.RATE_LIMITED)
 
-    def _guard_response(self, resp: httpx.Response, url: str, content_type: str) -> None:
+    def guard_response(self, resp: httpx.Response, url: str, content_type: str) -> None:
         """Classify the response; on a real block record it and fail fast or re-session."""
         guard = self.session_manager.guard
         is_json_ok = resp.status_code == 200 and "json" in content_type.lower()

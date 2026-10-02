@@ -51,6 +51,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import httpx
 
 from src.network.proxy import ProxyManager
+from src.security import SiteBlocked, SiteInCooldown
 
 from .client import BetB2BFeedClient
 from .config import BetB2BSkinConfig
@@ -194,6 +195,7 @@ class BetB2BScraper:
             skin=skin,
             proxy=self.proxy_endpoint,
             settle_seconds=settle_seconds,
+            has_browser=not self._direct,   # direct mode has no page to wait on or escalate
         )
         # Direct mode hits un-gated endpoints (no session to protect), so a
         # full card (100+ games) fits the timeout — bump the polite default.
@@ -595,11 +597,16 @@ class BetB2BScraper:
             "accept-language": "en-US,en;q=0.9",
         }
         try:
+            self._guard_gate()
             async with httpx.AsyncClient(
                 proxy=proxy_url, timeout=30.0, follow_redirects=True, headers=headers,
             ) as client:
                 resp = await client.get(url)
+                self._guard_check(resp)
                 html = resp.text if resp.status_code == 200 else ""
+        except (SiteBlocked, SiteInCooldown) as exc:
+            logger.warning("skin=%s HTML harvest skipped: %s", self.skin.name, exc)
+            return []
         except httpx.HTTPError as exc:
             logger.warning("skin=%s HTML harvest GET %s failed: %s", self.skin.name, url, exc)
             return []
@@ -1017,16 +1024,21 @@ class BetB2BScraper:
             "fcountry": str(self.skin.country), "gr": str(self.skin.gr),
         }
         try:
+            self._guard_gate()
             async with httpx.AsyncClient(
                 proxy=proxy_url, timeout=15.0, follow_redirects=True,
             ) as client:
                 resp = await client.get(url, params=params, headers=headers)
+            self._guard_check(resp)
             if resp.status_code in (200, 204) and not resp.text:
                 return None, False                      # answered: no data
             if resp.status_code != 200:
                 return None, resp.status_code >= 500 or resp.status_code in (403, 429)
             entity = (resp.json() or {}).get("entity") or {}
             return self._parse_result_entity(entity), False
+        except (SiteBlocked, SiteInCooldown) as exc:
+            logger.debug("skin=%s result fetch id=%s stopped by the guard: %s", self.skin.name, ident, exc)
+            return None, True                           # FAILED (not "no data"): trips the callers' breaker
         except Exception as exc:  # noqa: BLE001 — best-effort
             logger.debug("skin=%s result fetch id=%s failed: %s", self.skin.name, ident, exc)
             return None, True
@@ -1034,6 +1046,17 @@ class BetB2BScraper:
     # ------------------------------------------------------------------ #
     # H2H enrichment
     # ------------------------------------------------------------------ #
+    # -- security guard (same rules as the feed client) ---------------- #
+    def _guard_gate(self) -> None:
+        """Raise :class:`SiteInCooldown` while this skin is cooling down after a block."""
+        self.session_manager.guard.preflight()
+
+    def _guard_check(self, resp: httpx.Response) -> None:
+        """Classify a direct ``httpx`` response; raises :class:`SiteBlocked` on a block
+        that needs a cooldown. Direct calls used to bypass the guard, so a challenge
+        page there was neither recognised nor rested."""
+        self.feed_client.guard_response(resp, str(resp.url), resp.headers.get("content-type", ""))
+
     async def _enrich_with_stat_ids(self, events: List[Event]) -> None:
         """Capture each event's statisticfeed ``entity.id`` while it is
         fresh: ``v1/Game?id=<event id>`` resolves for recent/upcoming games, and
@@ -1096,11 +1119,13 @@ class BetB2BScraper:
 
         url = f"{self.skin.base_url}/service-api/statisticfeed/api/v1/Game/h2h"
         sem = asyncio.Semaphore(self.concurrency)   # Bounded concurrency
+        halted = False   # a block stops the whole batch (one warning, not one per match)
 
         async with httpx.AsyncClient(
             proxy=proxy_url, timeout=15.0, follow_redirects=True,
         ) as client:
             async def _one(ev: Event) -> None:
+                nonlocal halted
                 eid = str(ev.event_id)
                 if not eid.isdigit():
                     logger.debug(
@@ -1109,7 +1134,10 @@ class BetB2BScraper:
                     )
                     return
                 async with sem:
+                    if halted:
+                        return
                     try:
+                        self._guard_gate()
                         params = {
                             "id": eid,
                             "lng": self.skin.language,
@@ -1118,6 +1146,7 @@ class BetB2BScraper:
                             "gr": str(self.skin.gr),
                         }
                         resp = await client.get(url, params=params, headers=headers)
+                        self._guard_check(resp)
 
                         if resp.status_code == 204:
                             # 204 = no H2H data for this match (minor league).
@@ -1143,6 +1172,11 @@ class BetB2BScraper:
                                 self.skin.name, eid, len(h2h_data.game_shorts),
                             )
 
+                    except (SiteBlocked, SiteInCooldown) as exc:
+                        if not halted:
+                            halted = True
+                            logger.warning("skin=%s statisticfeed enrichment stopped: %s",
+                                           self.skin.name, exc)
                     except httpx.HTTPError as exc:
                         logger.warning(
                             "skin=%s H2H HTTP error for event=%s: %s",
@@ -1187,17 +1221,21 @@ class BetB2BScraper:
         enriched = 0
         url = f"{self.skin.base_url}/service-api/statisticfeed/api/v2/Game/statistic"
         sem = asyncio.Semaphore(self.concurrency)   # Bounded concurrency
+        halted = False   # a block stops the whole batch (one warning, not one per match)
 
         async with httpx.AsyncClient(
             proxy=proxy_url, timeout=15.0, follow_redirects=True,
         ) as client:
             async def _one(ev: Event) -> None:
-                nonlocal enriched
+                nonlocal enriched, halted
                 eid = str(ev.event_id)
                 if not eid.isdigit():
                     return
                 async with sem:
+                    if halted:
+                        return
                     try:
+                        self._guard_gate()
                         params = {
                             "id": eid,
                             "lng": self.skin.language,
@@ -1206,6 +1244,7 @@ class BetB2BScraper:
                             "gr": str(self.skin.gr),
                         }
                         resp = await client.get(url, params=params, headers=headers)
+                        self._guard_check(resp)
 
                         if resp.status_code == 204:
                             # 204 = no stats for this match (minor league).
@@ -1223,6 +1262,11 @@ class BetB2BScraper:
                             ev.statistics = rows
                             enriched += 1
 
+                    except (SiteBlocked, SiteInCooldown) as exc:
+                        if not halted:
+                            halted = True
+                            logger.warning("skin=%s statisticfeed enrichment stopped: %s",
+                                           self.skin.name, exc)
                     except httpx.HTTPError as exc:
                         logger.warning(
                             "skin=%s stats HTTP error for event=%s: %s",
