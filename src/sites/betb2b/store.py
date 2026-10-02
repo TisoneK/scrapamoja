@@ -975,6 +975,47 @@ def events_last_seen(conn, event_ids) -> Dict[str, Any]:
     return out
 
 
+def unprocessed_ids(pairs, path: PathLike | None = None, *,
+                    refresh_window: float = 10800.0,
+                    skip_started: bool = True) -> List[str]:
+    """Filter discovered ``[(event_id, start_epoch)]`` down to ids worth fetching:
+    drop events already scraped within ``refresh_window`` seconds (0 = skip
+    anything ever stored) and, if ``skip_started``, ones that have kicked off.
+    Works on whichever store ``init_db`` resolves (local SQLite or remote DB), so
+    several machines sharing one remote store skip each other's work."""
+    import time
+    conn = init_db(path)
+    try:
+        last_seen = events_last_seen(conn, [i for i, _ in pairs])
+    finally:
+        conn.close()
+    now = time.time()
+    keep: List[str] = []
+    for eid, start in pairs:
+        try:
+            if skip_started and start is not None and float(start) <= now:
+                continue
+        except (TypeError, ValueError):
+            pass
+        seen = last_seen.get(eid)
+        if seen is None:
+            keep.append(eid)
+            continue
+        if refresh_window <= 0:
+            continue
+        from datetime import datetime, timezone
+        try:
+            dt = seen if isinstance(seen, datetime) else datetime.fromisoformat(str(seen))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            age = now - dt.timestamp()
+        except ValueError:
+            age = float("inf")
+        if age >= refresh_window:
+            keep.append(eid)
+    return keep
+
+
 def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):
     """(event_id, stat_game_id) for real matches past ``min_age`` (default 2.5h)
     with no result yet — the results pass's work list (ADR-16/20). Oldest first."""

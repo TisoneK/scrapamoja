@@ -111,8 +111,13 @@ class BetB2BScraper:
         sport: Optional[Union[str, int, Sport, SportScraper]] = None,
         direct: Optional[bool] = None,
         concurrency: Optional[int] = None,
+        id_filter: Optional[Callable[[List[tuple]], List[str]]] = None,
     ) -> None:
         """Initialise the scraper for one skin + optional sport.
+
+        ``id_filter`` (direct mode): maps discovered ``[(event_id, start)]`` to
+        the ids worth fetching, so already-processed events skip the expensive
+        per-match ``GetGameZip`` (see CLI ``--skip-processed``).
 
         Args:
             skin: the :class:`BetB2BSkinConfig` to scrape.
@@ -158,6 +163,7 @@ class BetB2BScraper:
             except ValueError:
                 concurrency = default_conc
         self.concurrency = max(1, min(concurrency, 32))
+        self.id_filter = id_filter
 
         # Resolve the sport strategy (None → AllSportsScraper).
         self.sport_scraper: SportScraper = resolve_sport(sport)
@@ -747,8 +753,13 @@ class BetB2BScraper:
         pairs = await self.discover_ids(is_live=is_live)
         if not pairs:
             return []
-        events = await self.fetch_events([i for i, _ in pairs], is_live=is_live)
-        logger.info("skin=%s direct: %d ids → %d events", self.skin.name, len(pairs), len(events))
+        ids = [i for i, _ in pairs]
+        if self.id_filter is not None:
+            ids = self.id_filter(pairs)
+            logger.info("skin=%s id_filter: %d discovered → %d to fetch",
+                        self.skin.name, len(pairs), len(ids))
+        events = await self.fetch_events(ids, is_live=is_live)
+        logger.info("skin=%s direct: %d ids → %d events", self.skin.name, len(ids), len(events))
         return events
 
     async def _dom_fallback(self, *, is_live: bool) -> List[Event]:

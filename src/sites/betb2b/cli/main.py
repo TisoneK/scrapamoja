@@ -92,6 +92,22 @@ def _list_skins() -> List[str]:
     return sorted(p.stem for p in skins_dir.glob("*.yaml"))
 
 
+def _describe_store(path: str) -> str:
+    """Store target for log lines — remote URLs shown without credentials."""
+    from urllib.parse import urlsplit
+    url = os.environ.get("DATABASE_URL")
+    mode = (os.environ.get("BETB2B_STORE_MODE") or "auto").lower()
+    if url and mode != "local":
+        u = urlsplit(url)
+        return f"{u.scheme}://{u.hostname or ''}{u.path} (remote, mode={mode})"
+    return path
+
+
+def db_path() -> str:
+    from src.sites.betb2b.service import db_path as _p
+    return _p()
+
+
 def _load_skin(name: str):
     from src.sites.betb2b.config import BetB2BSkinConfig
 
@@ -201,12 +217,20 @@ class BetB2BCLI:
                             help="gzip the --output file (a .gz suffix is added). "
                                  "Read it back with `betb2b view <file>`. Large "
                              "results (full odds) compress ~85-90%%.")
-        scrape.add_argument("--db", default=None,
-                            help="Also persist the result into a SQLite odds store "
-                                 "at this path (events/odds_snapshots time-series). "
-                                 "Opt-in; JSON output is unaffected. "
-                                 "Default: data/betb2b/odds.db if flag given without value.",
-                            nargs="?", const="data/betb2b/odds.db")
+        scrape.add_argument("--db", default=None, nargs="?", const=None,
+                            help="Odds store path. Persisting is ON by default into the "
+                                 "local SQLite store ($BETB2B_DB_PATH or "
+                                 "data/betb2b/odds.db); $DATABASE_URL / "
+                                 "$BETB2B_STORE_MODE switch it to a remote DB. "
+                                 "JSON output is unaffected.")
+        scrape.add_argument("--no-db", action="store_true",
+                            help="Don't persist this run to the odds store.")
+        scrape.add_argument("--skip-processed", nargs="?", const=10800.0, default=None,
+                            type=float, metavar="SECONDS",
+                            help="Skip events already in the store and scraped within "
+                                 "SECONDS (default 10800 = 3h; 0 = skip anything ever "
+                                 "stored), plus matches already started. Direct mode "
+                                 "only. Needs the store (not --no-db).")
         scrape.add_argument("--ingest", nargs="?", const="env", default=None,
                             help="POST results to scorewise-engine /api/ingest "
                                  "(one PredictRequest per scope). Value = engine URL, "
@@ -409,24 +433,35 @@ class BetB2BCLI:
         skin = _load_skin(skin_name)
         if getattr(args, "subgames", False):
             skin = skin.with_overrides(features={**skin.features, "subgames": True})
+        no_db = getattr(args, "no_db", False)
+        db_target = getattr(args, "db", None) or db_path()
+        id_filter = None
+        skip = getattr(args, "skip_processed", None)
+        if skip is not None and not no_db:
+            from src.sites.betb2b.store import unprocessed_ids
+
+            def id_filter(pairs, _t=db_target, _w=float(skip)):
+                return unprocessed_ids(pairs, _t, refresh_window=_w)
+
         async with BetB2BScraper(
             skin, proxy_manager=proxy_manager, proxy_endpoint_id=proxy_endpoint_id,
             rate_limit_per_minute=args.rate, settle_seconds=args.settle,
             sport=args.sport, direct=getattr(args, "direct", False) or None,
+            id_filter=id_filter,
         ) as scraper:
             result = await scraper.scrape(
                 action=args.action, sport_id=args.sport_id,
                 count=args.count, timeout_seconds=args.timeout,
             )
 
-        if getattr(args, "db", None):
+        if not no_db:
             try:
                 from src.sites.betb2b.store import persist_result
 
-                run_id = persist_result(result, args.db)
+                run_id = persist_result(result, db_target)
                 print(
                     f"  [{skin_name}] persisted run {run_id} "
-                    f"({result.get('event_count', 0)} events) → {args.db}",
+                    f"({result.get('event_count', 0)} events) → {_describe_store(db_target)}",
                     file=sys.stderr,
                 )
             except Exception as exc:  # noqa: BLE001
