@@ -9,7 +9,7 @@ This implements Story 8.1 (Sport-Based Feature Flags) requirements:
 
 from typing import Optional, List
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Query, status, Path
+from fastapi import APIRouter, HTTPException, Query, status, Path, Depends
 from fastapi.responses import JSONResponse
 
 from ..schemas.feature_flags import (
@@ -24,8 +24,8 @@ from ..schemas.feature_flags import (
     EnabledSportsResponseSchema,
     FeatureFlagStatsResponseSchema,
 )
-from ..services.feature_flag_service import FeatureFlagService, get_feature_flag_service
-from ..db.models.feature_flag import FeatureFlag
+from src.selectors.adaptive.services.feature_flag_service import FeatureFlagService, get_feature_flag_service
+from ...db.models.feature_flag import FeatureFlag
 
 
 # Create router
@@ -62,7 +62,7 @@ def _feature_flag_to_response(flag: FeatureFlag) -> FeatureFlagResponseSchema:
 async def list_feature_flags(
     sport: Optional[str] = Query(None, description="Filter by sport name"),
     site: Optional[str] = Query(None, description="Filter by site name"),
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> FeatureFlagListResponseSchema:
     """
     List all feature flags.
@@ -102,7 +102,7 @@ async def list_feature_flags(
     description="Get list of sports with adaptive system enabled",
 )
 async def get_enabled_sports(
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> EnabledSportsResponseSchema:
     """
     Get list of sports with adaptive system enabled.
@@ -133,7 +133,7 @@ async def get_enabled_sports(
 async def check_feature_flag(
     sport: str = Query(..., description="Sport name to check"),
     site: Optional[str] = Query(None, description="Optional site name to check"),
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> FeatureFlagCheckResponseSchema:
     """
     Check if adaptive system is enabled for a sport/site.
@@ -167,7 +167,7 @@ async def check_feature_flag(
     description="Get statistics about feature flags usage",
 )
 async def get_feature_flag_stats(
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> FeatureFlagStatsResponseSchema:
     """
     Get feature flag statistics.
@@ -208,7 +208,7 @@ async def get_feature_flag_stats(
 )
 async def get_sport_feature_flags(
     sport: str = Path(..., description="Sport name"),
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> FeatureFlagListResponseSchema:
     """
     Get all feature flags for a specific sport.
@@ -241,7 +241,7 @@ async def get_sport_feature_flags(
 )
 async def create_feature_flag(
     flag_data: FeatureFlagCreateSchema,
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> FeatureFlagResponseSchema:
     """
     Create a new feature flag.
@@ -282,7 +282,7 @@ async def create_feature_flag(
 )
 async def bulk_create_feature_flags(
     bulk_data: FeatureFlagBulkCreateSchema,
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> FeatureFlagListResponseSchema:
     """
     Create multiple feature flags at once.
@@ -316,7 +316,7 @@ async def bulk_create_feature_flags(
 async def toggle_sport_flag(
     flag_data: FeatureFlagToggleSchema,
     sport: str = Path(..., description="Sport name"),
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> FeatureFlagResponseSchema:
     """
     Toggle adaptive system for a sport.
@@ -355,7 +355,7 @@ async def update_site_flag(
     flag_data: FeatureFlagUpdateSchema,
     sport: str = Path(..., description="Sport name"),
     site: str = Path(..., description="Site name"),
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> FeatureFlagResponseSchema:
     """
     Update feature flag for a specific sport and site.
@@ -394,7 +394,7 @@ async def update_site_flag(
 )
 async def delete_sport_flag(
     sport: str = Path(..., description="Sport name"),
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> None:
     """
     Delete global feature flag for a sport.
@@ -427,7 +427,7 @@ async def delete_sport_flag(
 async def delete_site_flag(
     sport: str = Path(..., description="Sport name"),
     site: str = Path(..., description="Site name"),
-    service: FeatureFlagService = Query(None, description="Feature flag service dependency"),
+    service: FeatureFlagService = Depends(lambda: get_feature_flag_service()),
 ) -> None:
     """
     Delete feature flag for a specific sport and site.

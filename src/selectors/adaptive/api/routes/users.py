@@ -15,7 +15,7 @@ Routes:
 
 from typing import Optional
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 from fastapi.responses import JSONResponse
 
 from ..schemas.users import (
@@ -30,8 +30,8 @@ from ..schemas.users import (
     UserRoleSchema,
     ViewModeSchema,
 )
-from ..services.view_service import ViewService, get_view_service
-from ..db.models.user_preferences import UserRole, ViewMode
+from src.selectors.adaptive.services.view_service import ViewService, get_view_service
+from ...db.models.user_preferences import UserRole, ViewMode
 
 
 # Create router
@@ -55,7 +55,7 @@ def _get_default_user_id() -> str:
 )
 async def get_current_user_info(
     user_id: Optional[str] = Query(None, description="User ID (optional, uses default if not provided)"),
-    service: ViewService = Query(None, description="View service dependency"),
+    service: ViewService = Depends(lambda: get_view_service()),
 ) -> UserInfoResponseSchema:
     """
     Get current user information including role and view preferences.
@@ -85,7 +85,7 @@ async def get_current_user_info(
 )
 async def create_user_preferences(
     request: UserPreferenceCreateSchema,
-    service: ViewService = Query(None, description="View service dependency"),
+    service: ViewService = Depends(lambda: get_view_service()),
 ) -> UserPreferencesResponseSchema:
     """
     Create new user preferences.
@@ -142,7 +142,7 @@ async def create_user_preferences(
 )
 async def get_user_preferences(
     target_user_id: str,
-    service: ViewService = Query(None, description="View service dependency"),
+    service: ViewService = Depends(lambda: get_view_service()),
 ) -> UserPreferencesResponseSchema:
     """
     Get user preferences by user ID.
@@ -181,7 +181,7 @@ async def get_user_preferences(
 async def update_user_preferences(
     request: UserPreferenceUpdateSchema,
     user_id: Optional[str] = Query(None, description="User ID (optional)"),
-    service: ViewService = Query(None, description="View service dependency"),
+    service: ViewService = Depends(lambda: get_view_service()),
 ) -> UserPreferencesResponseSchema:
     """
     Update current user preferences.
@@ -214,7 +214,7 @@ async def update_user_preferences(
         )
     
     # Get the user repo to update
-    from ..db.repositories.user_repository import UserPreferenceRepository
+    from ...db.repositories.user_repository import UserPreferenceRepository
     repo = UserPreferenceRepository()
     
     updated = repo.update_user_preference(
@@ -244,7 +244,7 @@ async def update_user_preferences(
 async def switch_view_mode(
     request: ViewModeSwitchSchema,
     user_id: Optional[str] = Query(None, description="User ID (optional)"),
-    service: ViewService = Query(None, description="View service dependency"),
+    service: ViewService = Depends(lambda: get_view_service()),
 ) -> ViewModeSwitchResponseSchema:
     """
     Switch user's view mode.
@@ -287,7 +287,7 @@ async def switch_view_mode(
 )
 async def get_view_usage(
     user_id: Optional[str] = Query(None, description="User ID (optional)"),
-    service: ViewService = Query(None, description="View service dependency"),
+    service: ViewService = Depends(lambda: get_view_service()),
 ) -> ViewUsageAnalyticsListSchema:
     """
     Get view usage statistics for current user.

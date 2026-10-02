@@ -14,7 +14,7 @@ Story: 4.3 - Flag Selectors for Developer Review
 
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 from fastapi.responses import JSONResponse
 
 from src.selectors.adaptive.api.schemas.failures import (
@@ -78,7 +78,7 @@ async def list_failures(
     ),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Results per page"),
-    service: FailureService = Query(None, description="Failure service dependency"),
+    service: FailureService = Depends(lambda: get_failure_service()),
 ) -> FailureListResponseSchema:
     """
     List selector failures with optional filtering and pagination.
@@ -156,7 +156,7 @@ async def list_failures(
 async def get_failure_detail(
     failure_id: int,
     include_alternatives: bool = Query(True, description="Include proposed alternatives"),
-    service: FailureService = Query(None, description="Failure service dependency"),
+    service: FailureService = Depends(lambda: get_failure_service()),
 ) -> FailureDetailResponseSchema:
     """
     Get detailed information about a selector failure.
@@ -247,7 +247,7 @@ async def get_failure_detail(
 async def approve_selector(
     failure_id: int,
     request: ApprovalRequestSchema,
-    service: FailureService = Query(None, description="Failure service dependency"),
+    service: FailureService = Depends(lambda: get_failure_service()),
 ) -> ApprovalResponseSchema:
     """
     Approve a proposed alternative selector.
@@ -320,7 +320,7 @@ async def approve_selector(
 async def reject_selector(
     failure_id: int,
     request: RejectionRequestSchema,
-    service: FailureService = Query(None, description="Failure service dependency"),
+    service: FailureService = Depends(lambda: get_failure_service()),
 ) -> ApprovalResponseSchema:
     """
     Reject a proposed alternative selector.
@@ -394,7 +394,7 @@ async def reject_selector(
 async def flag_failure(
     failure_id: int,
     request: FlagRequestSchema,
-    service: FailureService = Query(None, description="Failure service dependency"),
+    service: FailureService = Depends(lambda: get_failure_service()),
 ) -> FlagResponseSchema:
     """
     Flag a selector failure for developer review.
@@ -466,7 +466,7 @@ async def flag_failure(
 )
 async def unflag_failure(
     failure_id: int,
-    service: FailureService = Query(None, description="Failure service dependency"),
+    service: FailureService = Depends(lambda: get_failure_service()),
 ) -> FlagResponseSchema:
     """
     Remove the flag from a selector failure.
@@ -528,7 +528,7 @@ async def unflag_failure(
 async def create_custom_selector(
     failure_id: int,
     request: CustomSelectorRequestSchema,
-    service: FailureService = Query(None, description="Failure service dependency"),
+    service: FailureService = Depends(lambda: get_failure_service()),
 ) -> CustomSelectorResponseSchema:
     """
     Create a custom selector for a failure.
@@ -603,7 +603,7 @@ async def create_custom_selector(
     description="Get current approval weights for all strategy types",
 )
 async def get_weights(
-    service: FailureService = Query(None, description="Failure service dependency"),
+    service: FailureService = Depends(lambda: get_failure_service()),
 ) -> dict:
     """
     Get current approval weights for all strategies.
@@ -634,7 +634,7 @@ async def get_weights(
 )
 async def get_strategy_weight(
     strategy: str,
-    service: FailureService = Query(None, description="Failure service dependency"),
+    service: FailureService = Depends(lambda: get_failure_service()),
 ) -> dict:
     """
     Get approval weight for a specific strategy.

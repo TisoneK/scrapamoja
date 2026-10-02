@@ -10,14 +10,14 @@ Routes:
 """
 
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 
 from .failures import _create_problem_detail
 from ..schemas.failures import FailureDetailResponseSchema, ProblemDetailSchema
 from ..schemas.users import ViewAdaptiveFailureResponse
-from ..services.view_service import ViewService, get_view_service
-from ..services.failure_service import FailureService, get_failure_service
-from ..db.models.user_preferences import ViewMode
+from src.selectors.adaptive.services.view_service import ViewService, get_view_service
+from src.selectors.adaptive.services.failure_service import FailureService, get_failure_service
+from ...db.models.user_preferences import ViewMode
 
 
 # Create router
@@ -41,8 +41,8 @@ async def get_failure_adaptive(
     ),
     user_id: Optional[str] = Query(None, description="User ID for permission checking and preference detection"),
     include_alternatives: bool = Query(True, description="Include proposed alternatives"),
-    view_service: ViewService = Query(None, description="View service dependency"),
-    failure_service: FailureService = Query(None, description="Failure service dependency"),
+    view_service: ViewService = Depends(lambda: get_view_service()),
+    failure_service: FailureService = Depends(lambda: get_failure_service()),
 ) -> ViewAdaptiveFailureResponse:
     """
     Get failure details in view-adaptive format.

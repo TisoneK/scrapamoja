@@ -47,7 +47,7 @@ class TabContext:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ActivationEvent:
     """Event representing a tab activation or deactivation."""
     timestamp: datetime = field(default_factory=datetime.utcnow)

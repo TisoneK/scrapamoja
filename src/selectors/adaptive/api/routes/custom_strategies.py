@@ -18,7 +18,7 @@ Routes:
 
 from typing import Optional, List
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 from fastapi.responses import JSONResponse
 
 from ..schemas.custom_strategies import (
@@ -30,7 +30,7 @@ from ..schemas.custom_strategies import (
     TestResultSchema,
     StrategyCreateResponseSchema,
 )
-from ..services.custom_strategy_service import (
+from src.selectors.adaptive.services.custom_strategy_service import (
     CustomStrategyService,
     get_custom_strategy_service,
     CustomStrategy,
@@ -62,7 +62,7 @@ def _get_default_user_id() -> str:
 async def create_custom_strategy(
     request: CustomStrategyCreateSchema,
     user_id: Optional[str] = Query(None, description="User ID (optional, uses default if not provided)"),
-    service: CustomStrategyService = Query(None, description="Custom strategy service dependency"),
+    service: CustomStrategyService = Depends(lambda: get_custom_strategy_service()),
 ) -> StrategyCreateResponseSchema:
     """
     Create a new custom selector strategy.
@@ -121,7 +121,7 @@ async def list_custom_strategies(
     created_by: Optional[str] = Query(None, description="Filter by creator"),
     active_only: bool = Query(True, description="Only return active strategies"),
     user_id: Optional[str] = Query(None, description="User ID (optional)"),
-    service: CustomStrategyService = Query(None, description="Custom strategy service dependency"),
+    service: CustomStrategyService = Depends(lambda: get_custom_strategy_service()),
 ) -> CustomStrategyListSchema:
     """
     List custom strategies.
@@ -161,7 +161,7 @@ async def list_custom_strategies(
 )
 async def get_custom_strategy(
     strategy_id: str,
-    service: CustomStrategyService = Query(None, description="Custom strategy service dependency"),
+    service: CustomStrategyService = Depends(lambda: get_custom_strategy_service()),
 ) -> CustomStrategyResponseSchema:
     """
     Get a specific custom strategy.
@@ -199,7 +199,7 @@ async def get_custom_strategy(
 async def update_custom_strategy(
     strategy_id: str,
     request: CustomStrategyUpdateSchema,
-    service: CustomStrategyService = Query(None, description="Custom strategy service dependency"),
+    service: CustomStrategyService = Depends(lambda: get_custom_strategy_service()),
 ) -> CustomStrategyResponseSchema:
     """
     Update a custom strategy.
@@ -238,7 +238,7 @@ async def update_custom_strategy(
 )
 async def delete_custom_strategy(
     strategy_id: str,
-    service: CustomStrategyService = Query(None, description="Custom strategy service dependency"),
+    service: CustomStrategyService = Depends(lambda: get_custom_strategy_service()),
 ) -> dict:
     """
     Delete a custom strategy.
@@ -272,7 +272,7 @@ async def delete_custom_strategy(
 async def validate_selector(
     selector: str = Query(..., description="Selector string to validate"),
     strategy_type: str = Query(..., description="Strategy type (css, xpath, text_anchor, custom)"),
-    service: CustomStrategyService = Query(None, description="Custom strategy service dependency"),
+    service: CustomStrategyService = Depends(lambda: get_custom_strategy_service()),
 ) -> ValidationResultSchema:
     """
     Validate a selector string.
@@ -311,7 +311,7 @@ async def validate_selector(
 async def test_custom_strategy(
     strategy_id: str,
     test_content: Optional[str] = Query(None, description="Sample content to test against"),
-    service: CustomStrategyService = Query(None, description="Custom strategy service dependency"),
+    service: CustomStrategyService = Depends(lambda: get_custom_strategy_service()),
 ) -> TestResultSchema:
     """
     Test a custom strategy.

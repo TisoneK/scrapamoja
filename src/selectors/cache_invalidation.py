@@ -41,7 +41,7 @@ class InvalidationRule:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class InvalidationEvent:
     """Represents a cache invalidation event."""
     timestamp: datetime = field(default_factory=datetime.utcnow)

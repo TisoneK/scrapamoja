@@ -17,8 +17,8 @@ from dataclasses import dataclass, field
 import hashlib
 
 from .context_manager import SelectorContext, get_context_manager
-from .hierarchical_structure_validator import validate_selector_structure
-from .naming_convention_validator import validate_selector_naming
+from src.sites.base.template.hierarchical_structure_validator import validate_selector_structure
+from src.sites.base.template.naming_convention_validator import validate_selector_naming
 
 
 logger = logging.getLogger(__name__)

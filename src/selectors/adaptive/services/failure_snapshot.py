@@ -8,15 +8,15 @@ when selector failures occur, using the established SnapshotManager and storage.
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 
-from ...core.snapshot import (
+from ....core.snapshot import (
     SnapshotManager, 
     SnapshotContext, 
     SnapshotConfig, 
     SnapshotMode,
     get_snapshot_manager
 )
-from ...core.snapshot.triggers import SelectorFailureTrigger
-from ...storage.adapter import FileSystemStorageAdapter
+from ....core.snapshot.triggers import SelectorFailureTrigger
+from ....storage.adapter import FileSystemStorageAdapter
 
 
 class FailureSnapshotService:
