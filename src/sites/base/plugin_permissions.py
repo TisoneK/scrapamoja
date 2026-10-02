@@ -65,7 +65,7 @@ class Permission:
     auto_grant_for: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = builtins.dict()
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -78,6 +78,7 @@ class PermissionRequest:
     requested_at: datetime = field(default_factory=datetime.utcnow)
     expires_at: Optional[datetime] = None
     requestor: Optional[str] = None
+    request_id: str = ""        # what request_permission() returns and approve_permission() looks up
 
 
 @dataclass
@@ -104,6 +105,7 @@ class PermissionAuditLog:
     timestamp: datetime = field(default_factory=datetime.utcnow)
     requestor: Optional[str] = None
     expires_at: Optional[datetime] = None
+    granted_by: Optional[str] = None     # who granted/denied (auto_grant, an approver, ...)
 
 
 class PermissionManager:
@@ -133,7 +135,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="file_read",
             name="File Read Access",
-            description="Read access to file system",
             permission_type=PermissionType.FILE_SYSTEM,
             level=PermissionLevel.READ_ONLY,
             scope=PermissionScope.GLOBAL,
@@ -144,7 +145,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="file_write",
             name="File Write Access",
-            description="Write access to file system",
             permission_type=PermissionType.FILE_SYSTEM,
             level=PermissionLevel.WRITE,
             scope=PermissionScope.GLOBAL,
@@ -157,7 +157,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="network_access",
             name="Network Access",
-            description="Network access",
             permission_type=PermissionType.NETWORK,
             level=PermissionLevel.EXECUTE,
             scope=PermissionScope.GLOBAL,
@@ -169,7 +168,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="browser_control",
             name="Browser Control",
-            description="Browser control",
             permission_type=PermissionType.BROWSER_CONTROL,
             level=PermissionLevel.EXECUTE,
             scope=PermissionScope.GLOBAL,
@@ -181,7 +179,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="system_access",
             name="System Access",
-            description="System access",
             permission_type=PermissionType.SYSTEM,
             level=PermissionLevel.ADMIN,
             scope=PermissionScope.GLOBAL,
@@ -193,7 +190,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="data_access",
             name="Data Access",
-            description="Data access",
             permission_type=PermissionType.DATA_ACCESS,
             level=PermissionLevel.READ_ONLY,
             scope=PermissionScope.GLOBAL,
@@ -205,7 +201,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="config_access",
             name="Configuration Access",
-            description="Configuration access",
             permission_type=PermissionType.CONFIGURATION,
             level=PermissionLevel.WRITE,
             scope=PermissionScope.GLOBAL,
@@ -217,7 +212,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="logging",
             name="Logging",
-            description="Logging",
             permission_type=PermissionType.LOGGING,
             level=PermissionLevel.WRITE,
             scope=PermissionScope.GLOBAL,
@@ -229,7 +223,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="notifications",
             name="Notifications",
-            description="Send notifications",
             permission_type=PermissionType.NOTIFICATION,
             level=PermissionLevel.WRITE,
             scope=PermissionScope.GLOBAL,
@@ -241,7 +234,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="code_execution",
             name="Code Execution",
-            description="Code execution",
             permission_type=PermissionType.EXECUTION,
             level=PermissionLevel.EXECUTE,
             scope=PermissionScope.GLOBAL,
@@ -253,7 +245,6 @@ class PermissionManager:
         self.register_permission(Permission(
             id="debug_access",
             name="Debug Access",
-            description="Debug access",
             permission_type=PermissionType.DEBUG,
             level=PermissionLevel.READ_ONLY,
             scope=PermissionScope.GLOBAL,
@@ -338,7 +329,8 @@ class PermissionManager:
             reason=reason,
             context=context or {},
             expires_at=expires_at,
-            requestor=requestor
+            requestor=requestor,
+            request_id=request_id
         )
         
         with self._lock:
@@ -402,12 +394,12 @@ class PermissionManager:
             # Find the request
             request_found = False
             plugin_id = None
-            request_obj = None
+            request = None
             
             for pid, requests in self._permission_requests.items():
                 for req in requests:
                     if req.request_id == request_id:
-                        request_obj = req
+                        request = req
                         plugin_id = pid
                         request_found = True
                         break
@@ -670,7 +662,7 @@ class PermissionManager:
                 for perm_id, perm in self._permissions.items()
             },
             'plugin_permissions': {
-                plugin_id: list(perms) for plugin_id, permiss in self._plugin_permissions.items()
+                plugin_id: list(perms) for plugin_id, perms in self._plugin_permissions.items()
             },
             'permission_grants': {
                 plugin_id: {
@@ -682,6 +674,7 @@ class PermissionManager:
                     }
                     for grant_id, grant in grants.items()
                 }
+                for plugin_id, grants in self._permission_grants.items()
             },
             'audit_log': [
                 {
@@ -758,6 +751,11 @@ class PermissionManager:
 
 # Global permission manager instance
 _permission_manager = PermissionManager()
+
+
+def get_permission_manager() -> PermissionManager:
+    """Get the global permission manager."""
+    return _permission_manager
 
 
 # Convenience functions
