@@ -6,6 +6,23 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Added — the scraper now tells blocks apart and answers each properly; persistent browser profiles (2026-10-02)
+
+A website that turns us away is now recognised for what it is — a country block,
+a JavaScript browser check (Gcore, Cloudflare), a CAPTCHA, a rate limit, a ban or
+an expired session — instead of every refusal triggering the same "start the
+browser again". Each kind has its own response: wait for a self-clearing check, retry in a
+more browser-like way (real Google Chrome, then a visible window), ask a person to pass
+it once, switch to a backup skin, or rest the site for a while. Resting persists across
+runs, so a fresh run no longer walks straight back into a site that just blocked the last
+one. A country block is reported as such: no browser setting changes the country a request
+comes from. `python -m src.security status` shows where every site stands.
+
+The browser can now keep a **profile** between runs (`~/.scrapamoja/profiles`), so a check
+passed once is remembered. `python -m src.browser.profiles warmup <name> <url>` opens a visible
+window to pass a check by hand. The betb2b scraper uses one profile per skin
+(`BETB2B_PROFILE=off` restores a fresh browser each run).
+
 ### Changed — scrapes are saved on your machine by default, and matches are scraped once (2026-10-02)
 
 Every scrape now saves its results into the local database file
