@@ -13,7 +13,7 @@ documents what the live site actually does. Companion data:
 > proof are in "SOLVED: the live odds feed" below; the service-worker machinery is
 > real but does **not** gate the odds feed. Extraction mode for linebet is
 > **`hybrid`** (browser bootstrap once for cookies → direct HTTP polling), not a
-> new mode — see ADR-3 in `.context/memory/plans/decisions.md`.
+> new mode.
 
 ## TL;DR for a future scraper
 
@@ -139,7 +139,7 @@ only this writeup + the redacted endpoint catalog are.
 >    when the SW is registered with an `?i=` param, and the old IndexedDB
 >    `vpn/headers` store is gone. Missing that injected header ⇒ `406`.
 >
-> **Consequence for the scraper (see ADR-4):** treat **DOM extraction as the
+> **Consequence for the scraper ():** treat **DOM extraction as the
 > primary path** (drift-proof — odds render fine) and **direct-API as best-effort**:
 > capture the genuine headers per-session via CDP `Target.setAutoAttach` to the
 > service-worker/worker target + `Network`, replay those, and treat `406` as a
@@ -253,7 +253,7 @@ onto this directly. A sample decoded event is in
 
 The list/live grids render only event *stubs* (teams, league) — **odds do NOT
 render in the DOM in headless** (0 coefficient elements on both list and match
-pages), and the `top=true` list feed 406s (SW-gated, ADR-4). The odds live in the
+pages), and the `top=true` list feed 406s (SW-gated). The odds live in the
 **per-match** feed, which is NOT SW-gated and replays from httpx:
 
 ```

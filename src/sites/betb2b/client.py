@@ -1,6 +1,6 @@
 """HTTP feed client for the BetB2B family scraper.
 
-The "direct httpx polling" half of the hybrid extraction mode (ADR-3).
+The "direct httpx polling" half of the hybrid extraction mode.
 Once :class:`~src.sites.betb2b.session.BetB2BSessionManager` has
 harvested session cookies, this client polls the
 ``/service-api/{LiveFeed,LineFeed}/…`` endpoints directly via httpx —
@@ -69,7 +69,7 @@ class BetB2BFeedClient:
         self.skin = skin
         self.session_manager = session_manager
         self.proxy = proxy
-        # ADR-15: direct mode polls the un-gated feeds with NO session cookies
+        # Direct mode polls the un-gated feeds with NO session cookies
         # (and typically no proxy) — the browser bootstrap is skipped entirely.
         self.direct = direct
         self.timeout = timeout
@@ -154,7 +154,7 @@ class BetB2BFeedClient:
         # Rate-limit politely.
         await self._respect_rate_limit()
 
-        # Direct mode (ADR-15): the un-gated feeds work with no cookies, so skip
+        # Direct mode: the un-gated feeds work with no cookies, so skip
         # the browser session bootstrap entirely. Otherwise harvest a session.
         if self.direct:
             cookie_header = None
@@ -229,7 +229,7 @@ class BetB2BFeedClient:
         full nested ``E[]``/``AE[]`` markets and is not SW-gated. ``root="line"``
         for prematch, ``"live"`` for in-play.
 
-        ``new_builder``: use the SPA's new-builder variant (ADR-19) — adds
+        ``new_builder``: use the SPA's new-builder variant — adds
         ``isNewBuilder=true&GroupEvents=true&marketType=1&countevents=250``
         (plus an empty ``topGroups``), which makes the feed carry real market
         names: ``MEC[]`` filter categories + ``SG[].TG`` sub-game names. Defaults
@@ -268,7 +268,7 @@ class BetB2BFeedClient:
         """Fetch one league's game list via ``GetChampZip?champ=<champId>``.
 
         Unlike the aggregate list feeds (``Get1x2_VZip``/``GetSportsShortZip``,
-        which are SW-gated → 406 per ADR-4), the **per-champ** endpoint is
+        which are SW-gated → 406), the **per-champ** endpoint is
         un-gated — same as ``GetGameZip`` — and returns a clean, complete game
         list for the league under ``Value.G[]`` (each game's ``I`` = event id).
         Used for broad, accurate event discovery. ``root="line"`` for prematch,
@@ -289,7 +289,7 @@ class BetB2BFeedClient:
         root: str = "line",
         extra_params: Optional[Dict[str, str]] = None,
     ) -> CapturedFeedResponse:
-        """Fetch the full sports→leagues tree via ``GetSportsZip`` (ADR-15).
+        """Fetch the full sports→leagues tree via ``GetSportsZip``.
 
         Un-gated and browser-free: returns every sport with its leagues
         (`LI` id + `GC` game count), so discovery needs no SPA/landing page.

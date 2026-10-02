@@ -106,7 +106,7 @@ class Selection:
     is_suspended: bool = False
     raw_t: Optional[int] = None         # the raw ``T`` market-type id
     raw_g: Optional[int] = None         # the raw ``G`` group id
-    raw_gs: Optional[int] = None        # the raw ``GS`` group-specifier id (ADR-7 addendum: market identity = (G, GS, T))
+    raw_gs: Optional[int] = None        # the raw ``GS`` group-specifier id (market identity = (G, GS, T))
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -132,7 +132,7 @@ class Market:
     raw_g: Optional[int] = None
     # Prediction scope this market covers — "FULL_MATCH" for the main event,
     # "QUARTER_1".."QUARTER_4"/"FIRST_HALF"/"SECOND_HALF" for sub-game markets
-    # (mirrors the engine's PredictionScope; see ADR-7).
+    # (mirrors the engine's PredictionScope).
     scope: str = "FULL_MATCH"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -173,7 +173,7 @@ class Event:
     raw_endpoint: str = ""                # which feed endpoint produced this
     sport_id: Optional[int] = None        # the raw ``SI``
     league_id: Optional[int] = None       # the raw ``LI``
-    # --- GetGameZip event/team enrichment (ADR-11 field-mapping) ---------- #
+    # --- GetGameZip event/team enrichment (field-mapping) ---------- #
     home_team_feed_id: Optional[int] = None    # ``O1I`` — LineFeed numeric team id
     away_team_feed_id: Optional[int] = None    # ``O2I``
     home_team_image: Optional[str] = None      # ``O1IMG[0]`` — crest filename
@@ -186,9 +186,9 @@ class Event:
     wp_away: Optional[float] = None        # ``WP.P2`` — win probability away
     # ``SG[]`` — sub-games (per-period + per-stat market groups: "Rebounds",
     # "Free Throws Scored", "1st quarter", …). Named in-feed; a dimension the
-    # engine can use to know which prop/stat markets an event carries (ADR-19).
+    # engine can use to know which prop/stat markets an event carries.
     sub_games: List[Dict[str, Any]] = field(default_factory=list)
-    # ``MEC[]`` — the SPA's market-filter categories with REAL names (ADR-19),
+    # ``MEC[]`` — the SPA's market-filter categories with REAL names,
     # e.g. [{market_type_id: 3, count: 20, name: "Total"}, {… "Handicap"}].
     # Feed-sourced truth; the category label replaces a bare ``G=<n>`` where the
     # verified (G,T) core map has no entry. Exact exotic per-group labels stay

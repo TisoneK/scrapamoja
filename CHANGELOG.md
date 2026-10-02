@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to Scrapamoja. Format loosely based on [Keep a Changelog](https://keepachangelog.com/).
-Technical detail lives in the session reviews at `.context/memory/reviews/`;
+Technical detail lives in the agent session reviews kept with the project's agent memory;
 this file is the plain-language public record.
 
 ## [Unreleased]
@@ -60,7 +60,7 @@ The deploy guide no longer instructs enabling live polling, and warns that
 variables set in the Railway dashboard override the config-file defaults — a
 stale dashboard variable can silently re-enable live polling.
 
-### Added — ADR-11: shared PostgreSQL store foundation (2026-07-25, session 29)
+### Added — shared PostgreSQL store foundation (2026-07-25, session 29)
 
 The data store can now move from per-file SQLite databases to a single shared
 PostgreSQL database (Railway plugin), so the scraper, the prediction engine,

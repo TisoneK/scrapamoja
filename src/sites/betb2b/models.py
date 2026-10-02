@@ -1,16 +1,16 @@
-"""SQLAlchemy ORM models for the BetB2B store — the ADR-11 portable schema.
+"""SQLAlchemy ORM models for the BetB2B store — the portable schema.
 
-ADR-11 moves betb2b data from a file-SQLite (raw ``sqlite3``) store to a shared
-Railway PostgreSQL. The store's schema (ADR-6) is a clean relational model —
+This moves betb2b data from a file-SQLite (raw ``sqlite3``) store to a shared
+Railway PostgreSQL. The store's schema is a clean relational model —
 ``sports``, ``countries``, ``leagues``, ``teams``, ``events``, ``markets``,
 ``scrape_runs``, ``event_states``, ``period_scores``, ``odds_snapshots``,
 ``h2h_games``, ``h2h_period_scores``, ``statistics`` — kept deliberately
 "Postgres-portable". This module is that port: the same tables/columns/keys as
 ``store.py``'s ``SCHEMA`` string, but declared with SQLAlchemy types that
 compile cleanly on **both** SQLite (local/CI fallback) and PostgreSQL
-(deployed), per ADR-11 point 6.
+(deployed).
 
-Portable type choices (ADR-11 "port the SQLite-isms"):
+Portable type choices ("port the SQLite-isms"):
 
 * ``INTEGER PRIMARY KEY`` surrogate keys → :class:`BigInteger` (autoincrement).
   On SQLite ``BigInteger`` compiles to ``INTEGER`` (rowid-backed); on Postgres
@@ -27,13 +27,12 @@ Portable type choices (ADR-11 "port the SQLite-isms"):
 These models are the **canonical schema** for migrations (Alembic) and for the
 one-time data copy from the legacy SQLite files. ``store.py``'s hand-written
 ``SCHEMA`` remains the SQLite materialization used by the live scraper today;
-the two are kept in sync until the persist path is fully ported (backlogged —
-see ADR-11 progress note). The read helpers (``latest_odds``, ``line_movement``,
+the two are kept in sync until the persist path is fully ported (backlogged). The read helpers (``latest_odds``, ``line_movement``,
 ``cross_skin_odds``, ``counts``) are defined here against the ORM so a
 FastAPI service reading from Postgres uses the same relation shapes the
 scraper writes.
 
-Indexes (ADR-11 "index the hot query paths"): ``odds_snapshots(event_id,
+Indexes ("index the hot query paths"): ``odds_snapshots(event_id,
 extracted_at)`` and ``events(start_time)`` are added here in addition to the
 pre-existing ``store.py`` indexes (which key on ``captured_at`` per skin).
 """
@@ -59,7 +58,7 @@ from typing import Optional
 # autoincrements the literal ``INTEGER PRIMARY KEY`` (rowid-backed); ``BIGINT``
 # gets no rowid so inserts fail with NOT NULL on the PK. The variant compiles
 # to ``INTEGER`` on SQLite (autoincrement) and ``BIGINT`` on Postgres (also
-# autoincrement via an implicit sequence). ADR-11 "INTEGER PRIMARY KEY →
+# autoincrement via an implicit sequence). The "INTEGER PRIMARY KEY →
 # IDENTITY/SERIAL" — this is the portable realization.
 SurrogatePK = BigInteger().with_variant(Integer, "sqlite")
 
@@ -67,7 +66,7 @@ SurrogatePK = BigInteger().with_variant(Integer, "sqlite")
 class Base(DeclarativeBase):
     """Base for betb2b ORM models — distinct from the adaptive layer's Base.
 
-    The two stores consolidate into one Postgres *instance* (ADR-11 point 3)
+    The two stores consolidate into one Postgres *instance*
     but keep separate ``Base`` metadata so each can be migrated independently.
     A shared ``Base`` would couple their migration histories.
     """
@@ -126,7 +125,7 @@ class Event(Base):
     stage: Mapped[Optional[str]] = mapped_column(Text)   # MIO.TSt — tournament stage
     first_seen: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
     last_seen: Mapped[Optional[str]] = mapped_column(DateTime(timezone=True))
-    # Finished-match result (ADR-16/20) — statisticfeed `v1/Game` `entity`, written
+    # Finished-match result — statisticfeed `v1/Game` `entity`, written
     # once by the scheduler's results pass. `winner` 1=home/2=away/0=none;
     # `result_status` is the statisticfeed status (3 = finished).
     stat_game_id: Mapped[Optional[str]] = mapped_column(Text)          # entity.id (statisticfeed)
@@ -141,7 +140,7 @@ class Event(Base):
     __table_args__ = (
         Index("ix_events_league", "league_id"),
         Index("ix_events_sport", "sport_id"),
-        Index("ix_events_start_time", "start_time"),  # ADR-11 hot path
+        Index("ix_events_start_time", "start_time"),  # Hot path
     )
 
 
@@ -157,7 +156,7 @@ class SubGame(Base):
     """A named sub-game of an event (``SG[]``): a per-period or per-stat market
     group ("Rebounds", "Free Throws Scored", "1st quarter"). Dimension, not a
     fact — upserted, stable metadata cataloguing which prop/stat markets an
-    event carries (ADR-19)."""
+    event carries."""
     __tablename__ = "sub_games"
     sub_game_id: Mapped[str] = mapped_column(Text, primary_key=True)  # shared across skins
     event_id: Mapped[str] = mapped_column(ForeignKey("events.event_id"), nullable=False)
@@ -239,7 +238,7 @@ class OddsSnapshot(Base):
     __table_args__ = (
         Index("ix_odds_event", "event_id", "skin", "captured_at"),
         Index("ix_odds_market", "event_id", "skin", "market_id", "selection_name", "captured_at"),
-        Index("ix_odds_event_extracted", "event_id", "captured_at"),  # ADR-11 hot path
+        Index("ix_odds_event_extracted", "event_id", "captured_at"),  # Hot path
     )
 
 
@@ -287,7 +286,7 @@ class Statistic(Base):
 
 
 class ScraperJob(Base):
-    """Control-plane job queue/status — the remote-control API's runs (ADR-12).
+    """Control-plane job queue/status — the remote-control API's runs.
 
     Lives in the same store so apps can read live job status/progress (`phase`)
     over Supabase Realtime alongside the odds data.

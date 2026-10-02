@@ -9,7 +9,7 @@ This guide deploys the **FastAPI control plane** (`src/api/main.py`) to Railway 
 | Component | Status |
 |---|---|
 | FastAPI app (`src/api/main:app`) | ✅ Deployed (primary **web** service) |
-| BetB2B scheduler (`betb2b schedule`) | ➕ Optional **second service** — the always-on scraper worker (ADR-18, see below) |
+| BetB2B scheduler (`betb2b schedule`) | ➕ Optional **second service** — the always-on scraper worker (see below) |
 | Playwright + Chromium | ✅ Baked into the image |
 | SQLite DB (`data/adaptive.db`) | ⚠️ Requires a Railway Volume for persistence (web service only; the worker uses Supabase) |
 | React UI (`ui/app/`) | ❌ Not deployed by this config — deploy separately or add a build step |
@@ -102,7 +102,7 @@ Every endpoint requires the `x-api-key` header matching `SCRAPER_API_KEY`
 (unset ⇒ `503`; wrong/missing ⇒ `401`). Scrapes run as **single-flight
 background jobs** inside the web service and persist to the betb2b store; the
 deployed egress **needs `BETB2B_PROXY_*`** or jobs fail with a clear reason
-(the Railway IP is WAF-blocked). See ADR-12.
+(the Railway IP is WAF-blocked).
 
 | Method & path | Purpose |
 |---|---|
@@ -127,16 +127,15 @@ curl -s https://<your-app>.up.railway.app/api/scraper/runs/1 -H "x-api-key: $SCR
 
 ---
 
-## Scheduler worker (ADR-18) — the always-on scraper
+## Scheduler worker — the always-on scraper
 
 The control API above runs scrapes **on demand** (one job per POST). The **scheduler**
 is the other half: a continuously-looping process that runs `scheduled` (prematch,
-skip-fresh) and `live` passes on their own cadences, writing straight to Supabase. Per
-ADR-18 it runs as a **dedicated, second Railway service** — not inside the web service
+skip-fresh) and `live` passes on their own cadences, writing straight to Supabase. It runs as a **dedicated, second Railway service** — not inside the web service
 (an always-on loop would tie up the API's single worker). Both services deploy from the
 **same image/repo**; only the start command + env differ.
 
-**It is browser-free and proxy-free** (direct mode, ADR-15) and writes to Supabase, so it
+**It is browser-free and proxy-free** (direct mode) and writes to Supabase, so it
 needs **no Volume** and no proxy — just `DATABASE_URL`.
 
 ### Create the worker service (one-time, Railway dashboard)
@@ -157,8 +156,8 @@ needs **no Volume** and no proxy — just `DATABASE_URL`.
    | Var | Value | Notes |
    |---|---|---|
    | `DATABASE_URL` | Supabase pooler URL | port `6543`; same as the web service |
-   | `BETB2B_DIRECT` | `1` | browser/proxy-free (ADR-15) |
-   | `BETB2B_CONCURRENCY` | `8` (default) | bounded fetch concurrency (ADR-17) — ramp cautiously |
+   | `BETB2B_DIRECT` | `1` | browser/proxy-free |
+   | `BETB2B_CONCURRENCY` | `4` (default) | bounded fetch concurrency — ramp cautiously |
    | `SCHED_SKIN` | `linebet` | skin to schedule |
    | `SCHED_SPORT` | `basketball` | sport |
    | `SCHED_PREMATCH_INTERVAL` | `10800` | prematch pass cadence (s, 3h) |
@@ -227,7 +226,7 @@ Notes:
 
 The process handles **SIGTERM** cleanly (finishes the current pass, closes the scraper),
 so redeploys don't half-write. Each pass is idempotent + change-only, so a restart just
-re-runs harmlessly. **Rate discipline (ADR-17):** the datacenter IP is unproven at high
+re-runs harmlessly. **Rate discipline:** the datacenter IP is unproven at high
 volume — keep the live cadence ≥ ~10–15s and concurrency ~8 to start; watch for
 `429/403/203`; the proxy path (set `BETB2B_PROXY_URL` + `--no-direct`) is the fallback.
 
@@ -364,7 +363,7 @@ Railway injects `$PORT` automatically. Don't set it in your Variables — if you
 | File | Purpose |
 |---|---|
 | `Dockerfile` | Multi-stage build: Python 3.12 + Playwright + Chromium + gunicorn/uvicorn |
-| `.dockerignore` | Strips tests, `.context/`, caches, and the UI from the build context |
+| `.dockerignore` | Strips tests, the agent-memory directory, caches, and the UI from the build context |
 | `railway.json` | Railway-specific config: Dockerfile builder + healthcheck + restart policy |
 | `Procfile` | Conventional web process declaration (used if you switch off the Dockerfile builder) |
 | `RAILWAY.md` | This document |

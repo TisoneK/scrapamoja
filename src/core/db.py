@@ -1,4 +1,4 @@
-"""Shared database engine factory — the ADR-11 connection layer.
+"""Shared database engine factory — the shared connection layer.
 
 Env-driven single integration point so the scraper, the Selector Engine, and
 the FastAPI control plane all reach the **same** store through one code path:
@@ -9,7 +9,7 @@ the FastAPI control plane all reach the **same** store through one code path:
   ``ADAPTIVE_DB_PATH`` (legacy, kept for the Selector Engine) or defaults to
   ``<cwd>/data/adaptive.db``. Tests pass ``:memory:`` or a temp path.
 
-This is the ADR-11 "keep SQLite as the local-dev / test fallback" rule (point 6)
+This is the "keep SQLite as the local-dev / test fallback" rule
 and the "one SQLAlchemy code path" rule, made concrete. The betb2b store and the
 adaptive repositories both import :func:`get_engine` / :func:`get_session_factory`
 instead of building their own ``create_engine(f"sqlite:///...")``.
@@ -18,7 +18,7 @@ Two back ends, one path: callers never branch on the URL scheme. The only
 backend-specific tweak is SQLite's ``check_same_thread=False`` (the stdlib
 default rejects cross-thread connection use, which FastAPI/gunicorn needs).
 
-ADR-11 also retires ADR-1 point 5's Volume mount + ``ADAPTIVE_DB_PATH`` *as a
+This also retires the Volume mount + ``ADAPTIVE_DB_PATH`` *as a
 deploy concern* — in deployed envs ``DATABASE_URL`` points at the Railway
 Postgres plugin and ``ADAPTIVE_DB_PATH`` is simply ignored. ``ADAPTIVE_DB_PATH``
 stays supported for local/CI SQLite only, so nothing that currently sets it
@@ -53,7 +53,7 @@ ADAPTIVE_DB_PATH_ENV = "ADAPTIVE_DB_PATH"
 def default_sqlite_path() -> str:
     """The SQLite file used when neither ``DATABASE_URL`` nor a path is given.
 
-    Mirrors the Selector Engine's pre-ADR-11 default (``data/adaptive.db``
+    Mirrors the Selector Engine's earlier default (``data/adaptive.db``
     under the cwd) so local runs keep working unchanged.
     """
     db_dir = Path(os.getcwd()) / "data"
@@ -62,7 +62,7 @@ def default_sqlite_path() -> str:
 
 
 def resolve_database_url(explicit: str | None = None) -> str:
-    """Resolve the SQLAlchemy URL to use, ADR-11 precedence:
+    """Resolve the SQLAlchemy URL to use, in this precedence:
 
     1. ``explicit`` argument (caller overrides — used by tests and by the
        betb2b store, which has its own ``odds.db`` file in local mode).
@@ -71,7 +71,7 @@ def resolve_database_url(explicit: str | None = None) -> str:
     4. ``<cwd>/data/adaptive.db`` (local default).
 
     A bare path (no scheme) is treated as a SQLite file path and wrapped as
-    ``sqlite:///<path>`` — this preserves the pre-ADR-11 calling convention
+    ``sqlite:///<path>`` — this preserves the original calling convention
     where repositories received a filesystem path, not a URL.
     """
     if explicit:

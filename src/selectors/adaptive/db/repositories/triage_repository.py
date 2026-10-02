@@ -56,7 +56,7 @@ class TriageRepository:
             db_path = ":memory:"
         
         self.db_path = db_path
-        # ADR-11: shared env-driven engine factory (DATABASE_URL → Postgres).
+        # Shared env-driven engine factory (DATABASE_URL → Postgres).
         self.engine = get_engine(db_path)
         Base.metadata.create_all(self.engine, checkfirst=True)
         self.SessionLocal = sessionmaker(bind=self.engine)

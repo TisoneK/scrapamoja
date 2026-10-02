@@ -1,4 +1,4 @@
-"""ADR-11 baseline: consolidated adaptive + betb2b schema
+"""Baseline: consolidated adaptive + betb2b schema
 
 Revision ID: c7ea08fedb55
 Revises: 

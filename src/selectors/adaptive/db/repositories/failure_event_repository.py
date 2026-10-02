@@ -32,7 +32,7 @@ class FailureEventRepository:
             db_path = ":memory:"
         
         self.db_path = db_path
-        # ADR-11: shared env-driven engine factory (DATABASE_URL → Postgres).
+        # Shared env-driven engine factory (DATABASE_URL → Postgres).
         self.engine = get_engine(db_path)
         # Create tables with checkfirst to avoid index conflicts
         Base.metadata.create_all(self.engine, checkfirst=True)

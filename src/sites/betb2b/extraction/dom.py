@@ -1,6 +1,6 @@
 """DOM extractor for BetB2B skins — the PRIMARY, drift-proof extraction path.
 
-Per ADR-4, the direct-API feed (``service-api/{Live,Line}Feed/*``) rotates
+The direct-API feed (``service-api/{Live,Line}Feed/*``) rotates
 its auth-header contract (returns 406 without an SW-injected ``x-dt``), so
 DOM extraction — reading the odds the SPA already rendered — is the
 reliable path. This module drives an already-navigated Playwright ``page``

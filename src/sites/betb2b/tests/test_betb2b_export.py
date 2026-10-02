@@ -1,4 +1,4 @@
-"""Tests for the scorewise-engine exporter (ADR-7)."""
+"""Tests for the scorewise-engine exporter."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def test_empty_event_yields_nothing():
 
 
 # ---------------------------------------------------------------------------
-# Semantic validation (ADR-8) — the engine's s02_h2h_totals ALWAYS computes
+# Semantic validation — the engine's s02_h2h_totals ALWAYS computes
 # `home_score + away_score`, whatever the scope. Structural checks (fields
 # present, types right) miss the bug class where every field is valid but the
 # sum the engine derives is the wrong quantity — that shipped once already

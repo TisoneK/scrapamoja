@@ -169,7 +169,7 @@ _SPORT_NAME_ALIASES: Dict[str, Sport] = {
 }
 
 
-# Sub-game period name (``SG[].PN``) → engine PredictionScope (ADR-7).
+# Sub-game period name (``SG[].PN``) → engine PredictionScope.
 _SUBGAME_SCOPES: Dict[str, str] = {
     "1st quarter": "QUARTER_1", "2nd quarter": "QUARTER_2",
     "3rd quarter": "QUARTER_3", "4th quarter": "QUARTER_4",
@@ -351,7 +351,7 @@ class BetB2BExtractionRules:
         return events
 
     def extract_markets_scoped(self, captured: "CapturedFeedResponse", scope: str) -> List[Market]:
-        """Extract a sub-game's markets, tagged with a PredictionScope (ADR-7).
+        """Extract a sub-game's markets, tagged with a PredictionScope.
 
         A ``GetGameZip`` sub-game (1st quarter / 1 Half / …) is a single game;
         we pull its markets and stamp ``scope`` so scoped ingestion can select
@@ -508,14 +508,14 @@ class BetB2BExtractionRules:
 
     @staticmethod
     def _extract_market_categories(ev: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Parse the ``MEC[]`` market-filter categories (ADR-19, new-builder feed).
+        """Parse the ``MEC[]`` market-filter categories (new-builder feed).
 
         The SPA's new-builder ``GetGameZip`` carries ``MEC[]`` — the market
         filter categories with REAL names ("Popular", "Total", "Handicap",
         "Points", "Special", …). Each entry is ``{MT, EC, N}``: ``MT`` = the
         market-type filter id, ``EC`` = market count in that category, ``N`` =
-        the display name. Feed-sourced truth — this is the naming win from
-        ADR-19, distinct from the per-``G`` group names that stay
+        the display name. Feed-sourced truth — this is the naming win,
+        distinct from the per-``G`` group names that stay
         client-composed (never guess those).
         """
         mec = ev.get("MEC")
@@ -544,7 +544,7 @@ class BetB2BExtractionRules:
         name ("1st quarter", "1 Half"); one or both are set. ``I`` = the
         sub-game's own id, ``MG`` = parent game id, ``EC`` = its market count.
         Names are English because the feed is fetched with ``lng=en``. This is
-        the clean, feed-sourced naming win from ADR-19 (per-group ``G`` names
+        the clean, feed-sourced naming win (per-group ``G`` names
         stay client-composed and out of reach).
         """
         sg = ev.get("SG")
@@ -570,7 +570,7 @@ class BetB2BExtractionRules:
                 "market_count": _coerce_int(s.get("EC")),
                 "sport_id": _coerce_int(s.get("SI")),
                 # Each sub-game carries its own MEC category list (new-builder
-                # feed) — named market filters scoped to that sub-game (ADR-19).
+                # feed) — named market filters scoped to that sub-game.
                 "categories": BetB2BExtractionRules._extract_market_categories(s),
             })
         return out
@@ -683,7 +683,7 @@ class BetB2BExtractionRules:
                 if market is not None:
                     markets.append(market)
 
-        # Layout 2b: GE[] (new-builder grouped — ADR-19). The SPA's new-builder
+        # Layout 2b: GE[] (new-builder grouped). The SPA's new-builder
         # GetGameZip groups selections into GE[] with each group carrying
         # {G, GS, E: [rows]} where E is a list of ROWS, each row a list of
         # selection dicts (live-verified 2026-08-01). We flatten the rows and
@@ -781,7 +781,7 @@ class BetB2BExtractionRules:
             line = _coerce_float(sel.get("P"))
             blocked = bool(sel.get("B") or False)
             # GS is the group-specifier — market identity is (G, GS, T), not
-            # T alone (ADR-7 addendum). The lookup prefers the verified
+            # T alone. The lookup prefers the verified
             # (G,GS,T) map when the feed carries GS.
             gs_id = _coerce_int(sel.get("GS"))
 
@@ -912,7 +912,7 @@ class BetB2BExtractionRules:
     def extract_statistics_data(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Flatten a statisticfeed ``Game/statistic`` (v2) response into stat rows.
 
-        Endpoint (confirmed live, ADR-11 verification):
+        Endpoint (confirmed live):
         ``GET /service-api/statisticfeed/api/v2/Game/statistic?id=<eventId>``
         — note **api/v2**, not v1 (v1 returns 405 for this resource). Returns
         ``204`` (→ ``{}`` here) when a match has no stats, exactly like H2H.
@@ -924,7 +924,7 @@ class BetB2BExtractionRules:
 
         The real match statistics live in ``entity.periodStatistic``. Its inner
         field names have **not** been observed populated (every currently-live
-        minor-league event returns it empty), so — per ADR-7's "do not commit a
+        minor-league event returns it empty), so — following the "do not commit a
         guessed map" rule — this parser does NOT invent labels. It stores each
         ``periodStatistic`` entry **verbatim** (its own feed keys), coercing any
         nested value to a JSON string so the store's name/value flattening

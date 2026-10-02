@@ -5,8 +5,7 @@ The public surface of the betb2b site package. Parameterised by a
 melbet, betwinner, 22bet, megapari, 888starz, helabet, paripesa, …)
 is one skin config away from being scrapable.
 
-Extraction mode is **hybrid** (ADR-3 in
-`.context/memory/plans/decisions.md`):
+Extraction mode is **hybrid**:
 
   1. Browser bootstrap once through an allowed-country proxy to harvest
      ~21 session cookies (via :class:`BetB2BSessionManager`).
@@ -16,7 +15,7 @@ Extraction mode is **hybrid** (ADR-3 in
      :class:`Event` / :class:`Market` / :class:`Selection` (via
      :class:`BetB2BExtractionRules`).
 
-Per ADR-4, step 2 is best-effort: if a feed capture comes back non-2xx
+Step 2 is best-effort: if a feed capture comes back non-2xx
 or undecodable (the platform's auth-header contract rotates), the
 scraper falls back to rendering the corresponding live/line page and
 reading the odds via :func:`~.extraction.dom.extract_events_from_page`
@@ -153,11 +152,11 @@ class BetB2BScraper:
         self.timeout = timeout
         self.rate_limit_per_minute = rate_limit_per_minute
         self.settle_seconds = settle_seconds
-        # ADR-15 direct mode: browser+proxy-free discovery via GetSportsZip.
+        # Direct mode: browser+proxy-free discovery via GetSportsZip.
         # Param wins; otherwise the skin's `direct` feature flag.
         self._direct = bool(direct) if direct is not None else skin.features.get("direct", False)
 
-        # ADR-17: bounded-concurrency fetch. In direct mode the un-gated feeds
+        # Bounded-concurrency fetch. In direct mode the un-gated feeds
         # tolerate parallel polls, so a semaphore-bounded `gather` replaces the
         # sequential rate limiter (which becomes the semaphore). Conservative
         # default (8) per the datacenter-IP rate discipline — ramp via
@@ -198,7 +197,7 @@ class BetB2BScraper:
         )
         # Direct mode hits un-gated endpoints (no session to protect), so a
         # full card (100+ games) fits the timeout — bump the polite default.
-        # When concurrency > 1 the semaphore is the throttle (ADR-17), so the
+        # When concurrency > 1 the semaphore is the throttle, so the
         # client's per-request serial spacing is disabled (rate 0) to let the
         # gathered requests actually run in parallel.
         if self.concurrency > 1:
@@ -490,7 +489,7 @@ class BetB2BScraper:
     ) -> "tuple[List[CapturedFeedResponse], str, List[Event]]":
         """Dispatch the action to one or more feed fetches.
 
-        Per ADR-4, the direct-API feed is best-effort: a failed capture
+        The direct-API feed is best-effort: a failed capture
         (non-2xx status, e.g. the 406 seen when the platform rotates its
         auth-header contract) triggers a DOM-extraction fallback on the
         corresponding live/line page instead of retrying the API.
@@ -614,7 +613,7 @@ class BetB2BScraper:
         # League-level discovery: the landing page also links the (geo-curated)
         # "top" leagues. Each champ id → the un-gated GetChampZip → that league's
         # full, accurate game list. This broadens + cleans discovery vs the
-        # landing sample alone; the aggregate list feeds stay 406 (ADR-4).
+        # landing sample alone; the aggregate list feeds stay 406.
         champ_game_ids: List[str] = []
         if self.skin.features.get("champ_discovery", True):
             champ_ids = extract_champ_ids(html)
@@ -671,7 +670,7 @@ class BetB2BScraper:
 
     async def _enrich_with_subgames(self, event: Event, cap: Any, *, root: str) -> None:
         """Fetch the event's per-quarter/half sub-games and append their markets,
-        tagged with the PredictionScope (ADR-7). Opt-in (``subgames`` flag) —
+        tagged with the PredictionScope. Opt-in (``subgames`` flag) —
         each sub-game is an extra GetGameZip. Best-effort.
         """
         if not self.skin.features.get("subgames", False):
@@ -702,7 +701,7 @@ class BetB2BScraper:
     async def _discover_events(self, *, is_live: bool) -> List[Event]:
         """Primary discovery = HTML harvest (full card); DOM render is the
         fallback if the harvest yields nothing (flag: ``html_harvest``)."""
-        # ADR-15: direct mode replaces the browser-blocked landing-page discovery
+        # Direct mode replaces the browser-blocked landing-page discovery
         # with the un-gated GetSportsZip tree — no browser, cookies, or proxy.
         if self._direct:
             return await self._discover_events_direct(is_live=is_live)
@@ -713,7 +712,7 @@ class BetB2BScraper:
         return await self._dom_fallback(is_live=is_live)
 
     async def discover_ids(self, *, is_live: bool = False) -> List[tuple]:
-        """ADR-15 browser-free DISCOVERY only: ``GetSportsZip`` → ``GetChampZip``
+        """Browser-free DISCOVERY only: ``GetSportsZip`` → ``GetChampZip``
         → ``[(event_id, start_epoch)]``. No ``GetGameZip`` (cheap) — lets a caller
         state-filter (new / stale / started) before the expensive per-match fetch.
         No SPA/browser, cookies, or proxy."""
@@ -768,7 +767,7 @@ class BetB2BScraper:
         root = "live" if is_live else "line"
         ids = [str(i) for i in ids][:int(getattr(self.skin, "max_harvest", 200) or 200)]
         total = len(ids)
-        # ADR-17: bounded-concurrency fetch — a semaphore caps in-flight
+        # Bounded-concurrency fetch — a semaphore caps in-flight
         # GetGameZip calls; the ids are gathered instead of looped serially.
         sem = asyncio.Semaphore(self.concurrency)
         done = 0
@@ -963,7 +962,7 @@ class BetB2BScraper:
         return list(by_id.values())
 
     # ------------------------------------------------------------------ #
-    # Results (ADR-16/20)
+    # Results
     # ------------------------------------------------------------------ #
     @staticmethod
     def _parse_result_entity(entity: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -994,7 +993,7 @@ class BetB2BScraper:
         FAILED (timeout / connection error / unusable status), as opposed to the
         server answering "no data" (204/empty). Callers use it to stop early
         against an unreachable site instead of waiting out every timeout."""
-        """Fetch a match's result via statisticfeed ``v1/Game?id=<ident>`` (ADR-20).
+        """Fetch a match's result via statisticfeed ``v1/Game?id=<ident>``.
 
         ``ident`` is the LineFeed event id (while the match is recent) or the
         retained statisticfeed ``entity.id``. Returns the parsed result (see
@@ -1081,7 +1080,7 @@ class BetB2BScraper:
         if not events:
             return
 
-        # Direct mode (ADR-15): statisticfeed works cookie-less too — skip session.
+        # Direct mode: statisticfeed works cookie-less too — skip session.
         cookie_header = (
             None if self._direct
             else (await self.session_manager.get_session()).to_cookie_header()
@@ -1096,7 +1095,7 @@ class BetB2BScraper:
         )
 
         url = f"{self.skin.base_url}/service-api/statisticfeed/api/v1/Game/h2h"
-        sem = asyncio.Semaphore(self.concurrency)   # ADR-17: bounded concurrency
+        sem = asyncio.Semaphore(self.concurrency)   # Bounded concurrency
 
         async with httpx.AsyncClient(
             proxy=proxy_url, timeout=15.0, follow_redirects=True,
@@ -1171,7 +1170,7 @@ class BetB2BScraper:
         if not events:
             return
 
-        # Direct mode (ADR-15): statisticfeed works cookie-less too — skip session.
+        # Direct mode: statisticfeed works cookie-less too — skip session.
         cookie_header = (
             None if self._direct
             else (await self.session_manager.get_session()).to_cookie_header()
@@ -1187,7 +1186,7 @@ class BetB2BScraper:
 
         enriched = 0
         url = f"{self.skin.base_url}/service-api/statisticfeed/api/v2/Game/statistic"
-        sem = asyncio.Semaphore(self.concurrency)   # ADR-17: bounded concurrency
+        sem = asyncio.Semaphore(self.concurrency)   # Bounded concurrency
 
         async with httpx.AsyncClient(
             proxy=proxy_url, timeout=15.0, follow_redirects=True,
@@ -1251,7 +1250,7 @@ class BetB2BScraper:
         return {
             "skin": self.skin.to_dict(),
             "actions": sorted(_VALID_ACTIONS),
-            "extraction_mode": "hybrid (API primary, DOM fallback on failed capture — ADR-4)",
+            "extraction_mode": "hybrid (API primary, DOM fallback on failed capture)",
             "sport": self.sport_scraper.to_dict(),
             "sport_context": self.sport_ctx.to_dict(),
             "proxy_endpoint": (

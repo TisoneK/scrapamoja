@@ -1,7 +1,7 @@
-"""Tests for the ADR-11 betb2b ORM models (src/sites/betb2b/models.py).
+"""Tests for the betb2b ORM models (src/sites/betb2b/models.py).
 
 Verifies the portable schema: tables create on the SQLite fallback, the
-ADR-11 hot-path indexes are present, the SQLite-isms are ported (Boolean for
+hot-path indexes are present, the SQLite-isms are ported (Boolean for
 success/is_live/is_suspended; BigInteger surrogate PKs; DateTime(timezone=True)
 timestamps), and a persist-shaped insert round-trips on SQLite. DDL is also
 compiled against the PostgreSQL dialect (without a live server) to prove
@@ -48,10 +48,10 @@ def test_adr11_hot_path_indexes_exist():
     insp = inspect(engine)
     odds_ix = {i["name"] for i in insp.get_indexes("odds_snapshots")}
     events_ix = {i["name"] for i in insp.get_indexes("events")}
-    # ADR-11: odds_snapshots(event_id, extracted_at) — captured_at is the
+    # Odds_snapshots(event_id, extracted_at) — captured_at is the
     # time-series column (same role as extracted_at in the ADR text).
     assert "ix_odds_event_extracted" in odds_ix
-    # ADR-11: events(start_time)
+    # Events(start_time)
     assert "ix_events_start_time" in events_ix
 
 

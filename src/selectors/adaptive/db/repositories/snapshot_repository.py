@@ -32,7 +32,7 @@ class SnapshotRepository:
             db_path = os.path.join(db_dir, "adaptive.db")
 
         self.db_path = db_path
-        # ADR-11: route engine creation through the shared env-driven factory
+        # Route engine creation through the shared env-driven factory
         # (DATABASE_URL → Postgres in deployed envs; SQLite fallback here).
         self.engine = get_engine(db_path)
         Base.metadata.create_all(self.engine, checkfirst=True)

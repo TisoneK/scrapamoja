@@ -1,4 +1,4 @@
-"""Map betb2b events → scorewise-engine ingest requests (ADR-7).
+"""Map betb2b events → scorewise-engine ingest requests.
 
 One betb2b ``Event`` (dict from ``Event.to_dict()``) becomes up to 9
 ``PredictRequest``s — one per :class:`PredictionScope` the data supports:
@@ -64,7 +64,7 @@ def _team_names(h2h: Dict[str, Any]) -> Dict[str, str]:
 
 def _h2h_for_scope(ev: Dict[str, Any], scope: str, home: str, away: str) -> List[Dict[str, Any]]:
     """Strict head-to-head matches (both event teams only), scores matching the
-    scope, normalized to the event's home/away orientation (ADR-7). The engine
+    scope, normalized to the event's home/away orientation. The engine
     rejects H2H that involves any other opponent, so we filter + orient."""
     h2h = ev.get("h2h_data") or {}
     names = _team_names(h2h)

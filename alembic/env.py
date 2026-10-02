@@ -1,10 +1,10 @@
-"""Alembic environment — ADR-11.
+"""Alembic environment.
 
 Resolves the database URL via the shared factory (src.core.db) so migrations
 run against DATABASE_URL (Railway Postgres in deployed envs) or the SQLite
 fallback. Both metadata objects — the Selector Engine adaptive ``Base`` and
 the betb2b ``Base`` — are merged so a single migration stream creates every
-table in the consolidated store (ADR-11 point 3: one Postgres instance,
+table in the consolidated store (one Postgres instance,
 separate schemas/tables).
 """
 

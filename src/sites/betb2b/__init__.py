@@ -4,7 +4,7 @@ One parameterized scraper covers the whole BetB2B platform family —
 linebet, melbet, betwinner, 22bet, megapari, 888starz, helabet,
 paripesa, … — with per-skin config in YAML.
 
-Extraction mode is **hybrid** (ADR-3 in `.context/memory/plans/decisions.md`):
+Extraction mode is **hybrid**:
 browser bootstrap once through an allowed-country proxy to harvest
 session cookies, then ``httpx``-poll the ``/service-api/{LiveFeed,
 LineFeed}/…`` feeds directly. See ``README.md`` for the operator guide.

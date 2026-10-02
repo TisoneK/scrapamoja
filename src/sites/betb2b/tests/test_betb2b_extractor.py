@@ -280,7 +280,7 @@ def test_extract_drops_single_sided_outright_markets(rules: BetB2BExtractionRule
 
 def test_extract_sub_games_from_sg(rules: BetB2BExtractionRules) -> None:
     """SG[] sub-games (isSubGames feed) are parsed into named dimensions —
-    the clean feed-sourced naming win (ADR-19). TG=stat name, PN=period."""
+    the clean feed-sourced naming win. TG=stat name, PN=period."""
     payload = {
         "Success": True,
         "Value": [{
@@ -396,10 +396,10 @@ def test_extract_with_unknown_market_ids(rules: BetB2BExtractionRules) -> None:
 
 
 # ---------------------------------------------------------------------------
-# MEC market categories + GE[] layout (ADR-19 new-builder feed)
+# MEC market categories + GE[] layout (new-builder feed)
 # ---------------------------------------------------------------------------
 def test_extract_market_categories_from_mec(rules: BetB2BExtractionRules) -> None:
-    """The new-builder GetGameZip MEC[] names are parsed (ADR-19 naming win)."""
+    """The new-builder GetGameZip MEC[] names are parsed (naming win)."""
     event = {
         "I": 1, "O1": "A", "O2": "B", "SN": "Basketball", "SI": 3,
         "MEC": [
@@ -432,7 +432,7 @@ def test_extract_market_categories_absent_and_malformed(rules: BetB2BExtractionR
 
 
 def test_extract_markets_from_ge_layout(rules: BetB2BExtractionRules) -> None:
-    """New-builder GE[] grouped layout builds one market per group (ADR-19).
+    """New-builder GE[] grouped layout builds one market per group.
 
     Uses the REAL live shape (captured 2026-08-01 through the operator proxy):
     ``GE[].E`` is a list of ROWS, each row a list of selection dicts
@@ -516,7 +516,7 @@ def test_sub_games_carry_own_mec_categories(rules: BetB2BExtractionRules) -> Non
 
 
 def test_fetch_game_new_builder_param_wiring(skin: BetB2BSkinConfig, monkeypatch) -> None:
-    """fetch_game adds the new-builder params only when the flag is on (ADR-19)."""
+    """fetch_game adds the new-builder params only when the flag is on."""
     from src.sites.betb2b.client import BetB2BFeedClient
     from src.sites.betb2b.extraction.models import CapturedFeedResponse
 
@@ -720,7 +720,7 @@ def test_scraper_dedupe_merges_markets() -> None:
 
 
 def test_fetch_events_bounded_concurrency(skin: BetB2BSkinConfig) -> None:
-    """ADR-17: fetch_events gathers ids under a semaphore — bounded (never more
+    """Fetch_events gathers ids under a semaphore — bounded (never more
     than `concurrency` in flight), actually concurrent, and lossless."""
     import asyncio
     from src.sites.betb2b.extraction.models import Event
@@ -756,7 +756,7 @@ def test_fetch_events_bounded_concurrency(skin: BetB2BSkinConfig) -> None:
 
 
 def test_parse_result_entity() -> None:
-    """statisticfeed v1/Game `entity` → result dict (ADR-20). status 3 = finished."""
+    """statisticfeed v1/Game `entity` → result dict. status 3 = finished."""
     from src.sites.betb2b.scraper import BetB2BScraper
     p = BetB2BScraper._parse_result_entity
     fin = p({"id": "6a6", "status": 3, "score1": 110, "score2": 128, "winner": 2,
@@ -792,7 +792,7 @@ def test_scraper_get_info(skin: BetB2BSkinConfig) -> None:
     s = BetB2BScraper(skin)
     info = s.get_info()
     assert info["skin"]["name"] == "linebet"
-    # extraction_mode now carries the ADR-4 annotation — just check the prefix.
+    # extraction_mode now carries an annotation — just check the prefix.
     assert info["extraction_mode"].startswith("hybrid")
     assert "list_live" in info["actions"]
     # New: sport context is always present (defaults to AllSportsScraper).
@@ -1055,23 +1055,23 @@ def test_extract_h2h_data_bad_periods(rules: BetB2BExtractionRules) -> None:
 
 
 def test_lookup_market_gt_verified(skin) -> None:
-    """(G,T) verified map fixes the total variants (ADR-7, real PBA game)."""
+    """(G,T) verified map fixes the total variants (real PBA game)."""
     from src.sites.betb2b.markets import lookup_market
     mg, mt = skin.market_groups, skin.market_types
     assert lookup_market(17, 9, mg, mt) == ("Total", "Over")
     assert lookup_market(15, 11, mg, mt) == ("Individual Total Home", "Over")
     # The old T-only map wrongly called (62,13) "Double Chance".
     assert lookup_market(62, 13, mg, mt) == ("Individual Total Away", "Over")
-    # (14,182) was WRONGLY mapped to "To Win Match" (ADR-19 correction). Even
+    # (14,182) was WRONGLY mapped to "To Win Match" (correction). Even
     # without GS the G→name table names the group and the T→label table names
     # the side: "Total Even" / "Yes".
     assert lookup_market(14, 182, mg, mt) == ("Total Even", "Yes")
 
 
 def test_lookup_market_gst_verified(skin) -> None:
-    """(G,GS,T) verified map — the ADR-7 addendum identity. GS values are
+    """(G,GS,T) verified map — the identity. GS values are
     CONFIRMED from the real betb2b fixture (Brazil LDB U22, GetGameZip) +
-    the ADR-7 PBA mapping: G=17→GS=4, G=15→GS=5, G=62→GS=6, G=2→GS=3,
+    the verified PBA mapping: G=17→GS=4, G=15→GS=5, G=62→GS=6, G=2→GS=3,
     G=14→GS=22, G=101→GS=38. Same names as the (G,T) map — the GS key
     disambiguates scopes (quarter/half/full repeat the same G,T)."""
     from src.sites.betb2b.markets import lookup_market
@@ -1080,7 +1080,7 @@ def test_lookup_market_gst_verified(skin) -> None:
     assert lookup_market(15, 11, mg, mt, gs_id=5) == ("Individual Total Home", "Over")
     assert lookup_market(62, 13, mg, mt, gs_id=6) == ("Individual Total Away", "Over")
     assert lookup_market(2, 7, mg, mt, gs_id=3) == ("Asian Handicap", "W1")
-    # ADR-19 correction: GS=22 is "Total Even" (an Even/Odd market — fixture
+    # Correction: GS=22 is "Total Even" (an Even/Odd market — fixture
     # odds 1.84/1.82, no line), NOT the moneyline "To Win Match" it was hand-
     # mislabelled as. The GS table names it; the T→label table gives the side.
     assert lookup_market(14, 182, mg, mt, gs_id=22) == ("Total Even", "Yes")
@@ -1095,7 +1095,7 @@ def test_lookup_market_gst_fallback(skin) -> None:
     # GS not in the verified map → (G,T) map still resolves.
     assert lookup_market(17, 9, mg, mt, gs_id=9999) == ("Total", "Over")
     # Exotic new-builder group (G=2766 GS=939) → named by the authoritative GS
-    # table; the T→label table gives the side (ADR-19).
+    # table; the T→label table gives the side.
     assert lookup_market(2766, 3653, mg, mt, gs_id=939) == ("1X2 In Regular Time", "W1")
     # No GS → the G→name table still names the group; T→label the side.
     assert lookup_market(17, 9, mg, mt) == ("Total", "Over")
@@ -1105,7 +1105,7 @@ def test_lookup_market_gst_fallback(skin) -> None:
 
 
 def test_exotic_selection_labels_via_bet_model(skin) -> None:
-    """Exotic groups get real SELECTION sides from the T→label table (ADR-19) —
+    """Exotic groups get real SELECTION sides from the T→label table —
     no more bare 'T=<n>'. Verified against real feed (G,T) combos."""
     from src.sites.betb2b.markets import lookup_market
     mg, mt = skin.market_groups, skin.market_types
@@ -1121,7 +1121,7 @@ def test_exotic_selection_labels_via_bet_model(skin) -> None:
 
 def test_extract_selection_carries_gs(skin) -> None:
     """Selections extracted from E[]/AE[] carry raw_gs, and the (G,GS,T) map
-    resolves names via GS (the ADR-7 addendum identity)."""
+    resolves names via GS (the identity)."""
     rules = BetB2BExtractionRules(skin)
     # A market built from a selection with GS — via the extractor path.
     event = {
@@ -1148,7 +1148,7 @@ def test_extract_selection_carries_gs(skin) -> None:
 
 def test_extract_market_gs_from_real_fixture(skin) -> None:
     """The real betb2b fixture's (G,GS,T) combos resolve to names via the
-    verified map — regression for the ADR-7 addendum identity."""
+    verified map — regression for the identity."""
     fx_path = Path(__file__).parent / "fixtures" / "getgamezip_basketball.json"
     if not fx_path.exists():
         pytest.skip("fixture not present")
@@ -1164,10 +1164,10 @@ def test_extract_market_gs_from_real_fixture(skin) -> None:
     assert names.get(17) == "Total"
     assert names.get(15) == "Individual Total Home"
     assert names.get(62) == "Individual Total Away"
-    # ADR-19 correction: G=14/GS=22 is "Total Even", not "To Win Match".
+    # Correction: G=14/GS=22 is "Total Even", not "To Win Match".
     assert names.get(14) == "Total Even"
     # Exotic groups now resolve to real names via the authoritative GS table
-    # (ADR-19) — no more bare G=<n>.
+    # — no more bare G=<n>.
     assert names.get(2766) == "1X2 In Regular Time"
     assert names.get(2768) == "Regular Time Double Chance"
     assert names.get(91) == "Individual Total 1 Even"
@@ -1175,7 +1175,7 @@ def test_extract_market_gs_from_real_fixture(skin) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Match statistics (statisticfeed api/v2/Game/statistic) — ADR-11 verification
+# Match statistics (statisticfeed api/v2/Game/statistic)
 # ---------------------------------------------------------------------------
 
 # Real envelope captured live (linebet, minor-league basketball): the endpoint
@@ -1189,7 +1189,7 @@ SAMPLE_STATS_EMPTY = {
 }
 
 # Synthesised populated shape: periodStatistic entries are stored VERBATIM (the
-# parser invents no labels — ADR-7), nested values coerced to JSON strings.
+# parser invents no labels), nested values coerced to JSON strings.
 SAMPLE_STATS_POPULATED = {
     "sportId": 3,
     "entity": {
@@ -1233,7 +1233,7 @@ def test_extract_statistics_none_and_malformed(rules: BetB2BExtractionRules) -> 
 
 
 # ---------------------------------------------------------------------------
-# GetGameZip event/team field mapping (ADR-11 field-mapping) — real PBA shapes
+# GetGameZip event/team field mapping (field-mapping) — real PBA shapes
 # ---------------------------------------------------------------------------
 def test_build_event_maps_getgamezip_fields(rules: BetB2BExtractionRules) -> None:
     """O1I/O2I, crests, feed country, venue/stage, WP and LE are captured."""

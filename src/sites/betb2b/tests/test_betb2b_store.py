@@ -260,7 +260,7 @@ def test_state_change_stores_a_new_row(db, tmp_path):
 
 
 def test_h2h_period_scores_captured_for_scoped_ingestion(db, tmp_path):
-    # A played H2H game with a per-quarter breakdown (ADR-7: scoped ingestion).
+    # A played H2H game with a per-quarter breakdown (scoped ingestion).
     r = _rich_result()
     r["events"][0]["h2h_data"]["game_shorts"][0].update({
         "score1": 107, "score2": 122,
@@ -284,7 +284,7 @@ def test_h2h_period_scores_captured_for_scoped_ingestion(db, tmp_path):
 
 
 def test_scoped_odds_stored_and_deduped_per_scope(db, tmp_path):
-    # Same market name at two scopes must NOT dedup-collide (ADR-7).
+    # Same market name at two scopes must NOT dedup-collide.
     r = _result("linebet", price_1x2=(1.5, 2.5))
     ev = r["events"][0]
     ev["markets"] = [

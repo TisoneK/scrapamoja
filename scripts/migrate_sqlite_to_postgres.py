@@ -1,7 +1,7 @@
-"""ADR-11 one-time data copy: legacy SQLite files → the shared store.
+"""One-time data copy: legacy SQLite files → the shared store.
 
-Per ADR-11 consequence: "A one-time data copy (SQLAlchemy script over the
-shared models) moves existing rows." This is that script. It reads the three
+A one-time data copy (SQLAlchemy script over the
+shared models) moves existing rows. This is that script. It reads the three
 legacy SQLite databases:
 
   * data/betb2b/odds.db        → betb2b product data (raw sqlite3 store)
@@ -45,7 +45,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
-# betb2b ORM models (the ADR-11 portable schema)
+# betb2b ORM models (the portable schema)
 from src.sites.betb2b.models import (
     Base as BetB2BBase,
     Sport, Country, League, Team, Event, Market,
@@ -134,7 +134,7 @@ def copy_adaptive(src_path: Path, target_engine) -> dict[str, int]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="ADR-11 one-time SQLite→store data copy")
+    ap = argparse.ArgumentParser(description="One-time SQLite→store data copy")
     ap.add_argument("--target", default=None,
                     help="target SQLAlchemy URL (default: resolve_database_url)")
     ap.add_argument("--betb2b-source", default=str(REPO / "data" / "betb2b" / "odds.db"),

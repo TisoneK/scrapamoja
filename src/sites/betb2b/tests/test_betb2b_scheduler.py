@@ -72,7 +72,7 @@ def test_filter_scheduled_can_disable_skip_started(tmp_path):
 
 def test_scheduler_skips_live_pass_when_disabled(tmp_path):
     """live_interval<=0 → the live pass (the storage firehose) is not run;
-    scheduled still runs. The 'scheduled-only' low-storage mode (ADR-22)."""
+    scheduled still runs. The 'scheduled-only' low-storage mode."""
     import asyncio
 
     db = str(tmp_path / "s.db")
@@ -126,7 +126,7 @@ def test_is_read_only_error_detects_25006():
 
 def test_scheduler_backs_off_and_warns_on_read_only(tmp_path, caplog):
     """A read-only write does NOT crash the loop or hammer — it logs a throttled
-    warning and backs off (ADR-21/22)."""
+    warning and backs off."""
     import asyncio
     import logging
 

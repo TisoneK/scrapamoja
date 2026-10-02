@@ -1,4 +1,4 @@
-"""Tests for the ADR-11 shared database engine factory (src/core/db.py).
+"""Tests for the shared database engine factory (src/core/db.py).
 
 Verifies the env-driven URL resolution precedence and that one code path
 serves both the SQLite fallback and a (URL-form) Postgres backend — without
@@ -29,7 +29,7 @@ def test_resolve_defaults_to_sqlite_fallback(clean_env, tmp_path, monkeypatch):
 
 
 def test_resolve_explicit_path_is_wrapped_as_sqlite(clean_env):
-    # A bare filesystem path (the pre-ADR-11 calling convention) becomes a
+    # A bare filesystem path (the original calling convention) becomes a
     # sqlite URL — this is what keeps existing callers working.
     url = dbmod.resolve_database_url("/tmp/some/odds.db")
     assert url == "sqlite:////tmp/some/odds.db"

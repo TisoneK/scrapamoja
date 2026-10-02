@@ -1,4 +1,4 @@
-"""Regenerate the BetB2B/1xbet market-group name table (ADR-19).
+"""Regenerate the BetB2B/1xbet market-group name table.
 
 The 1xbet-family SPA names market groups client-side via
 ``name = groupNames[GS]`` where ``GS`` is the feed's *groupShortId*. That

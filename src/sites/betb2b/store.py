@@ -8,7 +8,7 @@ to one row per real entity. Everything a *skin observed at a moment* (scores,
 odds, period breakdowns, H2H, stats) is a **fact** table carrying ``skin`` +
 ``captured_at``, appended as a time-series.
 
-Schema (ADR-6, revised):
+Schema (revised):
 
   dimensions          facts (skin-scoped, time-series)
   ----------          -------------------------------
@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional
 
 
 def _is_orm(conn: Any) -> bool:
-    """A non-sqlite3 connection means the ORM/Postgres path (ADR-13)."""
+    """A non-sqlite3 connection means the ORM/Postgres path."""
     return conn is not None and not isinstance(conn, sqlite3.Connection)
 
 
@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS events (
     stage         TEXT,                     -- MIO.TSt — tournament stage
     first_seen    TEXT,
     last_seen     TEXT,
-    stat_game_id       TEXT,                -- statisticfeed entity.id (ADR-20)
+    stat_game_id       TEXT,                -- statisticfeed entity.id
     final_score_home   INTEGER,             -- results pass: entity.score1
     final_score_away   INTEGER,             -- entity.score2
     winner             INTEGER,             -- entity.winner (1=home/2=away/0=none)
@@ -289,7 +289,7 @@ CREATE TABLE IF NOT EXISTS h2h_games (
 -- Per-quarter breakdown of a historical H2H game — the raw material for
 -- scoped ingestion (QUARTER_n / FIRST_HALF / SECOND_HALF H2H scores). The
 -- feed's game_shorts[].periods[] carries this; the pipeline needs H2H scores
--- that match the prediction scope (ADR-7).
+-- that match the prediction scope.
 CREATE TABLE IF NOT EXISTS h2h_period_scores (
     id           INTEGER PRIMARY KEY,
     h2h_game_id  INTEGER NOT NULL REFERENCES h2h_games(id),
@@ -780,7 +780,7 @@ def persist_result(
                          _as_int(g.get("sub_score1")), _as_int(g.get("sub_score2")),
                          _as_int(g.get("winner")), _as_int(g.get("status")), at),
                     ).lastrowid)
-                    # Per-quarter H2H breakdown → scoped ingestion (ADR-7).
+                    # Per-quarter H2H breakdown → scoped ingestion.
                     for ps in g.get("periods") or []:
                         conn.execute(
                             "INSERT INTO h2h_period_scores "
@@ -1002,7 +1002,7 @@ def get_job(conn, job_id: int):
 def events_last_seen(conn, event_ids) -> Dict[str, Any]:
     """``{event_id: last_seen}`` for the given ids (missing = never scraped).
 
-    Used by the scheduler's skip filter (ADR-15 follow-up): a discovered event
+    Used by the scheduler's skip filter (follow-up): a discovered event
     is fetched only if it's new (absent here) or its ``last_seen`` is older than
     the refresh window. ``last_seen`` is an ISO string (SQLite) or datetime (PG).
     """
@@ -1115,7 +1115,7 @@ def events_missing_stat_id(conn, *, limit: int = 150) -> List[str]:
 
 def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):
     """(event_id, stat_game_id) for real matches past ``min_age`` (default 2.5h)
-    with no result yet — the results pass's work list (ADR-16/20). Oldest first."""
+    with no result yet — the results pass's work list. Oldest first."""
     if _is_orm(conn):
         from . import store_orm
         return store_orm.events_needing_results(conn, min_age_seconds=min_age_seconds, limit=limit)
@@ -1132,7 +1132,7 @@ def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int 
 
 def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
                   score_away=None, winner=None, status=None, at=None) -> None:
-    """Write a match's statisticfeed result onto the event (ADR-20). Captures
+    """Write a match's statisticfeed result onto the event. Captures
     ``stat_game_id`` whenever seen; stamps final score/winner/status only on
     ``status == 3`` (finished) — which removes it from ``events_needing_results``."""
     if _is_orm(conn):

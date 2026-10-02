@@ -1,4 +1,4 @@
-"""ORM store path (ADR-13) exercised on SQLite via DATABASE_URL.
+"""ORM store path exercised on SQLite via DATABASE_URL.
 
 Setting ``DATABASE_URL`` routes ``store`` through :mod:`store_orm` (the same
 code that writes Supabase Postgres in prod), so this verifies the ORM logic —
@@ -117,7 +117,7 @@ def test_orm_sub_games_persisted_and_upserted(orm_conn):
 
 
 def test_orm_results_needing_and_record(orm_conn):
-    """Results pass (ADR-16/20): a past real match is 'needing results'; a live
+    """Results pass: a past real match is 'needing results'; a live
     (status 2) probe captures stat_game_id but stays pending; status 3 stamps the
     final result and clears it from the list."""
     store.persist_result(_rich_result(), conn=orm_conn)   # event 739052498, away set, start 2026-07-27
@@ -195,7 +195,7 @@ def test_orm_job_failure_keeps_phase(orm_conn):
 
 
 def test_backfill_market_names(orm_conn, monkeypatch):
-    """The G=<n> name backfill (ADR-19): rename by raw_g, merge into an existing
+    """The G=<n> name backfill: rename by raw_g, merge into an existing
     correctly-named row (repointing odds), and leave unknown groups honest."""
     from datetime import datetime, timezone
     from sqlalchemy import insert, select

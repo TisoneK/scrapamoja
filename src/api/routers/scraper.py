@@ -60,7 +60,7 @@ class RunRequest(BaseModel):
     skin: str = Field("linebet", description="Skin name, or comma-list (linebet,melbet).")
     action: str = Field("list_live", description="live/prematch/all or list_live/list_prematch/…")
     sport: Optional[str] = Field(None, description="Sport slug, e.g. basketball. None = all.")
-    subgames: bool = Field(False, description="Also fetch per-quarter/half sub-games (ADR-7).")
+    subgames: bool = Field(False, description="Also fetch per-quarter/half sub-games.")
     count: Optional[int] = Field(None, ge=1, le=200, description="count= query param (default 50).")
 
 

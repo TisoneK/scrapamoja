@@ -392,10 +392,10 @@ class BetB2BCLI:
         scrape.add_argument("--subgames", action="store_true",
                             help="Fetch each event's per-quarter/half sub-games so the "
                                  "half and quarter scopes carry their own totals line "
-                                 "(ADR-7). Without it only FULL_MATCH and the two team "
+                                 ". Without it only FULL_MATCH and the two team "
                                  "totals can be exported. Costs extra requests per event.")
         scrape.add_argument("--direct", action="store_true",
-                            help="ADR-15 direct mode: browser+proxy-free discovery via "
+                            help="Direct mode: browser+proxy-free discovery via "
                                  "GetSportsZip → GetChampZip → GetGameZip (no Playwright, "
                                  "no session cookies, no proxy). Faster + broader coverage.")
 
@@ -431,7 +431,7 @@ class BetB2BCLI:
         poll.add_argument("--settle", type=float, default=12.0, help="SPA settle seconds")
         poll.add_argument("--rate", type=int, default=_env("BETB2B_RATE", 30, int), help="feed rate limit per minute")
         poll.add_argument("--subgames", action="store_true",
-                          help="Fetch per-quarter/half sub-games each cycle (ADR-7 scoped "
+                          help="Fetch per-quarter/half sub-games each cycle (scoped "
                                "odds). Costs extra requests per event per cycle.")
 
         # info
@@ -465,7 +465,7 @@ class BetB2BCLI:
         view.add_argument("--decompress-to", default=None,
                           help="Instead of printing, write the decompressed JSON to this path")
 
-        # schedule — long-running state-aware scheduler (ADR-14/15)
+        # schedule — long-running state-aware scheduler
         sch = sub.add_parser("schedule",
                              help="Run the state-aware scheduler: scheduled (prematch, skip-fresh) "
                                   "+ live passes on cadences. Browser+proxy-free (direct).")
@@ -477,7 +477,7 @@ class BetB2BCLI:
                          help="Seconds between prematch passes (default: 10800 = 3h). <=0 disables.")
         sch.add_argument("--live-interval", type=float, default=15.0,
                          help="Seconds between live passes (default: 15). Set 0 to DISABLE the "
-                              "live pass — 'scheduled-only' low-storage mode (ADR-22).")
+                              "live pass — 'scheduled-only' low-storage mode.")
         sch.add_argument("--results-interval", type=float, default=600.0,
                          help="Seconds between finished-match results passes (default: 600 = 10min). <=0 disables.")
         sch.add_argument("--quota-interval", type=float, default=3600.0,
@@ -735,7 +735,7 @@ class BetB2BCLI:
               f"scheduled={args.scheduled_interval:.0f}s live={args.live_interval:.0f}s "
               f"quota={args.quota_interval:.0f}s "
               f"(SIGTERM/Ctrl-C to stop)", file=sys.stderr)
-        # As a Railway worker (ADR-18) this runs forever until the platform sends
+        # As a Railway worker this runs forever until the platform sends
         # SIGTERM on redeploy/shutdown. Handle it (and SIGINT) gracefully → stop()
         # lets the current pass finish and run()'s finally closes the scraper, so
         # no half-written persist. add_signal_handler is unavailable on some

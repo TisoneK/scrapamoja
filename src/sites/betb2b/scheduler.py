@@ -1,13 +1,13 @@
-"""State-aware betb2b scheduler (ADR-14/15 follow-up).
+"""State-aware betb2b scheduler.
 
 Runs decoupled scrape passes on their own cadences. Matches flow between passes
-by **feed root + DB state**, not by any cross-scraper trigger (ADR-14 — Supabase
+by **feed root + DB state**, not by any cross-scraper trigger (Supabase
 is the bus):
 
   - **scheduled** (~3h): LineFeed discovery → skip matches already scraped
     recently or already kicked off → fetch only new/stale prematch odds.
   - **live** (~15s): LiveFeed discovery → fetch (always; live odds move fast).
-  - **results** (~10min): finished-match final scores (ADR-16/20) — the Line/Live
+  - **results** (~10min): finished-match final scores — the Line/Live
     feeds drop a match once it ends, so this reads statisticfeed `v1/Game` for
     real matches past ~2.5h with no result yet and stamps score/winner on finish.
   - **quota** (~1h): hosted-store size monitor — reads the server-side database
@@ -103,8 +103,8 @@ class BetB2BScheduler:
                     self.quota_interval)
         # A pass with interval <= 0 is DISABLED. The `live` pass is the dominant
         # data producer (15s polling of constantly-moving odds); disabling it
-        # (SCHED_LIVE_INTERVAL=0) is the "scheduled-only" low-storage mode — see
-        # ADR-22. Re-enable it (positive interval) once on a paid tier.
+        # (SCHED_LIVE_INTERVAL=0) is the "scheduled-only" low-storage mode.
+        # Re-enable it (positive interval) once on a paid tier.
         loops = []
         for name, fn, interval in (
             ("scheduled", self._scheduled_pass, self.scheduled_interval),
@@ -137,7 +137,7 @@ class BetB2BScheduler:
                     # Supabase restricts an over-quota project to read-only (the
                     # HTTP layer's 402). Don't hammer it with doomed writes every
                     # `interval`s — back off, warn (throttled), auto-resume when
-                    # the DB is writable again. See ADR-21/22.
+                    # the DB is writable again.
                     delay = max(interval, self.read_only_backoff)
                     now = time.monotonic()
                     if now - self._ro_warned_at.get(name, 0.0) > 300:
@@ -183,7 +183,7 @@ class BetB2BScheduler:
         self._persist("list_live", events)
 
     async def _results_pass(self) -> None:
-        """Capture finished-match final scores (ADR-16/20). State-driven: query
+        """Capture finished-match final scores. State-driven: query
         the DB for real matches past `result_min_age` with no result yet, fetch
         each via statisticfeed `v1/Game` (by retained stat_game_id, else the event
         id), and write score/winner when `status==3`. No cross-scraper trigger."""

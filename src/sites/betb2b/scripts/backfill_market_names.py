@@ -1,4 +1,4 @@
-"""Backfill real names onto existing ``markets`` rows saved as ``"G=<n>"`` (ADR-19).
+"""Backfill real names onto existing ``markets`` rows saved as ``"G=<n>"``.
 
 Before the GS-indexed naming landed, market groups the code couldn't name were
 stored as ``markets.name = "G=27"`` etc. New scrapes now write real names, but

@@ -2,7 +2,7 @@
 
 A single-flight, DB-driven job runner: the control API enqueues jobs into the
 ``scraper_jobs`` table; this service claims and runs them **one at a time**
-(one Chromium bootstrap at a time — ADR-1's memory concern) inside the API
+(one Chromium bootstrap at a time — a memory concern) inside the API
 process, persisting results to the betb2b odds store.
 
 Deploy note: run the web service with ``GUNICORN_WORKERS=1`` so a single runner
@@ -191,7 +191,7 @@ class ScraperService:
         skin = _load_skin(job["skin"])
         if job.get("subgames"):
             skin.features["subgames"] = True
-        # ADR-15: BETB2B_DIRECT=1 makes the deployed scraper run browser+proxy-free
+        # BETB2B_DIRECT=1 makes the deployed scraper run browser+proxy-free
         # (GetSportsZip discovery). Lets Railway drop the proxy entirely for odds.
         if os.environ.get("BETB2B_DIRECT", "").lower() in ("1", "true", "yes"):
             skin.features["direct"] = True

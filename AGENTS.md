@@ -59,20 +59,20 @@ src/
 └── utils/                  # Shared exceptions
 ```
 
-### Key Design Decisions (ADRs in `.context_ledger/memory/plans/decisions.md`)
+### Key Design Decisions
 
-| ADR | Topic | Summary |
+| # | Topic | Summary |
 |-----|-------|---------|
-| ADR-1 | Railway deployment | Deploy FastAPI control plane via Dockerfile; no scrape jobs in the API service |
-| ADR-2 | AccessProfile axis | Separate transport/access concerns (geo-gating, proxy, SW) from extraction mode |
-| ADR-3 | Linebet hybrid mode | Cookie-harvest → direct httpx polling of `/service-api/LiveFeed/` endpoints |
-| ADR-4 | DOM-primary extraction | BetB2B direct-API auth-header contract rotates (406); DOM extraction is the reliable primary path |
-| ADR-5 | `GetGameZip` market depth | Per-match `GetGameZip` is the reliable market-depth path for DOM-extracted events — refines ADR-4 |
-| ADR-6 | Structured odds store | Scraped odds go into a time-series SQLite store (the full match model), not loose JSON |
-| ADR-7 | Scoped engine ingestion | One betb2b match → up to 9 scorewise-engine prediction scopes, each with its own totals line + scope-matched H2H |
-| ADR-8 | H2H scope contract | Team-total scopes zero the non-relevant team's H2H score — the engine always sums `home_score + away_score` |
+| 1 | Railway deployment | Deploy FastAPI control plane via Dockerfile; no scrape jobs in the API service |
+| 2 | AccessProfile axis | Separate transport/access concerns (geo-gating, proxy, SW) from extraction mode |
+| 3 | Linebet hybrid mode | Cookie-harvest → direct httpx polling of `/service-api/LiveFeed/` endpoints |
+| 4 | DOM-primary extraction | BetB2B direct-API auth-header contract rotates (406); DOM extraction is the reliable primary path |
+| 5 | `GetGameZip` market depth | Per-match `GetGameZip` is the reliable market-depth path for DOM-extracted events — refines decision 4 |
+| 6 | Structured odds store | Scraped odds go into a time-series SQLite store (the full match model), not loose JSON |
+| 7 | Scoped engine ingestion | One betb2b match → up to 9 scorewise-engine prediction scopes, each with its own totals line + scope-matched H2H |
+| 8 | H2H scope contract | Team-total scopes zero the non-relevant team's H2H score — the engine always sums `home_score + away_score` |
 
-### Scorewise-Engine Ingestion (ADR-7 / ADR-8)
+### Scorewise-Engine Ingestion
 
 `src/sites/betb2b/export/scorewise.py` turns one scraped event into up to **9**
 engine `PredictRequest`s — one per `PredictionScope`. Each carries that scope's
@@ -98,7 +98,7 @@ what `BetB2BScraper._enrich_with_subgames` gates on. It costs one extra
 Auth: `$SCOREWISE_ENGINE_URL` + `$SCOREWISE_API_KEY` (sent as `x-api-key`, not
 Bearer). Values live in `.context_ledger/memory/secrets/` — never in tracked files.
 
-**The contract that is easy to break (ADR-8):** the engine's `s02_h2h_totals`
+**The contract that is easy to break:** the engine's `s02_h2h_totals`
 always computes `home_score + away_score`, whatever the scope. So a team-total
 request must zero the other team's score, or the engine compares a ~229-point
 game total against a ~109.5 individual line and calls everything OVER. Output
@@ -110,7 +110,7 @@ per scope rather than inspecting fields.
 
 The most important active work. `src/sites/betb2b/` is a **parameterised base scraper** for all BetB2B/1xbet-white-label bookmakers. Each brand is a thin YAML "skin" in `src/sites/betb2b/skins/<name>.yaml` — no Python changes needed to add a new bookmaker.
 
-**Extraction mode:** Hybrid (ADR-3/ADR-4)
+**Extraction mode:** Hybrid
 1. Browser bootstrap once through an allowed-country proxy → harvest ~21 session cookies
 2. `httpx`-poll the `/service-api/{LiveFeed,LineFeed}/...` endpoints directly (best-effort; 406 → DOM fallback)
 3. DOM extraction as the drift-proof primary path when the API auth-header contract rotates
@@ -319,7 +319,7 @@ python -m src.sites.betb2b.cli.main compare-match --skin linebet --sport basketb
 
 **Known observations (2026-07-20 testing):**
 - Women's Chinese basketball (linebet, Kenya egress): statisticfeed APIs return 404 for statistics/timeline, 204 (empty) for H2H. NBA major league matches expected to return data.
-- Get1x2_VZip consistently returns 406 (auth-header rotation per ADR-4) — markets from GetGameZip/E[]/AE[] paths.
+- Get1x2_VZip consistently returns 406 (auth-header rotation) — markets from GetGameZip/E[]/AE[] paths.
 - GetGameZip (live) reliably returns ~24KB+ data with scores, periods, markets. GetGameZip (line) for live events returns only ~100 bytes.
 - **Period scores gap RESOLVED 2026-07-20:** `SC.PS[]` is now extracted via `_extract_period_scores()` in `rules.py` and populated into `Event.period_scores`.
 - GetSubsOptionsForGame returns ~100 bytes — not useful.
@@ -456,7 +456,7 @@ single source of truth. Project-specific rule adjustments:
 
 ### BetB2B-Specific Rules
 
-11. **Never chase the BetB2B auth-header contract in code.** The `x-dt`/`x-project-id` header rotates per session. DOM extraction is the stable path (ADR-4).
+11. **Never chase the BetB2B auth-header contract in code.** The `x-dt`/`x-project-id` header rotates per session. DOM extraction is the stable path.
 12. **Skins are YAML-only.** To add a bookmaker, create `skins/<name>.yaml` — no Python changes.
 13. **Proxy is optional.** BetB2B sites geo-block per skin, but if your
     egress is already in an allowed country, the scraper runs fine in
@@ -538,8 +538,8 @@ python -m src.sites.betb2b.cli.main probe --skin linebet
 | `src/sites/betb2b/markets.py` | Market group/type lookup tables |
 | `src/sites/betb2b/sports.py` | Sport ID → name mapping |
 | `src/sites/betb2b/skins/` | Per-bookmaker YAML skin configs |
-| `src/sites/betb2b/export/scorewise.py` | Event → scorewise-engine `PredictRequest` per scope + `post_ingest` (ADR-7/8) |
-| `src/sites/betb2b/store.py` | SQLite odds store (`persist_result`) — the `--db` target (ADR-6) |
+| `src/sites/betb2b/export/scorewise.py` | Event → scorewise-engine `PredictRequest` per scope + `post_ingest` |
+| `src/sites/betb2b/store.py` | SQLite odds store (`persist_result`) — the `--db` target |
 | `src/sites/betb2b/tests/` | The betb2b test suite (next to the code, NOT under `tests/`) |
 | `src/sites/betb2b/scripts/validate_live.py` | E2E validation script |
 | `src/sites/betb2b/scripts/discover_h2h.py` | H2H endpoint discovery script |

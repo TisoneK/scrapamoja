@@ -1,4 +1,4 @@
-"""ORM-backed store path (ADR-13) — used when ``DATABASE_URL`` is set.
+"""ORM-backed store path — used when ``DATABASE_URL`` is set.
 
 Mirrors the raw-``sqlite3`` :mod:`store` one-to-one, but through SQLAlchemy
 Core over the typed ORM tables, so the scraper writes to **Supabase Postgres**
@@ -631,7 +631,7 @@ def list_jobs(conn, *, limit=50, status=None):
 def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):
     """(event_id, stat_game_id) for real matches that should have finished
     (start_time older than min_age, default 2.5h) and have no result yet —
-    the results pass's work list (ADR-16/20). Oldest first."""
+    the results pass's work list. Oldest first."""
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=min_age_seconds)
     rows = conn.execute(
         select(_events.c.event_id, _events.c.stat_game_id).where(
@@ -646,7 +646,7 @@ def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int 
 
 def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
                   score_away=None, winner=None, status=None, at=None) -> None:
-    """Write a match's statisticfeed result onto the event (ADR-20). `stat_game_id`
+    """Write a match's statisticfeed result onto the event. `stat_game_id`
     is captured whenever seen; the final score/winner/status are stamped only on
     `status == 3` (finished) — which also removes it from `events_needing_results`."""
     vals: Dict[str, Any] = {}

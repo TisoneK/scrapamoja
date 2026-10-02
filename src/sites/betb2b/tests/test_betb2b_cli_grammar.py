@@ -144,7 +144,7 @@ class TestMultiSkinParsing:
 
 
 class TestSubgamesFlag:
-    """ADR-7's half/quarter scopes need sub-game fetching, and the `subgames`
+    """The half/quarter scopes need sub-game fetching, and the `subgames`
     feature defaults to off — so the flag is the only thing that can reach the
     scoped-ingestion path from a command line."""
 

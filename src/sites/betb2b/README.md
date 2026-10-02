@@ -7,8 +7,8 @@ paripesa, … — with per-skin config in YAML.
 > A real-world example of Scrapamoja's "one framework, many sites"
 > thesis. linebet was reverse-engineered first (`src/sites/linebet/RECON.md`);
 > the findings generalize across 8+ family members (verified 2026-07-18 via
-> the Kenya proxy). ADR-3 in `.context/memory/plans/decisions.md` records
-> the extraction-mode decision (`hybrid`).
+> the Kenya proxy). The extraction mode is
+> `hybrid`.
 
 ## Why a family scraper?
 
@@ -68,7 +68,7 @@ Everything else is family-shared.
 | Live test script      | `scripts/validate_live.py`    | End-to-end probe → harvest → poll → extract → persist.              |
 | Family probe script   | `scripts/probe_family.py`     | Verify the family-generalization signal across skins.               |
 
-## Extraction mode: `hybrid` (ADR-3)
+## Extraction mode: `hybrid`
 
 The recipe is browser bootstrap once → httpx polling:
 
@@ -89,7 +89,7 @@ Re-bootstrap is automatic: the `SessionValidator` watches for the
 session TTL (default 2h) and for auth-error HTTP statuses (401/403/419/
 440); on either signal, the next `get_session()` call re-bootstraps.
 
-## Extraction mode: `direct` (ADR-15)
+## Extraction mode: `direct`
 
 `--direct` / `BETB2B_DIRECT=1` — **browser-free and proxy-free.** The un-gated
 feeds return data cookie-less from any IP (including a datacenter): discover the
@@ -109,7 +109,7 @@ with change-only dedup, `event_states`, `period_scores`),
 `h2h_games`/`h2h_period_scores`, `statistics`, and a `scraper_jobs` control
 queue. When `DATABASE_URL` is set, `store.py` dispatches to `store_orm.py`
 (SQLAlchemy → any Postgres); otherwise it uses raw SQLite. Change-only
-dedup and batched/bounded-concurrency I/O keep it cheap (ADR-13/17).
+dedup and batched/bounded-concurrency I/O keep it cheap.
 
 ### Local by default, remote optional
 
@@ -150,12 +150,12 @@ quota: scheduled-only scraping is small; live polling grows fast.
 
 **Remote-control API** (`src/api/routers/scraper.py`, `/api/scraper/*`,
 `x-api-key` auth) — queue a scrape, monitor live job `phase`, read odds/counts.
-Single-flight background jobs inside the FastAPI service (ADR-12).
+Single-flight background jobs inside the FastAPI service.
 
 **Scheduler** (`scheduler.py`, `betb2b schedule …`) — a continuously-looping
 worker with **scheduled** (~3h, skip-fresh), **live** (~15s), and **results**
 (~10min, finished-match final scores via `statisticfeed v1/Game`) passes; matches
-flow by feed-root + DB state, no cross-scraper triggers (ADR-15/16/18/20).
+flow by feed-root + DB state, no cross-scraper triggers.
 
 **Deploy** — set `DATABASE_URL` (a Postgres URL) + `BETB2B_DIRECT=1` and it runs
 proxy-free on Railway; the scheduler is a dedicated second service. See
@@ -398,7 +398,7 @@ Market-id tables (`G` → group, `T` → type within group) live in
 `markets.py`. Sport-id table (`SI` → name) in `sports.py`. Both are
 family-shared defaults; per-skin YAML can extend/override.
 
-### Market-group names (ADR-19)
+### Market-group names
 
 Every market group is named from the SPA's own bet-model dictionary, keyed
 by **`GS` (groupShortId)** — not feed `G`. The union of the CDN's
@@ -466,7 +466,7 @@ python -m src.sites.betb2b.scripts.probe_family
   paripesa 203s (domain outlier — cf. the Session-19 `paripesa.bet`→`paripesa.cool`
   fix). Workaround: scrape paripesa via the hybrid/proxy path, or fix its domain in
   `skins/paripesa.yaml`.
-- **Exotic market names show as `G=<n>`** (ADR-19). The feed carries only numeric
+- **Exotic market names show as `G=<n>`**. The feed carries only numeric
   market group/type ids; the human name is composed client-side and not in any feed
   or static dictionary. **Core markets are named correctly** (1x2, totals, handicap,
   individual totals, moneyline, To Win Match) via the verified `(G,T)` map; only rare
@@ -476,7 +476,7 @@ python -m src.sites.betb2b.scripts.probe_family
   intermittently return `529` (overloaded) at `BETB2B_CONCURRENCY=8`. Best-effort and
   non-fatal (odds/events persist fine; the odds endpoints aren't affected). Lower
   `BETB2B_CONCURRENCY` (e.g. 4) if the warnings are noisy — datacenter-IP rate
-  discipline, ADR-17.
+  discipline.
 - **`statisticfeed` coverage gaps.** Virtual/simulated leagues (e.g. "NBA" with player
   names) and some minor leagues have no `statisticfeed` data → `204` for H2H/stats and
   no result. Those matches scrape odds/events fine but won't be H2H-enriched or graded.
@@ -488,8 +488,6 @@ python -m src.sites.betb2b.scripts.probe_family
 ## See also
 
 - `src/sites/linebet/RECON.md` — the full reverse-engineering writeup.
-- `.context/memory/plans/decisions.md` ADR-2 + ADR-3 — extraction-mode
-  decision + the linebet-specific classification.
 - `src/network/proxy/` — the canonical ProxyManager / ProxyEndpoint
   layer this scraper wires into.
 - `src/network/session.py` — the `SessionHarvester` /

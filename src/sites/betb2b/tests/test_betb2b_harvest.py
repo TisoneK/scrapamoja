@@ -9,7 +9,7 @@ from src.sites.betb2b.harvest import (
 )
 
 
-# --- GetSportsZip league parsing (ADR-15 browser-free discovery) ------------ #
+# --- GetSportsZip league parsing (browser-free discovery) ------------ #
 _SPORTS = {"Value": [
     {"I": 3, "N": "Basketball", "L": [
         {"LI": 197289, "GC": 9, "L": "WNBA"},

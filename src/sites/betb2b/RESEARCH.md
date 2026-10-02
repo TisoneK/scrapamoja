@@ -160,7 +160,7 @@ header (derived from `x-project-id`) from a store the app fills via
 `postMessage`. The IndexedDB `vpn/headers` store is gone; the SW only
 activates when registered with an `?i=` param.
 
-**Consequence (ADR-4):** DOM extraction is the drift-proof primary path.
+**Consequence:** DOM extraction is the drift-proof primary path.
 The direct-API is best-effort: capture genuine headers per-session via
 CDP `Target.setAutoAttach` to the service-worker target + `Network`,
 replay those, and treat 406 as a DOM-fallback trigger.
@@ -351,7 +351,7 @@ handling.
 See §2. The feed request now (2026-07-19) requires an SW-injected `x-dt`
 header derived from `x-project-id` via `postMessage`. Missing it ⇒ 406.
 
-**Mitigation:** DOM extraction (ADR-4). The SPA renders the odds
+**Mitigation:** DOM extraction. The SPA renders the odds
 correctly; we read them from the rendered DOM. The direct-API path is
 best-effort and falls back to DOM on 406.
 
@@ -384,7 +384,7 @@ client (`curl_cffi` or `tls-client`).
 
 ---
 
-## 6. The hybrid extraction mode (ADR-3 + ADR-4)
+## 6. The hybrid extraction mode
 
 ### The recipe
 
@@ -422,7 +422,7 @@ client (`curl_cffi` or `tls-client`).
 
 ---
 
-## 7. The per-sport scraper framework (ADR-5)
+## 7. The per-sport scraper framework
 
 The betb2b scraper is parameterised by **skin** (which bookmaker) and by
 **sport** (which sport). See [`sports/`](sports/) for the implementation.
@@ -581,12 +581,12 @@ python -m src.sites.betb2b.cli.main probe --skin linebet --sport basketball
 
 ---
 
-## Appendix: ADRs
+## Appendix: Design decisions
 
-| ADR | Topic | Summary |
+| # | Topic | Summary |
 |-----|-------|---------|
-| ADR-1 | Railway deployment | Deploy FastAPI control plane via Dockerfile; no scrape jobs in the API service |
-| ADR-2 | AccessProfile axis | Separate transport/access concerns (geo-gating, proxy, SW) from extraction mode |
-| ADR-3 | Linebet hybrid mode | Cookie-harvest → direct httpx polling of `/service-api/LiveFeed/` endpoints |
-| ADR-4 | DOM-primary extraction | BetB2B direct-API auth-header contract rotates (406); DOM extraction is the reliable primary path |
-| ADR-5 | Per-sport scraper framework | One `SportScraper` ABC + sport-specific subclasses; per-sport URL slug, feed param, DOM selectors, market-group overrides, enrichment hooks. Adding a sport = drop a 50-line module, no scraper changes. |
+| 1 | Railway deployment | Deploy FastAPI control plane via Dockerfile; no scrape jobs in the API service |
+| 2 | AccessProfile axis | Separate transport/access concerns (geo-gating, proxy, SW) from extraction mode |
+| 3 | Linebet hybrid mode | Cookie-harvest → direct httpx polling of `/service-api/LiveFeed/` endpoints |
+| 4 | DOM-primary extraction | BetB2B direct-API auth-header contract rotates (406); DOM extraction is the reliable primary path |
+| 5 | Per-sport scraper framework | One `SportScraper` ABC + sport-specific subclasses; per-sport URL slug, feed param, DOM selectors, market-group overrides, enrichment hooks. Adding a sport = drop a 50-line module, no scraper changes. |

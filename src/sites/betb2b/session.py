@@ -1,7 +1,7 @@
 """Session bootstrap for the BetB2B family scraper.
 
 Implements the "browser-harvest cookies" half of the hybrid extraction
-mode (ADR-3 in `.context/memory/plans/decisions.md`).
+mode.
 
 Recipe:
 
@@ -326,7 +326,7 @@ class BetB2BSessionManager:
     ) -> List[Any]:
         """Navigate the live/line page and extract events from the rendered DOM.
 
-        This is the drift-tolerant fallback path (ADR-4): when the direct
+        This is the drift-tolerant fallback path: when the direct
         ``httpx`` feed poll fails (e.g. a non-2xx status), read the odds
         the SPA already rendered in a real browser instead of chasing the
         API's auth-header contract. Best-effort — returns an empty list

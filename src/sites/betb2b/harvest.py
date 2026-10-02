@@ -9,7 +9,7 @@ virtualization.
 
 So the drift-proof discovery path is: ``httpx`` GET the sport page → pull the
 event ids out of the HTML → ``GetGameZip?id=`` each (the per-match endpoint,
-which returns 200; the list feeds are 406 per ADR-4). This module does the
+which returns 200; the list feeds are 406). This module does the
 pure ID extraction; the scraper does the fetch + GetGameZip.
 
 Event ids on this platform are 9–10 digit numbers that appear as the deepest
@@ -32,7 +32,7 @@ def extract_leagues_from_sports(
     """Parse a ``GetSportsZip`` response → ``(league_id, game_count, name)`` list.
 
     The un-gated ``GetSportsZip`` returns the full sports→leagues tree
-    (ADR-15) with **no browser, cookies, or proxy**: ``Value[]`` per sport,
+ with **no browser, cookies, or proxy**: ``Value[]`` per sport,
     each sport's ``L[]`` listing every league with ``LI`` (champ/league id),
     ``GC`` (game count), and ``L`` (name). This is the browser-free discovery
     source. Returns leagues **with games** (``GC > 0``), highest game-count
@@ -68,7 +68,7 @@ _EVENT_ID_RE = re.compile(r"(?<!\d)(\d{9,10})(?=-[a-z0-9])", re.IGNORECASE)
 # Champ ids are 4–7 digits (distinct from the 9–10 digit event ids). Feeding
 # each champ id to the un-gated ``GetChampZip`` yields that league's full,
 # accurate game list — broader + cleaner than scraping the landing page alone,
-# since the aggregate list feeds are SW-gated (406, ADR-4).
+# since the aggregate list feeds are SW-gated (406).
 _CHAMP_LINK_RE = re.compile(
     r"/en/(?:line|live)/[a-z0-9\-]+/(\d{4,7})-[a-z0-9\-]+", re.IGNORECASE
 )

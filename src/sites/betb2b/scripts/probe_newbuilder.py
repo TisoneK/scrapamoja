@@ -1,7 +1,7 @@
-"""Live probe: old-builder vs new-builder GetGameZip (ADR-19 wire validation).
+"""Live probe: old-builder vs new-builder GetGameZip (wire validation).
 
 Fixture tests prove the parser; this proves the *wire contract*. It runs the
-browser-free discovery chain (GetSportsZip → GetChampZip → GetGameZip, ADR-15)
+browser-free discovery chain (GetSportsZip → GetChampZip → GetGameZip)
 through the operator proxy and compares, for one real event:
 
   A. old-builder  ``GetGameZip?id=<I>&isSubGames=true&grMode=4``
@@ -91,7 +91,7 @@ async def main() -> int:
     else:
         print("no BETB2B_PROXY_URL — running DIRECT", flush=True)
 
-    # ADR-15 direct mode: GetSportsZip / GetChampZip / GetGameZip are un-gated,
+    # Direct mode: GetSportsZip / GetChampZip / GetGameZip are un-gated,
     # so no browser bootstrap or cookies are needed — pure httpx through the proxy.
     # The session manager must still be a REAL instance: `fetch()` calls
     # `record_auth_failure()`/`clear()` on it unconditionally (even in direct

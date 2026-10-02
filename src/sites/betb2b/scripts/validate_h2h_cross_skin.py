@@ -9,7 +9,7 @@ For each BetB2B skin, this script:
   5. Calls the H2H endpoint via httpx with those cookies + real betting headers
   6. Validates the JSON response (teams[], gameShorts[])
 
-This mirrors the actual hybrid extraction mode (ADR-3/ADR-4) used by the
+This mirrors the actual hybrid extraction mode used by the
 BetB2B scraper — not raw direct httpx.
 
 Usage:
