@@ -25,3 +25,8 @@ Promoted: ADR-26, ADR-27, inefficiencies entries, backlog rows, preferences, fla
 - Result table at ~13:30Z: betwinner 443/80 DROPPED; melbet 443 DROPPED / 80 open; 22bet 443 open (recovered); linebet open. Owners: Melbikomas UAB; Redstart Group x2; G-Core Labs (linebet only).
 - `bore` log pasted by the operator showed the tunnel crashing ("frame error, invalid byte length") after repeated bursts of ~12 simultaneous new connections through it — the browser path opens many parallel connections; worth remembering when sizing anything that goes through bore.
 - The operator's phrasing "proxy is still up" was based on the pasted log; the port was refused 36 minutes after its last line. Check with a connect() before relying on it.
+
+## Vantage test (operator restarted the tunnel, remote_port 47613)
+- Order: tunnel `connect()` → control probe from the dev IP (betwinner:443 DROPPED, melbet:443 DROPPED, 22bet open) → egress check via the tunnel (Safaricom Nairobi) → ONE `GetSportsZip` to betwinner via the tunnel: HTTP 200, 273 KB, 11.5 s (slow = home upload through bore, not the site; proxy connect was 0.08 s).
+- No further requests were sent through the tunnel (it crashed earlier under bursts). The secrets file's port line was updated (gitignored; credentials untouched, never printed).
+- Not done: the threshold ramp (waits for the drop to expire; deliberate, once).
