@@ -22,6 +22,7 @@ don't remove the line.
 | B-2026-10-02-3 | Rotate the bore.pub proxy password — it was shared in an agent chat. Lives in `memory/secrets/betb2b-proxy` and the (gitignored, commented-out) `src/sites/betb2b/.env`. Operator rule: the proxy is for the website/browser bypass only, never for API calls. |
 | B-2026-10-02-4 | Storage-quota monitor limit for Neon — partial: `BETB2B_DB_LIMIT_MB=1000` is now set in the local `.env` and shipped in `.env.example`; any DEPLOYED worker/service env (Railway or other) still defaults to 500 MB (the Supabase limit) and needs it set. Neon free = 1 GB storage / 100 compute-hours. |
 | B-2026-10-02-5 | `ledger-mem lint --tree` can never pass in this repo: it flags the `.context_ledger/` routing paths inside `AGENTS.md`/`CLAUDE.md` (the ledger's own entry-point files). 262 ADR citations were stripped from product files this session (0 left); the 40 entry-point path hits remain. See the flaws log for the suggested upstream fix. |
+| B-2026-10-02-10 | linebet: decide whether it is worth supporting. Its website is country-blocked (US) and Gcore WAAP browser validation challenges non-browser clients (ADR-28); the scraper's headless Chromium fails it. Keep linebet last in `BETB2B_FALLBACK_SKINS`; any browser-session approach (operator-validated headed browser, requests kept inside it) needs the operator's go-ahead. |
 
 ### Low Priority
 

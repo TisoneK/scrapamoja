@@ -8,3 +8,8 @@
 - **Automated ADR strip:** regex pass kept rationale but produced six grammar breakages (`retires's`, `the's market`, stray `)`, `(backlogged —)`, `(addendum)`, `(point 3)`) — all caught by reviewing the whole diff, not by tests (comments don't fail tests).
 
 Promoted: ADR-26, ADR-27, inefficiencies entries, backlog rows, preferences, flaws entry. Nothing else needs to survive.
+
+## Follow-up: Gcore WAAP research (linebet)
+- Web search/fetch tools were unavailable (their backend errored), so the docs were read directly: the in-app browser on `docs.gcore.com`, and the public docs repo `g-core/product-documentation` via the GitHub trees API + raw files (`waap/waap-policies/anti-automation-and-bot-protection.mdx`, `waap/threat-intelligence/tls-fingerprinting.mdx`, `waap/frequently-asked-questions/javascript-injection.mdx`, `waap/waap-rules/advanced-rules*.mdx`). Detail is in ADR-28.
+- Operator's observation (validated once per browser; new tab no re-validation; other browser re-validates) = cookie + fingerprint per browser profile.
+- Seen in the in-app browser: validation page → `/en/block` "not available in your country" (US, 135.180.70.225). Earlier the feed URL (not the website) passed the same validation and returned JSON in that browser.

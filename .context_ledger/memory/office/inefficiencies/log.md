@@ -395,3 +395,10 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Fix:** re-read Phases 4–6 + `ledger-schema.md`, re-did the wrap in the right shapes; reviewed the whole diff and fixed each broken sentence.
 - **Prevent next time:** before the wrap-up, re-read Steps 13–19 and the backlog/registry schemas (the Exit checklist rule); after any bulk text rewrite, read the full `git diff` of the added lines — tests don't cover prose.
 - **Gate slip (same session):** ran `ledger-gates run pre-commit` inside a `;`-chained command, so a FAILED gate (`git diff --cached --check`: blank lines at EOF in two staged memory logs) did not stop the following `git commit`/`git push` of an unrelated product file. The product commit itself was clean (tests + lint passed, only its two paths committed) but the rule is: a failing gate blocks the commit. **Prevent:** always `&&`-chain the gate before the commit, and read its output, not just the pytest line.
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50, correction to the 2026-07-17 linebet WAF entry)
+- **Problem:** the 2026-07-17 entry ("Linebet WAF block: datacenter-IP fingerprinting, not geo-blocking") was repeated as fact this session ("not geography"). In the browser the website redirected to `/en/block` — "This website is not available in your country" (US IP). The same entry's own data (US proxies blocked, Kenyan egress worked) pointed to a country rule.
+- **Cost:** a wrong explanation given to the operator, who had said "it's geo-blocked" from the start.
+- **Cause:** trusted a recorded conclusion over the page the site actually shows; didn't open the site in a browser until the operator did.
+- **Fix:** ADR-28 records the two layers (country block on the website; Gcore WAAP browser validation for non-browser clients).
+- **Prevent next time:** when a site blocks a client, look at what a real browser sees (screenshot) before deciding the cause; treat recorded root causes as hypotheses.

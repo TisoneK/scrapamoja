@@ -103,4 +103,5 @@ at session start). Rotate with context-history.
 - **Open items:** see `tasks/backlog.md` B-2026-10-02-1..9 — live re-verification first; shared cooldown/budget; proxy password rotation; Neon quota limit; docs reconcile; `reset` CLI.
 - **Notes:** .context_ledger/memory/office/sessions/2026-10-02-50/notes.md
 - **Report:** .context_ledger/memory/office/reviews/2026-10-02-review.md
+- **Follow-up (same session):** operator-requested research into linebet's new Gcore WAAP protection — country block on the website + browser validation (JS challenge) for non-browser clients; recorded as ADR-28 with a correction to the 2026-07-17 'not geo-blocking' conclusion; no scraper code changed. `.env.example` shipped with non-secret defaults.
 - **Protocol slips (operator-flagged mid-session):** read kickoff then skipped Phase 1/roster/gates/session log for a long stretch; destructive `git reset --hard` before reading the ledger (backup branch kept); first bookkeeping used the wrong backlog format and no report; late check-in. All corrected in-session — see inefficiencies.
