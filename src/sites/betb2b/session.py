@@ -38,6 +38,7 @@ from src.security import (
     BETB2B_RULES, Action, BlockType, BlockVerdict, BrowserTier, SecurityGuard,
     SiteBlocked, SiteInCooldown,
 )
+from src.security import Pacer
 from src.security import resolver as sec_resolver
 
 from .config import BetB2BSkinConfig
@@ -118,6 +119,9 @@ class BetB2BSessionManager:
             fail_cooldown=float(_env_int("BETB2B_FAIL_COOLDOWN", 300)),
             hourly_budget=_env_int("BETB2B_HOURLY_BUDGET", 0),
         )
+        # One pacer per skin, shared by the feed client and the scraper's direct calls:
+        # bounds requests PER SECOND (concurrency alone still sends ~20/s on a fast site).
+        self.pacer = Pacer(float(os.environ.get("BETB2B_MAX_RPS", 3) or 0))
         self._profiles: Optional[Any] = None
         self.profile_name = profile_name_for(skin.name)
 

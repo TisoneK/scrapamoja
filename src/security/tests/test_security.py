@@ -252,3 +252,60 @@ def test_hourly_budget_caps_requests_and_resets_with_the_window(tmp_path):
                               ledger=BlockLedger(tmp_path / "u.json", clock=clock))
     for _ in range(50):
         unlimited.preflight()                        # budget 0 = off (the default)
+
+
+def test_failures_already_in_flight_do_not_lengthen_a_rest(tmp_path):
+    from src.security import BETB2B_RULES, BlockLedger, SecurityGuard
+    clock = _Clock()
+    led = BlockLedger(tmp_path / "l.json", clock=clock)
+    g = SecurityGuard("s", rules=BETB2B_RULES, interactive=False, fail_threshold=3, fail_cooldown=100, ledger=led)
+    for _ in range(3):
+        g.note_failure()
+    until = led.state("s").cooldown_until
+    for _ in range(5):                                # requests sent BEFORE the rest began, returning late
+        assert g.note_failure() is False
+    assert led.state("s").cooldown_until == until
+
+
+def test_scoped_failures_rest_only_that_endpoint_group(tmp_path):
+    import pytest
+    from src.security import BETB2B_RULES, BlockLedger, SecurityGuard, SiteInCooldown
+    g = SecurityGuard("s", rules=BETB2B_RULES, interactive=False, fail_threshold=2, fail_cooldown=100,
+                      ledger=BlockLedger(tmp_path / "l.json", clock=_Clock()))
+    g.note_failure("stats"); g.note_failure("stats")
+    with pytest.raises(SiteInCooldown):
+        g.preflight("stats")
+    g.preflight()                                     # the main site is untouched
+    g.note_ok("stats")                                # an answer ends the streak (rest still runs out by time)
+
+
+
+def test_pacer_spaces_request_starts_for_concurrent_callers():
+    """Four 'workers' calling at once still get start slots 1/rate apart (the semaphore alone
+    would let them all go in the same instant)."""
+    import asyncio, time
+    from src.security import Pacer
+    p = Pacer(50)                                    # 20 ms apart
+    starts = []
+
+    async def worker():
+        await p.wait()
+        starts.append(time.monotonic())
+
+    async def go():
+        await asyncio.gather(*[worker() for _ in range(8)])
+    asyncio.run(go())
+    starts.sort()
+    gaps = [b - a for a, b in zip(starts, starts[1:])]
+    assert min(gaps) >= 0.015                        # ~20 ms, with timer slack
+    assert starts[-1] - starts[0] >= 7 * 0.015
+
+
+def test_pacer_off_is_free():
+    import asyncio, time
+    from src.security import Pacer
+    async def go():
+        await asyncio.gather(*[Pacer(0).wait() for _ in range(100)])
+    t0 = time.monotonic()
+    asyncio.run(go())
+    assert time.monotonic() - t0 < 0.1

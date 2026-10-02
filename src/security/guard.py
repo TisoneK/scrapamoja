@@ -69,24 +69,39 @@ class SecurityGuard:
         self.policy.unavailable = frozenset(unavailable)
 
     # -- gate ----------------------------------------------------------- #
-    def preflight(self) -> None:
+    def _key(self, scope: Optional[str]) -> str:
+        return f"{self.site}:{scope}" if scope else self.site
+
+    def preflight(self, scope: Optional[str] = None) -> None:
         """Call before every request: raises :class:`SiteInCooldown` while the site is
-        resting (after blocks, or a run of timeouts) or its hourly budget is spent."""
+        resting (after blocks, or a run of timeouts) or its hourly budget is spent.
+        ``scope`` names a separate endpoint group (e.g. an optional statistics service)
+        whose timeouts rest only that group, not the whole site."""
         left, last = self.ledger.cooldown_left(self.site)
         if left > 0:
             raise SiteInCooldown(self.site, left, last)
+        if scope:
+            left, last = self.ledger.cooldown_left(self._key(scope))
+            if left > 0:
+                raise SiteInCooldown(self._key(scope), left, last)
         over = self.ledger.charge(self.site, self.hourly_budget)
         if over > 0:
             raise SiteInCooldown(self.site, over, BlockType.RATE_LIMITED)
 
-    def note_failure(self) -> bool:
+    def note_failure(self, scope: Optional[str] = None) -> bool:
         """A request FAILED to get any answer (timeout / dropped connection). After a run
-        of them the site is rested for everyone sharing this guard. True if that began."""
-        seconds = self.ledger.record_failure(self.site, self.fail_threshold, self.fail_cooldown)
+        of them the site (or just the ``scope`` endpoint group) is rested for everyone
+        sharing this guard. True if that began."""
+        key = self._key(scope)
+        seconds = self.ledger.record_failure(key, self.fail_threshold, self.fail_cooldown)
         if seconds:
-            logger.warning("site=%s unreachable (%d failures in a row) -> resting %.0fs", self.site,
-                           self.ledger.state(self.site).consecutive_failures, seconds)
+            logger.warning("site=%s unreachable (%d failures in a row) -> resting %.0fs", key,
+                           self.ledger.state(key).consecutive_failures, seconds)
         return bool(seconds)
+
+    def note_ok(self, scope: Optional[str] = None) -> None:
+        """An answer arrived for this endpoint group: its failure streak is over."""
+        self.ledger.record_success(self._key(scope))
 
     @property
     def tier(self) -> BrowserTier:

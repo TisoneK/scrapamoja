@@ -601,6 +601,7 @@ class BetB2BScraper:
             async with httpx.AsyncClient(
                 proxy=proxy_url, timeout=30.0, follow_redirects=True, headers=headers,
             ) as client:
+                await self.session_manager.pacer.wait()
                 resp = await client.get(url)
                 self._guard_check(resp)
                 html = resp.text if resp.status_code == 200 else ""
@@ -1025,12 +1026,13 @@ class BetB2BScraper:
             "fcountry": str(self.skin.country), "gr": str(self.skin.gr),
         }
         try:
-            self._guard_gate()
+            self._guard_gate("stats")
             async with httpx.AsyncClient(
                 proxy=proxy_url, timeout=15.0, follow_redirects=True,
             ) as client:
+                await self.session_manager.pacer.wait()
                 resp = await client.get(url, params=params, headers=headers)
-            self._guard_check(resp)
+            self._guard_check(resp, "stats")
             if resp.status_code in (200, 204) and not resp.text:
                 return None, False                      # answered: no data
             if resp.status_code != 200:
@@ -1041,7 +1043,7 @@ class BetB2BScraper:
             logger.debug("skin=%s result fetch id=%s stopped by the guard: %s", self.skin.name, ident, exc)
             return None, True                           # FAILED (not "no data"): trips the callers' breaker
         except Exception as exc:  # noqa: BLE001 — best-effort
-            self._guard_failure(exc)
+            self._guard_failure(exc, "stats")
             logger.debug("skin=%s result fetch id=%s failed: %s", self.skin.name, ident, exc)
             return None, True
 
@@ -1049,21 +1051,24 @@ class BetB2BScraper:
     # H2H enrichment
     # ------------------------------------------------------------------ #
     # -- security guard (same rules as the feed client) ---------------- #
-    def _guard_gate(self) -> None:
-        """Raise :class:`SiteInCooldown` while this skin is cooling down after a block."""
-        self.session_manager.guard.preflight()
+    def _guard_gate(self, scope: Optional[str] = None) -> None:
+        """Raise :class:`SiteInCooldown` while this skin (or, with ``scope``, just that endpoint
+        group — the optional statistics service) is cooling down."""
+        self.session_manager.guard.preflight(scope)
 
-    def _guard_failure(self, exc: BaseException) -> None:
+    def _guard_failure(self, exc: BaseException, scope: Optional[str] = None) -> None:
         """A direct call got no answer (timeout / dropped connection): count it toward resting
-        the skin, shared with every other component."""
+        the skin (or the ``scope`` endpoint group), shared with every other component."""
         if isinstance(exc, httpx.TransportError):
-            self.session_manager.guard.note_failure()
+            self.session_manager.guard.note_failure(scope)
 
-    def _guard_check(self, resp: httpx.Response) -> None:
+    def _guard_check(self, resp: httpx.Response, scope: Optional[str] = None) -> None:
         """Classify a direct ``httpx`` response; raises :class:`SiteBlocked` on a block
         that needs a cooldown. Direct calls used to bypass the guard, so a challenge
         page there was neither recognised nor rested."""
         self.feed_client.guard_response(resp, str(resp.url), resp.headers.get("content-type", ""))
+        if scope:                                       # an answer came back: that group's streak is over
+            self.session_manager.guard.note_ok(scope)
 
     async def _enrich_with_stat_ids(self, events: List[Event]) -> None:
         """Capture each event's statisticfeed ``entity.id`` while it is
@@ -1145,7 +1150,7 @@ class BetB2BScraper:
                     if halted:
                         return
                     try:
-                        self._guard_gate()
+                        self._guard_gate("stats")
                         params = {
                             "id": eid,
                             "lng": self.skin.language,
@@ -1153,8 +1158,9 @@ class BetB2BScraper:
                             "fcountry": str(self.skin.country),
                             "gr": str(self.skin.gr),
                         }
+                        await self.session_manager.pacer.wait()
                         resp = await client.get(url, params=params, headers=headers)
-                        self._guard_check(resp)
+                        self._guard_check(resp, "stats")
 
                         if resp.status_code == 204:
                             # 204 = no H2H data for this match (minor league).
@@ -1186,7 +1192,7 @@ class BetB2BScraper:
                             logger.warning("skin=%s statisticfeed enrichment stopped: %s",
                                            self.skin.name, exc)
                     except httpx.HTTPError as exc:
-                        self._guard_failure(exc)
+                        self._guard_failure(exc, "stats")
                         logger.warning(
                             "skin=%s H2H HTTP error for event=%s: %s",
                             self.skin.name, eid, exc,
@@ -1244,7 +1250,7 @@ class BetB2BScraper:
                     if halted:
                         return
                     try:
-                        self._guard_gate()
+                        self._guard_gate("stats")
                         params = {
                             "id": eid,
                             "lng": self.skin.language,
@@ -1252,8 +1258,9 @@ class BetB2BScraper:
                             "fcountry": str(self.skin.country),
                             "gr": str(self.skin.gr),
                         }
+                        await self.session_manager.pacer.wait()
                         resp = await client.get(url, params=params, headers=headers)
-                        self._guard_check(resp)
+                        self._guard_check(resp, "stats")
 
                         if resp.status_code == 204:
                             # 204 = no stats for this match (minor league).
@@ -1277,7 +1284,7 @@ class BetB2BScraper:
                             logger.warning("skin=%s statisticfeed enrichment stopped: %s",
                                            self.skin.name, exc)
                     except httpx.HTTPError as exc:
-                        self._guard_failure(exc)
+                        self._guard_failure(exc, "stats")
                         logger.warning(
                             "skin=%s stats HTTP error for event=%s: %s",
                             self.skin.name, eid, exc,

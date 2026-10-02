@@ -110,6 +110,8 @@ class BlockLedger:
         st.consecutive_failures += 1
         if threshold <= 0 or st.consecutive_failures < threshold:
             return 0.0
+        if st.cooldown_until > self._clock():
+            return 0.0      # requests already in flight when the rest began: don't lengthen it
         over = st.consecutive_failures - threshold
         seconds = min(max_cooldown, base_cooldown * (2 ** min(over, 10)))
         st.last_type, st.last_block_at = BlockType.UNREACHABLE.value, self._clock()

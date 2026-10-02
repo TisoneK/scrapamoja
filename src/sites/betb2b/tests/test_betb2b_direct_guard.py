@@ -151,5 +151,27 @@ def test_timeouts_across_components_rest_the_skin_for_everyone(monkeypatch, tmp_
     serve(monkeypatch, handler)
     asyncio.run(s._enrich_with_h2h(events(40)))
     assert len(hits) <= 4 + s.concurrency            # not 40 doomed 15-second waits
-    with pytest.raises(SiteInCooldown):              # another component sees the same rest
-        s.session_manager.guard.preflight()
+    guard = s.session_manager.guard
+    with pytest.raises(SiteInCooldown):              # every statistics caller sees the same rest...
+        guard.preflight("stats")
+    guard.preflight()                                # ...but the odds feed is NOT rested by an optional endpoint
+
+
+def test_direct_calls_are_paced_per_second_not_just_limited_in_flight(monkeypatch, tmp_path):
+    """Four workers on a fast site used to send ~20 requests/s. The skin's pacer now spaces
+    request starts for the feed client and the direct calls alike."""
+    import time
+    from src.security import Pacer
+    s = make_scraper(tmp_path)
+    s.session_manager.pacer = Pacer(40)               # 25 ms apart
+    starts = []
+
+    def handler(req):
+        starts.append(time.monotonic())
+        return httpx.Response(204)                    # "no data": fast, valid
+
+    serve(monkeypatch, handler)
+    asyncio.run(s._enrich_with_h2h(events(12)))
+    starts.sort()
+    assert len(starts) == 12
+    assert starts[-1] - starts[0] >= 11 * 0.02        # not 12 requests in the same instant

@@ -182,6 +182,7 @@ class BetB2BFeedClient:
         )
 
         try:
+            await self.session_manager.pacer.wait()
             resp = await self._client.get(url, headers=headers)
         except httpx.HTTPError as exc:
             if isinstance(exc, httpx.TransportError):      # no answer at all: counts toward resting the skin

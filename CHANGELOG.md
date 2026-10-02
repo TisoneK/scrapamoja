@@ -51,6 +51,22 @@ failures — default six in a row, five minutes, doubling — and an optional
 per-hour request cap is available (`BETB2B_HOURLY_BUDGET`). `probe` now says
 honestly when no cookies were obtained.
 
+Requests are now also paced per second (default 3 a second to one site, across
+all workers; `BETB2B_MAX_RPS`). Limiting how many requests run at once was not
+enough: on a fast site four workers still sent about twenty a second, and the
+sites answered by cutting this machine's connection off for a while. A slow
+optional service (match statistics) that stops answering rests only itself, not
+the odds feed, and requests already in flight when a rest begins no longer
+extend it.
+
+### Added — a guarded `reset` command (2026-10-02)
+
+`betb2b reset` shows the target and how many rows it holds and deletes nothing
+unless `--force` is given. `--scope all` (default) empties every table but
+keeps the structure; `--scope facts` clears only odds, states, head-to-head and
+run history. On a shared remote database, `--also-local` clears the local copy
+and its replay queue too, so the queue cannot refill what was just deleted.
+
 ### Fixed — fewer silent gaps, no junk matches (2026-10-02)
 
 - A match request that times out or is blocked is now retried with a short
