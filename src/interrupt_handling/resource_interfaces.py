@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from abc import ABC, abstractmethod
 
 from .resource_manager import ResourceType, ResourceCleanupTask
+import logging
 
 
 class ResourceInterface(ABC):

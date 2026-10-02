@@ -19,6 +19,7 @@ import weakref
 import json
 
 from .component_interface import IComponent, ComponentContext, ComponentResult
+from functools import wraps
 
 
 class PerformanceMetricType(Enum):

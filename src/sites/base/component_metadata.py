@@ -6,7 +6,7 @@ metadata extraction, validation, and management utilities.
 """
 
 from typing import Dict, Any, Optional, List, Type, Set
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from pathlib import Path
 

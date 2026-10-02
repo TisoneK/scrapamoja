@@ -6,6 +6,7 @@ Infobox processor for Wikipedia articles.
 from typing import Dict, Any, Optional
 import re
 from datetime import datetime, date
+from typing import List
 
 
 class WikipediaInfoboxProcessor:

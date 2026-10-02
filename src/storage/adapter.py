@@ -21,6 +21,7 @@ from src.observability.logger import get_logger
 from src.utils.exceptions import StorageError
 from ..core.snapshot.storage import SnapshotStorage
 from ..core.snapshot.models import SnapshotBundle, SnapshotContext, SnapshotConfig, SnapshotMode, EnumEncoder
+from collections import defaultdict
 
 # Module logger
 logger = get_logger("storage_adapter")

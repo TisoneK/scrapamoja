@@ -16,6 +16,7 @@ import threading
 import time
 
 from .environment_detector import detect_environment, Environment
+from pathlib import Path
 
 
 class FlagType(Enum):

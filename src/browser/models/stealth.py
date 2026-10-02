@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 from enum import Enum
 import structlog
+import random
 
 
 class StealthLevel(Enum):

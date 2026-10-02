@@ -15,12 +15,14 @@ from typing import Dict, Any, List, Optional, Union, Callable, Tuple
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from collections import OrderedDict
 import weakref
 import pickle
 import os
 
 from .component_interface import IComponent, ComponentContext, ComponentResult
+from functools import wraps
 
 
 class CacheStrategy(Enum):

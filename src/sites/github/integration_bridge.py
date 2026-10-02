@@ -15,6 +15,7 @@ from src.sites.base.template.integration_bridge import FullIntegrationBridge, Br
 from src.sites.base.template.selector_loader import FileSystemSelectorLoader
 from .selector_loader import GitHubSelectorLoader
 from .extraction.rules import GitHubExtractionRules
+from datetime import datetime
 
 
 logger = logging.getLogger(__name__)

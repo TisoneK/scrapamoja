@@ -14,6 +14,7 @@ from ..utils.output import OutputFormatter
 from src.browser import BrowserManager, BrowserConfiguration, BrowserType
 from src.selectors import get_selector_engine
 from tests.fixtures.browser_configs import CHROMIUM_HEADLESS_CONFIG
+from pathlib import Path
 
 
 class TestCommand:

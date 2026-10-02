@@ -7,7 +7,8 @@ following the Production Resilience constitution principle.
 
 import asyncio
 import time
-from typing import Optional, Dict, Any, List, Callable, Awaitable
+from typing import Optional, Dict, Any, List, Callable, Awaitable, TypeVar
+from dataclasses import dataclass
 from enum import Enum
 import structlog
 
@@ -16,6 +17,10 @@ from .state_logger import StateOperation, get_state_logger
 from .resilience import resilience_manager, RetryConfig, RetryStrategy
 from .corruption_detector import StateCorruptionDetector, CorruptionReport
 from .encryption import StateEncryption
+from pathlib import Path
+import json
+
+T = TypeVar("T")
 
 
 class StateErrorType(Enum):
