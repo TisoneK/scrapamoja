@@ -409,3 +409,9 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** betb2b had never imported `src.browser`; the package `__init__` pulls in resilience/logging that print on import.
 - **Fix:** lazy import inside `BetB2BSessionManager.profiles` / `_open_page`.
 - **Prevent next time:** in `src/sites/betb2b/` import `src.browser.*` lazily (and keep `src/security/` free of it); run the CLI-entrypoint test after adding any new top-level import.
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50, open-items round)
+- **Problem:** direct mode sent ~20 requests/second and the betb2b hosts then refused TCP connections from the dev machine for tens of minutes — repeatedly across the day. It was explained at various points as "sites dead", "burst throttling" and "geo-block" without measurement; the real number only surfaced when a live run logged 164 match requests in ~8 s. Cause: `client.py` disables its serial spacing in direct mode ("the semaphore is the throttle"), but a semaphore bounds requests IN FLIGHT, not PER SECOND.
+- **Cost:** most of the day's live runs hit a refusing host; two scrapes that "worked" were followed by an hour of unreachability each; confusion about the sites' state.
+- **Fix:** per-skin `Pacer` (`BETB2B_MAX_RPS`, default 3/s) shared by the feed client and the direct calls (ADR-30).
+- **Prevent next time:** before blaming a site, compute the request rate your own run produced (requests ÷ seconds from the log). After any change to concurrency or spacing, check requests/second, not just worker count. Connection timeouts that start right after a run are usually the sites dropping YOUR address.

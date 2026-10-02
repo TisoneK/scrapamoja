@@ -12,9 +12,7 @@ don't remove the line.
 
 | ID | Summary |
 |----|---------|
-| B-2026-10-02-1 | Live-verify the betb2b pipeline once a skin answers (linebet = Gcore JS challenge; betwinner/melbet/22bet time out from the dev IP after bursts). One gentle run (`scrape --direct --skip-processed`, concurrency 4) should confirm: stat-id capture (`v1/Game?id=<event id>` for UPCOMING matches — unverified, ADR-20's addendum says it may not resolve), retry + skin-fallback behaviour, and why so many discovered ids return no event. Do not hammer — the endpoints were hard to reverse-engineer. |
-| B-2026-10-02-2 | Shared per-skin cooldown + hourly request budget: after N timeouts every part of the scraper (discovery, fetch, stat ids, results) should pause that skin for a set time; today each backs off separately. Plus an optional requests-per-hour cap. Protects the costly endpoints. |
-| B-2026-10-02-11 | Guard the direct-httpx calls inside `scraper.py` (GetGameZip/sub-game/stat-id loops, ~4 sites) — they bypass `client.fetch`, so a challenge there is neither classified nor rested. Route them through `session_manager.guard` (`inspect` + `on_block`, `preflight`). |
+| B-2026-10-02-1 | Live-verify the pipeline after the per-second pacing (ADR-30) — the hosts (betwinner/melbet/22bet) were refusing TCP connections from the dev IP when the pacing shipped, probably because the previous run sent ~20 req/s. Once they answer: ONE `scrape --direct --skip-processed` (pacing 3/s, concurrency 4), then check: no connection drops, stat-id capture (`v1/Game?id=<event id>` for UPCOMING matches — unverified), retry + skin-fallback, and why so many discovered ids return no event. If drops recur lower `BETB2B_MAX_RPS`. Do not hammer. |
 
 ### Medium Priority
 
@@ -22,18 +20,14 @@ don't remove the line.
 |----|---------|
 | B-2026-10-02-3 | Rotate the bore.pub proxy password — it was shared in an agent chat. Lives in `memory/secrets/betb2b-proxy` and the (gitignored, commented-out) `src/sites/betb2b/.env`. Operator rule: the proxy is for the website/browser bypass only, never for API calls. |
 | B-2026-10-02-4 | Storage-quota monitor limit for Neon — partial: `BETB2B_DB_LIMIT_MB=1000` is now set in the local `.env` and shipped in `.env.example`; any DEPLOYED worker/service env (Railway or other) still defaults to 500 MB (the Supabase limit) and needs it set. Neon free = 1 GB storage / 100 compute-hours. |
-| B-2026-10-02-14 | `probe` CLI reports `session_harvested: true, cookie_count: 0` without bootstrapping — misleading when diagnosing blocks. Make it run the real bootstrap (or say it did not). |
 | B-2026-10-02-5 | `ledger-mem lint --tree` can never pass in this repo: it flags the `.context_ledger/` routing paths inside `AGENTS.md`/`CLAUDE.md` (the ledger's own entry-point files). 262 ADR citations were stripped from product files this session (0 left); the 40 entry-point path hits remain. See the flaws log for the suggested upstream fix. |
 | B-2026-10-02-12 | Live-verify the security package on a real challenge: (a) operator runs `python -m src.browser.profiles warmup betb2b-<skin> <url>` from an allowed-country egress and confirms later headless runs reuse the validation; (b) exercise HUMAN_HANDOFF and the headed tier end to end (only fakes so far). Cannot be done from the US dev IP while the country block applies. |
-| B-2026-10-02-13 | Direct mode + linebet: its feed now answers a Gcore challenge, and in direct mode (no browser) the guard's wait/escalate rungs cannot act — it only reaches cooldown after ~5 challenged calls. Make the ladder skip browser rungs when there is no browser (straight to failover/cooldown), or route that skin's calls through the Kenyan-proxy browser path. (`ROTATE_PROXY` itself is moot: the proxy is supplied up front from `BETB2B_PROXY_*`.) |
 | B-2026-10-02-10 | linebet: decide whether it is worth supporting. Its website is country-blocked (US) and Gcore WAAP browser validation challenges non-browser clients (ADR-28); the scraper's headless Chromium fails it. Keep linebet last in `BETB2B_FALLBACK_SKINS`; any browser-session approach (operator-validated headed browser, requests kept inside it) needs the operator's go-ahead. |
 
 ### Low Priority
 
 | ID | Summary |
 |----|---------|
-| B-2026-10-02-6 | `reset` CLI for the local/remote store: only `quota --truncate-facts` exists and it keeps `events` (so skip-processed would still skip everything). The operator wiped Neon by hand via SQL. A guarded `reset --all --force` (row counts + confirmation) would replace that. |
-| B-2026-10-02-7 | Reconcile docs still saying Supabase/Railway, the Supabase-specific numbers in `RAILWAY.md`, and AGENTS.md's "same events and ids across sister sites" (ADR-27: ids are mostly, not always, identical; relisting). Storage is now Neon (ADR-26). |
 | B-2026-10-02-8 | Cross-sport check of relist linking (`superseded_by`) and the sub-game filter — verified on basketball only. |
 | B-2026-10-02-9 | Delete the local safety branch `backup/pre-reset-main` once the operator is sure the four dropped `.context` rename commits are not needed (they were superseded by upstream's `.context_ledger` history). |
 
