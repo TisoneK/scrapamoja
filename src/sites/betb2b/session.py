@@ -17,23 +17,48 @@ Recipe:
      client to use.
 
 The harvested session is cached + re-used until either the TTL expires
-or the httpx client sees an auth-error status (401/403/419/440), at
+or the httpx client sees an auth-error status (401/419/440), at
 which point :meth:`BetB2BSessionManager.get_session` re-bootstraps.
+Challenges, country blocks, bans and rate limits are NOT answered with a
+blind re-bootstrap — they go through the :mod:`src.security` guard.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional
+from typing import Any, AsyncIterator, List, Optional
 
 from src.network.proxy import ProxyEndpoint, verify_proxy
 from src.network.session import SessionHarvester, SessionPackage, SessionValidator
+from src.security import (
+    BETB2B_RULES, Action, BlockType, BlockVerdict, BrowserTier, SecurityGuard,
+    SiteBlocked, SiteInCooldown,
+)
+from src.security import resolver as sec_resolver
 
 from .config import BetB2BSkinConfig
 
 logger = logging.getLogger(__name__)
+
+# $BETB2B_PROFILE: "off" → fresh throwaway browser every run (old behaviour);
+# unset → a persistent profile named after the skin; anything else → that name.
+PROFILE_ENV = "BETB2B_PROFILE"
+_MAX_BLOCK_STEPS = 8        # rungs one bootstrap may climb before giving up
+
+
+class _Retry(Exception):
+    """Internal: close this browser and bootstrap again at the (new) tier."""
+
+
+def profile_name_for(skin_name: str) -> Optional[str]:
+    raw = (os.environ.get(PROFILE_ENV) or "").strip()
+    if raw.lower() in ("off", "0", "false", "none", "ephemeral"):
+        return None
+    return raw or f"betb2b-{skin_name}"
 
 
 class BetB2BSessionManager:
@@ -53,6 +78,7 @@ class BetB2BSessionManager:
         grid_wait_ms: int = 20_000,
         proxy_verify_attempts: int = 3,
         proxy_verify_backoff: float = 3.0,
+        security_guard: Optional[SecurityGuard] = None,
     ) -> None:
         self.skin = skin
         self.proxy = proxy
@@ -71,6 +97,17 @@ class BetB2BSessionManager:
         self._session: Optional[SessionPackage] = None
         self._session_lock = asyncio.Lock()
         self._last_bootstrap_at: Optional[datetime] = None
+
+        # Block history is per (skin, egress): a geo block seen direct says
+        # nothing about the same skin through an allowed-country proxy.
+        egress = proxy.id if proxy is not None and not proxy.is_direct else None
+        self.guard = security_guard or SecurityGuard(
+            f"{skin.name}@{egress}" if egress else skin.name,
+            rules=BETB2B_RULES,
+            has_failover=bool(os.environ.get("BETB2B_FALLBACK_SKINS")),
+        )
+        self._profiles: Optional[Any] = None
+        self.profile_name = profile_name_for(skin.name)
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -138,10 +175,118 @@ class BetB2BSessionManager:
             return True
         return False
 
+    @property
+    def profiles(self) -> Any:
+        """The profile manager — imported lazily: ``src.browser`` logs to stdout on import,
+        which would corrupt the CLI's JSON output."""
+        if self._profiles is None:
+            from src.browser.profiles import ProfileManager
+            self._profiles = ProfileManager()
+        return self._profiles
+
+    @asynccontextmanager
+    async def _open_page(self, pw: Any, tier: BrowserTier) -> AsyncIterator[Any]:
+        """Open a browser at ``tier`` and yield ``(context, page)``; always closed on exit.
+
+        Uses the skin's persistent profile (cookies and any passed browser
+        validation survive between runs) unless ``$BETB2B_PROFILE=off`` or the
+        profile is already open in another process, in which case a throwaway
+        browser is used. Tier 0 keeps the skin's configured identity; stronger
+        tiers let the real browser report its own user agent, which is the
+        only consistent one.
+        """
+        from contextlib import AsyncExitStack
+
+        from src.browser.profiles import ProfileInUse
+
+        stealth = self.skin.stealth_profile
+        identity: dict[str, Any] = {
+            "viewport": stealth.get("viewport", {"width": 1536, "height": 864}),
+            "locale": stealth.get("locale", "en-US"),
+            "timezone_id": stealth.get("timezone", "Europe/London"),
+        }
+        if not tier.apply_stealth:
+            identity["user_agent"] = stealth.get("user_agent")
+        proxy_cfg = None
+        if self.proxy is not None and not self.proxy.is_direct:
+            proxy_cfg = self.proxy.to_playwright_proxy() or None
+        headless = bool(stealth.get("headless", True)) and tier.headless
+
+        async def launch(stack: AsyncExitStack, channel: Optional[str]) -> Any:
+            if self.profile_name:
+                try:
+                    return await stack.enter_async_context(self.profiles.open_context(
+                        pw, self.profile_name, headless=headless, channel=channel,
+                        stealth_args=tier.apply_stealth, proxy=proxy_cfg, identity=identity))
+                except ProfileInUse as exc:
+                    logger.warning("skin=%s %s — using a throwaway browser", self.skin.name, exc)
+            kwargs: dict[str, Any] = {"headless": headless}
+            if channel:
+                kwargs["channel"] = channel
+            if tier.apply_stealth:
+                kwargs["args"] = ["--disable-blink-features=AutomationControlled"]
+                kwargs["ignore_default_args"] = ["--enable-automation"]
+            browser = await pw.chromium.launch(**kwargs)
+            stack.push_async_callback(browser.close)
+            ctx_kwargs = dict(identity)
+            if proxy_cfg:
+                ctx_kwargs["proxy"] = proxy_cfg
+            return await browser.new_context(**ctx_kwargs)
+
+        async with AsyncExitStack() as stack:
+            try:
+                context = await launch(stack, tier.channel)
+            except Exception as exc:  # noqa: BLE001
+                if not tier.channel:
+                    raise
+                logger.warning("skin=%s tier %s unavailable (%s) — using bundled Chromium",
+                               self.skin.name, tier.name, str(exc).splitlines()[0])
+                context = await launch(stack, None)
+            if tier.apply_stealth:
+                try:
+                    from src.stealth.anti_detection import AntiDetectionMasker
+                    await AntiDetectionMasker().apply_masks(context)
+                except Exception as exc:  # noqa: BLE001 — masking is an extra, never a blocker
+                    logger.debug("skin=%s stealth masks not applied: %s", self.skin.name, exc)
+            page = context.pages[0] if context.pages else await context.new_page()
+            yield page
+
+    async def _resolve_block(self, page: Any, verdict: BlockVerdict, tier: BrowserTier) -> None:
+        """Walk the policy ladder for a block seen on ``page``.
+
+        Returns when the page is clear. Raises :class:`_Retry` to re-open the
+        browser at a stronger tier, or :class:`SiteBlocked` when nothing the
+        caller can do is left (failover / cooldown / abort).
+        """
+        for _ in range(_MAX_BLOCK_STEPS):
+            decision = self.guard.on_block(verdict)
+            if decision.action is Action.WAIT_FOR_CLEARANCE:
+                clearance = await sec_resolver.wait_for_clearance(page, rules=BETB2B_RULES)
+            elif decision.action is Action.HUMAN_HANDOFF and not tier.headless:
+                clearance = await sec_resolver.human_handoff(
+                    page, site=self.skin.name, rules=BETB2B_RULES)
+            elif decision.action in (Action.ESCALATE_BROWSER, Action.REFRESH_SESSION):
+                raise _Retry()
+            else:
+                raise self.guard.blocked(verdict, decision)
+            if clearance.cleared:
+                logger.info("skin=%s block cleared after %.0fs (%s)", self.skin.name,
+                            clearance.waited_s, decision.action.value)
+                return
+            verdict = clearance.verdict
+        raise self.guard.blocked(verdict)
+
     async def _bootstrap(self) -> SessionPackage:
-        """Run the browser bootstrap → cookie harvest pipeline."""
+        """Run the browser bootstrap → cookie harvest pipeline.
+
+        A block (country, JS challenge, CAPTCHA, …) is classified and answered
+        by the guard's policy — wait it out, retry in a stronger browser, hand
+        to a person — rather than re-bootstrapped blindly; a site that keeps
+        blocking is put on cooldown and surfaces as :class:`SiteBlocked`.
+        """
         if not self.skin.enabled:
             raise RuntimeError(f"skin={self.skin.name} is disabled")
+        self.guard.preflight()   # SiteInCooldown: don't touch a site that just blocked us
 
         # Validate proxy egress country BEFORE opening a browser — saves
         # an expensive Playwright launch if the proxy is misconfigured.
@@ -153,33 +298,27 @@ class BetB2BSessionManager:
                     f"country not in allowed_countries={self.skin.allowed_countries}"
                 )
 
+        for _ in range(_MAX_BLOCK_STEPS):
+            try:
+                session = await self._bootstrap_once(self.guard.tier)
+            except _Retry:
+                continue
+            self.guard.on_success()
+            return session
+        raise RuntimeError(f"skin={self.skin.name}: bootstrap did not settle after {_MAX_BLOCK_STEPS} attempts")
+
+    async def _bootstrap_once(self, tier: BrowserTier) -> SessionPackage:
         from playwright.async_api import async_playwright
 
-        stealth = self.skin.stealth_profile
         logger.info(
-            "skin=%s bootstrapping session via proxy=%s domain=%s",
+            "skin=%s bootstrapping session via proxy=%s domain=%s tier=%s profile=%s",
             self.skin.name,
             self.proxy.id if self.proxy and not self.proxy.is_direct else "DIRECT",
-            self.skin.domain,
+            self.skin.domain, tier.name, self.profile_name or "ephemeral",
         )
 
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=stealth.get("headless", True))
-            try:
-                context_kwargs: dict[str, Any] = {
-                    "user_agent": stealth.get("user_agent"),
-                    "viewport": stealth.get("viewport", {"width": 1536, "height": 864}),
-                    "locale": stealth.get("locale", "en-US"),
-                    "timezone_id": stealth.get("timezone", "Europe/London"),
-                }
-                if self.proxy is not None and not self.proxy.is_direct:
-                    pp = self.proxy.to_playwright_proxy()
-                    if pp:
-                        context_kwargs["proxy"] = pp
-
-                context = await browser.new_context(**context_kwargs)
-                page = await context.new_page()
-
+            async with self._open_page(pw, tier) as page:
                 home_url = self.skin.bootstrap_url("home")
                 logger.info("skin=%s navigating to %s", self.skin.name, home_url)
 
@@ -198,17 +337,12 @@ class BetB2BSessionManager:
                     logger.warning("skin=%s goto home failed: %s", self.skin.name, exc)
                     resp = None
 
-                # Detect geo/WAF block: HTTP 203 → redirect to /en/block.
+                # Classify what we landed on: country block (HTTP 203 →
+                # /en/block), JS browser-validation page, CAPTCHA, ban, ...
                 if resp is not None:
-                    status = resp.status
-                    final_url = page.url
-                    if status == 203 or final_url.endswith("/block"):
-                        raise RuntimeError(
-                            f"skin={self.skin.name}: geo/WAF block detected "
-                            f"(status={status}, url={final_url}). The proxy "
-                            f"egress is not in an allowed country for this skin "
-                            f"(allowed={self.skin.allowed_countries})."
-                        )
+                    verdict = await self.guard.inspect_page(page, resp.status)
+                    if verdict.blocked:
+                        await self._resolve_block(page, verdict, tier)
 
                 # Best-effort consent dismissal.
                 await self._dismiss_consent(page)
@@ -251,8 +385,6 @@ class BetB2BSessionManager:
                     )
 
                 return session
-            finally:
-                await browser.close()
 
     async def _verify_proxy_country(self) -> bool:
         """Verify the proxy's egress country is in the skin's allowed list.
@@ -358,32 +490,22 @@ class BetB2BSessionManager:
         else:
             route = "live" if is_live else "line"
             url = self.skin.bootstrap_url(route)
-        stealth = self.skin.stealth_profile
+        try:
+            self.guard.preflight()
+        except SiteInCooldown as exc:
+            logger.warning("skin=%s dom-render skipped: %s", self.skin.name, exc)
+            return []
 
         try:
             async with async_playwright() as pw:
-                browser = await pw.chromium.launch(headless=stealth.get("headless", True))
-                try:
-                    context_kwargs: dict[str, Any] = {
-                        "user_agent": stealth.get("user_agent"),
-                        "viewport": stealth.get("viewport", {"width": 1536, "height": 864}),
-                        "locale": stealth.get("locale", "en-US"),
-                        "timezone_id": stealth.get("timezone", "Europe/London"),
-                    }
-                    if self.proxy is not None and not self.proxy.is_direct:
-                        pp = self.proxy.to_playwright_proxy()
-                        if pp:
-                            context_kwargs["proxy"] = pp
-
-                    context = await browser.new_context(**context_kwargs)
-                    page = await context.new_page()
-
+                async with self._open_page(pw, self.guard.tier) as page:
+                    resp = None
                     try:
                         # 'commit' is the earliest non-empty document state.
                         # linebet's SPA keeps a long-poll open after load,
                         # so 'domcontentloaded'/'networkidle' can hang through
                         # slow residential proxies.
-                        await page.goto(
+                        resp = await page.goto(
                             url, wait_until="commit",
                             timeout=self.bootstrap_timeout_ms,
                         )
@@ -394,6 +516,11 @@ class BetB2BSessionManager:
                         )
                         # Even on timeout the page may be partially loaded —
                         # give it a short grace period and try anyway.
+
+                    if resp is not None:
+                        verdict = await self.guard.inspect_page(page, resp.status)
+                        if verdict.blocked:
+                            await self._resolve_block(page, verdict, self.guard.tier)
 
                     await self._dismiss_consent(page)
                     await asyncio.sleep(wait_s)
@@ -440,8 +567,13 @@ class BetB2BSessionManager:
                         self.skin.name, len(events), url,
                     )
                     return events
-                finally:
-                    await browser.close()
+        except _Retry:
+            logger.warning("skin=%s dom-render blocked; escalated browser tier for the next attempt",
+                           self.skin.name)
+            return []
+        except SiteBlocked as exc:
+            logger.warning("skin=%s dom-render skipped: %s", self.skin.name, exc)
+            return []
         except Exception as exc:  # noqa: BLE001
             logger.warning("skin=%s dom-render failed: %s", self.skin.name, exc)
             return []

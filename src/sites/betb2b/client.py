@@ -21,6 +21,7 @@ import httpx
 
 from src.network.proxy import ProxyEndpoint
 from src.network.session import SessionPackage
+from src.security import Action, BlockType
 
 from .config import BetB2BSkinConfig
 from .extraction.models import CapturedFeedResponse
@@ -151,6 +152,10 @@ class BetB2BFeedClient:
             await self.start()
         assert self._client is not None
 
+        # A site that recently challenged/banned us is left alone (raises
+        # SiteInCooldown) instead of being hit again by every id in the batch.
+        self.session_manager.guard.preflight()
+
         # Rate-limit politely.
         await self._respect_rate_limit()
 
@@ -206,6 +211,7 @@ class BetB2BFeedClient:
             self.session_manager.clear()
 
         content_type = resp.headers.get("content-type", "")
+        self._guard_response(resp, url, content_type)
         rules = BetB2BExtractionRules(self.skin)
         return rules.decode_response(
             url=url,
@@ -321,6 +327,32 @@ class BetB2BFeedClient:
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
+    # Block types this client acts on. A bare 403/406 is deliberately NOT
+    # here: some endpoints answer 406 as part of the auth-header rotation and
+    # that is handled by the DOM path, not by cooling the whole skin down.
+    _ACTED_ON = (BlockType.GEO_BLOCK, BlockType.JS_CHALLENGE, BlockType.CAPTCHA,
+                 BlockType.IP_BANNED, BlockType.RATE_LIMITED)
+
+    def _guard_response(self, resp: httpx.Response, url: str, content_type: str) -> None:
+        """Classify the response; on a real block record it and fail fast or re-session."""
+        guard = self.session_manager.guard
+        is_json_ok = resp.status_code == 200 and "json" in content_type.lower()
+        verdict = guard.inspect(
+            resp.status_code, str(resp.url), resp.headers,
+            None if is_json_ok else resp.content,
+        )
+        if verdict.type not in self._ACTED_ON:
+            if is_json_ok:
+                guard.on_success()
+            return
+        decision = guard.on_block(verdict)
+        if decision.action in (Action.COOLDOWN, Action.FAILOVER_SITE, Action.ABORT):
+            raise guard.blocked(verdict, decision)
+        if not self.direct:
+            # The harvested cookies are no good against a challenge: drop them
+            # so the next call bootstraps again at the guard's (escalated) tier.
+            self.session_manager.clear()
+
     async def _respect_rate_limit(self) -> None:
         if self._min_interval <= 0 or self._last_request_at is None:
             self._last_request_at = time.monotonic()

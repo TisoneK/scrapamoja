@@ -28,6 +28,7 @@ geo-blocking, and selector drift.
 src/
 ├── api/                    # FastAPI control plane (feature flags, failures, audit)
 ├── browser/                # Browser lifecycle, stealth, fingerprinting, sessions
+│   └── profiles/           # Persistent named Chromium profiles + warm-up CLI (site-agnostic)
 ├── config/                 # Global settings (settings.py)
 ├── core/
 │   ├── shutdown/           # Graceful shutdown coordinator
@@ -39,6 +40,7 @@ src/
 ├── network/                # HTTP client (httpx), HAR export/replay, proxy management, session harvesting
 ├── observability/          # Events, logger, metrics
 ├── resilience/             # Retry, circuit breaking, failure classification, abort management
+├── security/               # Block detection/classification, response ladders, cooldown ledger, challenge handling
 ├── selectors/              # Semantic selector engine (CSS, XPath, text-anchor, adaptive, fallback chains)
 │   ├── adaptive/           # Adaptive engine: confidence scoring, failure detection, DOM analysis, snapshot capture
 │   │   ├── api/            # FastAPI sub-app (health, audit, failures, triage, confidence, feature flags)
@@ -198,6 +200,52 @@ See `reviews/2026-07-21-review.md` + `tasks/current.md` Session 25 plan.
 - API endpoints: `Get1x2_VZip`, `GetSportsShortZip`, `WebGetTopChampsZip`, `GetTopGamesStatZip`
 - Response format: `{"Success": true, "Value": [{I, O1, O2, SN, SI, L, LI, S, SC, E[], AE[]}]}`
 - **H2H / statistics:** `/service-api/statisticfeed/api/v1/Game/h2h?id={gameId}&lng=en&ref={partner}&fcountry={country}&gr={gr}` — fires at bootstrap on scheduled match pages. The `id` param is **NOT** the URL event ID; it's found in `GetGameZip` or `GetSubsOptionsForGame` responses. Skins vary `partner`/`gr`/`country` values (see YAML). See `docs/H2H_DISCOVERY.md` for full spec.
+
+### Browser Profiles & Blockage Handling (`src/browser/profiles/`, `src/security/`)
+
+Two framework-level, site-agnostic pieces; betb2b is the first user.
+
+**Profiles** — a named, persistent Chromium user-data dir (`~/.scrapamoja/profiles/<name>/`,
+override `$SCRAPAMOJA_PROFILE_DIR`) so cookies and a passed browser-validation survive between
+runs and the site sees one long-lived browser instead of a new one each time. betb2b uses
+`betb2b-<skin>` (`$BETB2B_PROFILE=off` → throwaway browser; a name → that profile). One process
+per profile (pid lock); a busy profile falls back to a throwaway browser.
+
+```bash
+python -m src.browser.profiles list
+python -m src.browser.profiles warmup betb2b-linebet https://linebet.com/en   # headed: pass the check by hand, close the window
+python -m src.browser.profiles delete betb2b-linebet
+```
+
+**Security guard** — every response/page is classified (`src/security/detector.py`) as
+`geo_block` · `js_challenge` (Gcore/Cloudflare/…) · `captcha` · `rate_limited` · `ip_banned` ·
+`access_denied` · `auth_expired`, and each type has its own ladder (`policy.py`) instead of the old
+"re-bootstrap on 403":
+
+| Block | Ladder (attempt 1 → n) |
+|-------|------------------------|
+| `js_challenge` | wait for the page to self-clear → real Chrome (+masks) → headed Chrome → human handoff* → failover* → cooldown |
+| `captcha` | stronger browser → human handoff* → failover* → cooldown (no third-party solver) |
+| `geo_block` | proxy rotation* → failover* → cooldown — a browser change cannot fix a country block |
+| `rate_limited` | cooldown (honours `Retry-After`, doubles per repeat) |
+| `ip_banned` | proxy rotation* → failover* → cooldown |
+| `access_denied` / `auth_expired` | refresh session once → (stronger browser) → cooldown |
+
+\* only when available: a person at a terminal (`$SCRAPAMOJA_INTERACTIVE`) with a display; skins in
+`$BETB2B_FALLBACK_SKINS`; a proxy pool. Unavailable rungs are skipped. Cooldowns persist in
+`~/.scrapamoja/security/ledger.json` (`$SCRAPAMOJA_SECURITY_DIR`) so a fresh run does not walk
+back into a site that just blocked the last one; a cooling site raises `SiteInCooldown` before any
+request, and a site that stays blocked raises `SiteBlocked` (the CLI's skin fallback picks it up).
+Browser tiers: bundled headless Chromium → installed Google Chrome headless → headed Chrome.
+
+```bash
+python -m src.security status          # per-site streak, escalation tier, cooldown left
+python -m src.security clear linebet   # forget a site's blocks
+```
+
+Bare 403/406 from a feed endpoint are deliberately **not** treated as a block by the betb2b client
+(406 is the known auth-header rotation; DOM extraction handles it). The direct-httpx calls made
+inside `scraper.py` (not via `client.fetch`) are not yet guarded.
 
 ### Telemetry System (`src/telemetry/`) — ✅ Wired into betb2b
 
