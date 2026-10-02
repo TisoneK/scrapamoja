@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import time
 
 from .ledger import BlockLedger
@@ -16,7 +17,13 @@ def main(argv=None) -> int:
     sub.add_parser("status", help="show every site's block state")
     p = sub.add_parser("clear", help="forget a site's blocks, cooldown and escalation tier")
     p.add_argument("site")
+    e = sub.add_parser("evidence", help="what blocked/failed requests looked like (captured automatically)")
+    e.add_argument("--days", type=float, default=1.0, help="how far back to look (default 1)")
+    e.add_argument("--site", default=None)
+    e.add_argument("--tail", type=int, default=0, help="also print the last N raw records")
     a = ap.parse_args(argv)
+    if a.cmd == "evidence":
+        return _evidence(a)
     led = BlockLedger()
     if a.cmd == "status":
         if not led._sites:
@@ -31,6 +38,30 @@ def main(argv=None) -> int:
     else:
         led.clear(a.site)
         print(f"cleared {a.site}")
+    return 0
+
+
+def _evidence(a) -> int:
+    from .evidence import EvidenceLog
+    log = EvidenceLog()
+    recs = log.read(days=a.days, site=a.site)
+    if not recs:
+        print(f"no evidence in the last {a.days:g} day(s) ({log.dir})")
+        return 0
+    print(f"{len(recs)} record(s) in the last {a.days:g} day(s)  ({log.dir})\n")
+    for g in log.summarise(recs):
+        what = g["type"] or g["error"] or g["kind"]
+        vendor = f"/{g['vendor']}" if g["vendor"] else ""
+        status = f" status={g['status']}" if g["status"] else ""
+        print(f"{g['count']:>5}x  {g['site']:<12} {g['kind']:<12} {what}{vendor}{status}")
+        print(f"        {g['first']} -> {g['last']}")
+        ex = g["example"] or {}
+        if ex.get("url") or ex.get("body"):
+            print(f"        e.g. {ex.get('url') or ''}  {(ex.get('body') or '')[:110]!r}")
+    if a.tail:
+        print("\nlast raw records:")
+        for r in recs[-a.tail:]:
+            print(json.dumps(r, default=str)[:400])
     return 0
 
 

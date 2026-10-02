@@ -23,6 +23,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import os
 import logging
 import time
 import uuid
@@ -420,6 +421,10 @@ class BetB2BTelemetry:
         """
         if not self.enabled or not self.snapshot_on_success:
             return None
+        # A run that found nothing new (everything already stored) has nothing to audit or diff.
+        # Blocks and failures are recorded as evidence by the security guard, not here.
+        if result_data.get("event_count") == 0:
+            return None
 
         self._snapshot_counter += 1
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -446,12 +451,30 @@ class BetB2BTelemetry:
             logger.warning("skin=%s failed to write result snapshot: %s", self.skin.name, exc)
             return None
 
+        self._prune_result_snapshots(snapshot_dir, f"{self.skin.name}_{action}_")
         self.record_snapshot_captured(
             snapshot_type="result",
             path=str(filepath),
             size_bytes=filepath.stat().st_size,
         )
         return str(filepath)
+
+    @staticmethod
+    def _prune_result_snapshots(directory: Path, prefix: str) -> None:
+        """Keep only the newest ``BETB2B_KEEP_RESULT_SNAPSHOTS`` (default 20) result snapshots
+        for this skin+action; every successful run used to leave a full dump forever."""
+        try:
+            keep = int(os.environ.get("BETB2B_KEEP_RESULT_SNAPSHOTS", "20"))
+        except ValueError:
+            keep = 20
+        if keep <= 0:
+            return
+        try:
+            files = sorted(directory.glob(f"{prefix}*.json"))      # names embed a UTC timestamp
+            for old in files[:-keep]:
+                old.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     async def _save_page_html_direct(
         self,

@@ -231,3 +231,19 @@ def test_discovery_skips_outrights_before_any_per_match_request(monkeypatch, tmp
     s.feed_client.fetch_sports, s.feed_client.fetch_champ = sports, champ
     pairs = asyncio.run(s.discover_ids())
     assert [i for i, _ in pairs] == ["10", "13"]          # only the two real matches
+
+
+def test_result_snapshots_are_capped_and_empty_runs_are_not_dumped(tmp_path, monkeypatch):
+    """132 full result dumps (73 MB, mostly zero-event 'nothing new' runs) piled up with no cap."""
+    import time
+    from src.sites.betb2b.telemetry_integration import BetB2BTelemetry
+    monkeypatch.setenv("BETB2B_KEEP_RESULT_SNAPSHOTS", "3")
+    tel = BetB2BTelemetry(_load_skin_linebet(), output_dir=str(tmp_path / "t"))
+    paths = []
+    for i in range(6):
+        paths.append(tel.capture_result_snapshot(action="list_prematch",
+                                                 result_data={"event_count": 5, "events": [i]}))
+        time.sleep(1.05)                                      # file names carry a 1-second timestamp
+    kept = sorted((tmp_path / "t" / "result_snapshots").glob("*.json"))
+    assert len(kept) == 3 and kept[-1].name == paths[-1].rsplit("/", 1)[-1]   # newest survive
+    assert tel.capture_result_snapshot(action="list_prematch", result_data={"event_count": 0}) is None

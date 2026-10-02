@@ -21,6 +21,7 @@ from typing import Any, Callable, Optional
 
 from . import resolver
 from .detector import DEFAULT_RULES, SiteRules, classify
+from .evidence import EvidenceLog
 from .ledger import BlockLedger
 from .models import Action, BlockType, BlockVerdict, Decision, SiteBlocked, SiteInCooldown
 from .policy import BlockPolicy
@@ -44,12 +45,16 @@ class SecurityGuard:
         fail_threshold: int = 6,
         fail_cooldown: float = 300.0,
         hourly_budget: int = 0,
+        evidence: Optional[EvidenceLog] = None,
     ):
         self.site = site
         self.rules = rules
         self.fail_threshold, self.fail_cooldown = fail_threshold, fail_cooldown
         self.hourly_budget = hourly_budget      # requests per hour per site; 0 = unlimited
         self.ledger = ledger or BlockLedger()
+        # Evidence of every block / unreachable request, captured here because every request
+        # passes through this guard (see evidence.py). Defaults to a directory beside the ledger.
+        self.evidence = evidence or EvidenceLog(self.ledger.path.parent / "evidence")
         self.interactive = resolver.interactive_allowed() if interactive is None else interactive
         self.policy = policy or BlockPolicy()
         unavailable = set(self.policy.unavailable)
@@ -88,11 +93,13 @@ class SecurityGuard:
         if over > 0:
             raise SiteInCooldown(self.site, over, BlockType.RATE_LIMITED)
 
-    def note_failure(self, scope: Optional[str] = None) -> bool:
+    def note_failure(self, scope: Optional[str] = None, *, error: Optional[BaseException] = None,
+                     url: str = "") -> bool:
         """A request FAILED to get any answer (timeout / dropped connection). After a run
         of them the site (or just the ``scope`` endpoint group) is rested for everyone
         sharing this guard. True if that began."""
         key = self._key(scope)
+        self.evidence.record("unreachable", self.site, url=url, error=error, scope=scope)
         seconds = self.ledger.record_failure(key, self.fail_threshold, self.fail_cooldown)
         if seconds:
             logger.warning("site=%s unreachable (%d failures in a row) -> resting %.0fs", key,
@@ -110,10 +117,19 @@ class SecurityGuard:
     # -- classification --------------------------------------------------- #
     def inspect(self, status: Optional[int] = None, url: str = "", headers=None,
                 body=None, title: str = "") -> BlockVerdict:
-        return classify(status, url, headers, body, title, self.rules)
+        verdict = classify(status, url, headers, body, title, self.rules)
+        if verdict.blocked:
+            self.evidence.record("block", self.site, url=url, status=status,
+                                 response_headers=headers, body=body, verdict=verdict,
+                                 extra={"title": title} if title else None)
+        return verdict
 
     async def inspect_page(self, page: Any, status: Optional[int] = None) -> BlockVerdict:
-        return await resolver.inspect_page(page, status, self.rules)
+        verdict = await resolver.inspect_page(page, status, self.rules)
+        if verdict.blocked:
+            self.evidence.record("block", self.site, url=verdict.url, status=status,
+                                 verdict=verdict, extra={"via": "browser page"})
+        return verdict
 
     # -- decisions -------------------------------------------------------- #
     def on_block(self, verdict: BlockVerdict) -> Decision:

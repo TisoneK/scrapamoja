@@ -6,6 +6,22 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Added — blocked and failed requests now leave evidence automatically (2026-10-02)
+
+Working out why a site was dropping or challenging us took hand-made probes,
+because the existing snapshot tooling only recorded successful runs (and, in
+browser mode, page snapshots) and nothing for the direct requests the scraper
+actually makes. Now, every challenge page, geo block, ban, timeout or dropped
+connection is recorded the moment it happens, in the snapshot system's own
+compact, redacted format (what the response said, which provider's page it was,
+which exception, how often). Identical failures are stored a few times and then
+only counted; old days are deleted after a week. Read it with
+`python -m src.security evidence` (`--days`, `--site`, `--tail`). Scraping
+outright and placeholder listings that are skipped are recorded too. The
+snapshot folder no longer grows without limit: only the newest 20 results per
+site and action are kept (`BETB2B_KEEP_RESULT_SNAPSHOTS`), and runs that found
+nothing new are not dumped.
+
 ### Fixed — about 85 modules that could not be loaded at all now load (2026-10-02)
 
 A check that tries to load every module found that roughly a hundred of them

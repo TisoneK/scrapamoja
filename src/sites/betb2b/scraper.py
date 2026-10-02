@@ -612,7 +612,7 @@ class BetB2BScraper:
             logger.warning("skin=%s HTML harvest skipped: %s", self.skin.name, exc)
             return []
         except httpx.HTTPError as exc:
-            self._guard_failure(exc)
+            self._guard_failure(exc, url=url)
             logger.warning("skin=%s HTML harvest GET %s failed: %s", self.skin.name, url, exc)
             return []
 
@@ -770,6 +770,9 @@ class BetB2BScraper:
         if skipped_non_match:
             logger.info("skin=%s discovery skipped %d non-match listings (outrights/placeholders) "
                         "without fetching them", self.skin.name, skipped_non_match)
+            self.session_manager.guard.evidence.record(
+                "discovery", self.skin.name, extra={"skipped_non_match": skipped_non_match,
+                                                    "kept": len(out), "root": root})
         logger.info("skin=%s direct discovery: %d leagues → %d events (root=%s)",
                     self.skin.name, len(leagues), len(out), root)
         return list(out.items())
@@ -1052,7 +1055,7 @@ class BetB2BScraper:
             logger.debug("skin=%s result fetch id=%s stopped by the guard: %s", self.skin.name, ident, exc)
             return None, True                           # FAILED (not "no data"): trips the callers' breaker
         except Exception as exc:  # noqa: BLE001 — best-effort
-            self._guard_failure(exc, "stats")
+            self._guard_failure(exc, "stats", url)
             logger.debug("skin=%s result fetch id=%s failed: %s", self.skin.name, ident, exc)
             return None, True
 
@@ -1082,11 +1085,11 @@ class BetB2BScraper:
         group — the optional statistics service) is cooling down."""
         self.session_manager.guard.preflight(scope)
 
-    def _guard_failure(self, exc: BaseException, scope: Optional[str] = None) -> None:
+    def _guard_failure(self, exc: BaseException, scope: Optional[str] = None, url: str = "") -> None:
         """A direct call got no answer (timeout / dropped connection): count it toward resting
         the skin (or the ``scope`` endpoint group), shared with every other component."""
         if isinstance(exc, httpx.TransportError):
-            self.session_manager.guard.note_failure(scope)
+            self.session_manager.guard.note_failure(scope, error=exc, url=url)
 
     def _guard_check(self, resp: httpx.Response, scope: Optional[str] = None) -> None:
         """Classify a direct ``httpx`` response; raises :class:`SiteBlocked` on a block
@@ -1216,7 +1219,7 @@ class BetB2BScraper:
                             logger.warning("skin=%s statisticfeed enrichment stopped: %s",
                                            self.skin.name, exc)
                     except httpx.HTTPError as exc:
-                        self._guard_failure(exc, "stats")
+                        self._guard_failure(exc, "stats", url)
                         logger.warning(
                             "skin=%s H2H HTTP error for event=%s: %s",
                             self.skin.name, eid, exc,
@@ -1306,7 +1309,7 @@ class BetB2BScraper:
                             logger.warning("skin=%s statisticfeed enrichment stopped: %s",
                                            self.skin.name, exc)
                     except httpx.HTTPError as exc:
-                        self._guard_failure(exc, "stats")
+                        self._guard_failure(exc, "stats", url)
                         logger.warning(
                             "skin=%s stats HTTP error for event=%s: %s",
                             self.skin.name, eid, exc,

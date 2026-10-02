@@ -16,13 +16,14 @@ Browser identity that survives between runs lives in
 from .detector import BETB2B_RULES, DEFAULT_RULES, SiteRules, classify
 from .guard import SecurityGuard
 from .ledger import BlockLedger
+from .evidence import EvidenceLog
 from .pacer import Pacer
 from .models import Action, BlockType, BlockVerdict, Decision, SiteBlocked, SiteInCooldown
 from .policy import BlockPolicy
 from .tiers import ALL_TIERS, BrowserTier, available_tiers
 
 __all__ = [
-    "SecurityGuard", "Pacer", "BlockLedger", "BlockPolicy", "SiteRules", "classify",
+    "SecurityGuard", "Pacer", "EvidenceLog", "BlockLedger", "BlockPolicy", "SiteRules", "classify",
     "BETB2B_RULES", "DEFAULT_RULES", "BlockType", "BlockVerdict", "Action", "Decision",
     "SiteBlocked", "SiteInCooldown", "BrowserTier", "ALL_TIERS", "available_tiers",
 ]

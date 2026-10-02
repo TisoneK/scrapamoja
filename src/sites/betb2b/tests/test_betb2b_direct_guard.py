@@ -199,3 +199,29 @@ def test_direct_calls_share_one_pooled_client(monkeypatch, tmp_path):
         await s.close()                      # no-op when never started; must not raise
     asyncio.run(go())
     assert len(built) == 1                   # not 1 + 1 + 6
+
+
+def test_a_challenge_on_a_direct_call_leaves_evidence_without_anyone_asking(monkeypatch, tmp_path):
+    """The point of the evidence log: the Gcore page that stopped H2H is on disk afterwards, in the
+    snapshot system's normalised form, with no curl probes needed to find out what happened."""
+    s = make_scraper(tmp_path)
+    serve(monkeypatch, lambda req: httpx.Response(
+        200, headers={"content-type": "text/html", "server": "gcore"}, text=GCORE))
+    asyncio.run(s._enrich_with_h2h(events(6)))
+    recs = s.session_manager.guard.evidence.read(days=1)
+    blocks = [r for r in recs if r["kind"] == "block"]
+    assert blocks and blocks[0]["verdict"]["vendor"] == "gcore"
+    assert "Browser Validation" in blocks[0]["response"]["body"]
+    assert blocks[0]["url"].endswith("/statisticfeed/api/v1/Game/h2h")
+
+
+def test_timeouts_on_direct_calls_are_recorded_by_exception_class(monkeypatch, tmp_path):
+    s = make_scraper(tmp_path)
+
+    def handler(req):
+        raise httpx.ConnectTimeout("dropped", request=req)
+
+    serve(monkeypatch, handler)
+    asyncio.run(s._enrich_with_h2h(events(4)))
+    rows = s.session_manager.guard.evidence.summarise(s.session_manager.guard.evidence.read(days=1))
+    assert any(r["kind"] == "unreachable" and r["error"] == "ConnectTimeout" for r in rows)
