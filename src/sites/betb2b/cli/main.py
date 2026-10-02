@@ -21,6 +21,14 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Pick up DATABASE_URL / BETB2B_* from a repo-root .env (gitignored) if present.
+# Real environment variables win (override=False).
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[4] / ".env", override=False)
+except ImportError:  # python-dotenv is optional here
+    pass
+
 _VALID_ACTIONS = ("list_live", "list_prematch", "list_all", "raw_capture", "sports_short", "top_champs")
 
 # Friendly betting-vocabulary words → canonical action. Both the positional
