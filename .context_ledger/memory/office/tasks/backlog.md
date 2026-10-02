@@ -14,6 +14,7 @@ don't remove the line.
 |----|---------|
 | B-2026-10-02-1 | Live-verify the betb2b pipeline once a skin answers (linebet = Gcore JS challenge; betwinner/melbet/22bet time out from the dev IP after bursts). One gentle run (`scrape --direct --skip-processed`, concurrency 4) should confirm: stat-id capture (`v1/Game?id=<event id>` for UPCOMING matches — unverified, ADR-20's addendum says it may not resolve), retry + skin-fallback behaviour, and why so many discovered ids return no event. Do not hammer — the endpoints were hard to reverse-engineer. |
 | B-2026-10-02-2 | Shared per-skin cooldown + hourly request budget: after N timeouts every part of the scraper (discovery, fetch, stat ids, results) should pause that skin for a set time; today each backs off separately. Plus an optional requests-per-hour cap. Protects the costly endpoints. |
+| B-2026-10-02-11 | Guard the direct-httpx calls inside `scraper.py` (GetGameZip/sub-game/stat-id loops, ~4 sites) — they bypass `client.fetch`, so a challenge there is neither classified nor rested. Route them through `session_manager.guard` (`inspect` + `on_block`, `preflight`). |
 
 ### Medium Priority
 
@@ -22,6 +23,8 @@ don't remove the line.
 | B-2026-10-02-3 | Rotate the bore.pub proxy password — it was shared in an agent chat. Lives in `memory/secrets/betb2b-proxy` and the (gitignored, commented-out) `src/sites/betb2b/.env`. Operator rule: the proxy is for the website/browser bypass only, never for API calls. |
 | B-2026-10-02-4 | Storage-quota monitor limit for Neon — partial: `BETB2B_DB_LIMIT_MB=1000` is now set in the local `.env` and shipped in `.env.example`; any DEPLOYED worker/service env (Railway or other) still defaults to 500 MB (the Supabase limit) and needs it set. Neon free = 1 GB storage / 100 compute-hours. |
 | B-2026-10-02-5 | `ledger-mem lint --tree` can never pass in this repo: it flags the `.context_ledger/` routing paths inside `AGENTS.md`/`CLAUDE.md` (the ledger's own entry-point files). 262 ADR citations were stripped from product files this session (0 left); the 40 entry-point path hits remain. See the flaws log for the suggested upstream fix. |
+| B-2026-10-02-12 | Live-verify the security package on a real challenge: (a) operator runs `python -m src.browser.profiles warmup betb2b-<skin> <url>` from an allowed-country egress and confirms later headless runs reuse the validation; (b) exercise HUMAN_HANDOFF and the headed tier end to end (only fakes so far). Cannot be done from the US dev IP while the country block applies. |
+| B-2026-10-02-13 | `ROTATE_PROXY` rung has no pool behind it (`has_proxy_pool` is never set). Wire `src/network/proxy` / `src/stealth/proxy_manager` into `SecurityGuard` — keeping the operator rule: proxies for the website/browser path only, never API calls. |
 | B-2026-10-02-10 | linebet: decide whether it is worth supporting. Its website is country-blocked (US) and Gcore WAAP browser validation challenges non-browser clients (ADR-28); the scraper's headless Chromium fails it. Keep linebet last in `BETB2B_FALLBACK_SKINS`; any browser-session approach (operator-validated headed browser, requests kept inside it) needs the operator's go-ahead. |
 
 ### Low Priority

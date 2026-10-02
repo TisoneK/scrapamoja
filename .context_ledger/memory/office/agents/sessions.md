@@ -105,3 +105,13 @@ at session start). Rotate with context-history.
 - **Report:** .context_ledger/memory/office/reviews/2026-10-02-review.md
 - **Follow-up (same session):** operator-requested research into linebet's new Gcore WAAP protection — country block on the website + browser validation (JS challenge) for non-browser clients; recorded as ADR-28 with a correction to the 2026-07-17 'not geo-blocking' conclusion; no scraper code changed. `.env.example` shipped with non-secret defaults.
 - **Protocol slips (operator-flagged mid-session):** read kickoff then skipped Phase 1/roster/gates/session log for a long stretch; destructive `git reset --hard` before reading the ledger (backup branch kept); first bookkeeping used the wrong backlog format and no report; late check-in. All corrected in-session — see inefficiencies.
+
+---
+## 2026-10-02 — Session 51 (Noor/S449)
+- **Agent:** Noor (S449) | **Model:** claude-sonnet-5-5 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** engineer | **Core:** 1.1.3
+- **Task:** operator: handle (1) user/browser profiles and (2) a website security package — how scrapamoja handles blockages, e.g. the logged linebet Gcore page. Operator decisions: profiles are a general framework feature, not site-specific; the security package includes challenge handling/evasion.
+- **Commits:** 5 product (`a7cc233` security package, `7cf4572` profiles, `1372368` betb2b wiring + docs, CHANGELOG) + ledger (check-in `45e08b0`, wrap).
+- **Outcome:** done (work) — `src/security/` (detector for geo/JS-challenge/CAPTCHA/rate-limit/ban/access-denied/auth-expired, per-type ladders, persisted cooldown ledger, browser tiers bundled-Chromium → real Chrome → headed, wait/human-handoff resolver, `python -m src.security status|clear`); `src/browser/profiles/` (persistent named profiles, pid lock, headed `warmup` CLI); betb2b bootstrap/DOM-render/feed client routed through the guard with a per-skin profile. A block now costs ≤5 requests then a cooldown instead of a re-bootstrap storm. Live: linebet = Gcore handshake waited out → country block classified; betwinner website also 203 geo from the US IP; real-Chrome tier verified (webdriver masked, real UA). ADR-29 supersedes ADR-28's "build nothing" half; scope of evasion stated (fidelity + patience + human only — no CAPTCHA solver, no TLS spoofing, no cookie export). Suite 323 passed (37 new: security 17, profiles 11, betb2b integration 9).
+- **Open items:** `tasks/backlog.md` B-2026-10-02-11 (guard direct-httpx calls in scraper.py), -12 (live verify warm-up/handoff/headed from an allowed-country egress), -13 (proxy pool for ROTATE_PROXY); earlier items unchanged.
+- **Notes:** none
+- **Report:** .context_ledger/memory/office/reviews/2026-10-02-review-2.md

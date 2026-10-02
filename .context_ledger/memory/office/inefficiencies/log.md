@@ -402,3 +402,10 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** trusted a recorded conclusion over the page the site actually shows; didn't open the site in a browser until the operator did.
 - **Fix:** ADR-28 records the two layers (country block on the website; Gcore WAAP browser validation for non-browser clients).
 - **Prevent next time:** when a site blocks a client, look at what a real browser sees (screenshot) before deciding the cause; treat recorded root causes as hypotheses.
+---
+## 2026-10-02 — Noor (S449) / claude-sonnet-5-5 (Session 51, `src.browser` import prints to stdout)
+- **Problem:** importing `src.browser` (even `src.browser.profiles`) runs the framework's structlog setup, which writes `[debug] Retry config registered …` lines to **stdout**; the betb2b CLI prints JSON on stdout, so a top-level import in `session.py` broke `test_documented_module_entry_points_actually_run` (`JSONDecodeError: Extra data`).
+- **Cost:** one failed suite run + a diagnosis round.
+- **Cause:** betb2b had never imported `src.browser`; the package `__init__` pulls in resilience/logging that print on import.
+- **Fix:** lazy import inside `BetB2BSessionManager.profiles` / `_open_page`.
+- **Prevent next time:** in `src/sites/betb2b/` import `src.browser.*` lazily (and keep `src/security/` free of it); run the CLI-entrypoint test after adding any new top-level import.
