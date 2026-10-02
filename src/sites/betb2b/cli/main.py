@@ -21,13 +21,28 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Pick up DATABASE_URL / BETB2B_* from a repo-root .env (gitignored) if present.
+# Pick up DATABASE_URL / BETB2B_* from src/sites/betb2b/.env (or repo-root .env) (gitignored) if present.
 # Real environment variables win (override=False).
+# Skipped under pytest (a real .env must not leak into tests) or BETB2B_NO_DOTENV=1.
 try:
+    if "pytest" in sys.modules or os.environ.get("BETB2B_NO_DOTENV"):
+        raise ImportError
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).resolve().parents[4] / ".env", override=False)
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)  # src/sites/betb2b/.env
+    load_dotenv(Path(__file__).resolve().parents[4] / ".env", override=False)  # repo root
 except ImportError:  # python-dotenv is optional here
     pass
+
+def _env(name: str, default, cast=str):
+    """Default for a CLI option from ``$name`` (e.g. set in .env), else ``default``."""
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return cast(raw)
+    except ValueError:
+        return default
+
 
 _VALID_ACTIONS = ("list_live", "list_prematch", "list_all", "raw_capture", "sports_short", "top_champs")
 
@@ -194,27 +209,27 @@ class BetB2BCLI:
                                  "(linebet,melbet,helabet). Default: linebet.")
         scrape.add_argument("status_pos", nargs="?", default=None, metavar="status",
                             help="live | scheduled | all (positional). Default: live.")
-        scrape.add_argument("--skin", "-s", default="linebet",
+        scrape.add_argument("--skin", "-s", default=_env("BETB2B_SKIN", "linebet"),
                             help="Skin name, or comma-list (default: linebet)")
         scrape.add_argument("--all-skins", action="store_true",
                             help="Scrape every available skin (into one --db for "
                                  "cross-skin comparison)")
-        scrape.add_argument("--action", "-a", default="list_live",
+        scrape.add_argument("--action", "-a", default=_env("BETB2B_ACTION", "list_live"),
                             help="Scrape action — live/scheduled/all or "
                                  f"{'/'.join(_VALID_ACTIONS)} (default: list_live)")
-        scrape.add_argument("--sport", default=None,
+        scrape.add_argument("--sport", default=_env("BETB2B_SPORT", None),
                             help="Sport slug (e.g. basketball, football, ice-hockey, tennis, esports). "
                                  "Default: all sports.")
         scrape.add_argument("--sport-id", type=int, default=None,
                             help="Filter by sport SI id (Football=1, Basketball=3, …). "
                                  "Overrides --sport.")
-        scrape.add_argument("--count", type=int, default=50,
+        scrape.add_argument("--count", type=int, default=_env("BETB2B_COUNT", 50, int),
                             help="`count=` query param — number of events (default: 50)")
-        scrape.add_argument("--timeout", type=float, default=120.0,
+        scrape.add_argument("--timeout", type=float, default=_env("BETB2B_TIMEOUT", 120.0, float),
                             help="Hard cap on the scrape in seconds (default: 120)")
         scrape.add_argument("--settle", type=float, default=12.0,
                             help="Bootstrap SPA settle seconds (default: 12)")
-        scrape.add_argument("--rate", type=int, default=30,
+        scrape.add_argument("--rate", type=int, default=_env("BETB2B_RATE", 30, int),
                             help="Rate limit per minute (default: 30)")
         scrape.add_argument("--no-live", action="store_true",
                             help="Skip the live scrape; just print what we'd do")
@@ -264,12 +279,12 @@ class BetB2BCLI:
                           help="Skin name or comma-list (linebet,melbet). Default: linebet.")
         poll.add_argument("status_pos", nargs="?", default=None, metavar="status",
                           help="live | scheduled | all (positional). Default: live.")
-        poll.add_argument("--skin", "-s", default="linebet", help="Skin name or comma-list")
+        poll.add_argument("--skin", "-s", default=_env("BETB2B_SKIN", "linebet"), help="Skin name or comma-list")
         poll.add_argument("--all-skins", action="store_true",
                           help="Poll every available skin each cycle (one shared --db)")
-        poll.add_argument("--action", "-a", default="list_live",
+        poll.add_argument("--action", "-a", default=_env("BETB2B_ACTION", "list_live"),
                           help="live/scheduled/all or the canonical list_* action")
-        poll.add_argument("--sport", default=None, help="Sport slug. Default: all sports.")
+        poll.add_argument("--sport", default=_env("BETB2B_SPORT", None), help="Sport slug. Default: all sports.")
         poll.add_argument("--sport-id", type=int, default=None, help="Sport SI id (overrides --sport)")
         poll.add_argument("--interval", type=float, default=60.0,
                           help="Target seconds between cycle starts (default: 60). "
@@ -280,18 +295,18 @@ class BetB2BCLI:
                           help="Stop after this many wall-clock seconds (0 = unlimited)")
         poll.add_argument("--db", default="data/betb2b/odds.db",
                           help="SQLite odds store path (default: data/betb2b/odds.db)")
-        poll.add_argument("--count", type=int, default=50, help="events `count=` param")
-        poll.add_argument("--timeout", type=float, default=120.0, help="per-scrape hard cap (s)")
+        poll.add_argument("--count", type=int, default=_env("BETB2B_COUNT", 50, int), help="events `count=` param")
+        poll.add_argument("--timeout", type=float, default=_env("BETB2B_TIMEOUT", 120.0, float), help="per-scrape hard cap (s)")
         poll.add_argument("--settle", type=float, default=12.0, help="SPA settle seconds")
-        poll.add_argument("--rate", type=int, default=30, help="feed rate limit per minute")
+        poll.add_argument("--rate", type=int, default=_env("BETB2B_RATE", 30, int), help="feed rate limit per minute")
         poll.add_argument("--subgames", action="store_true",
                           help="Fetch per-quarter/half sub-games each cycle (ADR-7 scoped "
                                "odds). Costs extra requests per event per cycle.")
 
         # info
         info = sub.add_parser("info", help="Print skin config + scraper state")
-        info.add_argument("--skin", "-s", default="linebet", help="Skin name")
-        info.add_argument("--sport", default=None,
+        info.add_argument("--skin", "-s", default=_env("BETB2B_SKIN", "linebet"), help="Skin name")
+        info.add_argument("--sport", default=_env("BETB2B_SPORT", None),
                           help="Sport slug (e.g. basketball). Default: all sports.")
 
         # skins
@@ -304,8 +319,8 @@ class BetB2BCLI:
 
         # probe
         probe = sub.add_parser("probe", help="Connectivity probe — verify proxy + bootstrap")
-        probe.add_argument("--skin", "-s", default="linebet", help="Skin name")
-        probe.add_argument("--sport", default=None,
+        probe.add_argument("--skin", "-s", default=_env("BETB2B_SKIN", "linebet"), help="Skin name")
+        probe.add_argument("--sport", default=_env("BETB2B_SPORT", None),
                            help="Sport slug to probe (e.g. basketball). Default: all sports.")
         probe.add_argument("--settle", type=float, default=12.0,
                            help="Bootstrap SPA settle seconds (default: 12)")
@@ -323,8 +338,8 @@ class BetB2BCLI:
         sch = sub.add_parser("schedule",
                              help="Run the state-aware scheduler: scheduled (prematch, skip-fresh) "
                                   "+ live passes on cadences. Browser+proxy-free (direct).")
-        sch.add_argument("skin", nargs="?", default="linebet", help="Skin (default: linebet)")
-        sch.add_argument("--sport", default="basketball", help="Sport slug (default: basketball)")
+        sch.add_argument("skin", nargs="?", default=_env("BETB2B_SKIN", "linebet"), help="Skin (default: linebet)")
+        sch.add_argument("--sport", default=_env("BETB2B_SPORT", "basketball"), help="Sport slug (default: basketball)")
         sch.add_argument("--db", nargs="?", const="", default=None,
                          help="Store path (default: $BETB2B_DB_PATH / DATABASE_URL if set)")
         sch.add_argument("--scheduled-interval", type=float, default=10800.0,
@@ -373,8 +388,8 @@ class BetB2BCLI:
 
         # compare-match
         cm = sub.add_parser("compare-match", help="Compare match page UI data vs API endpoints")
-        cm.add_argument("--skin", "-s", default="linebet", help="Skin name (default: linebet)")
-        cm.add_argument("--sport", default="basketball",
+        cm.add_argument("--skin", "-s", default=_env("BETB2B_SKIN", "linebet"), help="Skin name (default: linebet)")
+        cm.add_argument("--sport", default=_env("BETB2B_SPORT", "basketball"),
                         help="Sport slug (basketball, football, etc.)")
         cm.add_argument("--event-id", default=None,
                         help="Target event ID (numeric). Auto-discovers if not set.")
