@@ -460,6 +460,21 @@ class BetB2BCLI:
         sports.add_argument("--verbose", "-v", action="store_true",
                             help="Show full sport config (DOM selectors, market overrides)")
 
+        # reset — delete stored data (dry run unless --force)
+        rs = sub.add_parser("reset", help="Delete stored data. Shows what WOULD go; nothing is "
+                                          "deleted without --force")
+        rs.add_argument("--db", nargs="?", const="", default=None,
+                        help="Store path (default: $BETB2B_DB_PATH / DATABASE_URL if set)")
+        rs.add_argument("--scope", choices=("all", "facts"), default="all",
+                        help="all = every row, schema kept (default); facts = odds/state/H2H/runs "
+                             "only, keeping events, teams and leagues")
+        rs.add_argument("--local", action="store_true",
+                        help="Act on the local SQLite file even if DATABASE_URL is set")
+        rs.add_argument("--also-local", action="store_true",
+                        help="With --scope all on a remote store: ALSO wipe the local copy and its "
+                             "replay queue (otherwise the queue can refill the remote)")
+        rs.add_argument("--force", action="store_true", help="Actually delete (otherwise a dry run)")
+
         # probe
         probe = sub.add_parser("probe", help="Connectivity probe — verify proxy + bootstrap")
         probe.add_argument("--skin", "-s", default=_env("BETB2B_SKIN", "linebet"), help="Skin name")
@@ -584,6 +599,8 @@ class BetB2BCLI:
             return await self._cmd_schedule(args)
         if args.command == "quota":
             return await self._cmd_quota(args)
+        if args.command == "reset":
+            return self._cmd_reset(args)
         if args.command == "view":
             return self._cmd_view(args)
         if args.command == "compare-match":
@@ -770,6 +787,47 @@ class BetB2BCLI:
         return 0
 
     # ------------------------------------------------------------------ #
+    def _cmd_reset(self, args: argparse.Namespace) -> int:
+        """Delete stored data: a dry run showing the target and row counts unless --force."""
+        from src.sites.betb2b import store
+
+        if args.local:
+            os.environ["BETB2B_STORE_MODE"] = "local"
+        db = args.db or db_path()
+        targets = [("remote/primary" if os.environ.get("DATABASE_URL") and not args.local else "local", db)]
+        if args.also_local and os.environ.get("DATABASE_URL") and not args.local:
+            targets.append(("local copy + replay queue", db))
+        rc = 0
+        for label, path in targets:
+            local_only = label.startswith("local")
+            if local_only and len(targets) > 1:
+                conn = store._connect_sqlite(path)            # the local file, bypassing DATABASE_URL
+            else:
+                conn = store.init_db(path)
+            try:
+                print(f"{label}: {_describe_store(path) if not local_only or len(targets) == 1 else path}",
+                      file=sys.stderr)
+                before = store.counts(conn)
+                print("  rows now: " + (", ".join(f"{k}={v}" for k, v in before.items() if v) or "none"),
+                      file=sys.stderr)
+                if not args.force:
+                    print("  dry run — nothing deleted. Re-run with --force to delete "
+                          f"(scope={args.scope}).", file=sys.stderr)
+                    continue
+                if args.scope == "facts":
+                    store.truncate_facts(conn)
+                else:
+                    store.reset_all(conn)
+                after = store.counts(conn)
+                print("  deleted. rows now: " + (", ".join(f"{k}={v}" for k, v in after.items() if v) or "none"),
+                      file=sys.stderr)
+            except Exception as exc:  # noqa: BLE001
+                print(f"  reset failed: {exc}", file=sys.stderr)
+                rc = 1
+            finally:
+                conn.close()
+        return rc
+
     async def _cmd_quota(self, args: argparse.Namespace) -> int:
         """One-shot hosted-store size check; optional bounded prune."""
         from src.sites.betb2b import quota, store

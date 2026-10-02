@@ -114,6 +114,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "init_db",
+    "reset_all",
     "mark_superseded",
     "is_read_only_error",
     "persist_result",
@@ -1292,6 +1293,38 @@ def prune_counts(conn, *, days: float = 7.0) -> Dict[str, int]:
     ).fetchone()
     out["events"] = int(row[0]) if row else 0
     return out
+
+
+def reset_all(conn) -> Dict[str, Any]:
+    """Delete EVERY row of every table (the schema is kept), including events, teams, leagues
+    and — on a local mirror — the replay outbox, so a wiped remote cannot be refilled from it.
+    Postgres: one ``TRUNCATE … RESTART IDENTITY CASCADE``; SQLite: per-table ``DELETE``.
+    The migration bookkeeping table is left alone. Returns ``{"tables": [...]}``."""
+    skip = {"alembic_version"}
+    if _is_orm(conn):
+        from sqlalchemy import text as _t
+        if conn.dialect.name == "postgresql":
+            tabs = [r[0] for r in conn.execute(_t("SELECT tablename FROM pg_tables WHERE schemaname='public'"))
+                    if r[0] not in skip]
+            if tabs:
+                conn.execute(_t("TRUNCATE " + ", ".join(f'"{t}"' for t in tabs) + " RESTART IDENTITY CASCADE"))
+        else:
+            tabs = [r[0] for r in conn.execute(_t("SELECT name FROM sqlite_master WHERE type='table' "
+                                                  "AND name NOT LIKE 'sqlite_%'")) if r[0] not in skip]
+            conn.execute(_t("PRAGMA foreign_keys=OFF"))
+            for t in tabs:
+                conn.execute(_t(f'DELETE FROM "{t}"'))
+            conn.execute(_t("PRAGMA foreign_keys=ON"))
+        conn.commit()
+        return {"tables": tabs}
+    tabs = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                                       "AND name NOT LIKE 'sqlite_%'") if r[0] not in skip]
+    conn.execute("PRAGMA foreign_keys = OFF")
+    for t in tabs:
+        conn.execute(f'DELETE FROM "{t}"')
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = ON")
+    return {"tables": tabs}
 
 
 def truncate_facts(conn) -> Dict[str, Any]:

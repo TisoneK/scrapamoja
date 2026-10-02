@@ -413,3 +413,68 @@ def test_init_db_adds_columns_to_legacy_db(tmp_path):
     assert conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0] == 1  # data kept
     conn.close()
     init_db(p).close()  # idempotent — no error on second open
+
+
+# --- reset ------------------------------------------------------------------
+def _seed(db):
+    from src.sites.betb2b import store
+    store.persist_result({
+        "skin": "linebet", "action": "list_prematch", "url": "u",
+        "extracted_at": "2026-10-02T00:00:00+00:00", "success": True, "event_count": 1,
+        "scrape_duration_seconds": 1.0, "template_version": "1",
+        "events": [{"event_id": "9", "sport": "basketball", "sport_id": 3, "competition": "L",
+                    "home": "A", "away": "B", "status": "scheduled", "is_live": False,
+                    "markets": [{"name": "1x2", "market_type": "1x2", "raw_g": 1,
+                                 "selections": [{"name": "1", "price": 1.5, "is_suspended": False}]}]}],
+    }, db)
+
+
+@pytest.mark.parametrize("backend", ["sqlite", "orm"])
+def test_reset_all_empties_every_table_but_keeps_the_schema(tmp_path, monkeypatch, backend):
+    from src.sites.betb2b import store
+    db = str(tmp_path / "r.db")
+    if backend == "orm":
+        monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db}")
+        monkeypatch.setenv("BETB2B_STORE_MODE", "auto")
+    else:
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.setenv("BETB2B_STORE_MODE", "local")
+    _seed(db)
+    conn = store.init_db(db)
+    assert store.counts(conn)["events"] == 1 and store.counts(conn)["odds_snapshots"] == 1
+    out = store.reset_all(conn)
+    assert "events" in out["tables"] and "odds_snapshots" in out["tables"]
+    assert sum(store.counts(conn).values()) == 0                 # every table empty
+    _seed(db)                                                    # schema still there: it works again
+    assert store.counts(store.init_db(db))["events"] == 1
+
+
+def test_reset_cli_is_a_dry_run_unless_forced(tmp_path, monkeypatch, capsys):
+    import argparse
+    from src.sites.betb2b import store
+    from src.sites.betb2b.cli.main import BetB2BCLI
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("BETB2B_STORE_MODE", "local")
+    db = str(tmp_path / "c.db")
+    _seed(db)
+    ns = lambda **kw: argparse.Namespace(**{"db": db, "scope": "all", "local": False,
+                                            "also_local": False, "force": False, **kw})
+    assert BetB2BCLI()._cmd_reset(ns()) == 0
+    assert "dry run" in capsys.readouterr().err
+    assert store.counts(store.init_db(db))["events"] == 1        # nothing deleted
+    assert BetB2BCLI()._cmd_reset(ns(force=True)) == 0
+    assert sum(store.counts(store.init_db(db)).values()) == 0
+
+
+def test_reset_scope_facts_keeps_events(tmp_path, monkeypatch):
+    import argparse
+    from src.sites.betb2b import store
+    from src.sites.betb2b.cli.main import BetB2BCLI
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("BETB2B_STORE_MODE", "local")
+    db = str(tmp_path / "f.db")
+    _seed(db)
+    BetB2BCLI()._cmd_reset(argparse.Namespace(db=db, scope="facts", local=False,
+                                              also_local=False, force=True))
+    c = store.counts(store.init_db(db))
+    assert c["events"] == 1 and c["odds_snapshots"] == 0
