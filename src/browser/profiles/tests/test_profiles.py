@@ -112,3 +112,17 @@ def test_per_launch_identity_is_not_persisted(tmp_path):
         return pw.chromium.calls[0][1]
     assert asyncio.run(go({"user_agent": "UA-1"}))["user_agent"] == "UA-1"
     assert "user_agent" not in asyncio.run(go(None))          # a later tier must not inherit it
+
+
+def test_warmup_proxy_from_env_keeps_credentials_out_of_argv(monkeypatch):
+    from src.browser.profiles.__main__ import proxy_from_env
+    monkeypatch.setenv("X_PROXY_URL", "http://h.example:1074")
+    monkeypatch.setenv("X_PROXY_USER", "u")
+    monkeypatch.setenv("X_PROXY_PASS", "p")
+    assert proxy_from_env("X_PROXY_URL") == {"server": "http://h.example:1074",
+                                             "username": "u", "password": "p"}
+    monkeypatch.setenv("Y_URL", "http://a%40b:pw@h.example:9")        # creds embedded, url-encoded
+    assert proxy_from_env("Y_URL") == {"server": "http://h.example:9", "username": "a@b", "password": "pw"}
+    monkeypatch.delenv("NOPE", raising=False)
+    with pytest.raises(ValueError):
+        proxy_from_env("NOPE")

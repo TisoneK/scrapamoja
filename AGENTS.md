@@ -213,7 +213,7 @@ per profile (pid lock); a busy profile falls back to a throwaway browser.
 
 ```bash
 python -m src.browser.profiles list
-python -m src.browser.profiles warmup betb2b-linebet https://linebet.com/en   # headed: pass the check by hand, close the window
+python -m src.browser.profiles warmup betb2b-linebet https://linebet.com/en --proxy-env BETB2B_PROXY_URL   # headed, via the allowed-country proxy: pass the check by hand, close the window
 python -m src.browser.profiles delete betb2b-linebet
 ```
 
