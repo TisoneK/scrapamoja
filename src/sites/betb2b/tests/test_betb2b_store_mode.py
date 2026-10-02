@@ -173,3 +173,32 @@ def test_mirror_drains_once_primary_recovers(env, monkeypatch):
     assert not store_fallback.active()
     assert _primary_count("events") == 1
     assert _mirror_rows(env, "SELECT COUNT(*) AS n FROM fallback_outbox")[0]["n"] == 0
+
+
+def test_skip_filter_sees_what_another_machine_stored_in_the_shared_store(env, monkeypatch):
+    """Cross-machine skip: in `mirror` mode init_db() hands back only the LOCAL copy,
+    so the skip filter must also read the shared remote store — an event stored there
+    by another machine is skipped here even though this machine never saw it."""
+    import time
+    remote = f"sqlite:///{env / 'remote.db'}"
+    # "machine A" stored EV-A in the shared store
+    monkeypatch.setenv("DATABASE_URL", remote)
+    monkeypatch.setenv(MODE_ENV, "auto")
+    store.persist_result(_result("EV-A"), str(env / "a_local.db"))
+    store_orm._engines.clear()
+    store_fallback._reset_for_tests()
+
+    # "machine B": mirror mode, its own empty local copy
+    monkeypatch.setenv(MODE_ENV, "mirror")
+    future = time.time() + 7200
+    kept = store.unprocessed_ids([("EV-A", future), ("EV-NEW", future)], str(env / "b_local.db"))
+    assert kept == ["EV-NEW"]
+
+
+def test_skip_filter_falls_back_to_local_when_remote_unreachable(env, monkeypatch):
+    import time
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@127.0.0.1:1/none?connect_timeout=1")
+    monkeypatch.setenv(MODE_ENV, "auto")
+    future = time.time() + 7200
+    # remote down + empty local -> everything is "new", and it must not raise
+    assert store.unprocessed_ids([("EV-X", future)], str(env / "l.db")) == ["EV-X"]

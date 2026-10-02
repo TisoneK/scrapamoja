@@ -1030,10 +1030,10 @@ def known_sub_game_ids(conn, ids) -> set:
     for i in range(0, len(ids), 400):
         chunk = ids[i:i + 400]
         if _is_orm(conn):
-            from sqlalchemy import text as _t
-            binds = {f"p{n}": v for n, v in enumerate(chunk)}
-            sql = "SELECT sub_game_id FROM sub_games WHERE sub_game_id IN (%s)" % ",".join(f":p{n}" for n in binds)
-            out.update(r[0] for r in conn.execute(_t(sql), binds))
+            from sqlalchemy import bindparam, text as _t
+            stmt = _t("SELECT sub_game_id FROM sub_games WHERE sub_game_id IN :ids").bindparams(
+                bindparam("ids", expanding=True))
+            out.update(r[0] for r in conn.execute(stmt, {"ids": chunk}))
         else:
             q = "SELECT sub_game_id FROM sub_games WHERE sub_game_id IN (%s)" % ",".join("?" * len(chunk))
             out.update(r[0] for r in conn.execute(q, chunk))
@@ -1049,12 +1049,30 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
     Works on whichever store ``init_db`` resolves (local SQLite or remote DB), so
     several machines sharing one remote store skip each other's work."""
     import time
-    conn = init_db(path)
-    try:
-        last_seen = events_last_seen(conn, [i for i, _ in pairs])
-        sub_ids = known_sub_game_ids(conn, [i for i, _ in pairs])
-    finally:
-        conn.close()
+    ids = [i for i, _ in pairs]
+    last_seen: Dict[str, Any] = {}
+    sub_ids: set = set()
+    # Read the SHARED remote store (when configured) as well as the local one, so a
+    # second machine skips what the first already scraped — even in `mirror` mode,
+    # where init_db() hands back only the local copy. Remote unreachable -> local only.
+    sources = []
+    if os.environ.get("DATABASE_URL") and store_mode() != "local":
+        try:
+            from . import store_orm
+            sources.append(store_orm.connect())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("skip filter: remote store unreachable (%s) — using the local copy", exc)
+    sources.append(init_db(path) if store_mode() != "remote" or not sources else None)
+    for conn in [c for c in sources if c is not None]:
+        try:
+            for eid, seen in events_last_seen(conn, ids).items():
+                if eid not in last_seen or (seen is not None and str(seen) > str(last_seen[eid])):
+                    last_seen[eid] = seen
+            sub_ids |= known_sub_game_ids(conn, ids)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("skip filter: read failed on one store (%s)", exc)
+        finally:
+            conn.close()
     now = time.time()
     keep: List[str] = []
     for eid, start in pairs:

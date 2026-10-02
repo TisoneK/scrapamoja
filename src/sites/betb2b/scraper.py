@@ -383,7 +383,11 @@ class BetB2BScraper:
         error = None
         if (not events and action not in ("raw_capture", "sports_short", "top_champs")
                 and (self._discovery_failed
-                     or (captured and all(self._capture_failed(c) for c in captured)))):
+                     # Direct mode's list feed is gated by design (always "failed"), and an
+                     # empty result is the NORMAL steady state once everything is stored —
+                     # only a failed discovery proves the site is blocked there.
+                     or (not self._direct and captured
+                         and all(self._capture_failed(c) for c in captured)))):
             error = "no events: site blocked or unreachable (discovery/feed returned no usable data)"
             logger.warning("skin=%s %s", self.skin.name, error)
         result = BetB2BScrapeResult(
