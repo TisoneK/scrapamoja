@@ -108,8 +108,35 @@ skins; carries the finished-match result), time-series facts (`odds_snapshots`
 with change-only dedup, `event_states`, `period_scores`),
 `h2h_games`/`h2h_period_scores`, `statistics`, and a `scraper_jobs` control
 queue. When `DATABASE_URL` is set, `store.py` dispatches to `store_orm.py`
-(SQLAlchemy → Supabase Postgres); otherwise it uses raw SQLite. Change-only
+(SQLAlchemy → any Postgres); otherwise it uses raw SQLite. Change-only
 dedup and batched/bounded-concurrency I/O keep it cheap (ADR-13/17).
+
+### Local by default, remote optional
+
+`scrape` persists to **local SQLite** by default (`$BETB2B_DB_PATH`, else
+`data/betb2b/odds.db`); `--no-db` opts out. Re-runs skip work already stored:
+
+```bash
+python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --skip-processed
+#   --skip-processed [SECONDS]  skip events scraped within SECONDS (default 3h;
+#   0 = anything ever stored) and matches already started
+```
+
+**Shared remote store (optional).** Point `DATABASE_URL` at any hosted Postgres
+(Neon, a VPS, self-hosted…) and every machine running the scraper reads/writes
+the same database, so `--skip-processed` skips events *any* of them handled.
+Only the database is remote; the scraper still runs wherever you like.
+
+```bash
+export DATABASE_URL='postgresql+psycopg://user:pass@host/dbname?sslmode=require'
+export BETB2B_STORE_MODE=mirror   # optional: write locally + replay to remote
+python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --skip-processed
+```
+
+`BETB2B_STORE_MODE`: `auto` (default — `DATABASE_URL` set → remote, else local),
+`local` (ignore `DATABASE_URL`), `mirror` (write local, queue for replay to the
+remote), `remote` (fail fast without `DATABASE_URL`). Mind the provider's free
+quota: scheduled-only scraping is small; live polling grows fast.
 
 **Remote-control API** (`src/api/routers/scraper.py`, `/api/scraper/*`,
 `x-api-key` auth) — queue a scrape, monitor live job `phase`, read odds/counts.
@@ -120,13 +147,13 @@ worker with **scheduled** (~3h, skip-fresh), **live** (~15s), and **results**
 (~10min, finished-match final scores via `statisticfeed v1/Game`) passes; matches
 flow by feed-root + DB state, no cross-scraper triggers (ADR-15/16/18/20).
 
-**Deploy** — set `DATABASE_URL` (Supabase pooler) + `BETB2B_DIRECT=1` and it runs
+**Deploy** — set `DATABASE_URL` (a Postgres URL) + `BETB2B_DIRECT=1` and it runs
 proxy-free on Railway; the scheduler is a dedicated second service. See
 [`RAILWAY.md`](../../../RAILWAY.md).
 
 ```bash
 # Local scrape (browser-free direct mode) → persist to the store
-python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --direct --db
+python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --direct
 
 # Trigger + monitor remotely
 curl -sX POST https://<app>/api/scraper/runs -H "x-api-key: $KEY" \
