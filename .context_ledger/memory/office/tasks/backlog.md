@@ -12,23 +12,30 @@ don't remove the line.
 
 | ID | Summary |
 |----|---------|
-| B-2026-10-02-1 | Live-verify the pipeline after the per-second pacing (ADR-30) — the hosts (betwinner/melbet/22bet) were refusing TCP connections from the dev IP when the pacing shipped, probably because the previous run sent ~20 req/s. Once they answer: ONE `scrape --direct --skip-processed` (pacing 3/s, concurrency 4), then check: no connection drops, stat-id capture (`v1/Game?id=<event id>` for UPCOMING matches — unverified), retry + skin-fallback, and why so many discovered ids return no event. If drops recur lower `BETB2B_MAX_RPS`. Do not hammer. |
+| B-2026-10-02-16 | Write the missing abort-handling models in `src/resilience/models/abort.py`: `AbortDecision`, `ExecutionResult`, `RollbackInfo`, `DEFAULT_ERROR_THRESHOLD_POLICY`, `DEFAULT_FAILURE_RATE_POLICY` are imported by `resilience/abort/{abort_manager,abort_executor,abort_logger}.py` and the resilience integrations but never defined (constructed with fields at `abort_manager.py` ~368 and ~534) — 6 modules unimportable. Needs a design pass from those call sites. |
 
 ### Medium Priority
 
 | ID | Summary |
 |----|---------|
+| B-2026-10-02-17 | `StealthSettings` has no `webgl_protection` field but `browser/models/stealth.py` presets (~line 481) pass it — `src.browser.authority` and `src.browser.configuration` cannot be imported. Decide: add the field or fix the presets. |
+| B-2026-10-02-18 | `src/selectors/integration.py` imports `src.selectors.engine.configuration.{loader,discovery}` but `engine` is a module, not a package — unimportable. Find where the configuration loader/discovery really live (or write them). |
+| B-2026-10-02-19 | Plugin permission system, remaining defects (module now imports and request/approve/export work): statistics were never implemented (`export_permissions` reads `self._stats`; the module-level `get_permission_statistics()` calls a missing `get_statistics()`); `import_plugin_permissions` compares against an undefined `permission_id`; `export_permissions` writes permissions as a dict keyed by id while `import_permissions` expects a list; `tests/integration/test_plugin_integration.py` imports a `PluginManager` that exists nowhere. |
+| B-2026-10-02-20 | Adaptive dashboard API integration tests (`tests/integration/test_feature_flag_api.py`, `test_audit_api.py`, `test_audit_query_api.py`, `test_audit_export_formats.py`) were uncollectable; now they run and fail (mostly 404): they call routes such as `/test-feature-flags` that the app does not mount. Update them to the real routes/prefixes or re-add a test app. |
+| B-2026-10-02-21 | 78 remaining undefined-name sites (`ruff check src --select F821`): latent NameErrors inside function bodies — `MessageType` (10, interrupt_handling), `request` (navigation/plugin code), `Adaptation`/`nx` (navigation/route_adaptation.py), `BrowserSession`, `params`, `get_component_info`... Each needs its function read; not mechanical. |
+| B-2026-10-02-22 | `tests/unit` baseline: 129 pre-existing failures (755 passed on the pre-change tree; 762 passed / 130 failing now, the +1 failing being environmental), and tests that never finish (an asyncio subprocess wait; run with `--timeout=8 --timeout-method=signal` or the suite hangs). Also a test-isolation flaw: `tests/unit/test_feature_flag_service.py::TestGlobalFunctions::test_is_adaptive_enabled_convenience_function` says it uses an in-memory DB but reads the local gitignored `data/adaptive.db` — it fails on any machine whose file has `basketball` enabled (the old code fails it identically). Triage the failing set and fix or mark. |
 | B-2026-10-02-3 | Rotate the bore.pub proxy password — it was shared in an agent chat. Lives in `memory/secrets/betb2b-proxy` and the (gitignored, commented-out) `src/sites/betb2b/.env`. Operator rule: the proxy is for the website/browser bypass only, never for API calls. |
 | B-2026-10-02-4 | Storage-quota monitor limit for Neon — partial: `BETB2B_DB_LIMIT_MB=1000` is now set in the local `.env` and shipped in `.env.example`; any DEPLOYED worker/service env (Railway or other) still defaults to 500 MB (the Supabase limit) and needs it set. Neon free = 1 GB storage / 100 compute-hours. |
 | B-2026-10-02-5 | `ledger-mem lint --tree` can never pass in this repo: it flags the `.context_ledger/` routing paths inside `AGENTS.md`/`CLAUDE.md` (the ledger's own entry-point files). 262 ADR citations were stripped from product files this session (0 left); the 40 entry-point path hits remain. See the flaws log for the suggested upstream fix. |
 | B-2026-10-02-12 | Live-verify the security package on a real challenge: (a) operator runs `python -m src.browser.profiles warmup betb2b-<skin> <url>` from an allowed-country egress and confirms later headless runs reuse the validation; (b) exercise HUMAN_HANDOFF and the headed tier end to end (only fakes so far). Cannot be done from the US dev IP while the country block applies. |
 | B-2026-10-02-10 | linebet: decide whether it is worth supporting. Its website is country-blocked (US) and Gcore WAAP browser validation challenges non-browser clients (ADR-28); the scraper's headless Chromium fails it. Keep linebet last in `BETB2B_FALLBACK_SKINS`; any browser-session approach (operator-validated headed browser, requests kept inside it) needs the operator's go-ahead. |
-| B-2026-10-02-15 | Find out safely HOW the hosts penalise the dev IP (ADR-30 addendum). DONE: the drop is per source address (a Kenyan-egress request to a dropping host returned 200). OPEN: (a) the threshold — after the drop expires, ONE controlled slow ramp (1 → 2 → 3 req/s), stopping at the first sign of a drop; each trigger costs tens of minutes; (b) the duration — betwinner:443/80 stayed dropped 30+ minutes; keep a TCP-connect watch (one `connect()` per 30 s per host) running until it recovers and record the time. |
+| B-2026-10-02-15 | The hosts' connection drops: DONE — per source address (a request from another allowed-country egress to a dropping host returned 200); lasted ~30 min after a ~20 req/s burst; 3 req/s with one pooled client ran ~500 requests with no drop (ADR-30 addenda). OPEN only if more speed is wanted: find the real threshold with ONE deliberate slow ramp (3 -> 4 -> 5 req/s), stopping at the first sign of a drop; each trigger costs ~30 minutes. |
 
 ### Low Priority
 
 | ID | Summary |
 |----|---------|
+| B-2026-10-02-23 | Smaller import findings: `src.telemetry.integration.alerting_integration` needs an `ITelemetryIntegration` that does not exist (only `ISelectorTelemetryIntegration`); `src/sites/flashscore/cli*` import the top-level `tests` package (only works when launched from the repo root); `src/resilience/config.py` and `src/resilience/config/` both exist (package shadows module) and importing writes `resilience_config.json` into the current directory; `src/sites/shared_components/setup.py` is a setup script inside the import tree. |
 | B-2026-10-02-8 | Cross-sport check of relist linking (`superseded_by`) and the sub-game filter — verified on basketball only. |
 | B-2026-10-02-9 | Delete the local safety branch `backup/pre-reset-main` once the operator is sure the four dropped `.context` rename commits are not needed (they were superseded by upstream's `.context_ledger` history). |
 
@@ -249,11 +256,11 @@ don't remove the line.
       (`tests/stealth/test_proxy_manager.py`). MEDIUM — architectural; do
       deliberately, one caller at a time, with tests green.
       The proxy abstraction is done; the remaining step is the actual capture,
-      blocked on the user standing up a `gost` HTTP proxy on their Kenyan Windows
+      blocked on the user standing up a `gost` HTTP proxy on their Windows machine
       box exposed via `ngrok tcp`. When they send host:port + basic-auth
-      user/pass: `build_proxy_manager({...kenya endpoint + *linebet.com routing})`,
+      user/pass: `build_proxy_manager({...proxy endpoint + *linebet.com routing})`,
       `verify_proxy` (assert countryCode KE), then `HarExporter(url=linebet,
-      proxy=kenya)` → 200 not 203 → HAR → `HarReplayer` + normalize → commit the
+      proxy=proxy)` → 200 not 203 → HAR → `HarReplayer` + normalize → commit the
       normalized snapshot under `src/sites/linebet/snapshots/`. This finally
       yields the real sports/odds endpoints + headers and feeds the classifier.
       See `tasks/current.md` for the exact resume steps. HIGH.
@@ -270,7 +277,7 @@ don't remove the line.
       Playwright can't see SW traffic), OR (b) after the SPA initializes, read the
       IndexedDB `vpn/headers` store + locate the sportsbook fetch the app issues
       (the SPA `entry-*.js` only revealed casino `service-api` endpoints; the
-      sportsbook chunk loads separately). Requires the Kenya proxy live again
+      sportsbook chunk loads separately). Requires the allowed-country proxy live again
       (bore/gost). HIGH — this is the endpoint a direct-API linebet scraper needs.
 - [ ] **Build a linebet live-odds DOM extractor** (added 2026-07-17 by Claude Opus 4.8, Session 11 cont.) —
       Since the odds feed is SW-hidden, the reliable extraction path today is the
@@ -297,7 +304,7 @@ don't remove the line.
           IndexedDB **`vpn`→`headers`** — that's why they're invisible to
           interception and to the page JS. See `src/sites/linebet/RECON.md`
           "Prior operator investigation" + ADR-2.
-      Concrete plan (needs the Kenya proxy live again — gost + `bore` tunnel):
+      Concrete plan (needs the allowed-country proxy live again — gost + `bore` tunnel):
         1. Load linebet live, let the SPA init, then dump IndexedDB `vpn/headers`
            (via `page.evaluate` opening the DB, or CDP `IndexedDB.requestData`) →
            get the token + expiry + referer header + x-dt/x-project-id.
@@ -331,13 +338,13 @@ don't remove the line.
            SC.FS=score; E[]/AE[].ME[] markets: T=type, G=group, C=odds, P=line, B=blocked).
         4. Build the `T`(market-type)/`G`(group) id → market-name lookup (1=1x2, 2=handicap,
            17=totals, …; 1xbet-family tables) and confirm cookie TTL / re-bootstrap cadence.
-      Needs the Kenya proxy live (gost + bore). HIGH — this ships the scraper the
+      Needs the allowed-country proxy live (gost + bore). HIGH — this ships the scraper the
       whole exercise was for. Extraction mode = `hybrid` per ADR-3.
 
 ---
       VERIFIED 2026-07-18: linebet is one skin of the BetB2B/1xbet platform, and the
       recon generalizes across the family. Probing `/service-api/LineFeed/Get1x2_VZip`
-      through the Kenya proxy returned the IDENTICAL `feed/NotAcceptableException` 406
+      through the allowed-country proxy returned the IDENTICAL `feed/NotAcceptableException` 406
       envelope (same feed microservice) on: melbet, betwinner, 22bet, megapari,
       888starz, helabet, paripesa, linebet. So the endpoints/headers/schema/hybrid
       approach are shared. Build a `src/sites/betb2b/` base scraper + thin per-skin
@@ -377,7 +384,7 @@ don't remove the line.
 
 ---
 - [ ] **Run + confirm betb2b live e2e — all endpoints collect data** (added 2026-07-20 by Claude Code, Session 23) —
-      Operator-gated. Needs the Kenya proxy tunnel UP (bore.pub or gost/bore
+      Operator-gated. Needs the allowed-country proxy tunnel UP (bore.pub or gost/bore
       on the operator's Windows box) + env: `BETB2B_PROXY_URL`,
       `BETB2B_PROXY_USER`, `BETB2B_PROXY_PASS`, `BETB2B_PROXY_COUNTRY=KE`.
       Then per skin: `python -m src.sites.betb2b.scripts.validate_live --skin
@@ -399,7 +406,7 @@ don't remove the line.
       against captured HTML but not yet via the integrated CLI this session).
 
 ---
-      Root cause differed from the handoff: on a fresh live capture (via Kenya
+      Root cause differed from the handoff: on a fresh live capture (via an allowed-country egress
       proxy) the current `dashboard-champ`/`dashboard-game-block__team`
       selectors already extract 10 clean events with numeric IDs — the Session
       24 garble was a loading-state snapshot, not a wrong subtree. The real
@@ -473,7 +480,7 @@ don't remove the line.
 
 ---
       **Confirmed green:** `python -m src.sites.betb2b.cli scrape --skin linebet
-      --sport basketball --action list_live` through the Kenya proxy →
+      --sport basketball --action list_live` through the allowed-country proxy →
       **10 live events, 10/10 clean team names (0 rejected), 10/10 with live
       scores, 8/10 with GetGameZip markets (133 total; Phoenix=40, Botafogo=39),
       76s.** Logs confirm all fixes composing: `proxy OK (attempt 1)`,
@@ -487,11 +494,11 @@ don't remove the line.
       against real data (DOM extraction, score parse, GetGameZip enrichment)
       and fixed a fragile fixed-settle render (`d173c6a` — now waits for the
       game grid). But the *integrated* `scrape(list_live)` run through the
-      Kenya bore proxy was NOT confirmed green — the tunnel (`bore.pub:50670`)
+      allowed-country bore proxy was NOT confirmed green — the tunnel (`bore.pub:50670`)
       dropped (HTTP 000) before the grid-wait fix could be re-run. When the
       proxy is up: `export BETB2B_PROXY_URL=http://bore.pub:<port>
       BETB2B_PROXY_USER=TisoneK BETB2B_PROXY_PASS=<pass> BETB2B_PROXY_COUNTRY=KE
-      BETB2B_PROXY_ID=kenya` then `python -m src.sites.betb2b.cli scrape --skin
+      BETB2B_PROXY_ID=proxy` then `python -m src.sites.betb2b.cli scrape --skin
       linebet --sport basketball --action list_live --count 30 -o out.json`.
       Expect ≥1 live event with clean teams + score + ≥1 market. NOTE the
       entry point is `python -m src.sites.betb2b.cli` (NOT `.cli.main` — that
@@ -528,7 +535,7 @@ don't remove the line.
       Cross-skin validation (Session 25) got 0 events from 22bet
       (`raw_rows=0`) while linebet/melbet/helabet/betwinner/paripesa all
       returned 10. Root cause: `22bet.com/en/live/basketball` redirects (via
-      the Kenya proxy) to **`22bet.co.ke/live/basketball`** — the KE domain
+      the allowed-country proxy) to **`22bet.co.ke/live/basketball`** — the KE domain
       uses NO `/en` locale prefix, so the scraper's bootstrap path
       (`/en/live/basketball`) lands on a route that never renders the
       `.dashboard-champ__game` grid. Fix: in `src/sites/betb2b/skins/22bet.yaml`

@@ -51,6 +51,8 @@ correction twice.
 - Cross-reference recorded platform facts (Windows, macOS, etc.) against every tool, script, and command the protocol asks you to run — if something won't work on this platform, log it as a flaw before being told (correction, 2026-07-20)
 
 ## Context protocol compliance
+- **Fix safe issues you find — "not my change" is not a reason to leave them.** Syntax errors, missing imports, wrong import paths, typos: fix them (with a test) and flag only what needs a design decision. Never close a task by logging something fixable (correction, 2026-10-02)
+- **Never describe the way in as one country.** Write "an allowed-country egress" / "an address the site has not penalised", not "the Kenyan IP/proxy". Where the operator's tunnel happens to exit is incidental; naming it makes later agents fix-minded ("only Kenya works") and anchors their research there. Keep a specific country only where it is a measured fact about a specific test, and say it is incidental (correction, 2026-10-02)
 - **Follow the ledger from the first turn, even for conversational requests** — roster check-in, gates, lint, session log, ADRs, report, backlog tables, `ai-models` row, preferences; the operator had to ask "are you following ledger rules?" and "do actual bookkeeping end to end following protocol" (correction, 2026-10-02)
 - `.context_ledger/` is the primary workflow, not a backup — internalize it as the source of truth over built-in agent workflows (correction, 2026-07-20; dir renamed from `.context/` at core 1.1.1)
 - Record every user correction as a preference in this file immediately — never let corrections pile up unrecorded across sessions (correction, 2026-07-20)

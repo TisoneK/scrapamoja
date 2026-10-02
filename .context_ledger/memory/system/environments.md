@@ -100,7 +100,7 @@ block (and its "last verified" date) every time you run on it again.
   - `git push` / `git pull` — works with GitHub CLI credential manager
 - **Not yet run:** full `pytest` suite (suite-wide hang issue still open), `ruff`, `mypy`
 - **Quirks / gotchas:**
-  - Some BetB2B skins geo-block Kenya egress: 888starz.bet, megapari.com, melbet.com all return `net::ERR_CONNECTION_TIMED_OUT` without proxy
+  - Some BetB2B skins refused connections from the operator's egress at the time (egress requirements are per site and per address, not a fixed country): 888starz.bet, megapari.com, melbet.com all return `net::ERR_CONNECTION_TIMED_OUT` without proxy
   - Use `$env:BETB2B_PROXY_URL` etc. for proxy-aware runs
   - No `bore.pub` tunnel running; proxy vars not currently set
   - Playwright installed with Chromium headless
