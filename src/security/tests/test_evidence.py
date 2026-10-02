@@ -120,3 +120,23 @@ def test_shape_watch_baseline_then_drift(tmp_path, monkeypatch):
     assert any(r["kind"] == "drift" for r in log.read(days=1))
     # an optional field appearing later is absorbed by the union baseline
     assert log.check_shape("s", "GetGameZip", {"Success": True, "Value": {"O1": "A", "E": [{"C": 1, "T": 2, "New": "x"}]}}) is None
+
+
+def test_block_evidence_becomes_snapshot_bundle_and_telemetry_event(tmp_path):
+    """The cross-cutting contract: one block -> evidence line + snapshot bundle + sink event."""
+    import json
+    from src.security.evidence import EvidenceLog
+    log = EvidenceLog(tmp_path / "ev", snapshot_dir=str(tmp_path / "snaps"))
+    got = []
+    log.add_sink(got.append)
+    log.record("block", "site", url="https://x/service-api/Get?id=7&_=123", status=403,
+               response_headers={"content-type": "text/html"}, body="<html>Access denied</html>")
+    assert len(got) == 1 and got[0]["kind"] == "block"
+    bundle = tmp_path / "snaps"
+    metas = list(bundle.rglob("metadata.json"))
+    assert metas and (metas[0].parent / "response" / "body.txt").read_text() == "<html>Access denied</html>"
+    assert json.loads((metas[0].parent / "response" / "response.json").read_text())["status"] == 403
+    assert got[0]["snapshot_bundle"] == str(metas[0].parent)
+    # a broken sink must never break the scrape
+    log.add_sink(lambda r: 1 / 0)
+    log.record("block", "site", url="https://x/other", status=429, body="slow down")

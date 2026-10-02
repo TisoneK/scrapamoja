@@ -26,7 +26,7 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
 
 ENV_DIR = "SCRAPAMOJA_EVIDENCE_DIR"
 KEEP_DAYS = 7
@@ -36,7 +36,7 @@ FULL_RECORDS_PER_SIGNATURE = 3
 MAX_BODY_CHARS = 2000
 # A response shape is only called drift once this many responses have taught the baseline which
 # fields are optional (a single match lacks e.g. period scores that the next one has).
-WARMUP_RESPONSES = 30
+WARMUP_RESPONSES = 300
 
 
 def default_dir() -> Path:
@@ -65,13 +65,20 @@ def _normalise(url: str, status: Optional[int], method: str,
 
 class EvidenceLog:
     def __init__(self, directory: Optional[Path] = None, *, keep_days: int = KEEP_DAYS,
-                 clock=time.time):
+                 clock=time.time, snapshots: bool = True, snapshot_dir: Optional[str] = None):
         self.dir = Path(directory) if directory else default_dir()
         self.keep_days = keep_days
         self._clock = clock
         self._seen: collections.Counter = collections.Counter()
         self._swept = False
         self._registered = False
+        # Cross-cutting outputs. Every kept record is also (a) written as a snapshot bundle in the
+        # snapshot system's own layout (so `data/snapshots/` has the full evidence for
+        # an escalation) and (b) handed to sinks -- telemetry, alerting, a dashboard -- registered
+        # by whichever module owns them. Both are best-effort.
+        self.snapshots = snapshots
+        self.snapshot_dir = snapshot_dir or os.environ.get("SCRAPAMOJA_SNAPSHOT_DIR", "data/snapshots")
+        self.sinks: List[Callable[[Dict[str, Any]], None]] = []
 
     # -- writing ------------------------------------------------------------ #
     def record(self, kind: str, site: str, *, url: str = "", status: Optional[int] = None,
@@ -100,12 +107,33 @@ class EvidenceLog:
                 rec["response"] = response
             if extra:
                 rec["extra"] = extra
+            if self.snapshots and kind in ("block", "unreachable") and body is not None:
+                from src.core.snapshot.api_capture import capture_response_bundle
+                bundle = capture_response_bundle(
+                    site=site, module="security", component=kind, url=url, status=status,
+                    method=method, request_headers=request_headers,
+                    response_headers=response_headers, body=body, base_path=self.snapshot_dir,
+                    note=(rec.get("verdict") or {}).get("type") or rec.get("error"))
+                if bundle:
+                    rec["snapshot_bundle"] = str(bundle)
             self._append(rec)
+            self._notify(rec)
             if not self._registered:
                 atexit.register(self.flush)
                 self._registered = True
         except Exception:  # noqa: BLE001 — never break a scrape over its own diagnostics
             pass
+
+    def add_sink(self, sink: Callable[[Dict[str, Any]], None]) -> None:
+        """Register a callable that receives every stored record (telemetry, alerting, ...)."""
+        self.sinks.append(sink)
+
+    def _notify(self, rec: Dict[str, Any]) -> None:
+        for sink in list(self.sinks):
+            try:
+                sink(rec)
+            except Exception:  # noqa: BLE001 -- a broken sink must not break the scrape
+                pass
 
     def flush(self) -> None:
         """Write a closing summary of the repeats that were counted but not stored."""
@@ -167,7 +195,9 @@ class EvidenceLog:
             if base is None or seen < WARMUP_RESPONSES:
                 return None            # still learning which fields are optional
             diff = {"added": added[:40], "added_total": len(added)}
-            self._append({"ts": self._iso(), "kind": "drift", "site": site, "endpoint": endpoint, **diff})
+            rec = {"ts": self._iso(), "kind": "drift", "site": site, "endpoint": endpoint, **diff}
+            self._append(rec)
+            self._notify(rec)
             return diff
         except Exception:  # noqa: BLE001
             return None

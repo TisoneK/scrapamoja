@@ -73,6 +73,9 @@ class BetB2BFeedClient:
         # Direct mode polls the un-gated feeds with NO session cookies
         # (and typically no proxy) — the browser bootstrap is skipped entirely.
         self.direct = direct
+        # Health hook: called with (feed, root, status, body_bytes, latency_ms, decoded) for every
+        # request, success or not. The scraper points it at telemetry.
+        self.on_request = None
         self.timeout = timeout
         self.rate_limit_per_minute = rate_limit_per_minute
         # The UA is part of the session — fall back to the stealth profile's.
@@ -190,6 +193,7 @@ class BetB2BFeedClient:
             logger.error(
                 "skin=%s feed=%s HTTP error: %s", self.skin.name, feed, exc,
             )
+            self._report(feed, root, 0, 0, (time.monotonic() - start) * 1000.0, False)
             # Return an empty capture so the scrape continues.
             return CapturedFeedResponse(
                 url=url, status=0, content_type="",
@@ -222,6 +226,7 @@ class BetB2BFeedClient:
             content_type=content_type,
             raw_bytes=resp.content,
         )
+        self._report(feed, root, resp.status_code, len(resp.content), latency_ms, bool(cap.decoded))
         if resp.status_code == 200 and cap.decoded:
             # API contract watch: a changed response *structure* is recorded as evidence
             endpoint = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
@@ -343,6 +348,15 @@ class BetB2BFeedClient:
     # that is handled by the DOM path, not by cooling the whole skin down.
     _ACTED_ON = (BlockType.GEO_BLOCK, BlockType.JS_CHALLENGE, BlockType.CAPTCHA,
                  BlockType.IP_BANNED, BlockType.RATE_LIMITED)
+
+    def _report(self, feed: str, root: str, status: int, body_bytes: int,
+                latency_ms: float, decoded: bool) -> None:
+        if self.on_request is not None:
+            try:
+                self.on_request(feed=feed, root=root, status=status, body_bytes=body_bytes,
+                                latency_ms=latency_ms, decoded=decoded)
+            except Exception:  # noqa: BLE001 -- health reporting must never break a request
+                pass
 
     def guard_response(self, resp: httpx.Response, url: str, content_type: str) -> None:
         """Classify the response; on a real block record it and fail fast or re-session."""

@@ -228,6 +228,17 @@ class BetB2BScraper:
         else:
             self.telemetry = BetB2BTelemetry.disabled(skin)
 
+        # Security evidence (blocks, unreachable hosts, API drift) flows into this scrape's telemetry,
+        # so one telemetry file tells the whole story of an escalation.
+        self.session_manager.guard.evidence.add_sink(
+            lambda rec: self.telemetry._emit(
+                phase="security", action=rec.get("kind", "event"), success=False,
+                metadata={k: rec.get(k) for k in ("site", "url", "status", "endpoint", "verdict",
+                                                   "error", "added_total", "snapshot_bundle")
+                          if rec.get(k) is not None}))
+
+        self.feed_client.on_request = self.telemetry.record_feed_poll
+
         self._started = False
 
         # Optional progress hook — a caller (e.g. the control API's job runner)
@@ -264,6 +275,7 @@ class BetB2BScraper:
     async def close(self) -> None:
         if not self._started:
             return
+        self.telemetry.record_health()
         await self.feed_client.close()
         if self._direct_http is not None:
             await self._direct_http.aclose()

@@ -113,6 +113,7 @@ class BetB2BTelemetry:
         self.include_captured_bodies = include_captured_bodies
 
         self._events: List[BetB2BTelemetryEvent] = []
+        self._poll_stats: Dict[str, Dict[str, Any]] = {}
         self._file_counter = 0
         self._session_id = uuid.uuid4().hex[:12]
         self._snapshot_counter = 0
@@ -174,6 +175,11 @@ class BetB2BTelemetry:
     ) -> None:
         if not self.enabled:
             return
+        st = self._poll_stats.setdefault(f"{root}_{feed}", {"n": 0, "ok": 0, "status": {}, "lat": []})
+        st["n"] += 1
+        st["ok"] += int(status >= 200 and status < 300 and decoded)
+        st["status"][str(status)] = st["status"].get(str(status), 0) + 1
+        st["lat"].append(latency_ms)
         self._emit(
             phase="poll", action=f"{root}_{feed}",
             success=(status >= 200 and status < 300 and decoded),
@@ -232,6 +238,27 @@ class BetB2BTelemetry:
                 "error": error,
             },
         )
+
+    def record_health(self) -> Dict[str, Any]:
+        """Emit one ``health`` event summarising every endpoint polled so far: request count,
+        success rate, status histogram, latency p50/p95/max. This is the "is it healthy" view;
+        failures themselves are captured as snapshots/evidence and arrive as ``security`` events."""
+        summary: Dict[str, Any] = {}
+        for action, st in self._poll_stats.items():
+            lat = sorted(st["lat"])
+            pick = lambda q: round(lat[min(len(lat) - 1, int(q * len(lat)))], 1) if lat else 0.0
+            summary[action] = {
+                "requests": st["n"], "success_rate": round(st["ok"] / st["n"], 3) if st["n"] else None,
+                "status": st["status"], "latency_ms": {"p50": pick(0.5), "p95": pick(0.95),
+                                                       "max": round(lat[-1], 1) if lat else 0.0},
+            }
+        if self.enabled and summary:
+            total = sum(v["requests"] for v in summary.values())
+            ok = sum(st["ok"] for st in self._poll_stats.values())
+            self._emit(phase="health", action="summary", success=(ok == total),
+                       metadata={"endpoints": summary, "requests": total,
+                                 "success_rate": round(ok / total, 3) if total else None})
+        return summary
 
     def record_scrape_complete(
         self,

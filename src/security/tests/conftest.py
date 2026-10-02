@@ -8,3 +8,4 @@ import pytest
 def _isolated_security_state(tmp_path, monkeypatch):
     monkeypatch.setenv("SCRAPAMOJA_SECURITY_DIR", str(tmp_path / "security"))
     monkeypatch.setenv("SCRAPAMOJA_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv("SCRAPAMOJA_SNAPSHOT_DIR", str(tmp_path / "snapshots"))
