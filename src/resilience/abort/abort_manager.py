@@ -528,7 +528,7 @@ class AbortManager(IResilienceManager):
         # Determine severity
         severity = AbortSeverity.LOW
         if triggered_conditions:
-            severity = max(c.severity for c in triggered_conditions)
+            severity = max((c.severity for c in triggered_conditions), key=lambda s: s.rank)
         
         # Create decision
         decision = AbortDecision(

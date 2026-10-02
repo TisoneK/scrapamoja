@@ -12,9 +12,9 @@ from datetime import datetime
 
 from ..correlation import get_correlation_id
 from ..models.abort import (
-    AbortPolicy, AbortDecision, AbortAction, AbortTrigger, AbortSeverity,
-    ExecutionResult, RollbackInfo
+    AbortPolicy, AbortDecision, AbortAction, AbortTrigger, AbortSeverity
 )
+from .abort_executor import ExecutionResult, RollbackInfo      # defined with the executor
 from ..logging.resilience_logger import ResilienceLogger
 
 

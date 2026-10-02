@@ -366,3 +366,67 @@ async def publish_recovery_event(
         recovery_type, original_error, action_taken, severity, job_id, context, component
     )
     await _event_bus.publish(event)
+
+
+def create_integration_event(
+    action: str,
+    context: Optional[Dict[str, Any]] = None,
+    component: Optional[str] = None,
+    severity: str = "info",
+    job_id: Optional[str] = None,
+    **identifiers: Any,
+) -> ResilienceEvent:
+    """Create an event for a resilience integration (browser lifecycle, selector engine, ...).
+
+    ``identifiers`` (e.g. ``browser_id=...``) are stored alongside ``action`` in the event data.
+    """
+    return ResilienceEvent(
+        event_type="integration_event",
+        severity=severity,
+        job_id=job_id,
+        component=component or "integration",
+        data={"action": action, **identifiers, **(context or {})},
+    )
+
+
+async def publish_integration_event(
+    action: str,
+    context: Optional[Dict[str, Any]] = None,
+    component: Optional[str] = None,
+    severity: str = "info",
+    job_id: Optional[str] = None,
+    **identifiers: Any,
+) -> None:
+    """Publish an integration event."""
+    await _event_bus.publish(
+        create_integration_event(action, context, component, severity, job_id, **identifiers)
+    )
+
+
+def create_telemetry_event(
+    action: str,
+    context: Optional[Dict[str, Any]] = None,
+    component: Optional[str] = None,
+    severity: str = "info",
+    job_id: Optional[str] = None,
+) -> ResilienceEvent:
+    """Create an event describing telemetry activity (metrics collected, health checks, ...)."""
+    return ResilienceEvent(
+        event_type="telemetry_event",
+        severity=severity,
+        job_id=job_id,
+        component=component or "telemetry_integration",
+        data={"action": action, **(context or {})},
+    )
+
+
+async def publish_telemetry_event(
+    action: str,
+    context: Optional[Dict[str, Any]] = None,
+    component: Optional[str] = None,
+    severity: str = "info",
+    job_id: Optional[str] = None,
+) -> None:
+    """Publish a telemetry event."""
+    await _event_bus.publish(create_telemetry_event(action, context, component, severity, job_id))
+

@@ -33,6 +33,11 @@ class AbortSeverity(Enum):
     HIGH = "high"
     CRITICAL = "critical"
 
+    @property
+    def rank(self) -> int:
+        """Ordering for max()/sorting (a plain string Enum cannot be compared)."""
+        return ("low", "medium", "high", "critical").index(self.value)
+
 
 class AbortStatus(Enum):
     ACTIVE = "active"
@@ -118,6 +123,39 @@ class AbortPolicy:
             "abort_count": self.abort_count,
             "tags": self.tags,
             "metadata": self.metadata
+        }
+
+
+@dataclass
+class AbortDecision:
+    """The outcome of evaluating an abort policy, or of triggering one manually.
+
+    Built by :class:`AbortManager` (``triggered`` False with no ``action`` when no condition
+    fired) and consumed by the executor, the abort logger and the event publisher.
+    """
+    policy_id: str
+    triggered: bool
+    action: Optional[AbortAction] = None
+    severity: AbortSeverity = AbortSeverity.LOW
+    reason: str = ""
+    condition: Optional[AbortCondition] = None
+    metrics: Optional[AbortMetrics] = None
+    context: Dict[str, Any] = field(default_factory=dict)
+    decision_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "decision_id": self.decision_id,
+            "policy_id": self.policy_id,
+            "triggered": self.triggered,
+            "action": self.action.value if self.action else None,
+            "severity": self.severity.value,
+            "reason": self.reason,
+            "condition": self.condition.to_dict() if self.condition else None,
+            "metrics": self.metrics.to_dict() if self.metrics else None,
+            "context": self.context,
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
