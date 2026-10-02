@@ -269,6 +269,12 @@ class BetB2BSessionManager:
             logger.warning("skin=%s blocked on the DIRECT egress although BETB2B_PROXY_URL is set — "
                            "run without --direct / pass the proxy to the browser path.", self.skin.name)
 
+    async def _check_page(self, page: Any, status: Optional[int], tier: BrowserTier) -> None:
+        """Classify what ``page`` shows; walk the ladder if it is a block."""
+        verdict = await self.guard.inspect_page(page, status)
+        if verdict.blocked:
+            await self._resolve_block(page, verdict, tier)
+
     async def _resolve_block(self, page: Any, verdict: BlockVerdict, tier: BrowserTier) -> None:
         """Walk the policy ladder for a block seen on ``page``.
 
@@ -358,10 +364,9 @@ class BetB2BSessionManager:
 
                 # Classify what we landed on: country block (HTTP 203 →
                 # /en/block), JS browser-validation page, CAPTCHA, ban, ...
-                if resp is not None:
-                    verdict = await self.guard.inspect_page(page, resp.status)
-                    if verdict.blocked:
-                        await self._resolve_block(page, verdict, tier)
+                # Also when the navigation itself errored (a reset can still
+                # leave a challenge page behind).
+                await self._check_page(page, resp.status if resp is not None else None, tier)
 
                 # Best-effort consent dismissal.
                 await self._dismiss_consent(page)
@@ -381,6 +386,9 @@ class BetB2BSessionManager:
                     await asyncio.sleep(min(self.settle_seconds, 6.0))
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("skin=%s live-page visit failed: %s", self.skin.name, exc)
+
+                # Never harvest cookies from a page that is showing a challenge.
+                await self._check_page(page, None, tier)
 
                 # Harvest cookies + UA via the framework's SessionHarvester.
                 session = await self._harvester.harvest(
@@ -536,10 +544,8 @@ class BetB2BSessionManager:
                         # Even on timeout the page may be partially loaded —
                         # give it a short grace period and try anyway.
 
-                    if resp is not None:
-                        verdict = await self.guard.inspect_page(page, resp.status)
-                        if verdict.blocked:
-                            await self._resolve_block(page, verdict, self.guard.tier)
+                    await self._check_page(page, resp.status if resp is not None else None,
+                                           self.guard.tier)
 
                     await self._dismiss_consent(page)
                     await asyncio.sleep(wait_s)

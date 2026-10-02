@@ -203,3 +203,22 @@ def test_block_through_a_configured_proxy_blames_the_proxy(skin, tmp_path, caplo
     caplog.set_level("WARNING")
     mgr._explain_block(mgr.guard.inspect(203, "https://linebet.com/en/block"))
     assert "the proxy is the problem" in caplog.text
+
+
+def test_a_challenge_is_caught_even_when_the_navigation_errored(skin, tmp_path, monkeypatch):
+    """goto can fail (connection reset) and still leave a challenge page: status is None."""
+    mgr = manager(skin, tmp_path)
+
+    async def never_clears(page, **kw):
+        return resolver.Clearance(False, await resolver.inspect_page(page), 0.0)
+    monkeypatch.setattr(session_mod.sec_resolver, "wait_for_clearance", never_clears)
+
+    async def go():
+        with pytest.raises(_Retry):
+            await mgr._check_page(P(), None, mgr.guard.tier)
+
+        class Clean(P):
+            async def title(self):
+                return "Linebet"
+        await mgr._check_page(Clean(), None, mgr.guard.tier)          # clean page: no raise
+    asyncio.run(go())
