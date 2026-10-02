@@ -19,3 +19,9 @@ Promoted: ADR-26, ADR-27, inefficiencies entries, backlog rows, preferences, fla
 - Dead end avoided: a first idea was to treat every transport failure as a whole-skin rest; the live run showed the optional statistics service timing out while the odds feed was fine, so failures got a `scope` (stats) and in-flight failures stopped doubling the rest.
 - Tests initially "passed first time" — checked by running them against the OLD scraper (they failed there), so they test the change.
 - The live run was on the code BEFORE the scoped-rest and pacing fixes; its log is the evidence for ADR-30. Afterwards all three hosts refused TCP connections (connect time 0) — not a challenge page and not a timeout on a slow answer.
+
+## Diagnosis round ("find out why it's blocking")
+- Method: DNS (each host = ONE IP, no CDN) → raw TCP `connect()` per port with a 4 s timeout → ipinfo ownership of the IPs. No HTTP traffic to the sites, to avoid prolonging a drop.
+- Result table at ~13:30Z: betwinner 443/80 DROPPED; melbet 443 DROPPED / 80 open; 22bet 443 open (recovered); linebet open. Owners: Melbikomas UAB; Redstart Group x2; G-Core Labs (linebet only).
+- `bore` log pasted by the operator showed the tunnel crashing ("frame error, invalid byte length") after repeated bursts of ~12 simultaneous new connections through it — the browser path opens many parallel connections; worth remembering when sizing anything that goes through bore.
+- The operator's phrasing "proxy is still up" was based on the pasted log; the port was refused 36 minutes after its last line. Check with a connect() before relying on it.
