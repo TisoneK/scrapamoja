@@ -178,6 +178,7 @@ class BetB2BScraper:
         self.retries = max(0, _env_num("BETB2B_RETRIES", 2, int))
         self.retry_backoff = max(0.0, _env_num("BETB2B_RETRY_BACKOFF", 2.0, float))
         self.last_fetch_stats: Dict[str, Any] = {}
+        self._discovery_failed = False
 
         # Resolve the sport strategy (None → AllSportsScraper).
         self.sport_scraper: SportScraper = resolve_sport(sport)
@@ -372,6 +373,15 @@ class BetB2BScraper:
         session_harvested = self.session_manager.has_session
 
         duration = (datetime.now(timezone.utc) - start).total_seconds()
+        # An empty result is only a SUCCESS if the site actually answered. A
+        # blocked / unreachable site (WAF challenge page, timeouts) must not be
+        # recorded as "0 events, success".
+        error = None
+        if (not events and action not in ("raw_capture", "sports_short", "top_champs")
+                and (self._discovery_failed
+                     or (captured and all(self._capture_failed(c) for c in captured)))):
+            error = "no events: site blocked or unreachable (discovery/feed returned no usable data)"
+            logger.warning("skin=%s %s", self.skin.name, error)
         result = BetB2BScrapeResult(
             skin=self.skin.name,
             action=action,
@@ -380,6 +390,7 @@ class BetB2BScraper:
             captured_responses=captured,
             scrape_duration_seconds=duration,
             session_harvested=session_harvested,
+            error=error,
         )
         logger.info(
             "skin=%s sport=%s scrape '%s' done: %d events from %d captures in %.2fs",
@@ -705,10 +716,17 @@ class BetB2BScraper:
             self.sport_scraper.sport_id if self.sport_scraper.sport_id > 0 else None
         )
         self._emit_phase("discovering sports")
+        self._discovery_failed = False
         try:
             cap = await self.feed_client.fetch_sports(root=root)
         except Exception as exc:  # noqa: BLE001
             logger.warning("skin=%s GetSportsZip failed: %s", self.skin.name, exc)
+            self._discovery_failed = True
+            return []
+        if self._capture_failed(cap):   # HTTP error / WAF challenge page / not JSON
+            logger.warning("skin=%s GetSportsZip unusable (status=%s) — blocked or unreachable",
+                           self.skin.name, getattr(cap, "status", None))
+            self._discovery_failed = True
             return []
         leagues = extract_leagues_from_sports(getattr(cap, "decoded", None) or {}, sport_id)
         leagues = leagues[:int(getattr(self.skin, "max_leagues", 60) or 60)]

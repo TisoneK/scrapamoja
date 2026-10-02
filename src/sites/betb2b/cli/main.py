@@ -570,6 +570,8 @@ class BetB2BCLI:
                 await _update_results(scraper, db_target, skin_name)
             failed_ids = list((getattr(scraper, "last_fetch_stats", None) or {}).get("failed_ids", []))
 
+        if result.get("error"):
+            print(f"  [{skin_name}] FAILED: {result['error']}", file=sys.stderr)
         if not no_db:
             try:
                 from src.sites.betb2b.store import persist_result

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -243,6 +244,18 @@ def _coerce_status(sc: Dict[str, Any], is_live: bool) -> Tuple[EventStatus, Opti
 # ---------------------------------------------------------------------------
 # Main extractor
 # ---------------------------------------------------------------------------
+_PLACEHOLDER_NAME = re.compile(r"^\s*(home|away|team\s*[12])\s*(\(.*\))?\s*$", re.IGNORECASE)
+
+
+def is_placeholder_event(event: Event) -> bool:
+    """True for special-market listings that are not real matches — the feed
+    carries them with generic participant names such as ``Home (Points)`` /
+    ``Away (Points)``. Both sides must be generic, so a real team named e.g.
+    "Home Guard" is never dropped."""
+    return bool(_PLACEHOLDER_NAME.match(event.home or "")
+                and _PLACEHOLDER_NAME.match(event.away or ""))
+
+
 class BetB2BExtractionRules:
     """Project raw BetB2B feed JSON payloads onto our dataclass models.
 
@@ -319,16 +332,21 @@ class BetB2BExtractionRules:
             value = self._flatten_value(value)
 
         events: List[Event] = []
+        placeholders = 0
         for ev_dict in value:
             if not isinstance(ev_dict, dict):
                 continue
             ev = self._build_event(ev_dict, source_url=captured.url)
-            if ev is not None:
-                events.append(ev)
+            if ev is None:
+                continue
+            if is_placeholder_event(ev):
+                placeholders += 1
+                continue
+            events.append(ev)
 
         logger.debug(
-            "Extracted %d events from %s (skin=%s)",
-            len(events), captured.url, self.skin.name,
+            "Extracted %d events from %s (skin=%s, %d placeholder listings dropped)",
+            len(events), captured.url, self.skin.name, placeholders,
         )
         return events
 
