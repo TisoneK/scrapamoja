@@ -76,8 +76,21 @@ class TestAuditQueryService:
     
     @pytest.fixture
     def mock_repository(self):
-        """Create a mock repository."""
-        return Mock()
+        """Create a mock repository.
+
+        The service counts with ``count_events_by_multiple_filters`` (an efficient COUNT query)
+        and fetches pages with ``get_events_by_multiple_filters``; keep the two consistent so each
+        test only has to say which events exist.
+        """
+        repo = Mock()
+
+        def count(**_filters):
+            try:
+                return len(repo.get_events_by_multiple_filters.return_value)
+            except TypeError:                    # no events configured for this test
+                return 0
+        repo.count_events_by_multiple_filters.side_effect = count
+        return repo
     
     @pytest.fixture
     def audit_service(self, mock_repository):

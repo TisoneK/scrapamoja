@@ -23,12 +23,6 @@ ROOT = Path(__file__).resolve().parents[2]
 KNOWN_BROKEN = {
     "src.browser.authority": "StealthSettings has no 'webgl_protection' field (presets in browser/models/stealth.py use fields that were renamed/never added)",
     "src.browser.configuration": "same StealthSettings 'webgl_protection' mismatch",
-    "src.resilience.abort.abort_executor": "AbortDecision / ExecutionResult / RollbackInfo / default abort policies are imported from resilience/models/abort.py but never written",
-    "src.resilience.abort.abort_logger": "same missing abort models",
-    "src.resilience.abort.abort_manager": "same missing abort models",
-    "src.resilience.integration.browser_lifecycle": "depends on the missing abort models",
-    "src.resilience.integration.selector_engine": "depends on the missing abort models",
-    "src.resilience.integration.telemetry": "depends on the missing abort models",
     "src.selectors.integration": "imports src.selectors.engine.configuration.*, which does not exist ('engine' is a module, not a package)",
     "src.telemetry.integration.alerting_integration": "ITelemetryIntegration does not exist (only ISelectorTelemetryIntegration)",
 }

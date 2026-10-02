@@ -101,6 +101,14 @@ class YAMLSelectorLoader:
                     operation="load_selector_from_file"
                 )
             
+            # A missing file is a file error (not a generic loading failure)
+            if not Path(file_path).is_file():
+                raise SelectorFileError(
+                    message=f"File not found: {file_path}",
+                    file_path=file_path,
+                    operation="load_selector_from_file"
+                )
+            
             # Check file size
             file_size = Path(file_path).stat().st_size
             if self.config.enforce_file_size_limits and file_size > self.config.max_selector_file_size:
@@ -166,9 +174,10 @@ class YAMLSelectorLoader:
             # Extract required fields
             selector_id = yaml_data.get('id')
             if not selector_id:
-                raise SelectorLoadingError(
+                raise SelectorValidationException(
                     message="Missing required field: id",
-                    file_path=file_path
+                    validation_errors=["id is required"],
+                    field_path="id",
                 )
             
             # Convert to YAMLSelector object

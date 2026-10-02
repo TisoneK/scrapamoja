@@ -115,11 +115,11 @@ class TestConfidenceThresholds:
         manager.set_context_threshold("production", "critical_page", 0.95)
         
         # Should return context-specific threshold
-        critical_threshold = manager.get_threshold("production", context="critical_page")
+        critical_threshold = manager.get_threshold("production", sub_context="critical_page")
         assert critical_threshold == 0.95
         
         # Should return default production threshold for other contexts
-        default_threshold = manager.get_threshold("production", context="normal_page")
+        default_threshold = manager.get_threshold("production", sub_context="normal_page")
         assert default_threshold >= 0.8
     
     def test_threshold_history_tracking(self):
@@ -239,7 +239,7 @@ class TestConfidenceThresholds:
         assert violation["selector_name"] == "alert_test"
         assert violation["actual_confidence"] == 0.6
         assert violation["required_threshold"] == 0.8
-        assert violation["violation_amount"] == 0.2
+        assert violation["violation_amount"] == pytest.approx(0.2)
 
 
 class TestConfidenceThresholdsEdgeCases:
@@ -320,4 +320,4 @@ class TestConfidenceThresholdsEdgeCases:
             manager.set_custom_threshold(f"context_{i}", 0.5 + (i % 10) * 0.05)
         
         # Should handle large number of thresholds efficiently
-        assert len(manager.get_all_thresholds()) >= 1000
+        assert len(manager.get_all_thresholds()["custom_thresholds"]) >= 1000   # counts the custom ones, not the 3 sections

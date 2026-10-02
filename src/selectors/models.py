@@ -5,6 +5,7 @@ This module defines the core entities for the YAML selector loading system
 including YAMLSelector, SelectorStrategy, and supporting data structures.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -195,8 +196,10 @@ class YAMLSelector:
         # Cross-field validation
         if self.selector_type == SelectorType.CSS:
             # Basic CSS pattern validation
-            if not self.pattern.strip().startswith(('.', '#', '[', '*')):
-                errors.append("CSS selector pattern should start with '.', '#', '[', or '*'")
+            # A CSS selector may start with a tag name (div#id), a class, id, attribute, pseudo-class or
+            # universal selector; a combinator or punctuation cannot start one.
+            if not re.match(r"^\s*[A-Za-z.#\[*:]", self.pattern):
+                errors.append("CSS selector pattern should start with a tag name, '.', '#', '[', ':' or '*'")
         
         return errors
     

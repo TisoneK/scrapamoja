@@ -24,6 +24,28 @@ from src.selectors.exceptions import (
 )
 
 
+
+@pytest.fixture(autouse=True)
+def _private_tempdir(tmp_path, monkeypatch):
+    """These tests write with NamedTemporaryFile(delete=False) and then scan the temp directory.
+    In the shared system temp dir that picks up every earlier run's leftovers ("28 loaded, expected
+    2"); a private one per test is empty and cleaned up automatically."""
+    import tempfile as _tf
+    monkeypatch.setattr(_tf, "tempdir", str(tmp_path))
+
+
+@pytest.fixture
+def allow_temp_files(monkeypatch):
+    """The loader only reads files inside the configured selector directories (a security
+    allow-list). Tests that load from temp files switch that check off for the loader they build."""
+    from src.selectors.config import SelectorConfig
+    cfg = SelectorConfig()
+    cfg.validate_file_paths = False
+    monkeypatch.setattr("src.selectors.yaml_loader.get_config", lambda: cfg)
+    return cfg
+
+
+@pytest.mark.usefixtures("allow_temp_files")
 class TestYAMLSelectorLoader:
     """Test cases for YAML selector loader."""
     
@@ -239,27 +261,24 @@ class TestSelectorStrategy:
     
     def test_strategy_validation_invalid_priority(self):
         """Test validation of strategy with invalid priority."""
-        strategy = SelectorStrategy(
-            type=StrategyType.TEXT_ANCHOR,
-            priority=0,  # Invalid priority
-            config={"anchor_text": "Test"},
-            confidence_threshold=0.8
-        )
-        
+        # Invalid values are rejected when the strategy is CONSTRUCTED (fail fast), not by validate()
         with pytest.raises(ValueError, match="Strategy priority must be positive"):
-            strategy.validate()
+            SelectorStrategy(
+                type=StrategyType.TEXT_ANCHOR,
+                priority=0,  # Invalid priority
+                config={"anchor_text": "Test"},
+                confidence_threshold=0.8
+            )
     
     def test_strategy_validation_invalid_confidence(self):
         """Test validation of strategy with invalid confidence threshold."""
-        strategy = SelectorStrategy(
-            type=StrategyType.TEXT_ANCHOR,
-            priority=1,
-            config={"anchor_text": "Test"},
-            confidence_threshold=1.5  # Invalid confidence
-        )
-        
         with pytest.raises(ValueError, match="Confidence threshold must be between 0.0 and 1.0"):
-            strategy.validate()
+            SelectorStrategy(
+                type=StrategyType.TEXT_ANCHOR,
+                priority=1,
+                config={"anchor_text": "Test"},
+                confidence_threshold=1.5  # Invalid confidence
+            )
 
 
 class TestYAMLSelector:
@@ -372,3 +391,17 @@ class TestYAMLSelector:
         assert restored_selector.selector_type == selector.selector_type
         assert restored_selector.pattern == selector.pattern
         assert len(restored_selector.strategies) == len(selector.strategies)
+
+
+def test_loader_rejects_files_outside_the_selector_directories(tmp_path):
+    """The security allow-list stays in force when path validation is on (the default)."""
+    from src.selectors.config import SelectorConfig
+    from src.selectors.exceptions import SelectorFileError
+    from src.selectors.yaml_loader import YAMLSelectorLoader
+    outside = tmp_path / "evil.yaml"
+    outside.write_text("id: x\n")
+    loader = YAMLSelectorLoader(config=SelectorConfig())
+    assert loader.config.validate_file_paths is True
+    with pytest.raises(SelectorFileError):
+        loader.load_selector_from_file(str(outside))
+

@@ -7,6 +7,7 @@ persistence, and adaptive learning capabilities as specified in the API contract
 
 import asyncio
 import json
+import os
 import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -60,9 +61,14 @@ class AdaptiveThresholdResult:
 class ConfidenceThresholdManager:
     """Manages confidence thresholds with context-aware adjustments."""
     
-    def __init__(self):
+    def __init__(self, storage_path: Optional[str] = None):
         self._logger = get_logger("confidence_thresholds")
         self._config = get_config()
+        # Where custom thresholds persist: argument, else $SCRAPAMOJA_THRESHOLDS_FILE, else
+        # data/thresholds.json. (It used to be hard-wired, so every instance - and every test run -
+        # shared and re-read one file.)
+        self._storage_path = Path(
+            storage_path or os.environ.get("SCRAPAMOJA_THRESHOLDS_FILE") or "data/thresholds.json")
         
         # Threshold storage
         self._thresholds: Dict[str, Dict[str, float]] = {}
@@ -100,6 +106,10 @@ class ConfidenceThresholdManager:
         Returns:
             Confidence threshold value (0.0 to 1.0)
         """
+        if not isinstance(context, str) or not context.strip():
+            raise ValidationError(
+                selector_name=str(context), validation_type="threshold_context",
+                rule_pattern="non-empty string", reason="Threshold context must be a non-empty string")
         with self._lock:
             # Check sub-context specific threshold first
             if sub_context and context in self._context_thresholds:
@@ -169,8 +179,9 @@ class ConfidenceThresholdManager:
             # Persist changes
             self._save_thresholds()
             
-            # Publish event
-            asyncio.create_task(
+            # Publish event (best effort). This is a synchronous method: schedule the publish when
+            # an event loop is running, otherwise just run it - create_task() raises without a loop.
+            self._publish_nowait(
                 publish_event(
                     "threshold_changed",
                     {
@@ -196,6 +207,25 @@ class ConfidenceThresholdManager:
             
             return True
     
+    def _publish_nowait(self, coro) -> None:
+        """Run an event-publishing coroutine from synchronous code without failing.
+
+        With a running loop the coroutine is scheduled as a task (a reference is kept so it is not
+        garbage-collected before it runs); with no loop it is run to completion.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            try:
+                asyncio.run(coro)
+            except Exception as exc:  # noqa: BLE001 - events are best effort
+                self._logger.warning("threshold_event_failed", error=str(exc))
+            return
+        pending = self.__dict__.setdefault("_pending_events", set())
+        task = loop.create_task(coro)
+        pending.add(task)
+        task.add_done_callback(pending.discard)
+
     def set_context_threshold(self, context: str, sub_context: str, threshold: float,
                              reason: str = "Context-specific threshold") -> bool:
         """
@@ -522,7 +552,7 @@ class ConfidenceThresholdManager:
         """Load thresholds from storage."""
         try:
             # Try to load from file
-            storage_path = Path("data/thresholds.json")
+            storage_path = self._storage_path
             if storage_path.exists():
                 with open(storage_path, 'r') as f:
                     data = json.load(f)
@@ -545,11 +575,10 @@ class ConfidenceThresholdManager:
         """Save thresholds to storage."""
         try:
             # Ensure directory exists
-            storage_path = Path("data")
-            storage_path.mkdir(exist_ok=True)
+            thresholds_file = self._storage_path
+            thresholds_file.parent.mkdir(parents=True, exist_ok=True)
             
             # Save to file
-            thresholds_file = storage_path / "thresholds.json"
             data = {
                 "custom_thresholds": self._thresholds,
                 "context_thresholds": self._context_thresholds,
