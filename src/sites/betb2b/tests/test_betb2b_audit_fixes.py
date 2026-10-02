@@ -125,9 +125,9 @@ def test_enrich_with_stat_ids_sets_ids(skin):
     s = BetB2BScraper(skin, direct=True)
 
     async def fake_result(ident):
-        return {"stat_game_id": "S" + ident} if ident != "404" else None
+        return ({"stat_game_id": "S" + ident} if ident != "404" else None), False
 
-    s.fetch_result = fake_result
+    s.fetch_result_checked = fake_result
     evs = []
     for i in ("10", "404"):
         e = _ev("A", "B"); e.event_id = i; evs.append(e)
@@ -152,3 +152,39 @@ def test_known_sub_game_ids_are_not_refetched_as_matches(tmp_path, monkeypatch):
     future = time.time() + 3600
     pairs = [("757880276", future), ("757880277", future), ("757880281", future), ("999", future)]
     assert store.unprocessed_ids(pairs, db) == ["999"]   # stored match + its sub-games are skipped
+
+
+def test_stat_id_enrichment_stops_early_when_site_unreachable(skin):
+    from src.sites.betb2b.scraper import BetB2BScraper
+    s = BetB2BScraper(skin, direct=True)
+    s.concurrency = 1
+    calls = []
+
+    async def always_down(ident):
+        calls.append(ident)
+        return None, True            # request FAILED (timeout), not "no data"
+
+    s.fetch_result_checked = always_down
+    evs = []
+    for i in range(40):
+        e = _ev("A", "B"); e.event_id = str(100 + i); evs.append(e)
+    asyncio.run(s._enrich_with_stat_ids(evs))
+    assert len(calls) < 40           # gave up after the failure streak instead of waiting out all 40
+
+
+def test_no_data_is_not_treated_as_unreachable(skin):
+    from src.sites.betb2b.scraper import BetB2BScraper
+    s = BetB2BScraper(skin, direct=True)
+    s.concurrency = 1
+    calls = []
+
+    async def no_data(ident):
+        calls.append(ident)
+        return None, False           # server answered "no data"
+
+    s.fetch_result_checked = no_data
+    evs = []
+    for i in range(20):
+        e = _ev("A", "B"); e.event_id = str(100 + i); evs.append(e)
+    asyncio.run(s._enrich_with_stat_ids(evs))
+    assert len(calls) == 20          # every event is still tried

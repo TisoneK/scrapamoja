@@ -982,6 +982,14 @@ class BetB2BScraper:
         }
 
     async def fetch_result(self, ident: str) -> Optional[Dict[str, Any]]:
+        """See :meth:`fetch_result_checked`; returns just the parsed result."""
+        return (await self.fetch_result_checked(ident))[0]
+
+    async def fetch_result_checked(self, ident: str):
+        """``(result | None, errored)``. ``errored`` is True when the request
+        FAILED (timeout / connection error / unusable status), as opposed to the
+        server answering "no data" (204/empty). Callers use it to stop early
+        against an unreachable site instead of waiting out every timeout."""
         """Fetch a match's result via statisticfeed ``v1/Game?id=<ident>`` (ADR-20).
 
         ``ident`` is the LineFeed event id (while the match is recent) or the
@@ -990,7 +998,7 @@ class BetB2BScraper:
         """
         ident = str(ident or "").strip()
         if not ident:
-            return None
+            return None, False
         cookie_header = (
             None if self._direct
             else (await self.session_manager.get_session()).to_cookie_header()
@@ -1010,13 +1018,15 @@ class BetB2BScraper:
                 proxy=proxy_url, timeout=15.0, follow_redirects=True,
             ) as client:
                 resp = await client.get(url, params=params, headers=headers)
-            if resp.status_code != 200 or not resp.text:
-                return None
+            if resp.status_code in (200, 204) and not resp.text:
+                return None, False                      # answered: no data
+            if resp.status_code != 200:
+                return None, resp.status_code >= 500 or resp.status_code in (403, 429)
             entity = (resp.json() or {}).get("entity") or {}
-            return self._parse_result_entity(entity)
+            return self._parse_result_entity(entity), False
         except Exception as exc:  # noqa: BLE001 — best-effort
             logger.debug("skin=%s result fetch id=%s failed: %s", self.skin.name, ident, exc)
-            return None
+            return None, True
 
     # ------------------------------------------------------------------ #
     # H2H enrichment
@@ -1030,10 +1040,22 @@ class BetB2BScraper:
         if not todo:
             return
         sem = asyncio.Semaphore(self.concurrency)
+        streak = 0        # consecutive FAILED requests; stop when the site is clearly unreachable
+        tripped = False
 
         async def _one(ev: Event) -> None:
+            nonlocal streak, tripped
+            if tripped:
+                return
             async with sem:
-                res = await self.fetch_result(str(ev.event_id))
+                if tripped:
+                    return
+                res, errored = await self.fetch_result_checked(str(ev.event_id))
+            streak = streak + 1 if errored else 0
+            if streak >= 6 and not tripped:
+                tripped = True
+                logger.warning("skin=%s stat ids: %d consecutive failures — site unreachable, "
+                               "skipping the rest", self.skin.name, streak)
             if res and res.get("stat_game_id"):
                 ev.stat_game_id = str(res["stat_game_id"])
 

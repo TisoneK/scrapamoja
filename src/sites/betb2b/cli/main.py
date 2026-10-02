@@ -182,10 +182,20 @@ async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
         return
     sem = asyncio.Semaphore(scraper.concurrency)
     found = []
+    state = {"streak": 0, "tripped": False}
 
     async def _one(eid):
+        if state["tripped"]:
+            return
         async with sem:
-            res = await scraper.fetch_result(eid)
+            if state["tripped"]:
+                return
+            res, errored = await scraper.fetch_result_checked(eid)
+        state["streak"] = state["streak"] + 1 if errored else 0
+        if state["streak"] >= 6 and not state["tripped"]:
+            state["tripped"] = True
+            print(f"  [{skin_name}] stat id backfill: site unreachable, stopping early",
+                  file=sys.stderr)
         if res and res.get("stat_game_id"):
             found.append((eid, res))
 
