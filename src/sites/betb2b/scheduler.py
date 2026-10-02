@@ -57,7 +57,7 @@ class BetB2BScheduler:
         db_path: Optional[str] = None, direct: bool = True,
         scheduled_interval: float = 10800.0,   # 3h
         live_interval: float = 15.0,           # 15s
-        refresh_window: float = 10800.0,       # re-scrape a prematch match after 3h
+        refresh_window: float = float('inf'),  # inf = never re-scrape a stored match (scores update via live/results passes)
         skip_started: bool = True,
         rate_limit_per_minute: int = 120,
         results_interval: float = 600.0,       # 10min — results pass cadence

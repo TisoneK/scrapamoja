@@ -118,8 +118,10 @@ dedup and batched/bounded-concurrency I/O keep it cheap (ADR-13/17).
 
 ```bash
 python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --skip-processed
-#   --skip-processed [SECONDS]  skip events scraped within SECONDS (default 3h;
-#   0 = anything ever stored) and matches already started
+#   --skip-processed [SECONDS]  never re-scrape a match already stored (or re-scrape
+#   only once older than SECONDS) and skip matches already started. Live scrapes are
+#   never filtered (they update scores); finished matches get their final score via
+#   the results update that runs after each scrape (--no-results to skip).
 ```
 
 **Shared remote store (optional).** Point `DATABASE_URL` at any hosted Postgres

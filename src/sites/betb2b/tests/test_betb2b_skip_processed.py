@@ -23,12 +23,12 @@ def test_skips_fresh_and_started_keeps_new(tmp_path, monkeypatch):
     future = time.time() + 3600
     pairs = [("seen", future), ("new", future), ("started", time.time() - 60)]
     assert store.unprocessed_ids(pairs, db) == ["new"]
-    # refresh_window=0 → anything ever stored is skipped; stale-by-window re-fetched
-    assert store.unprocessed_ids(pairs, db, refresh_window=0) == ["new"]
+    # default (inf) → anything ever stored is never re-fetched; 0 → always re-fetch
+    assert store.unprocessed_ids(pairs, db, refresh_window=0) == ["seen", "new"]
 
 
 def test_cli_parses_flags():
     from src.sites.betb2b.cli.main import BetB2BCLI
     p = BetB2BCLI().parser
     a = p.parse_args(["scrape", "linebet", "scheduled", "--skip-processed", "--no-db"])
-    assert a.skip_processed == 10800.0 and a.no_db
+    assert a.skip_processed == float('inf') and a.no_db

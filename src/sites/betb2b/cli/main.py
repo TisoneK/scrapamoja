@@ -131,6 +131,47 @@ def db_path() -> str:
     return _p()
 
 
+async def _update_results(scraper, db_target: str, skin_name: str) -> None:
+    """Score updates for stored matches that should have finished: fetch their
+    final result (statisticfeed ``v1/Game``) and record it. Best-effort — the
+    only re-fetch a stored match gets."""
+    from datetime import datetime, timezone
+    from src.sites.betb2b import store
+    try:
+        conn = store.init_db(db_target)
+        try:
+            pending = store.events_needing_results(conn)
+        finally:
+            conn.close()
+        if not pending:
+            return
+        sem = asyncio.Semaphore(scraper.concurrency)
+        out = []
+
+        async def _one(eid, stat_id):
+            async with sem:
+                res = await scraper.fetch_result(stat_id or eid)
+            if res:
+                out.append((eid, res))
+
+        await asyncio.gather(*[_one(e, sid) for e, sid in pending])
+        at = datetime.now(timezone.utc).isoformat()
+        conn = store.init_db(db_target)
+        try:
+            for eid, res in out:
+                store.record_result(
+                    conn, eid, stat_game_id=res.get("stat_game_id"),
+                    score_home=res.get("score_home"), score_away=res.get("score_away"),
+                    winner=res.get("winner"), status=res.get("status"), at=at)
+        finally:
+            conn.close()
+        done = sum(1 for _, r in out if r.get("status") == 3)
+        print(f"  [{skin_name}] results: {len(pending)} pending → {done} finished recorded",
+              file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  [{skin_name}] WARNING: results update failed: {exc}", file=sys.stderr)
+
+
 def _load_skin(name: str):
     from src.sites.betb2b.config import BetB2BSkinConfig
 
@@ -248,12 +289,16 @@ class BetB2BCLI:
                                  "JSON output is unaffected.")
         scrape.add_argument("--no-db", action="store_true",
                             help="Don't persist this run to the odds store.")
-        scrape.add_argument("--skip-processed", nargs="?", const=10800.0, default=None,
+        scrape.add_argument("--skip-processed", nargs="?", const=float("inf"), default=None,
                             type=float, metavar="SECONDS",
-                            help="Skip events already in the store and scraped within "
-                                 "SECONDS (default 10800 = 3h; 0 = skip anything ever "
-                                 "stored), plus matches already started. Direct mode "
-                                 "only. Needs the store (not --no-db).")
+                            help="Never re-scrape a match already in the store (default); with "
+                                 "SECONDS, re-scrape it once older than that. Also skips "
+                                 "matches already started. Live scrapes are never "
+                                 "filtered (they update scores). Direct mode only; "
+                                 "needs the store (not --no-db).")
+        scrape.add_argument("--no-results", action="store_true",
+                            help="Don't update final scores of finished stored matches "
+                                 "after the scrape.")
         scrape.add_argument("--ingest", nargs="?", const="env", default=None,
                             help="POST results to scorewise-engine /api/ingest "
                                  "(one PredictRequest per scope). Value = engine URL, "
@@ -351,8 +396,9 @@ class BetB2BCLI:
                          help="Seconds between finished-match results passes (default: 600 = 10min). <=0 disables.")
         sch.add_argument("--quota-interval", type=float, default=3600.0,
                          help="Seconds between hosted-store quota-monitor passes (default: 3600 = 1h). <=0 disables.")
-        sch.add_argument("--refresh-window", type=float, default=10800.0,
-                         help="Re-scrape a prematch match only after this many seconds (default: 3h)")
+        sch.add_argument("--refresh-window", type=float, default=float("inf"),
+                         help="Re-scrape a stored prematch match after this many seconds "
+                              "(default inf = never; scores still update via the live + results passes)")
         sch.add_argument("--no-direct", action="store_true",
                          help="Use the browser/proxy path instead of direct mode")
 
@@ -476,6 +522,8 @@ class BetB2BCLI:
                 action=args.action, sport_id=args.sport_id,
                 count=args.count, timeout_seconds=args.timeout,
             )
+            if not no_db and not getattr(args, "no_results", False):
+                await _update_results(scraper, db_target, skin_name)
 
         if not no_db:
             try:

@@ -754,7 +754,7 @@ class BetB2BScraper:
         if not pairs:
             return []
         ids = [i for i, _ in pairs]
-        if self.id_filter is not None:
+        if self.id_filter is not None and not is_live:   # live = score updates: always fetch
             ids = self.id_filter(pairs)
             logger.info("skin=%s id_filter: %d discovered → %d to fetch",
                         self.skin.name, len(pairs), len(ids))

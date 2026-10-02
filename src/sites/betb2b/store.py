@@ -976,11 +976,11 @@ def events_last_seen(conn, event_ids) -> Dict[str, Any]:
 
 
 def unprocessed_ids(pairs, path: PathLike | None = None, *,
-                    refresh_window: float = 10800.0,
+                    refresh_window: float = float('inf'),
                     skip_started: bool = True) -> List[str]:
     """Filter discovered ``[(event_id, start_epoch)]`` down to ids worth fetching:
-    drop events already scraped within ``refresh_window`` seconds (0 = skip
-    anything ever stored) and, if ``skip_started``, ones that have kicked off.
+    drop events already scraped within ``refresh_window`` seconds (default inf =
+    never re-scrape a stored event; 0 = always re-fetch) and, if ``skip_started``, ones that have kicked off.
     Works on whichever store ``init_db`` resolves (local SQLite or remote DB), so
     several machines sharing one remote store skip each other's work."""
     import time
@@ -1000,8 +1000,6 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
         seen = last_seen.get(eid)
         if seen is None:
             keep.append(eid)
-            continue
-        if refresh_window <= 0:
             continue
         from datetime import datetime, timezone
         try:
