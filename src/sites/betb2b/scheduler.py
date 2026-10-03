@@ -90,6 +90,7 @@ class BetB2BScheduler:
             skin, sport=self.sport, direct=self.direct,
             rate_limit_per_minute=self.rate_limit_per_minute,
             telemetry_enabled=False,
+            probe_filter=lambda ds, ids: store.probe_state(ids, self.db_path, ds),
         )
         await self._scraper.start()
 

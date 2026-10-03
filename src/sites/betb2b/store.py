@@ -1236,17 +1236,72 @@ def incomplete_event_ids(conn, event_ids) -> set:
     return out
 
 
-def events_missing_stat_id(conn, *, limit: int = 150) -> List[str]:
+def probe_state(ids, path: PathLike | None = None, dataset: str = "h2h", *,
+                retry_none_hours: float = 24.0) -> tuple:
+    """What the store already knows about a probe, so it is not repeated:
+    ``(have, recent_none)`` — event ids that already HAVE the data (``h2h``: stored games;
+    ``stat_id``: a stored stat id), and ids the source recently answered "no data" for
+    (latest ``dataset`` coverage row is ``not_offered`` and newer than ``retry_none_hours``).
+    Reads the shared remote store as well as the local one, like :func:`unprocessed_ids`;
+    anything unreadable simply means "unknown" (the probe goes ahead)."""
+    ids = [str(i) for i in ids]
+    have: set = set()
+    none: set = set()
+    sources = []
+    if os.environ.get("DATABASE_URL") and store_mode() != "local":
+        try:
+            from . import store_orm
+            sources.append(store_orm.connect())
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        sources.append(init_db(path) if store_mode() != "remote" or not sources else None)
+    except Exception:  # noqa: BLE001
+        pass
+    now = datetime.now(timezone.utc)
+    for conn in [c for c in sources if c is not None]:
+        try:
+            for i in range(0, len(ids), 400):
+                chunk = ids[i:i + 400]
+                ph = ",".join(f":p{n}" for n in range(len(chunk)))
+                params = {f"p{n}": v for n, v in enumerate(chunk)}
+                if dataset == "h2h":
+                    q = f"SELECT DISTINCT event_id FROM h2h_games WHERE event_id IN ({ph})"
+                else:
+                    q = f"SELECT event_id FROM events WHERE stat_game_id IS NOT NULL AND event_id IN ({ph})"
+                have |= {r[0] for r in _run_sql(conn, q, params).fetchall()}
+                q = (f"SELECT c.event_id, c.status, c.captured_at FROM coverage c JOIN (SELECT event_id, "
+                     f"MAX(id) mid FROM coverage WHERE dataset = '{dataset}' AND event_id IN ({ph}) "
+                     f"GROUP BY event_id) m ON c.id = m.mid")
+                for eid, status, at in _run_sql(conn, q, params).fetchall():
+                    when = _parse_ts(at)
+                    if status == "not_offered" and when and (now - when).total_seconds() < retry_none_hours * 3600:
+                        none.add(eid)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("probe state (%s): read failed on one store (%s)", dataset, exc)
+        finally:
+            conn.close()
+    return have, none - have
+
+
+def events_missing_stat_id(conn, *, limit: int = 150, retry_none_hours: float = 24.0) -> List[str]:
     """Event ids of real matches (two teams) with no statisticfeed id yet — the
     backfill queue for events stored before stat ids were captured. Newest first,
-    since ``v1/Game?id=<event id>`` only resolves for recent/upcoming games."""
+    since ``v1/Game?id=<event id>`` only resolves for recent/upcoming games. An event the
+    source answered "no data" for is left alone for ``retry_none_hours``."""
     sql = ("SELECT event_id FROM events WHERE stat_game_id IS NULL "
            "AND away_name IS NOT NULL AND away_name <> '' AND superseded_by IS NULL "
-           "ORDER BY start_time DESC LIMIT {n}").format(n=int(limit))
-    if _is_orm(conn):
-        from sqlalchemy import text as _t
-        return [r[0] for r in conn.execute(_t(sql))]
-    return [r[0] for r in conn.execute(sql)]
+           "ORDER BY start_time DESC")
+    cov = ("SELECT c.event_id, c.status, c.captured_at FROM coverage c JOIN (SELECT event_id, "
+           "MAX(id) mid FROM coverage WHERE dataset = 'stat_id' GROUP BY event_id) m ON c.id = m.mid")
+    rows = [r[0] for r in _run_sql(conn, sql, {}).fetchall()]
+    now = datetime.now(timezone.utc)
+    recent = set()
+    for eid, status, at in _run_sql(conn, cov, {}).fetchall():
+        when = _parse_ts(at)
+        if status == "not_offered" and when and (now - when).total_seconds() < retry_none_hours * 3600:
+            recent.add(eid)
+    return [e for e in rows if e not in recent][:int(limit)]
 
 
 def relabel_h2h_periods(conn) -> int:

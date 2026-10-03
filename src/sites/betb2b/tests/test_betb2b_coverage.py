@@ -159,7 +159,7 @@ def test_finalize_coverage_records_h2h_and_totals():
     s._finalize_coverage([ok, none, failed, never])
     h2h = [next(r for r in e.coverage if r["dataset"] == "h2h")["status"] for e in (ok, none, failed, never)]
     assert h2h == ["not_attempted", "not_offered", "fetch_failed", "not_attempted"]
-    assert all(len(e.coverage) == 22 for e in (ok, none, failed, never))
+    assert all(len(e.coverage) == 23 for e in (ok, none, failed, never))   # 21 totals + h2h + stat_id
 
 
 # --------------------------------------------------------------------------- #
@@ -428,3 +428,47 @@ def test_a_match_the_source_has_no_periods_for_is_marked_and_not_queued_again(co
     assert store.record_period_results(conn, run, "E1", "linebet", []) == 0
     store.record_coverage(conn, run, "E1", "linebet", "result_periods", "not_offered")
     assert store.events_missing_period_scores(conn) == []
+
+
+# --------------------------------------------------------------------------- #
+# Probes the store already answers are not repeated
+# --------------------------------------------------------------------------- #
+def _seed_probe_events(conn):
+    store.persist_result(_result("2026-10-03T10:00:00+00:00"), conn=conn)     # E1: no h2h, no stat id
+    run = store.begin_backfill_run(conn, "linebet", "x")
+    return run
+
+
+def test_probe_state_reports_have_and_recent_none(conn, tmp_path, monkeypatch):
+    run = _seed_probe_events(conn)
+    path = None if store._is_orm(conn) else tmp_path / "odds.db"
+    fresh = datetime.now(timezone.utc).isoformat()
+    store.record_coverage(conn, run, "E1", "linebet", "h2h", "not_offered", at=fresh)
+    have, none = store.probe_state(["E1", "E2"], path, "h2h")
+    assert have == set() and none == {"E1"}                                   # source said none, recently
+    old = (datetime.now(timezone.utc) - timedelta(hours=30)).isoformat()
+    store.record_coverage(conn, run, "E1", "linebet", "h2h", "not_offered", at=old)   # latest row is old
+    assert store.probe_state(["E1"], path, "h2h")[1] == set()                 # asked again after 24h
+    store.record_result(conn, "E1", stat_game_id="sg")
+    assert store.probe_state(["E1"], path, "stat_id")[0] == {"E1"}            # already has a stat id
+
+
+def test_stat_id_backfill_queue_skips_events_the_source_answered_none_for(conn):
+    run = _seed_probe_events(conn)
+    assert store.events_missing_stat_id(conn) == ["E1"]
+    store.record_coverage(conn, run, "E1", "linebet", "stat_id", "not_offered")
+    assert store.events_missing_stat_id(conn) == []
+
+
+@pytest.mark.asyncio
+async def test_in_scrape_probes_skip_what_the_store_knows():
+    s = _scraper(_Feed())
+    known, none, new = _event(), _event(), _event()
+    known.event_id, none.event_id, new.event_id = "10", "11", "12"
+    s.probe_filter = lambda ds, ids: ({"10"}, {"11"})
+    todo = s._apply_probe_filter("h2h", [known, none, new], "h2h_status")
+    assert [e.event_id for e in todo] == ["12"]
+    assert (known.h2h_status, none.h2h_status, new.h2h_status) == ("known", "none", None)
+    s._finalize_coverage([known, none, new])
+    st = [next(r for r in e.coverage if r["dataset"] == "h2h")["status"] for e in (known, none, new)]
+    assert st == ["offered", "not_offered", "not_attempted"]                  # coverage stays truthful

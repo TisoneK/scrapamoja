@@ -169,6 +169,11 @@ async def _fallback_fetch(failed_ids, fallback_skins, args, db_target, primary: 
               f"(they stay unstored and will be retried next run)", file=sys.stderr)
 
 
+def store_probe_state(ids, db_target, dataset):
+    from src.sites.betb2b.store import probe_state
+    return probe_state(ids, db_target, dataset)
+
+
 async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
     """Resolve the statisticfeed id for stored events that lack one (stored
     before stat ids were captured). Self-healing: a bounded batch per run."""
@@ -182,6 +187,7 @@ async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
         return
     sem = asyncio.Semaphore(scraper.concurrency)
     found = []
+    answered_none = []     # the source answered "no data": remembered so it is not asked again today
     state = {"streak": 0, "tripped": False}
 
     async def _one(eid):
@@ -198,6 +204,8 @@ async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
                   file=sys.stderr)
         if res and res.get("stat_game_id"):
             found.append((eid, res))
+        elif not errored:
+            answered_none.append(eid)
 
     await asyncio.gather(*[_one(e) for e in ids])
     conn = store.init_db(db_target)
@@ -207,9 +215,16 @@ async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
             store.record_result(conn, eid, stat_game_id=res["stat_game_id"],
                                 score_home=res.get("score_home"), score_away=res.get("score_away"),
                                 winner=res.get("winner"), status=res.get("status"), at=at)
+        if found or answered_none:
+            rid = store.begin_backfill_run(conn, skin_name, "backfill_stat_ids", at=at)
+            for eid, _ in found:
+                store.record_coverage(conn, rid, eid, skin_name, "stat_id", "offered", at=at)
+            for eid in answered_none:
+                store.record_coverage(conn, rid, eid, skin_name, "stat_id", "not_offered", at=at)
     finally:
         conn.close()
-    print(f"  [{skin_name}] stat ids backfilled: {len(found)}/{len(ids)}", file=sys.stderr)
+    print(f"  [{skin_name}] stat ids backfilled: {len(found)}/{len(ids)} "
+          f"({len(answered_none)} have none at the source; asked again after 24h)", file=sys.stderr)
 
 
 async def _backfill_h2h(scraper, db_target: str, skin_name: str) -> None:
@@ -742,6 +757,8 @@ class BetB2BCLI:
             rate_limit_per_minute=args.rate, settle_seconds=args.settle,
             sport=args.sport, direct=getattr(args, "direct", False) or None,
             id_filter=id_filter,
+            probe_filter=(None if no_db else
+                          (lambda ds, ids, _t=db_target: store_probe_state(ids, _t, ds))),
         ) as scraper:
             result = await scraper.scrape(
                 action=args.action, sport_id=args.sport_id,

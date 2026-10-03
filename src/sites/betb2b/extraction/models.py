@@ -198,6 +198,7 @@ class Event:
     # What we asked the source for and what it said — see labels.build_totals_coverage.
     # ``h2h_status``: ok | none (source has no H2H) | failed | None (never asked).
     h2h_status: Optional[str] = None
+    stat_status: Optional[str] = None     # ok | none | failed | known | None (never asked)
     # scope -> fetched | failed, for the sub-games we tried (not serialised).
     subgame_fetch: Dict[str, str] = field(default_factory=dict)
     coverage: List[Dict[str, Any]] = field(default_factory=list)

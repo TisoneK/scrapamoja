@@ -120,6 +120,7 @@ class BetB2BScraper:
         direct: Optional[bool] = None,
         concurrency: Optional[int] = None,
         id_filter: Optional[Callable[[List[tuple]], List[str]]] = None,
+        probe_filter: Optional[Callable[[str, List[str]], tuple]] = None,
     ) -> None:
         """Initialise the scraper for one skin + optional sport.
 
@@ -177,6 +178,9 @@ class BetB2BScraper:
         self._partial_sub_ids: set = set()
         self._partial_requested: List[str] = []
         self.id_filter = id_filter
+        # ``probe_filter(dataset, ids) -> (have, recent_none)``: ids that already have the data /
+        # that the source recently said have none, so H2H and stat-id probes are not repeated.
+        self.probe_filter = probe_filter
         # Resilience: ids whose GetGameZip fails (timeout / dropped connection /
         # WAF challenge page) are retried with exponential backoff; whatever
         # still fails is reported in ``last_fetch_stats`` so a caller can fail
@@ -771,9 +775,13 @@ class BetB2BScraper:
             if ev.h2h_data is not None and ev.h2h_data.game_shorts:
                 h2h = "offered"
             else:
-                h2h = {"ok": "not_offered", "none": "not_offered",
+                h2h = {"ok": "not_offered", "none": "not_offered", "known": "offered",
                        "failed": "fetch_failed"}.get(ev.h2h_status or "", "not_attempted")
             rows.append({"dataset": "h2h", "subject": None, "period": None, "status": h2h})
+            stat = ("offered" if ev.stat_game_id else
+                    {"none": "not_offered", "failed": "fetch_failed", "known": "offered"}.get(
+                        ev.stat_status or "", "not_attempted"))
+            rows.append({"dataset": "stat_id", "subject": None, "period": None, "status": stat})
             ev.coverage = rows
 
     async def _discover_events(self, *, is_live: bool) -> List[Event]:
@@ -1186,12 +1194,37 @@ class BetB2BScraper:
         if scope:                                       # an answer came back: that group's streak is over
             self.session_manager.guard.note_ok(scope)
 
+    def _apply_probe_filter(self, dataset: str, events: List[Event], status_attr: str) -> List[Event]:
+        """Drop events whose probe the store already answers; mark them so coverage stays right."""
+        if self.probe_filter is None or not events:
+            return events
+        try:
+            have, none = self.probe_filter(dataset, [str(e.event_id) for e in events])
+        except Exception as exc:  # noqa: BLE001 — unknown means "probe it"
+            logger.debug("skin=%s probe filter (%s) failed: %s", self.skin.name, dataset, exc)
+            return events
+        todo = []
+        for e in events:
+            eid = str(e.event_id)
+            if eid in have:
+                setattr(e, status_attr, "known")
+            elif eid in none:
+                setattr(e, status_attr, "none")
+            else:
+                todo.append(e)
+        skipped = len(events) - len(todo)
+        if skipped:
+            logger.info("skin=%s %s: %d of %d already known to the store — not probed again",
+                        self.skin.name, dataset, skipped, len(events))
+        return todo
+
     async def _enrich_with_stat_ids(self, events: List[Event]) -> None:
         """Capture each event's statisticfeed ``entity.id`` while it is
         fresh: ``v1/Game?id=<event id>`` resolves for recent/upcoming games, and
         the id is what the results pass needs later (it does NOT resolve for old
         games). Best-effort, bounded concurrency; sets ``Event.stat_game_id``."""
         todo = [e for e in events if e and not e.stat_game_id and str(e.event_id).isdigit()]
+        todo = self._apply_probe_filter("stat_id", todo, "stat_status")
         if not todo:
             return
         sem = asyncio.Semaphore(self.concurrency)
@@ -1213,6 +1246,9 @@ class BetB2BScraper:
                                "skipping the rest", self.skin.name, streak)
             if res and res.get("stat_game_id"):
                 ev.stat_game_id = str(res["stat_game_id"])
+                ev.stat_status = "ok"
+            else:
+                ev.stat_status = "failed" if errored else "none"
 
         await asyncio.gather(*[_one(e) for e in todo])
         got = sum(1 for e in todo if e.stat_game_id)
@@ -1229,6 +1265,9 @@ class BetB2BScraper:
         The H2H endpoint returns historical match results between the
         two teams. We attach the parsed data to each ``Event.h2h_data``.
         """
+        if not events:
+            return
+        events = self._apply_probe_filter("h2h", events, "h2h_status")
         if not events:
             return
 
