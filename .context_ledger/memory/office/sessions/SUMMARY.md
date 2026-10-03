@@ -34,3 +34,4 @@ records.
 - **2026-10-03 — Session 1** — Noor / claude-sonnet-5-5 — ledger core 1.1.3 to 2.0.4, office 001 closed and recorded, entry points regenerated.
   First pass skipped the protocol (stale sibling source, no gates, no reads); redone properly after two corrections.
   Detail: reviews/2026-10-03-review.md.
+- 2026-10-03 — Achieng (S002) — deepseek/deepseek-flash — fixed the Windows gate trap (portable launcher via a git alias; both runners PASS) and swept the product tree for ledger vocabulary (none outside the managed entry points).

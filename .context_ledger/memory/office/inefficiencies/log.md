@@ -65,3 +65,11 @@ names them), and roll-up candidates.
 - **Workaround / fix:** use `--refs <sha>`, `sed -i ''`, and absolute paths or a leading `cd /Users/bao/Code/scrapamoja &&`.
 - **Prevent next time:** recorded in `system/environments.md` (sed); the rest is habit.
 
+
+---
+## 2026-10-03 — Achieng / deepseek/deepseek-flash (Session 2, Windows gate trap — FIXED)
+- **Problem:** the gate registry pinned `.venv/bin/python`, so `ledger-gates run pre-commit|integration|exit` failed 127 on every Windows box and agents ran the suite manually as an "equivalent" — for many sessions (the trap was logged and re-hit repeatedly since Session 41). The old project note said not to edit `gates.conf` because the Mac shares the file.
+- **Cost:** every Windows session's gate was formally red; the fix is one line per gate.
+- **Cause:** one registry file shared by two platforms whose venv layouts differ (`bin/python` vs `Scripts/python.exe`), and neither `sh` nor `python` being on a clean Windows PATH (Git for Windows puts only `Git\cmd` there; `python` is the system 3.14 without project deps).
+- **Workaround / fix:** `gates.conf` now runs `git -c 'alias.ledger-gate=!sh tools/gates/pytest.sh' ledger-gate`; `git` is on the PATH in both agent shells, a `!` alias runs through git's own bundled `sh` (verified on a clean machine PATH), and the committed launcher picks the interpreter the venv actually has. Failures still propagate (exit 5 verified). Both runners (`sh …/ledger-gates` and the PowerShell `ledger-gates.cmd` path) now PASS on Lameck-Windows; the Mac is unaffected (its `sh` + `.venv/bin/python` satisfy the same line). Do NOT put `;` in a `git -c alias.…` value — git treats it as a comment; `||` is safe.
+- **Prevent next time:** prefer a committed launcher invoked via a tool guaranteed present on the PATH of both platform families over a raw interpreter path in a shared registry; verify a gate command through BOTH runners, not one.

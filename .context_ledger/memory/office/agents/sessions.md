@@ -34,3 +34,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Notes:** none
 - **Report:** .context_ledger/memory/office/reviews/2026-10-03-review.md
 
+
+---
+## 2026-10-03 — Session 2 (Achieng/S002)
+- **Agent:** Achieng (S002) | **Model:** deepseek/deepseek-flash | **Platform:** Lameck-Windows (Windows 11, DESKTOP-3LRR8MD) | **Role:** engineer | **Core:** 2.0.4
+- **Task:** operator: (1) "I hope now windowsgates passes" — verify the gate on Windows after the core migration; (2) check product code for `.context_ledger` vocabulary contamination.
+- **Commits:** 2 (`80220d6` product: `tools/gates/pytest.sh` + `.gitattributes` LF pin; `698d297` ledger: `gates.conf` portable launcher) + ledger bookkeeping.
+- **Outcome:** done — the gate did NOT pass as pulled (core 2.0.4 does not translate the POSIX path); fixed in the project registry: one launcher, invoked as `git -c 'alias.ledger-gate=!sh tools/gates/pytest.sh' ledger-gate`, picks `.venv/bin/python` or `.venv/Scripts/python.exe`. Verified through **both** runners (`sh …/ledger-gates` and the PowerShell path `ledger-gates.cmd` uses) — both PASSED; failure propagation checked (exit 5). Rejected alternatives with evidence: bare `sh` (not on the clean Windows PATH), inline `;` conditional (git treats `;` as a comment), dropping to discovery (bare `python`). Lint sweep: 23 hits, **all** in `AGENTS.md`/`CLAUDE.md` (managed entry points), zero in `src/`/`tools/`/`tests/`/`docs/`; one real leak in my own new script's comment found and stripped.
+- **Open items:** none new; the upstream `lint --tree` entry-point limitation remains the only tree-sweep exit-1 cause.
+- **Notes:** none
+- **Report:** .context_ledger/memory/office/reviews/2026-10-03-review-2.md

@@ -18,7 +18,7 @@ accordingly).
 | ZCode | GLM-5.3-Flash | 2026-09-06 | 2026-09-08 | 4 |
 | ZCode | qwen3.8-flash | 2026-09-14 | 2026-09-14 | 2 |
 | Claude Code | claude-sonnet-5-5 | 2026-10-02 | 2026-10-03 | 3 |
-| ZCode | deepseek/deepseek-flash | 2026-10-03 | 2026-10-03 | 1 |
+| ZCode | deepseek/deepseek-flash | 2026-10-03 | 2026-10-03 | 2 |
 
 ## Observations
 
