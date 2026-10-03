@@ -426,6 +426,9 @@ class BetB2BCLI:
         scrape.add_argument("--output", "-o", default=None,
                             help="Write JSON result to this file (default: stdout)")
         scrape.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
+        scrape.add_argument("--json", action="store_true",
+                            help="Print the full result JSON to stdout. By default only a short "
+                                 "summary is printed; --output FILE writes the full JSON to a file.")
         scrape.add_argument("--compress", action="store_true",
                             help="gzip the --output file (a .gz suffix is added). "
                                  "Read it back with `betb2b view <file>`. Large "
@@ -797,7 +800,7 @@ class BetB2BCLI:
             except Exception as exc:  # noqa: BLE001
                 print(f"ERROR: scrape failed: {exc}", file=sys.stderr)
                 return 1
-            return self._emit(result, args)
+            return self._emit(result, args, summary=True)
 
         # Multiple skins: scrape each (sequentially — one tunnel), persist to the
         # shared --db, emit a combined summary. This is the cross-skin
@@ -817,7 +820,7 @@ class BetB2BCLI:
             "results": results,
             "total_events": sum(r.get("event_count", 0) for r in results),
         }
-        return self._emit(combined, args)
+        return self._emit(combined, args, summary=True)
 
     # ------------------------------------------------------------------ #
     async def _cmd_schedule(self, args: argparse.Namespace) -> int:
@@ -1202,7 +1205,28 @@ class BetB2BCLI:
             _sys.argv = old_argv
 
     # ------------------------------------------------------------------ #
-    def _emit(self, payload: Dict[str, Any], args: argparse.Namespace, always_pretty: bool = False) -> int:
+    @staticmethod
+    def _summarize_result(r: Dict[str, Any]) -> str:
+        """A few readable lines for one scrape result (instead of its full JSON)."""
+        events = r.get("events") or []
+        markets = sum(len(e.get("markets") or []) for e in events)
+        h2h = sum(1 for e in events if (e.get("h2h_data") or {}).get("game_shorts"))
+        cov: Dict[str, int] = {}
+        for e in events:
+            for c in e.get("coverage") or []:
+                if c.get("dataset") == "totals":
+                    cov[c.get("status")] = cov.get(c.get("status"), 0) + 1
+        line = (f"{r.get('skin')} {r.get('action')}: {'ok' if r.get('success', r.get('error') is None) else 'FAILED'}"
+                f" — {len(events)} events, {markets} markets, {h2h} with H2H"
+                f" in {float(r.get('scrape_duration_seconds') or 0):.0f}s")
+        if cov:
+            line += "\n  totals lines: " + ", ".join(f"{k} {v}" for k, v in sorted(cov.items()))
+        if r.get("error"):
+            line += f"\n  error: {r['error']}"
+        return line
+
+    def _emit(self, payload: Dict[str, Any], args: argparse.Namespace, always_pretty: bool = False,
+              summary: bool = False) -> int:
         indent = 2 if (getattr(args, "pretty", False) or always_pretty) else None
         output = getattr(args, "output", None)
         if output:
@@ -1214,6 +1238,13 @@ class BetB2BCLI:
             size = written.stat().st_size
             note = " (gzip)" if written.suffix == ".gz" else ""
             print(f"Wrote {size} bytes to {written}{note}", file=sys.stderr)
+        elif summary and not getattr(args, "json", False):
+            # A summary, not hundreds of events of JSON; the data is in the store.
+            # `--json` prints the full result, `--output FILE` writes it.
+            results = payload.get("results") if "results" in payload else [payload]
+            for r in results:
+                print(self._summarize_result(r))
+            print("(full JSON: add --json or --output FILE)", file=sys.stderr)
         else:
             print(json.dumps(payload, indent=indent, default=str))
         return 0

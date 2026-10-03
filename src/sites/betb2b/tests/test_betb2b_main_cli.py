@@ -100,3 +100,40 @@ def test_documented_module_entry_points_actually_run(module):
                           cwd=repo, capture_output=True, text=True, timeout=120)
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout)["count"] > 0
+
+
+# --------------------------------------------------------------------------- #
+# The scrape prints a summary; the full JSON is opt-in
+# --------------------------------------------------------------------------- #
+def _fake_result():
+    return {"skin": "betwinner", "action": "list_prematch", "success": True, "error": None,
+            "scrape_duration_seconds": 12.0, "events": [
+                {"event_id": "1", "markets": [{}, {}], "h2h_data": {"game_shorts": [1]},
+                 "coverage": [{"dataset": "totals", "status": "offered"},
+                              {"dataset": "totals", "status": "not_offered"},
+                              {"dataset": "h2h", "status": "offered"}]}]}
+
+
+def test_default_is_a_summary_not_the_json(capsys):
+    import argparse
+    from src.sites.betb2b.cli.main import BetB2BCLI
+    BetB2BCLI()._emit(_fake_result(), argparse.Namespace(output=None, json=False, pretty=False), summary=True)
+    out = capsys.readouterr().out
+    assert "1 events, 2 markets, 1 with H2H" in out and "offered 1" in out and "{" not in out
+
+
+def test_json_flag_prints_the_full_result(capsys):
+    import argparse, json
+    from src.sites.betb2b.cli.main import BetB2BCLI
+    BetB2BCLI()._emit(_fake_result(), argparse.Namespace(output=None, json=True, pretty=False), summary=True)
+    assert json.loads(capsys.readouterr().out)["skin"] == "betwinner"
+
+
+def test_output_file_gets_the_full_json_and_stdout_stays_quiet(capsys, tmp_path):
+    import argparse, json
+    from src.sites.betb2b.cli.main import BetB2BCLI
+    f = tmp_path / "r.json"
+    BetB2BCLI()._emit(_fake_result(), argparse.Namespace(output=str(f), json=False, pretty=False,
+                                                         compress=False), summary=True)
+    assert capsys.readouterr().out == ""
+    assert json.loads(f.read_text())["skin"] == "betwinner"
