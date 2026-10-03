@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-03T17:00:22Z_
+_Regenerated: 2026-10-03T17:43:56Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-10-03)
@@ -15,7 +15,7 @@ _Regenerated: 2026-10-03T17:00:22Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-(office empty — no live roster rows)
+- **Achieng** (S002) — Working — Engineer: verify Windows gate execution, then sweep product code for `.context_ledger` vo…
 
 ## Current task
 - **—** — none — no session in progress — *idle*
