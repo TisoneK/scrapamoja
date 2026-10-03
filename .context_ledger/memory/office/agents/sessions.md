@@ -29,6 +29,7 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Task:** finish the core 2.0.3 migration: close the previous office, fill its permanent record, re-seed the new office.
 - **Commits:** ledger only (close + re-seed).
 - **Outcome:** done — previous office frozen verbatim and recorded in `history/office-001.md`; backlog re-seeded with 20 actionable rows (cap 20), one carry-over ADR written, new roster and `STATE.md` generated. The close was operator-requested; the registry held 13 sessions, under the 20-session door threshold.
-- **Open items:** the 20 backlog rows (top: linebet live re-verification, Neon sub-game volume check); `AGENTS.md` still the 1.1.x digest, not the 2.0.x router.
+- **Open items:** the 20 backlog rows (top: linebet live re-verification, Neon sub-game volume check).
+- **Follow-up (entry points):** `AGENTS.md` and `CLAUDE.md` regenerated from the 2.0.3 templates (the weak-agent floor); the project text they carried (architecture, BetB2B rules 11-17, setup, key files) moved verbatim to `memory/overrides/project-guide.md`, wired in via an override bullet so it survives core updates.
 - **Notes:** none
 

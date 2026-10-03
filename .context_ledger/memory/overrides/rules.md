@@ -24,3 +24,5 @@ Example:
 - **`kickoff.md` Step 1 — Windows core-check commands** → **No change needed since core 1.1.1** — the protocol ships `.cmd` launchers for every tool (`ledger-sync.cmd`, `ledger-gates.cmd`, `ledger-mem.cmd`, `ledger-collab.cmd`, `ledger-history.cmd`) that run the `.ps1` ports with `-ExecutionPolicy Bypass`; the 0.17-era override (PowerShell port + manual SHA fallback) is fully retired, including its pre-0.4.0 manual verification snippet. (set by agent, 2026-07-20; superseded by the 0.4.0 ps1 port 2026-08-01; retired by core 1.1.1 `.cmd` launchers, 2026-09-14)
 
 - **`kickoff.md` Step 1 — `git pull --ff-only`** → **No change needed** — git works fine from PowerShell on Windows. (set by agent, 2026-07-20)
+
+- **Read order ends at the edition's overrides** → **also read `project-guide.md` (this directory) at orientation** — it holds the project architecture and the BetB2B rules (11-17) that used to live in the root `AGENTS.md`, which core 2.0.x regenerates (set by agent, 2026-10-03)
