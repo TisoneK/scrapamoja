@@ -101,7 +101,7 @@ stable label and are not fetched. Each stored odds row also carries `subject`
 change, whether each subject x period line and the H2H were `offered`,
 `not_offered` (asked, source has none), `not_attempted` (never asked) or
 `fetch_failed`. After each scrape, stored upcoming events with no H2H are asked
-again (a "no H2H" answer waits 24 h). Matches already in the store are skipped by default (`--refetch` fetches them again; `--skip-processed SECONDS` re-fetches those older than that); live scrapes are never filtered. The engine exporter still builds the nine
+again (a "no H2H" answer waits 24 h). Matches already in the store are skipped by default (`--refetch` fetches them again; `--skip-processed SECONDS` re-fetches those older than that); live scrapes are never filtered. A stored match whose coverage shows a failed or never-attempted totals fetch is fetched again (at most once an hour). The engine exporter still builds the nine
 combined scopes only; per-team period lines are stored but not exported.
 
 Auth: `$SCOREWISE_ENGINE_URL` + `$SCOREWISE_API_KEY` (sent as `x-api-key`, not

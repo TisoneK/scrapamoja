@@ -1149,16 +1149,20 @@ def known_sub_game_ids(conn, ids) -> set:
 
 def unprocessed_ids(pairs, path: PathLike | None = None, *,
                     refresh_window: float = float('inf'),
-                    skip_started: bool = True) -> List[str]:
+                    skip_started: bool = True,
+                    retry_incomplete_after: float = 3600.0) -> List[str]:
     """Filter discovered ``[(event_id, start_epoch)]`` down to ids worth fetching:
     drop events already scraped within ``refresh_window`` seconds (default inf =
     never re-scrape a stored event; 0 = always re-fetch) and, if ``skip_started``, ones that have kicked off.
+    A stored event whose coverage shows a failed or never-attempted totals fetch is kept
+    once ``retry_incomplete_after`` seconds have passed since it was last seen.
     Works on whichever store ``init_db`` resolves (local SQLite or remote DB), so
     several machines sharing one remote store skip each other's work."""
     import time
     ids = [i for i, _ in pairs]
     last_seen: Dict[str, Any] = {}
     sub_ids: set = set()
+    incomplete: set = set()
     # Read the SHARED remote store (when configured) as well as the local one, so a
     # second machine skips what the first already scraped — even in `mirror` mode,
     # where init_db() hands back only the local copy. Remote unreachable -> local only.
@@ -1176,6 +1180,7 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
                 if eid not in last_seen or (seen is not None and str(seen) > str(last_seen[eid])):
                     last_seen[eid] = seen
             sub_ids |= known_sub_game_ids(conn, ids)
+            incomplete |= incomplete_event_ids(conn, ids)
         except Exception as exc:  # noqa: BLE001
             logger.warning("skip filter: read failed on one store (%s)", exc)
         finally:
@@ -1204,7 +1209,31 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
             age = float("inf")
         if age >= refresh_window:
             keep.append(eid)
+        elif eid in incomplete and age >= retry_incomplete_after:
+            keep.append(eid)      # stored, but part of its market data failed or was never fetched
     return keep
+
+
+def incomplete_event_ids(conn, event_ids) -> set:
+    """Events whose latest totals coverage says a fetch failed or was never attempted
+    (``fetch_failed`` / ``not_attempted``). Events with no coverage rows are not
+    counted: nothing says they are incomplete."""
+    ids = [str(i) for i in event_ids]
+    out: set = set()
+    for i in range(0, len(ids), 400):
+        chunk = ids[i:i + 400]
+        sql = ("SELECT DISTINCT c.event_id FROM coverage c JOIN (SELECT event_id, subject, period, "
+               "MAX(id) mid FROM coverage WHERE dataset = 'totals' AND event_id IN {ph} "
+               "GROUP BY event_id, subject, period) m ON c.id = m.mid "
+               "WHERE c.status IN ('fetch_failed', 'not_attempted')")
+        if _is_orm(conn):
+            from sqlalchemy import bindparam, text as _t
+            rows = conn.execute(_t(sql.format(ph=":ids")).bindparams(
+                bindparam("ids", expanding=True)), {"ids": chunk}).fetchall()
+        else:
+            rows = conn.execute(sql.format(ph="(%s)" % ",".join("?" * len(chunk))), chunk).fetchall()
+        out.update(r[0] for r in rows)
+    return out
 
 
 def events_missing_stat_id(conn, *, limit: int = 150) -> List[str]:
