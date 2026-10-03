@@ -1,6 +1,7 @@
 """Fixes from the DB audit: placeholder 'Home (Points)' listings are not matches;
 a blocked/unreachable site is a FAILED run, not '0 events, success'."""
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -245,5 +246,5 @@ def test_result_snapshots_are_capped_and_empty_runs_are_not_dumped(tmp_path, mon
                                                  result_data={"event_count": 5, "events": [i]}))
         time.sleep(1.05)                                      # file names carry a 1-second timestamp
     kept = sorted((tmp_path / "t" / "result_snapshots").glob("*.json"))
-    assert len(kept) == 3 and kept[-1].name == paths[-1].rsplit("/", 1)[-1]   # newest survive
+    assert len(kept) == 3 and kept[-1].name == Path(paths[-1]).name   # newest survive
     assert tel.capture_result_snapshot(action="list_prematch", result_data={"event_count": 0}) is None
