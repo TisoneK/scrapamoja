@@ -1,3 +1,3 @@
 # Current Task
 
-**Status:** idle — Session 50 (Ada / S448) clocked out after the diagnostics round; see `agents/sessions.md` Follow-up 8.
+**Status:** idle — Session 52 (Mei / S450) finished the coverage-request reply; see `agents/sessions.md`.
