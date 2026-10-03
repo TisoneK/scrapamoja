@@ -83,19 +83,26 @@ own totals line (the rung whose **Over** price is nearest 1.85, and whose line
 scope.
 
 ```bash
-# FULL_MATCH + HOME/AWAY_TEAM_TOTAL only (3 scopes):
+# Scrape, store and ingest (all 9 engine scopes when the sub-games offer them):
 python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --ingest
 
-# All 9 scopes — --subgames fetches each event's per-quarter/half sub-games,
-# which is where the half and quarter totals lines come from:
-python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --subgames --ingest
+# Sub-games (quarters, halves, per-stat groups) are fetched BY DEFAULT now.
+# --no-subgames skips them (about 1 request per event instead of up to 12):
+python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --no-subgames
 ```
 
-**Without `--subgames` the half and quarter scopes are silently absent** — every
-market a plain scrape extracts is tagged `FULL_MATCH`, so `_nearest_185_total`
-finds no line for them. The flag flips `skin.features["subgames"]`, which is
-what `BetB2BScraper._enrich_with_subgames` gates on. It costs one extra
-`GetGameZip` per sub-game per event.
+Every labelled sub-game of an event is fetched and its markets stored under a
+scope: `QUARTER_n`, `FIRST_HALF`, `SECOND_HALF` for periods, `STAT_<NAME>`
+(`STAT_REBOUNDS`, …) for per-stat groups. Unlabelled special groups carry no
+stable label and are not fetched. Each stored odds row also carries `subject`
+(`MATCH` | `HOME_TEAM` | `AWAY_TEAM`, totals ladders only) and `period`
+(`FULL_TIME` | `HALF_n` | `QUARTER_n` | `PERIOD_n`) — vocabulary in
+`src/sites/betb2b/labels.py`. The `coverage` table records, per event and on
+change, whether each subject x period line and the H2H were `offered`,
+`not_offered` (asked, source has none), `not_attempted` (never asked) or
+`fetch_failed`. After each scrape, stored upcoming events with no H2H are asked
+again (a "no H2H" answer waits 24 h). The engine exporter still builds the nine
+combined scopes only; per-team period lines are stored but not exported.
 
 Auth: `$SCOREWISE_ENGINE_URL` + `$SCOREWISE_API_KEY` (sent as `x-api-key`, not
 Bearer). Values live in `.context_ledger/memory/secrets/` — never in tracked files.

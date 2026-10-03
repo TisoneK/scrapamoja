@@ -1,5 +1,10 @@
 # Reply: market and period coverage for all scopes
 
+> **Status (built):** items 1-3 of section 4 are implemented: sub-games are fetched by default,
+> odds rows carry `subject`/`period`, the `coverage` table records offered / not_offered /
+> not_attempted / fetch_failed, and stored events with no H2H are retried. Under prices on
+> period team totals are confirmed (live run). Unlabelled special sub-groups are not fetched.
+
 Answer to the consumer's request for totals lines on every subject x period
 combination, unambiguous labelling, period scores in H2H history, and honest
 gaps. Evidence is from the local odds store (459 basketball events, 8 runs of
