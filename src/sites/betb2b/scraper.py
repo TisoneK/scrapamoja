@@ -250,6 +250,12 @@ class BetB2BScraper:
 
         self._started = False
 
+        # Set when a direct (browser-free) call is answered with a block. A phase
+        # that fires several requests at once reads it after each answer and stops:
+        # the responses already in flight are one incident, and walking the guard's
+        # policy ladder once per response rests the whole site within a second.
+        self._direct_block_seen = False
+
         # Optional progress hook — a caller (e.g. the control API's job runner)
         # sets this to receive live phase updates during a scrape. Best-effort:
         # never lets a progress callback break the scrape.
@@ -1236,6 +1242,8 @@ class BetB2BScraper:
         self._health(str(resp.url), resp.status_code, len(resp.content), latency_ms, scope)
         blocked = self.feed_client.guard_response(
             resp, str(resp.url), resp.headers.get("content-type", ""))
+        if blocked:
+            self._direct_block_seen = True
         if scope:                                       # an answer came back: that group's streak is over
             self.session_manager.guard.note_ok(scope)
         return blocked
@@ -1273,6 +1281,7 @@ class BetB2BScraper:
         todo = self._apply_probe_filter("stat_id", todo, "stat_status")
         if not todo:
             return
+        self._direct_block_seen = False
         sem = asyncio.Semaphore(self.concurrency)
         streak = 0        # consecutive FAILED requests; stop when the site is clearly unreachable
         tripped = False
@@ -1285,6 +1294,11 @@ class BetB2BScraper:
                 if tripped:
                     return
                 res, errored = await self.fetch_result_checked(str(ev.event_id))
+            if self._direct_block_seen:     # a sibling already recorded this block; stop the batch
+                tripped = True
+                logger.warning("skin=%s stat ids: guard blocked the endpoint — the rest of the "
+                               "batch is left to another run", self.skin.name)
+                return
             streak = streak + 1 if errored else 0
             if streak >= 6 and not tripped:
                 tripped = True
@@ -1316,6 +1330,7 @@ class BetB2BScraper:
         events = self._apply_probe_filter("h2h", events, "h2h_status")
         if not events:
             return
+        self._direct_block_seen = False
 
         # Direct mode: statisticfeed works cookie-less too — skip session.
         cookie_header = (
@@ -1433,6 +1448,7 @@ class BetB2BScraper:
         events = [e for e in events if e and e.is_live]
         if not events:
             return
+        self._direct_block_seen = False
 
         # Direct mode: statisticfeed works cookie-less too — skip session.
         cookie_header = (
