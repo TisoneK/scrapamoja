@@ -11,24 +11,30 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Callable
+from typing import Callable, Optional
 
 
 class Pacer:
     def __init__(self, rate_per_second: float, clock: Callable[[], float] = time.monotonic):
         self.interval = 1.0 / rate_per_second if rate_per_second and rate_per_second > 0 else 0.0
         self._clock = clock
-        self._next = 0.0
+        self._last_start: Optional[float] = None
+        self._lock = asyncio.Lock()
 
     async def wait(self) -> None:
         """Return when this caller's start slot arrives (immediately if pacing is off)."""
         if self.interval <= 0:
             return
-        now = self._clock()
-        # No await between reading and updating _next, so concurrent tasks (one event
-        # loop) each get their own distinct slot.
-        slot = max(self._next, now)
-        self._next = slot + self.interval
-        delay = slot - now
-        if delay > 0:
-            await asyncio.sleep(delay)
+        # One caller at a time, each spaced from the previous caller's ACTUAL start.
+        # A pre-computed schedule (slot = max(next, now)) collapses where the event
+        # loop's timer is coarse — Windows rounds to ~15.6 ms, so two slots 20 ms
+        # apart can wake in the same tick and go out together. Sleeping while
+        # holding the lock keeps the spacing true at any timer resolution.
+        async with self._lock:
+            now = self._clock()
+            if self._last_start is not None:
+                delay = self._last_start + self.interval - now
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                    now = self._clock()
+            self._last_start = now

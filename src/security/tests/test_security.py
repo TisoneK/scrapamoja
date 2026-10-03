@@ -290,7 +290,8 @@ def test_pacer_spaces_request_starts_for_concurrent_callers():
 
     async def worker():
         await p.wait()
-        starts.append(time.monotonic())
+        starts.append(time.perf_counter())           # high-resolution: time.monotonic() is
+                                                     # one ~15.6 ms tick on Windows
 
     async def go():
         await asyncio.gather(*[worker() for _ in range(8)])
