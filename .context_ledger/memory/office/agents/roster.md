@@ -51,6 +51,7 @@ is your stable session tag.
 |------|----------|-------|-------|--------|---------------|
 | Kai | S447 | qwen3.8-flash | Operator: env-only switch to run workers locally during the Supabase pause | Done | Shipped: BETB2B_STORE_MODE (auto/local/mirror/remote) + 9 tests, suite 262 green; core 1.1.3 + office compaction. Operator still to stop the Railway worker |
 | Mei | S450 | claude-sonnet-5-5 | Engineer: full market/odds/H2H capture build | Done | Shipped: all sub-games by default, subject/period labels, coverage table, H2H backfill (both stores, 22 tests); Postgres not yet verified live |
+| Achieng | S451 | deepseek/deepseek-flash | Engineer on the Kenyan machine: warm the linebet profile and run all four skins directly per `docs/proposals/KENYA_MACHINE_BRIEF.md` | Working | Stage: door check-in — protocol read next, then warm-up |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
