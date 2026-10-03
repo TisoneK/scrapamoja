@@ -1425,6 +1425,19 @@ def record_period_results(conn, run_id: int, event_id: str, skin: str,
     return added
 
 
+def events_missing_period_scores(conn, *, limit: int = 200) -> List[tuple]:
+    """``(event_id, stat_game_id)`` of finished matches (final score recorded) that have no
+    per-period scores and were not already checked: the queue for backfilling quarter
+    scores onto matches resolved before the results pass stored them. A match the source
+    gave no periods for gets a ``result_periods`` coverage row and leaves the queue."""
+    rows = _run_sql(conn,
+        "SELECT e.event_id, e.stat_game_id FROM events e WHERE e.result_status = 3 "
+        "AND NOT EXISTS (SELECT 1 FROM period_scores p WHERE p.event_id = e.event_id) "
+        "AND NOT EXISTS (SELECT 1 FROM coverage c WHERE c.event_id = e.event_id "
+        "AND c.dataset = 'result_periods') ORDER BY e.start_time", {}).fetchall()
+    return [(r[0], r[1]) for r in rows][:limit]
+
+
 def give_up_results(conn, run_id, skin: str, *, days: float = 7.0,
                     at: Optional[str] = None) -> List[str]:
     """Matches that started more than ``days`` ago and still have no result: the source

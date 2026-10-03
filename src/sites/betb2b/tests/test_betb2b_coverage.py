@@ -407,3 +407,24 @@ def test_a_recent_unresolved_match_is_still_asked(conn):
     run = store.begin_backfill_run(conn, "linebet", "results")
     assert store.give_up_results(conn, run, "linebet") == []
     assert store.events_needing_results(conn) == [("E1", None)]
+
+
+def test_finished_matches_without_period_scores_are_queued_once(conn):
+    store.persist_result(_result("2026-10-03T10:00:00+00:00"), conn=conn)
+    assert store.events_missing_period_scores(conn) == []                    # not finished yet
+    store.record_result(conn, "E1", stat_game_id="sg", score_home=90, score_away=80, winner=1,
+                        status=3, at="2026-10-03T12:00:00+00:00")
+    assert store.events_missing_period_scores(conn) == [("E1", "sg")]        # final score, no periods
+    run = store.begin_backfill_run(conn, "linebet", "backfill_periods")
+    store.record_period_results(conn, run, "E1", "linebet", [{"type": 18, "score1": 20, "score2": 18}])
+    assert store.events_missing_period_scores(conn) == []                    # now has periods
+
+
+def test_a_match_the_source_has_no_periods_for_is_marked_and_not_queued_again(conn):
+    store.persist_result(_result("2026-10-03T10:00:00+00:00"), conn=conn)
+    store.record_result(conn, "E1", score_home=90, score_away=80, winner=1, status=3,
+                        at="2026-10-03T12:00:00+00:00")
+    run = store.begin_backfill_run(conn, "linebet", "backfill_periods")
+    assert store.record_period_results(conn, run, "E1", "linebet", []) == 0
+    store.record_coverage(conn, run, "E1", "linebet", "result_periods", "not_offered")
+    assert store.events_missing_period_scores(conn) == []

@@ -317,8 +317,49 @@ async def _update_results(scraper, db_target: str, skin_name: str) -> None:
         done = sum(1 for _, r in out if r.get("status") == 3)
         print(f"  [{skin_name}] results: {len(pending)} pending → {done} finished recorded "
               f"({periods} period scores)", file=sys.stderr)
+        await _backfill_period_scores(scraper, db_target, skin_name)
     except Exception as exc:  # noqa: BLE001
         print(f"  [{skin_name}] WARNING: results update failed: {exc}", file=sys.stderr)
+
+
+async def _backfill_period_scores(scraper, db_target: str, skin_name: str) -> None:
+    """Quarter/half scores for finished matches that have a final score but none of their
+    periods (resolved before the results pass stored them). A match the source gives no
+    periods for is marked so it is not asked again; a failed request is retried next run."""
+    from src.sites.betb2b import store
+    conn = store.init_db(db_target)
+    try:
+        todo = store.events_missing_period_scores(conn)
+    finally:
+        conn.close()
+    if not todo:
+        return
+    sem = asyncio.Semaphore(scraper.concurrency)
+    out = []
+
+    async def _one(eid, stat_id):
+        async with sem:
+            res, errored = await scraper.fetch_result_checked(stat_id or eid)
+        if not errored:
+            out.append((eid, res))
+
+    await asyncio.gather(*[_one(e, sid) for e, sid in todo])
+    at = datetime.now(timezone.utc).isoformat()
+    conn = store.init_db(db_target)
+    added = found = 0
+    try:
+        rid = store.begin_backfill_run(conn, skin_name, "backfill_periods", at=at)
+        for eid, res in out:
+            n = store.record_period_results(conn, rid, eid, skin_name,
+                                            (res or {}).get("periods") or [], at=at)
+            added += n
+            found += 1 if n else 0
+            store.record_coverage(conn, rid, eid, skin_name, "result_periods",
+                                  "offered" if n else "not_offered", at=at)
+    finally:
+        conn.close()
+    print(f"  [{skin_name}] period scores backfilled: {found}/{len(todo)} matches ({added} periods)",
+          file=sys.stderr)
 
 
 def _load_skin(name: str):
