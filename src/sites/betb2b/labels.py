@@ -15,7 +15,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 __all__ = [
     "SUBJECTS", "SCOPE_PERIOD", "period_structure", "scope_from_period_name",
-    "stat_scope", "classify", "build_totals_coverage", "COVERAGE_STATUSES",
+    "stat_scope", "classify", "h2h_period_label", "build_totals_coverage", "COVERAGE_STATUSES",
 ]
 
 MATCH, HOME_TEAM, AWAY_TEAM = "MATCH", "HOME_TEAM", "AWAY_TEAM"
@@ -71,10 +71,44 @@ def scope_from_period_name(pn: Any) -> Optional[str]:
     return _SUBGAME_SCOPES.get(str(pn or "").strip().lower())
 
 
-def stat_scope(name: Any) -> Optional[str]:
-    """Scope for a named per-stat sub-game (``Rebounds`` → ``STAT_REBOUNDS``)."""
+# Sub-game ``P`` index → period, for per-stat groups that exist per period.
+_INDEX_PERIOD = {1: "QUARTER_1", 2: "QUARTER_2", 3: "QUARTER_3", 4: "QUARTER_4",
+                 11: "FIRST_HALF", 12: "SECOND_HALF"}
+
+
+def stat_scope(name: Any, period_index: Any = None) -> Optional[str]:
+    """Scope for a named per-stat sub-game (``Rebounds`` → ``STAT_REBOUNDS``).
+
+    A stat group can exist per period (three-point goals for each quarter); its
+    ``P`` index then goes on the end (``STAT_REBOUNDS__QUARTER_2``) so the groups
+    do not collide.
+    """
     slug = re.sub(r"[^A-Za-z0-9]+", "_", str(name or "")).strip("_").upper()
-    return f"STAT_{slug}" if slug else None
+    if not slug:
+        return None
+    try:
+        suffix = _INDEX_PERIOD.get(int(period_index)) if period_index not in (None, "") else None
+    except (TypeError, ValueError):
+        suffix = None
+    return f"STAT_{slug}__{suffix}" if suffix else f"STAT_{slug}"
+
+
+# H2H ``periods[].type`` keys. Keys are the source's; only the ones seen in real data
+# are mapped (basketball: 18-21 are the quarters, 4 is overtime — the quarters plus it
+# add up to the final score). Anything else is stored under its own key, never guessed.
+_H2H_BASKETBALL = {18: "QUARTER_1", 19: "QUARTER_2", 20: "QUARTER_3", 21: "QUARTER_4", 4: "OVERTIME_1"}
+_H2H_COMMON = {1: "HALF_1", 2: "HALF_2"}
+
+
+def h2h_period_label(key: Any, sport_id: Any, legacy: str = "") -> str:
+    """Fixed-vocabulary label for an H2H period key, or ``legacy``/``period_<key>``."""
+    try:
+        k = int(key)
+    except (TypeError, ValueError):
+        return legacy
+    if int(sport_id or 0) == 3 and k in _H2H_BASKETBALL:
+        return _H2H_BASKETBALL[k]
+    return _H2H_COMMON.get(k) or legacy or f"period_{k}"
 
 
 def classify(market_name: Any, scope: Any) -> Tuple[Optional[str], str]:
@@ -85,9 +119,11 @@ def classify(market_name: Any, scope: Any) -> Tuple[Optional[str], str]:
     always comes from the scope; stat scopes are ``FULL_TIME``.
     """
     scope = str(scope or "FULL_MATCH")
-    period = SCOPE_PERIOD.get(scope, "FULL_TIME")
     if scope.startswith("STAT_"):
-        return None, period
+        # STAT_<NAME>[__<PERIOD SCOPE>]: never a subject; the period is the suffix, if any.
+        base = scope.split("__", 1)[1] if "__" in scope else "FULL_MATCH"
+        return None, SCOPE_PERIOD.get(base, "FULL_TIME")
+    period = SCOPE_PERIOD.get(scope, "FULL_TIME")
     return _TOTAL_SUBJECT.get(str(market_name or "")), period
 
 

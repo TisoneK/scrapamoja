@@ -40,6 +40,11 @@ def test_sub_game_names_map_to_scopes():
     assert scope_from_period_name("Rebounds") is None
     assert stat_scope("Free Throws Scored") == "STAT_FREE_THROWS_SCORED"
     assert stat_scope("") is None
+    # the same stat per period must not collide
+    assert stat_scope("Three-Point Field Goals Scored", 2) == "STAT_THREE_POINT_FIELD_GOALS_SCORED__QUARTER_2"
+    assert stat_scope("Rebounds", 12) == "STAT_REBOUNDS__SECOND_HALF"
+    assert stat_scope("Rebounds", None) == "STAT_REBOUNDS"
+    assert classify("Total", "STAT_REBOUNDS__QUARTER_2") == (None, "QUARTER_2")
 
 
 def test_period_structure_is_per_sport():
@@ -124,17 +129,20 @@ def _event():
 
 _CAP = SimpleNamespace(decoded={"Value": {"SG": [
     {"I": 11, "PN": "1st quarter"}, {"I": 12, "PN": "1 Half"}, {"I": 13, "TG": "Rebounds"},
-    {"I": 14, "PN": "2nd quarter"}, {"I": 15}]}})   # 15 = unlabelled special group
+    {"I": 14, "PN": "2nd quarter"}, {"I": 15},   # 15 = unlabelled special group
+    {"I": 16, "TG": "Rebounds", "P": 1}, {"I": 17, "TG": "Rebounds", "P": 2}]}})
 
 
 @pytest.mark.asyncio
 async def test_all_labelled_sub_games_are_fetched_with_their_scope():
     feed, ev = _Feed(fail={"14"}), _event()
     await _scraper(feed)._enrich_with_subgames(ev, _CAP, root="line")
-    assert feed.calls == ["11", "12", "13", "14"]          # the unlabelled one is skipped
-    assert {m.scope for m in ev.markets} == {"QUARTER_1", "FIRST_HALF", "STAT_REBOUNDS"}
+    assert feed.calls == ["11", "12", "13", "14", "16", "17"]   # the unlabelled one is skipped
+    assert {m.scope for m in ev.markets} == {"QUARTER_1", "FIRST_HALF", "STAT_REBOUNDS",
+                                             "STAT_REBOUNDS__QUARTER_1", "STAT_REBOUNDS__QUARTER_2"}
     assert ev.subgame_fetch == {"QUARTER_1": "fetched", "FIRST_HALF": "fetched",
-                                "STAT_REBOUNDS": "fetched", "QUARTER_2": "failed"}
+                                "STAT_REBOUNDS": "fetched", "QUARTER_2": "failed",
+                                "STAT_REBOUNDS__QUARTER_1": "fetched", "STAT_REBOUNDS__QUARTER_2": "fetched"}
 
 
 @pytest.mark.asyncio
@@ -282,3 +290,41 @@ async def test_timeout_with_nothing_fetched_is_still_an_error():
     s._started = True
     res = await s.scrape(action="list_prematch", timeout_seconds=0.05)
     assert res["events"] == [] and "timed out" in res["error"]
+
+
+# --------------------------------------------------------------------------- #
+# H2H period labels and honest scores
+# --------------------------------------------------------------------------- #
+def test_h2h_period_labels_use_the_fixed_vocabulary():
+    from src.sites.betb2b.labels import h2h_period_label
+    assert h2h_period_label(18, 3) == "QUARTER_1"
+    assert h2h_period_label(4, 3) == "OVERTIME_1"          # basketball: overtime, not "4th period"
+    assert h2h_period_label(4, 2, "4th period") == "4th period"   # other sports: not claimed
+    assert h2h_period_label(2, 1) == "HALF_2"
+    assert h2h_period_label(99, 3) == "period_99"          # unknown: stored under its own key
+
+
+def test_h2h_missing_period_score_is_not_filled_with_zero():
+    from src.sites.betb2b import BetB2BSkinConfig
+    from src.sites.betb2b.extraction.rules import BetB2BExtractionRules
+    from pathlib import Path
+    skin = BetB2BSkinConfig.from_yaml(str(Path(__file__).resolve().parents[1] / "skins" / "linebet.yaml"))
+    raw = {"teams": [], "sportId": 3, "gameShorts": [{
+        "id": "g", "team1": "a", "team2": "b", "score1": 90, "score2": 80,
+        "periods": [{"type": 18, "score1": 20, "score2": 18}, {"type": 4, "score1": 10}]}]}
+    d = BetB2BExtractionRules.extract_h2h_data(raw)
+    q1, ot = d.game_shorts[0].periods
+    assert (q1.period_name, q1.home_score, q1.away_score) == ("QUARTER_1", 20, 18)
+    assert (ot.period_name, ot.home_score, ot.away_score) == ("OVERTIME_1", 10, None)
+
+
+def test_stored_basketball_h2h_periods_are_relabelled(conn):
+    h2h = {"sport_id": 3, "teams": [], "game_shorts": [{
+        "game_id": "g", "team1_id": "a", "team2_id": "b", "score1": 90, "score2": 80, "status": 3,
+        "periods": [{"period_key": 18, "period_name": "1st quarter", "home_score": 20, "away_score": 18},
+                    {"period_key": 4, "period_name": "4th period", "home_score": 10, "away_score": 2}]}]}
+    store.persist_result(_result("2026-10-03T10:00:00+00:00", h2h=h2h), conn=conn)
+    assert store.relabel_h2h_periods(conn) == 2
+    assert store.relabel_h2h_periods(conn) == 0                      # idempotent
+    names = sorted(r[0] for r in _q(conn, "SELECT period_name FROM h2h_period_scores"))
+    assert names == ["OVERTIME_1", "QUARTER_1"]

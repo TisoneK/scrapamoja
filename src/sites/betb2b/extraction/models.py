@@ -83,8 +83,8 @@ class PeriodScore:
     """
 
     period_name: str      # e.g. "1st quarter", "2nd half", "1 Overtime"
-    home_score: int       # ``S1`` field
-    away_score: int       # ``S2`` field
+    home_score: Optional[int]   # ``S1`` field; None when the source gives no score
+    away_score: Optional[int]   # ``S2`` field
     period_key: int = 0   # ``Key`` — ordinal (1=first period)
 
     def to_dict(self) -> Dict[str, Any]:

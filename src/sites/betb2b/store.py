@@ -1170,6 +1170,25 @@ def events_missing_stat_id(conn, *, limit: int = 150) -> List[str]:
     return [r[0] for r in conn.execute(sql)]
 
 
+def relabel_h2h_periods(conn) -> int:
+    """Rewrite stored basketball H2H period names to the fixed vocabulary
+    (quarters, and key 4 = overtime). Idempotent; returns the rows changed."""
+    from .labels import _H2H_BASKETBALL
+    changed = 0
+    for key, label in _H2H_BASKETBALL.items():
+        base = ("UPDATE h2h_period_scores SET period_name = {l1} WHERE period_key = {k} "
+                "AND (period_name IS NULL OR period_name <> {l2}) AND h2h_game_id IN "
+                "(SELECT id FROM h2h_games WHERE sport_id = 3)")
+        if _is_orm(conn):
+            from sqlalchemy import text as _t
+            res = conn.execute(_t(base.format(l1=":l", l2=":l", k=":k")), {"l": label, "k": key})
+        else:
+            res = conn.execute(base.format(l1="?", l2="?", k="?"), (label, key, label))
+        changed += max(res.rowcount or 0, 0)
+    conn.commit()
+    return changed
+
+
 def _parse_ts(v: Any) -> Optional[datetime]:
     """An ISO string (SQLite) or datetime (Postgres) → aware UTC datetime."""
     if v is None or v == "":

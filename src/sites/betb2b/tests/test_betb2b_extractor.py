@@ -990,11 +990,11 @@ def test_extract_h2h_data_valid(rules: BetB2BExtractionRules) -> None:
 
     # Periods within gameShort
     assert len(gs0.periods) == 2
-    assert gs0.periods[0].period_name == "1st quarter"
+    assert gs0.periods[0].period_name == "QUARTER_1"
     assert gs0.periods[0].home_score == 15
     assert gs0.periods[0].away_score == 22
     assert gs0.periods[0].period_key == 18
-    assert gs0.periods[1].period_name == "2nd quarter"
+    assert gs0.periods[1].period_name == "QUARTER_2"
 
     # Second game has no periods
     gs1 = result.game_shorts[1]

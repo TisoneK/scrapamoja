@@ -130,6 +130,8 @@ def _market_type_for_group(g_id: int) -> MarketType:
 # These are sport-specific; type 18 = "1st quarter" for basketball
 # but could mean something different for other sports. The mapping
 # covers the most common values seen in H2H gameShorts.periods[].type.
+from ..labels import h2h_period_label  # noqa: E402
+
 _PERIOD_TYPE_NAMES: Dict[int, str] = {
     1: "1st half",
     2: "2nd half",
@@ -885,10 +887,13 @@ class BetB2BExtractionRules:
                     if not isinstance(p, dict):
                         continue
                     pt = _coerce_int(p.get("type"))
+                    # Stored as the source reports it: a missing score stays None, it is
+                    # not filled in as 0.
                     periods.append(PeriodScore(
-                        period_name=_PERIOD_TYPE_NAMES.get(pt, f"period_{pt}") if pt else "",
-                        home_score=_coerce_int(p.get("score1")) or 0,
-                        away_score=_coerce_int(p.get("score2")) or 0,
+                        period_name=(h2h_period_label(pt, sport_id, _PERIOD_TYPE_NAMES.get(pt, ""))
+                                     if pt else ""),
+                        home_score=_coerce_int(p.get("score1")),
+                        away_score=_coerce_int(p.get("score2")),
                         period_key=pt or 0,
                     ))
 

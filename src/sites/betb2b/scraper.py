@@ -734,7 +734,7 @@ class BetB2BScraper:
         for sg in value.get("SG") or []:
             sub_id = sg.get("I")
             scope = scope_from_period_name(sg.get("PN")) or (
-                stat_scope(sg.get("TG")) if not (sg.get("PN") or "").strip() else None)
+                stat_scope(sg.get("TG"), sg.get("P")) if not (sg.get("PN") or "").strip() else None)
             if not scope or not sub_id or scope in event.subgame_fetch:
                 continue   # unlabelled special groups carry no stable label
             if fetched >= limit:

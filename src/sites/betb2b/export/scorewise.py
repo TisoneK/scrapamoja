@@ -86,6 +86,8 @@ def _h2h_for_scope(ev: Dict[str, Any], scope: str, home: str, away: str) -> List
                     for p in g.get("periods") or []}
             if not qidx or not all(q in by_q for q in qidx):
                 continue
+            if any(v is None for q in qidx for v in by_q[q]):
+                continue   # the source gave no score for a needed period: never fill it in
             s1 = sum(by_q[q][0] or 0 for q in qidx)
             s2 = sum(by_q[q][1] or 0 for q in qidx)
         if s1 is None or s2 is None:
