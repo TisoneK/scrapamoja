@@ -1136,6 +1136,43 @@ class BetB2BScraper:
             logger.debug("skin=%s result fetch id=%s failed: %s", self.skin.name, ident, exc)
             return None, True
 
+    async def fetch_match_stats_checked(self, ident: str):
+        """``(parsed | None, errored)`` for a played match's statistics (statisticfeed
+        ``v2/Game/statistic``): ``parsed`` is :meth:`extract_match_stats` output, or None
+        when the source has no statistics (204, or an empty entity — normal before a match
+        and for minor leagues). ``errored`` is True only for a failed request."""
+        ident = str(ident or "").strip()
+        if not ident:
+            return None, False
+        cookie_header = (
+            None if self._direct
+            else (await self.session_manager.get_session()).to_cookie_header()
+        )
+        headers = self.skin.merged_headers(session_cookies=cookie_header)
+        headers["accept"] = "application/json"
+        url = f"{self.skin.base_url}/service-api/statisticfeed/api/v2/Game/statistic"
+        params = {"id": ident, "lng": self.skin.language, "ref": str(self.skin.partner),
+                  "fcountry": str(self.skin.country), "gr": str(self.skin.gr)}
+        try:
+            self._guard_gate("stats")
+            async with self._shared_http() as client:
+                await self.session_manager.pacer.wait()
+                resp = await client.get(url, params=params, headers=headers)
+            self._guard_check(resp, "stats")
+            if resp.status_code in (200, 204) and not resp.text:
+                return None, False
+            if resp.status_code != 200:
+                return None, resp.status_code >= 500 or resp.status_code in (403, 429)
+            parsed = BetB2BExtractionRules.extract_match_stats(resp.json())
+            return (parsed if (parsed["team"] or parsed["players"]) else None), False
+        except (SiteBlocked, SiteInCooldown) as exc:
+            logger.debug("skin=%s match stats id=%s stopped by the guard: %s", self.skin.name, ident, exc)
+            return None, True
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            self._guard_failure(exc, "stats", url)
+            logger.debug("skin=%s match stats id=%s failed: %s", self.skin.name, ident, exc)
+            return None, True
+
     # ------------------------------------------------------------------ #
     # H2H enrichment
     # ------------------------------------------------------------------ #
@@ -1374,6 +1411,9 @@ class BetB2BScraper:
         (common for minor leagues, exactly like H2H); we leave
         ``Event.statistics`` empty in that case.
         """
+        # The feed has nothing to count before a match, so only live matches are probed here;
+        # a played match's statistics are fetched by the post-match pass (match_stats).
+        events = [e for e in events if e and e.is_live]
         if not events:
             return
 

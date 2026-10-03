@@ -472,3 +472,102 @@ async def test_in_scrape_probes_skip_what_the_store_knows():
     s._finalize_coverage([known, none, new])
     st = [next(r for r in e.coverage if r["dataset"] == "h2h")["status"] for e in (known, none, new)]
     assert st == ["offered", "not_offered", "not_attempted"]                  # coverage stays truthful
+
+
+# --------------------------------------------------------------------------- #
+# Played-match statistics (team + player)
+# --------------------------------------------------------------------------- #
+_STAT_PAYLOAD = {
+    "sportId": 3,
+    "players": [{"id": "p1", "name": "Ann (X)"}, {"id": "p2", "name": "Bob (Y)"}],
+    "entity": {
+        "periodStatistic": [
+            {"title": "Match", "periodType": 100, "groups": [
+                {"groupTypeTitle": "Points", "periodStatistic": [
+                    {"type": 61, "title": "Field goals scored", "val1": 31, "val2": 24, "isPercent": False},
+                    {"type": 62, "title": "Field goals %", "val1": 48.4, "val2": 34.8, "isPercent": True}]}]},
+            {"title": "quarter", "periodType": 18, "groups": [
+                {"groupTypeTitle": "Other", "periodStatistic": [
+                    {"type": 70, "title": "Fouls", "val1": 4, "val2": None, "isPercent": False}]}]}],
+        "playerStatistic": {"tabs": [
+            {"title": "Beta", "table": {"tableTitles": [{"id": 1, "valueCol": [
+                {"id": 1, "title": "Player", "prompt": "Player"}, {"id": 2, "title": "Pts", "prompt": "Points"},
+                {"id": 3, "title": "MP", "prompt": "Minutes played"}]}],
+                "tableBody": [[{"id": 1, "valueCol": [{"id": 1, "competitorId": "p2"},
+                                                      {"id": 2, "value": ["9"]}, {"id": 3, "value": ["19:57"]}]}]]}},
+            {"title": "Alpha", "table": {"tableTitles": [{"id": 1, "valueCol": [
+                {"id": 1, "title": "Player", "prompt": "Player"}, {"id": 2, "title": "Pts", "prompt": "Points"}]}],
+                "tableBody": [[{"id": 1, "valueCol": [{"id": 1, "competitorId": "p1"}, {"id": 2, "value": ["12"]}]}]]}}]}}}
+
+
+def test_match_stats_parser_keeps_what_the_source_reports():
+    from src.sites.betb2b.extraction.rules import BetB2BExtractionRules
+    out = BetB2BExtractionRules.extract_match_stats(_STAT_PAYLOAD)
+    team = out["team"]
+    assert (team[0]["period"], team[0]["stat_title"], team[0]["home_value"], team[0]["away_value"]) == \
+        ("FULL_TIME", "Field goals scored", 31, 24)
+    assert team[1]["is_percent"] is True
+    assert (team[2]["period"], team[2]["away_value"]) == ("QUARTER_1", None)       # missing stays empty
+    pl = out["players"]
+    assert {(p["player_name"], p["stat_code"], p["stat_title"], p["value"]) for p in pl} == {
+        ("Bob (Y)", "Pts", "Points", "9"), ("Bob (Y)", "MP", "Minutes played", "19:57"),
+        ("Ann (X)", "Pts", "Points", "12")}
+    assert BetB2BExtractionRules.extract_match_stats({"entity": {"periodStatistic": []}}) == {"team": [], "players": []}
+
+
+def test_match_stats_are_stored_with_home_and_away_side(conn):
+    from src.sites.betb2b.extraction.rules import BetB2BExtractionRules
+    store.persist_result(_result("2026-10-03T10:00:00+00:00"), conn=conn)       # E1: Alpha vs Beta
+    run = store.begin_backfill_run(conn, "linebet", "backfill_match_stats")
+    parsed = BetB2BExtractionRules.extract_match_stats(_STAT_PAYLOAD)
+    assert store.record_match_stats(conn, run, "E1", "linebet", parsed) == (3, 3)
+    assert _q(conn, "SELECT period, stat_title, home_value, away_value FROM match_stats "
+                    "WHERE stat_title = 'Field goals scored'") == [("FULL_TIME", "Field goals scored", 31.0, 24.0)]
+    sides = dict(_q(conn, "SELECT player_name, side FROM player_stats WHERE stat_code = 'Pts'"))
+    assert sides == {"Ann (X)": "HOME", "Bob (Y)": "AWAY"}        # matched by team name, not tab order
+
+
+def test_finished_matches_without_statistics_are_queued_then_remembered(conn):
+    store.persist_result(_result("2026-10-03T10:00:00+00:00", start=(datetime.now(timezone.utc)
+                                                                      - timedelta(days=1)).isoformat()), conn=conn)
+    assert store.events_missing_match_stats(conn) == []                           # not finished
+    store.record_result(conn, "E1", stat_game_id="sg", score_home=9, score_away=8, winner=1, status=3,
+                        at="2026-10-03T12:00:00+00:00")
+    assert store.events_missing_match_stats(conn) == [("E1", "sg")]
+    run = store.begin_backfill_run(conn, "linebet", "backfill_match_stats")
+    store.record_coverage(conn, run, "E1", "linebet", "match_stats", "not_offered",
+                          at=datetime.now(timezone.utc).isoformat())
+    assert store.events_missing_match_stats(conn) == []                           # source had none: wait 24h
+    store.record_match_stats(conn, run, "E1", "linebet", {"team": [{"period": "FULL_TIME", "stat_title": "x",
+                                                                    "home_value": 1, "away_value": 2}], "players": []})
+    store.record_coverage(conn, run, "E1", "linebet", "match_stats", "offered")
+    assert store.events_missing_match_stats(conn) == []                           # stored
+
+
+@pytest.mark.asyncio
+async def test_backfills_run_even_when_no_match_is_newly_due(tmp_path, monkeypatch):
+    """The statistics/period backfills used to be skipped whenever the results pass had nothing pending."""
+    from types import SimpleNamespace
+    from src.sites.betb2b.cli.main import _update_results
+    from src.sites.betb2b.extraction.rules import BetB2BExtractionRules
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("BETB2B_STORE_MODE", "local")
+    db = str(tmp_path / "o.db")
+    c = store.init_db(db)
+    store.persist_result(_result("2026-10-03T10:00:00+00:00", start=(datetime.now(timezone.utc)
+                                                                      - timedelta(days=1)).isoformat()), conn=c)
+    store.record_result(c, "E1", stat_game_id="sg", score_home=9, score_away=8, winner=1, status=3,
+                        at="2026-10-03T12:00:00+00:00")
+    c.close()
+    parsed = BetB2BExtractionRules.extract_match_stats(_STAT_PAYLOAD)
+
+    class _Scraper:
+        concurrency = 2
+        async def fetch_result(self, ident): return None
+        async def fetch_result_checked(self, ident): return {"periods": [{"type": 18, "score1": 1, "score2": 2}]}, False
+        async def fetch_match_stats_checked(self, ident): return parsed, False
+
+    await _update_results(_Scraper(), db, "linebet")
+    c = store.init_db(db)
+    assert c.execute("SELECT COUNT(*) FROM match_stats").fetchone()[0] == 3
+    assert c.execute("SELECT COUNT(*) FROM period_scores").fetchone()[0] == 1

@@ -276,6 +276,39 @@ CREATE TABLE IF NOT EXISTS odds_snapshots (
 -- (totals by subject x period; h2h) and status offered | not_offered |
 -- not_attempted | fetch_failed. Stored on change only, so a gap says whether the
 -- source lacks the data or we never looked.
+CREATE TABLE IF NOT EXISTS match_stats (
+    id           INTEGER PRIMARY KEY,
+    run_id       INTEGER NOT NULL REFERENCES scrape_runs(run_id),
+    event_id     TEXT NOT NULL REFERENCES events(event_id),
+    skin         TEXT NOT NULL,
+    period       TEXT,
+    period_key   INTEGER,
+    group_title  TEXT,
+    stat_type    INTEGER,
+    stat_title   TEXT,
+    home_value   REAL,
+    away_value   REAL,
+    is_percent   INTEGER,
+    captured_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_match_stats_event ON match_stats(event_id);
+
+CREATE TABLE IF NOT EXISTS player_stats (
+    id           INTEGER PRIMARY KEY,
+    run_id       INTEGER NOT NULL REFERENCES scrape_runs(run_id),
+    event_id     TEXT NOT NULL REFERENCES events(event_id),
+    skin         TEXT NOT NULL,
+    side         TEXT,
+    team_title   TEXT,
+    player_id    TEXT,
+    player_name  TEXT,
+    stat_code    TEXT,
+    stat_title   TEXT,
+    value        TEXT,
+    captured_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_player_stats_event ON player_stats(event_id);
+
 CREATE TABLE IF NOT EXISTS coverage (
     id           INTEGER PRIMARY KEY,
     run_id       INTEGER NOT NULL REFERENCES scrape_runs(run_id),
@@ -994,7 +1027,7 @@ def counts(conn) -> Dict[str, int]:
     tables = [
         "sports", "countries", "leagues", "teams", "events", "markets", "sub_games",
         "scrape_runs", "event_states", "period_scores", "odds_snapshots",
-        "h2h_games", "h2h_period_scores", "statistics", "coverage",
+        "h2h_games", "h2h_period_scores", "statistics", "coverage", "match_stats", "player_stats",
     ]
     return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
 
@@ -1493,6 +1526,83 @@ def events_missing_period_scores(conn, *, limit: int = 200) -> List[tuple]:
     return [(r[0], r[1]) for r in rows][:limit]
 
 
+def _run_many(conn, sql: str, rows: List[Dict[str, Any]]) -> None:
+    """Insert many rows with one statement (named ``:params``) on either backend."""
+    if not rows:
+        return
+    if _is_orm(conn):
+        from sqlalchemy import text as _t
+        conn.execute(_t(sql), rows)
+        return
+    import re
+    names = re.findall(r":([a-z_0-9]+)", sql)
+    conn.executemany(re.sub(r":[a-z_0-9]+", "?", sql), [[r[n] for n in names] for r in rows])
+
+
+def _num(v: Any) -> Optional[float]:
+    try:
+        return float(v) if v is not None and v != "" else None
+    except (TypeError, ValueError):
+        return None
+
+
+def events_missing_match_stats(conn, *, limit: int = 100, retry_none_hours: float = 24.0,
+                               max_age_days: float = 7.0) -> List[tuple]:
+    """``(event_id, stat_game_id)`` of finished matches (final score recorded, started within
+    ``max_age_days``) with no team statistics stored yet — the post-match statistics queue. A
+    match the source had no statistics for waits ``retry_none_hours`` before it is asked again."""
+    rows = _run_sql(conn,
+        "SELECT e.event_id, e.stat_game_id, e.start_time FROM events e WHERE e.result_status = 3 "
+        "AND NOT EXISTS (SELECT 1 FROM match_stats m WHERE m.event_id = e.event_id) "
+        "ORDER BY e.start_time DESC", {}).fetchall()
+    cov = _run_sql(conn,
+        "SELECT c.event_id, c.status, c.captured_at FROM coverage c JOIN (SELECT event_id, MAX(id) mid "
+        "FROM coverage WHERE dataset = 'match_stats' GROUP BY event_id) x ON c.id = x.mid", {}).fetchall()
+    now = datetime.now(timezone.utc)
+    recent = {eid for eid, st, at in cov if st == "not_offered" and _parse_ts(at)
+              and (now - _parse_ts(at)).total_seconds() < retry_none_hours * 3600}
+    out = []
+    for eid, sid, start in rows:
+        st = _parse_ts(start)
+        if eid in recent or (st and (now - st).total_seconds() > max_age_days * 86400):
+            continue
+        out.append((eid, sid))
+    return out[:limit]
+
+
+def record_match_stats(conn, run_id: int, event_id: str, skin: str,
+                       parsed: Dict[str, List[Dict[str, Any]]], *, at: Optional[str] = None) -> tuple:
+    """Store a played match's team and player statistics exactly as the source reports them.
+    Returns ``(team_rows, player_rows)`` added."""
+    when = _ts_for(conn, at)
+    orm = _is_orm(conn)
+    team = [{"r": run_id, "e": event_id, "s": skin, "p": t.get("period"), "pk": t.get("period_key"),
+             "g": t.get("group_title"), "st": t.get("stat_type"), "t": t.get("stat_title"),
+             "h": _num(t.get("home_value")), "a": _num(t.get("away_value")),
+             "pc": bool(t.get("is_percent")) if orm else (1 if t.get("is_percent") else 0), "at": when}
+            for t in parsed.get("team") or []]
+    _run_many(conn, "INSERT INTO match_stats (run_id, event_id, skin, period, period_key, group_title, "
+                    "stat_type, stat_title, home_value, away_value, is_percent, captured_at) VALUES "
+                    "(:r, :e, :s, :p, :pk, :g, :st, :t, :h, :a, :pc, :at)", team)
+    names = _run_sql(conn, "SELECT home_name, away_name FROM events WHERE event_id = :e",
+                     {"e": event_id}).fetchone()
+    home, away = ((names[0] or "").strip().lower(), (names[1] or "").strip().lower()) if names else ("", "")
+
+    def side(title, idx):
+        t = (title or "").strip().lower()
+        return "HOME" if t and t == home else "AWAY" if t and t == away else ("HOME" if idx == 0 else "AWAY")
+
+    players = [{"r": run_id, "e": event_id, "s": skin, "sd": side(x.get("team_title"), x.get("tab_index")),
+                "tt": x.get("team_title"), "pid": x.get("player_id"), "pn": x.get("player_name"),
+                "sc": x.get("stat_code"), "stt": x.get("stat_title"), "v": x.get("value"), "at": when}
+               for x in parsed.get("players") or []]
+    _run_many(conn, "INSERT INTO player_stats (run_id, event_id, skin, side, team_title, player_id, "
+                    "player_name, stat_code, stat_title, value, captured_at) VALUES "
+                    "(:r, :e, :s, :sd, :tt, :pid, :pn, :sc, :stt, :v, :at)", players)
+    conn.commit()
+    return len(team), len(players)
+
+
 def give_up_results(conn, run_id, skin: str, *, days: float = 7.0,
                     at: Optional[str] = None) -> List[str]:
     """Matches that started more than ``days`` ago and still have no result: the source
@@ -1608,12 +1718,12 @@ def _prune_delete(conn, event_ids: List[str]) -> Dict[str, int]:
     if not event_ids:
         return {t: 0 for t in ("odds_snapshots", "event_states", "period_scores",
                                "h2h_period_scores", "h2h_games", "statistics",
-                               "sub_games", "events_pruned")}
+                               "sub_games", "match_stats", "player_stats", "events_pruned")}
     ph = ",".join("?" for _ in event_ids)
     params = list(event_ids)
     out: Dict[str, int] = {}
     for table in ("odds_snapshots", "event_states", "period_scores",
-                  "statistics", "sub_games", "coverage"):
+                  "statistics", "sub_games", "coverage", "match_stats", "player_stats"):
         cur = conn.execute(f"DELETE FROM {table} WHERE event_id IN ({ph})", params)
         out[table] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
     # h2h_period_scores references h2h_games — children first.
@@ -1656,7 +1766,7 @@ def prune_counts(conn, *, days: float = 7.0) -> Dict[str, int]:
         return store_orm.prune_counts(conn, days=days)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     tables = ("odds_snapshots", "event_states", "period_scores", "statistics",
-              "sub_games", "h2h_games", "coverage")
+              "sub_games", "h2h_games", "coverage", "match_stats", "player_stats")
     out: Dict[str, int] = {}
     for table in tables:
         row = conn.execute(
@@ -1724,7 +1834,8 @@ def truncate_facts(conn) -> Dict[str, Any]:
         from . import store_orm
         return store_orm.truncate_facts(conn)
     tables = ("odds_snapshots", "event_states", "period_scores", "statistics",
-              "sub_games", "coverage", "h2h_period_scores", "h2h_games", "scrape_runs")
+              "sub_games", "coverage", "match_stats", "player_stats", "h2h_period_scores",
+              "h2h_games", "scrape_runs")
     out: Dict[str, Any] = {"tables": list(tables), "deleted": {}}
     for table in tables:
         cur = conn.execute(f"DELETE FROM {table}")

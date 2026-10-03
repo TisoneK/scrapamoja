@@ -304,6 +304,44 @@ class Statistic(Base):
     captured_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class MatchStat(Base):
+    """A played match's team statistics: one row per period x stat (the whole match is
+    ``FULL_TIME``, then each quarter/half), home and away values as the source reports them."""
+    __tablename__ = "match_stats"
+    id: Mapped[int] = mapped_column(SurrogatePK, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(SurrogatePK, ForeignKey("scrape_runs.run_id"), nullable=False)
+    event_id: Mapped[str] = mapped_column(Text, ForeignKey("events.event_id"), nullable=False)
+    skin: Mapped[str] = mapped_column(Text, nullable=False)
+    period: Mapped[Optional[str]] = mapped_column(Text)
+    period_key: Mapped[Optional[int]] = mapped_column(Integer)
+    group_title: Mapped[Optional[str]] = mapped_column(Text)
+    stat_type: Mapped[Optional[int]] = mapped_column(Integer)
+    stat_title: Mapped[Optional[str]] = mapped_column(Text)
+    home_value: Mapped[Optional[float]] = mapped_column(Float)
+    away_value: Mapped[Optional[float]] = mapped_column(Float)
+    is_percent: Mapped[Optional[bool]] = mapped_column(Boolean)
+    captured_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (Index("ix_match_stats_event", "event_id"),)
+
+
+class PlayerStat(Base):
+    """A played match's per-player statistics (long format: one row per player x stat)."""
+    __tablename__ = "player_stats"
+    id: Mapped[int] = mapped_column(SurrogatePK, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(SurrogatePK, ForeignKey("scrape_runs.run_id"), nullable=False)
+    event_id: Mapped[str] = mapped_column(Text, ForeignKey("events.event_id"), nullable=False)
+    skin: Mapped[str] = mapped_column(Text, nullable=False)
+    side: Mapped[Optional[str]] = mapped_column(Text)          # HOME | AWAY
+    team_title: Mapped[Optional[str]] = mapped_column(Text)
+    player_id: Mapped[Optional[str]] = mapped_column(Text)
+    player_name: Mapped[Optional[str]] = mapped_column(Text)
+    stat_code: Mapped[Optional[str]] = mapped_column(Text)     # the column abbreviation (Pts, TR, ...)
+    stat_title: Mapped[Optional[str]] = mapped_column(Text)    # its full name
+    value: Mapped[Optional[str]] = mapped_column(Text)         # as reported ("19:57", "9")
+    captured_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (Index("ix_player_stats_event", "event_id"),)
+
+
 class ScraperJob(Base):
     """Control-plane job queue/status — the remote-control API's runs.
 

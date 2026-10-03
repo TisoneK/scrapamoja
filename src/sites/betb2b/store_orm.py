@@ -23,7 +23,7 @@ from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 
 from .labels import classify
 from .models import (
-    Base, Country, Coverage, Event, EventState, H2HGame, H2HPeriodScore, League,
+    Base, Country, Coverage, Event, MatchStat, PlayerStat, EventState, H2HGame, H2HPeriodScore, League,
     Market, OddsSnapshot, PeriodScore, ScrapeRun, ScraperJob, Sport,
     Statistic, SubGame, Team,
 )
@@ -37,6 +37,7 @@ _states, _periods, _odds = EventState.__table__, PeriodScore.__table__, OddsSnap
 _h2h, _h2hp, _stats, _jobs = H2HGame.__table__, H2HPeriodScore.__table__, Statistic.__table__, ScraperJob.__table__
 _subgames = SubGame.__table__
 _coverage = Coverage.__table__
+_match_stats, _player_stats = MatchStat.__table__, PlayerStat.__table__
 
 # One engine per resolved URL (pool reuse); schema ensured once.
 _engines: Dict[str, Any] = {}
@@ -749,7 +750,7 @@ def record_h2h(conn: Connection, run_id: int, event_id: str, skin: str,
 
 def counts(conn) -> Dict[str, int]:
     tables = [_sports, _countries, _leagues, _teams, _events, _markets, _subgames, _runs,
-              _states, _periods, _odds, _h2h, _h2hp, _stats, _coverage]
+              _states, _periods, _odds, _h2h, _h2hp, _stats, _coverage, _match_stats, _player_stats]
     return {t.name: conn.execute(select(func.count()).select_from(t)).scalar() for t in tables}
 
 
@@ -799,9 +800,9 @@ def prune_expired(conn: Connection, *, days: float = 7.0, batch: int = 2000,
     if not old_ids:
         return {t: 0 for t in ("odds_snapshots", "event_states", "period_scores",
                                "h2h_period_scores", "h2h_games", "statistics",
-                               "sub_games", "events_pruned")}
+                               "sub_games", "match_stats", "player_stats", "events_pruned")}
     out: Dict[str, int] = {}
-    for t in (_odds, _states, _periods, _stats, _subgames, _coverage):
+    for t in (_odds, _states, _periods, _stats, _subgames, _coverage, _match_stats, _player_stats):
         res = conn.execute(t.delete().where(t.c.event_id.in_(old_ids)))
         out[t.name] = max(res.rowcount or 0, 0)
     res = conn.execute(_h2hp.delete().where(_h2hp.c.h2h_game_id.in_(
@@ -822,7 +823,7 @@ def prune_counts(conn: Connection, *, days: float = 7.0) -> Dict[str, int]:
     old = select(_events.c.event_id).where(
         _events.c.start_time.isnot(None), _events.c.start_time < cutoff).subquery()
     out: Dict[str, int] = {}
-    for t in (_odds, _states, _periods, _stats, _subgames, _h2h, _coverage):
+    for t in (_odds, _states, _periods, _stats, _subgames, _h2h, _coverage, _match_stats, _player_stats):
         out[t.name] = conn.execute(
             select(func.count()).select_from(t).where(t.c.event_id.in_(select(old.c.event_id)))
         ).scalar() or 0
@@ -842,7 +843,8 @@ def prune_counts(conn: Connection, *, days: float = 7.0) -> Dict[str, int]:
 # referenced table and its referencing tables in the same TRUNCATE, even when
 # the referencing table is empty — odds_snapshots.run_id → scrape_runs).
 _FACT_TABLES = ("odds_snapshots", "scrape_runs", "event_states", "period_scores",
-                "h2h_games", "h2h_period_scores", "statistics", "sub_games", "coverage")
+                "h2h_games", "h2h_period_scores", "statistics", "sub_games", "coverage",
+                "match_stats", "player_stats")
 
 
 def truncate_facts(conn: Connection, *, commit: bool = True) -> Dict[str, Any]:

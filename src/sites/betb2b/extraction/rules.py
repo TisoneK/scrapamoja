@@ -921,6 +921,76 @@ class BetB2BExtractionRules:
     # Match statistics (statisticfeed api/v2/Game/statistic)
     # ------------------------------------------------------------------ #
     @staticmethod
+    def extract_match_stats(raw: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+        """Structured statistics from a statisticfeed ``v2/Game/statistic`` response of a
+        played match: ``{"team": [...], "players": [...]}``. Both are empty before the match
+        (the feed's ``entity`` is empty until there is something to count).
+
+        ``team``: one row per period (the whole match, then each quarter/half) x group x stat:
+        ``period`` (fixed vocabulary; ``FULL_TIME`` for the whole match), ``group_title``,
+        ``stat_type``, ``stat_title``, ``home_value``/``away_value`` (as reported) and
+        ``is_percent``. ``players``: one row per player x stat from the per-team tables:
+        ``team_title``, ``tab_index``, ``player_id``, ``player_name``, ``stat_code`` (the column
+        abbreviation), ``stat_title`` (its full name) and ``value`` (text, as reported).
+        Nothing is derived or filled in.
+        """
+        out: Dict[str, List[Dict[str, Any]]] = {"team": [], "players": []}
+        if not isinstance(raw, dict):
+            return out
+        entity = raw.get("entity")
+        if not isinstance(entity, dict):
+            return out
+        from ..labels import h2h_period_label
+        sport_id = _coerce_int(raw.get("sportId"))
+
+        for per in entity.get("periodStatistic") or []:
+            if not isinstance(per, dict):
+                continue
+            key = _coerce_int(per.get("periodType"))
+            period = "FULL_TIME" if key == 100 else h2h_period_label(key, sport_id, str(per.get("title") or ""))
+            for grp in per.get("groups") or []:
+                if not isinstance(grp, dict):
+                    continue
+                for st in grp.get("periodStatistic") or []:
+                    if not isinstance(st, dict):
+                        continue
+                    out["team"].append({
+                        "period": period, "period_key": key,
+                        "group_title": grp.get("groupTypeTitle"),
+                        "stat_type": _coerce_int(st.get("type")), "stat_title": st.get("title"),
+                        "home_value": st.get("val1"), "away_value": st.get("val2"),
+                        "is_percent": bool(st.get("isPercent")),
+                    })
+
+        names = {str(pl.get("id")): pl.get("name") for pl in raw.get("players") or [] if isinstance(pl, dict)}
+        tabs = (entity.get("playerStatistic") or {}).get("tabs") if isinstance(entity.get("playerStatistic"), dict) else None
+        for idx, tab in enumerate(tabs or []):
+            table = (tab or {}).get("table") or {}
+            cols: Dict[Any, Dict[str, Any]] = {}
+            for grp in table.get("tableTitles") or []:
+                for c in (grp or {}).get("valueCol") or []:
+                    cols[c.get("id")] = c
+            for rowgroup in table.get("tableBody") or []:
+                for row in rowgroup if isinstance(rowgroup, list) else [rowgroup]:
+                    player_id, vals = None, []
+                    for cell in (row or {}).get("valueCol") or []:
+                        if cell.get("competitorId"):
+                            player_id = str(cell["competitorId"])
+                        elif cell.get("value") is not None:
+                            vals.append((cell.get("id"), cell["value"]))
+                    if not player_id:
+                        continue
+                    for cid, v in vals:
+                        col = cols.get(cid) or {}
+                        out["players"].append({
+                            "team_title": tab.get("title"), "tab_index": idx,
+                            "player_id": player_id, "player_name": names.get(player_id),
+                            "stat_code": col.get("title"), "stat_title": col.get("prompt"),
+                            "value": (str(v[0]) if isinstance(v, list) and v else (None if isinstance(v, list) else str(v))),
+                        })
+        return out
+
+    @staticmethod
     def extract_statistics_data(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Flatten a statisticfeed ``Game/statistic`` (v2) response into stat rows.
 

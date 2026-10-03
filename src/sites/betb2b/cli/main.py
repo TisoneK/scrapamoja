@@ -299,42 +299,91 @@ async def _update_results(scraper, db_target: str, skin_name: str) -> None:
         if gave_up:
             print(f"  [{skin_name}] results: {len(gave_up)} matches unresolved by the source after "
                   f"7 days — marked, no longer asked", file=sys.stderr)
-        if not pending:
-            return
-        sem = asyncio.Semaphore(scraper.concurrency)
-        out = []
-
-        async def _one(eid, stat_id):
-            async with sem:
-                res = await scraper.fetch_result(stat_id or eid)
-            if res:
-                out.append((eid, res))
-
-        await asyncio.gather(*[_one(e, sid) for e, sid in pending])
-        at = datetime.now(timezone.utc).isoformat()
-        conn = store.init_db(db_target)
-        periods = 0
-        try:
-            rid = None
-            for eid, res in out:
-                store.record_result(
-                    conn, eid, stat_game_id=res.get("stat_game_id"),
-                    score_home=res.get("score_home"), score_away=res.get("score_away"),
-                    winner=res.get("winner"), status=res.get("status"), at=at)
-                if res.get("status") == 3:
-                    if rid is None:
-                        rid = store.begin_backfill_run(conn, skin_name, "results", at=at)
-                    periods += store.record_period_results(
-                        conn, rid, eid, skin_name, res.get("periods") or [], at=at)
-                    store.record_coverage(conn, rid, eid, skin_name, "result", "offered", at=at)
-        finally:
-            conn.close()
-        done = sum(1 for _, r in out if r.get("status") == 3)
-        print(f"  [{skin_name}] results: {len(pending)} pending → {done} finished recorded "
-              f"({periods} period scores)", file=sys.stderr)
+        await _record_pending_results(scraper, db_target, skin_name, pending)
         await _backfill_period_scores(scraper, db_target, skin_name)
+        await _backfill_match_stats(scraper, db_target, skin_name)
     except Exception as exc:  # noqa: BLE001
         print(f"  [{skin_name}] WARNING: results update failed: {exc}", file=sys.stderr)
+
+
+async def _record_pending_results(scraper, db_target: str, skin_name: str, pending) -> None:
+    """Fetch and record the final result (and per-period scores) of the matches that are due."""
+    from src.sites.betb2b import store
+    if not pending:
+        return
+    sem = asyncio.Semaphore(scraper.concurrency)
+    out = []
+
+    async def _one(eid, stat_id):
+        async with sem:
+            res = await scraper.fetch_result(stat_id or eid)
+        if res:
+            out.append((eid, res))
+
+    await asyncio.gather(*[_one(e, sid) for e, sid in pending])
+    at = datetime.now(timezone.utc).isoformat()
+    conn = store.init_db(db_target)
+    periods = 0
+    try:
+        rid = None
+        for eid, res in out:
+            store.record_result(
+                conn, eid, stat_game_id=res.get("stat_game_id"),
+                score_home=res.get("score_home"), score_away=res.get("score_away"),
+                winner=res.get("winner"), status=res.get("status"), at=at)
+            if res.get("status") == 3:
+                if rid is None:
+                    rid = store.begin_backfill_run(conn, skin_name, "results", at=at)
+                periods += store.record_period_results(
+                    conn, rid, eid, skin_name, res.get("periods") or [], at=at)
+                store.record_coverage(conn, rid, eid, skin_name, "result", "offered", at=at)
+    finally:
+        conn.close()
+    done = sum(1 for _, r in out if r.get("status") == 3)
+    print(f"  [{skin_name}] results: {len(pending)} pending → {done} finished recorded "
+          f"({periods} period scores)", file=sys.stderr)
+
+
+async def _backfill_match_stats(scraper, db_target: str, skin_name: str) -> None:
+    """Team and player statistics for finished matches. The feed has nothing to count before a
+    match, so this runs after the results pass: finished matches with no statistics stored are
+    fetched; a match the source has none for is marked (``match_stats`` coverage, not_offered)
+    and asked again after 24 h for a week; a failed request is retried next run."""
+    from src.sites.betb2b import store
+    conn = store.init_db(db_target)
+    try:
+        todo = store.events_missing_match_stats(conn)
+    finally:
+        conn.close()
+    if not todo:
+        return
+    sem = asyncio.Semaphore(scraper.concurrency)
+    out = []
+
+    async def _one(eid, stat_id):
+        async with sem:
+            parsed, errored = await scraper.fetch_match_stats_checked(stat_id or eid)
+        if not errored:
+            out.append((eid, parsed))
+
+    await asyncio.gather(*[_one(e, sid) for e, sid in todo])
+    at = datetime.now(timezone.utc).isoformat()
+    conn = store.init_db(db_target)
+    got = team = players = 0
+    try:
+        rid = store.begin_backfill_run(conn, skin_name, "backfill_match_stats", at=at)
+        for eid, parsed in out:
+            if parsed:
+                t, p = store.record_match_stats(conn, rid, eid, skin_name, parsed, at=at)
+                team += t
+                players += p
+                got += 1
+            store.record_coverage(conn, rid, eid, skin_name, "match_stats",
+                                  "offered" if parsed else "not_offered", at=at)
+    finally:
+        conn.close()
+    print(f"  [{skin_name}] match statistics: {got}/{len(todo)} matches ({team} team rows, "
+          f"{players} player rows)", file=sys.stderr)
 
 
 async def _backfill_period_scores(scraper, db_target: str, skin_name: str) -> None:
