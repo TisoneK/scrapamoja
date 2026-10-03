@@ -262,15 +262,28 @@ def _guard_state(guard) -> dict:
 
 async def _update_results(scraper, db_target: str, skin_name: str) -> None:
     """Score updates for stored matches that should have finished: fetch their
-    final result (statisticfeed ``v1/Game``) and record it. Best-effort — the
-    only re-fetch a stored match gets."""
+    final result (statisticfeed ``v1/Game``) and record it with its per-period
+    scores. Matches the source never resolves within a week are marked unresolved
+    (``result_status = -1``, a ``result`` coverage row) so they stop being asked.
+    Best-effort — the only re-fetch a stored match gets."""
     from src.sites.betb2b import store
     try:
+        at = datetime.now(timezone.utc).isoformat()
         conn = store.init_db(db_target)
+        run = {}
         try:
+            def run_id():
+                if "id" not in run:
+                    run["id"] = store.begin_backfill_run(conn, skin_name, "results", at=at)
+                return run["id"]
+
+            gave_up = store.give_up_results(conn, run_id, skin_name, at=at)
             pending = store.events_needing_results(conn)
         finally:
             conn.close()
+        if gave_up:
+            print(f"  [{skin_name}] results: {len(gave_up)} matches unresolved by the source after "
+                  f"7 days — marked, no longer asked", file=sys.stderr)
         if not pending:
             return
         sem = asyncio.Semaphore(scraper.concurrency)
@@ -285,17 +298,25 @@ async def _update_results(scraper, db_target: str, skin_name: str) -> None:
         await asyncio.gather(*[_one(e, sid) for e, sid in pending])
         at = datetime.now(timezone.utc).isoformat()
         conn = store.init_db(db_target)
+        periods = 0
         try:
+            rid = None
             for eid, res in out:
                 store.record_result(
                     conn, eid, stat_game_id=res.get("stat_game_id"),
                     score_home=res.get("score_home"), score_away=res.get("score_away"),
                     winner=res.get("winner"), status=res.get("status"), at=at)
+                if res.get("status") == 3:
+                    if rid is None:
+                        rid = store.begin_backfill_run(conn, skin_name, "results", at=at)
+                    periods += store.record_period_results(
+                        conn, rid, eid, skin_name, res.get("periods") or [], at=at)
+                    store.record_coverage(conn, rid, eid, skin_name, "result", "offered", at=at)
         finally:
             conn.close()
         done = sum(1 for _, r in out if r.get("status") == 3)
-        print(f"  [{skin_name}] results: {len(pending)} pending → {done} finished recorded",
-              file=sys.stderr)
+        print(f"  [{skin_name}] results: {len(pending)} pending → {done} finished recorded "
+              f"({periods} period scores)", file=sys.stderr)
     except Exception as exc:  # noqa: BLE001
         print(f"  [{skin_name}] WARNING: results update failed: {exc}", file=sys.stderr)
 

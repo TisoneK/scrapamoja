@@ -1368,6 +1368,86 @@ def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int 
     return [(r["event_id"], r["stat_game_id"]) for r in rows]
 
 
+def _ts_for(conn, at):
+    """A timestamp in the form the backend wants: datetime for Postgres, ISO text for SQLite."""
+    if _is_orm(conn):
+        return _parse_ts(at) or datetime.now(timezone.utc)
+    return at or datetime.now(timezone.utc).isoformat()
+
+
+def _run_sql(conn, sql: str, params: Dict[str, Any]):
+    """Run a named-parameter statement (``:name``) on either backend."""
+    if _is_orm(conn):
+        from sqlalchemy import text as _t
+        return conn.execute(_t(sql), params)
+    import re
+    names = re.findall(r":([a-z_0-9]+)", sql)
+    return conn.execute(re.sub(r":[a-z_0-9]+", "?", sql), [params[n] for n in names])
+
+
+def record_coverage(conn, run_id: int, event_id: str, skin: str, dataset: str,
+                    status: str, *, at: Optional[str] = None) -> None:
+    """Log one coverage row (always) for a dataset with no subject/period, e.g. ``result``."""
+    _run_sql(conn, "INSERT INTO coverage (run_id, event_id, skin, dataset, subject, period, status, captured_at) "
+                   "VALUES (:r, :e, :s, :d, NULL, NULL, :st, :at)",
+             {"r": run_id, "e": event_id, "s": skin, "d": dataset, "st": status, "at": _ts_for(conn, at)})
+    conn.commit()
+
+
+def record_period_results(conn, run_id: int, event_id: str, skin: str,
+                          periods: List[Dict[str, Any]], *, at: Optional[str] = None) -> int:
+    """Store a finished match's per-period scores from the results lookup, as the source
+    reports them (the ``type 0`` "Result" row is the final total, not a period, and is
+    left to the event's final score). A period already stored with the same score (from
+    a live scrape) is not stored again. Returns the rows added."""
+    from .labels import h2h_period_label
+    sport = _run_sql(conn, "SELECT sport_id FROM events WHERE event_id = :e", {"e": event_id}).fetchone()
+    sport_id = sport[0] if sport else None
+    have = {(r[0], r[1], r[2]) for r in _run_sql(
+        conn, "SELECT period_key, home_score, away_score FROM period_scores WHERE event_id = :e",
+        {"e": event_id}).fetchall()}
+    added = 0
+    for p in periods or []:
+        key = _as_int(p.get("type"))
+        if not key:                       # 0 / missing: the final total, not a period
+            continue
+        home, away = _as_int(p.get("score1")), _as_int(p.get("score2"))
+        if (key, home, away) in have:
+            continue
+        name = h2h_period_label(key, sport_id, str(p.get("title") or ""))
+        _run_sql(conn, "INSERT INTO period_scores (run_id, event_id, skin, period_key, period_name, "
+                       "home_score, away_score, captured_at) VALUES (:r, :e, :s, :k, :n, :h, :a, :at)",
+                 {"r": run_id, "e": event_id, "s": skin, "k": key, "n": name, "h": home, "a": away,
+                  "at": _ts_for(conn, at)})
+        have.add((key, home, away))
+        added += 1
+    conn.commit()
+    return added
+
+
+def give_up_results(conn, run_id, skin: str, *, days: float = 7.0,
+                    at: Optional[str] = None) -> List[str]:
+    """Matches that started more than ``days`` ago and still have no result: the source
+    never resolved them (postponed, cancelled, or not in its statistics). Mark them
+    ``result_status = -1`` so they stop being asked every run, and log a ``result``
+    coverage row of ``not_offered``. ``run_id`` may be a callable that makes the run on
+    demand. Returns the event ids given up on."""
+    rows = _run_sql(conn, "SELECT event_id, start_time FROM events WHERE result_status IS NULL "
+                          "AND away_team_id IS NOT NULL AND start_time IS NOT NULL", {}).fetchall()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    ids = [r[0] for r in rows if (_parse_ts(r[1]) or datetime.now(timezone.utc)) < cutoff]
+    if ids and callable(run_id):      # a run row is only created when there is something to log
+        run_id = run_id()
+    for eid in ids:
+        _run_sql(conn, "UPDATE events SET result_status = -1 WHERE event_id = :e AND result_status IS NULL",
+                 {"e": eid})
+        _run_sql(conn, "INSERT INTO coverage (run_id, event_id, skin, dataset, subject, period, status, captured_at) "
+                       "VALUES (:r, :e, :s, 'result', NULL, NULL, 'not_offered', :at)",
+                 {"r": run_id, "e": eid, "s": skin, "at": _ts_for(conn, at)})
+    conn.commit()
+    return ids
+
+
 def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
                   score_away=None, winner=None, status=None, at=None) -> None:
     """Write a match's statisticfeed result onto the event. Captures

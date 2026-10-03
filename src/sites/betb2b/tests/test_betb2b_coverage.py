@@ -371,3 +371,39 @@ def test_dedupe_removes_existing_duplicates_and_their_periods(conn):
     assert _q(conn, "SELECT COUNT(*) FROM h2h_games")[0][0] == 1
     assert _q(conn, "SELECT COUNT(*) FROM h2h_period_scores")[0][0] == 0   # belonged to a removed copy
     assert store.dedupe_h2h_games(conn) == 0
+
+
+# --------------------------------------------------------------------------- #
+# Results pass: per-period scores, unresolved matches
+# --------------------------------------------------------------------------- #
+def test_finished_match_period_scores_are_stored_without_the_total_row(conn):
+    store.persist_result(_result("2026-10-03T10:00:00+00:00"), conn=conn)
+    run = store.begin_backfill_run(conn, "linebet", "results")
+    periods = [{"type": 18, "title": "Quater1", "score1": 30, "score2": 10},
+               {"type": 19, "title": "Quater2", "score1": 25, "score2": 21},
+               {"type": 4, "title": "Overtime", "score1": 5, "score2": None},
+               {"type": 0, "title": "Result", "score1": 60, "score2": 31}]
+    assert store.record_period_results(conn, run, "E1", "linebet", periods) == 3
+    rows = _q(conn, "SELECT period_key, period_name, home_score, away_score FROM period_scores ORDER BY period_key")
+    assert rows == [(4, "OVERTIME_1", 5, None), (18, "QUARTER_1", 30, 10), (19, "QUARTER_2", 25, 21)]
+    assert store.record_period_results(conn, run, "E1", "linebet", periods) == 0   # not stored twice
+
+
+def test_a_match_the_source_never_resolves_is_given_up_on_and_marked(conn):
+    old = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+    store.persist_result(_result("2026-10-03T10:00:00+00:00", start=old), conn=conn)
+    assert store.events_needing_results(conn) == [("E1", None)]
+    run = store.begin_backfill_run(conn, "linebet", "results")
+    assert store.give_up_results(conn, run, "linebet") == ["E1"]
+    assert store.events_needing_results(conn) == []                                  # no longer asked
+    assert _q(conn, "SELECT result_status FROM events")[0][0] == -1
+    assert _q(conn, "SELECT status FROM coverage WHERE dataset='result'") == [("not_offered",)]
+    assert store.give_up_results(conn, run, "linebet") == []                         # idempotent
+
+
+def test_a_recent_unresolved_match_is_still_asked(conn):
+    recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    store.persist_result(_result("2026-10-03T10:00:00+00:00", start=recent), conn=conn)
+    run = store.begin_backfill_run(conn, "linebet", "results")
+    assert store.give_up_results(conn, run, "linebet") == []
+    assert store.events_needing_results(conn) == [("E1", None)]
