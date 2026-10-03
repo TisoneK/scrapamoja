@@ -12,7 +12,6 @@ don't remove the line.
 
 | ID | Summary |
 |----|---------|
-| B-2026-10-03-6 | A scrape's hard cap (`--timeout`, `$BETB2B_TIMEOUT`, 300 s in the local `.env`) wraps all of discovery + per-match fetches, and on expiry the whole result is dropped: a refetch of ~300 events with sub-games on made 836 requests, hit the cap and stored 0 events (run row with 0 events on Neon). Either keep partial events on timeout (accumulate in the scraper, not the return value) or scale the cap with sub-games. Workaround: `--timeout 3600`. |
 | B-2026-10-03-4 | Run the H2H backfill and sub-game capture against Neon and watch request volume: sub-games cost up to ~12 requests per new event (was 1). Confirm the Postgres `ALTER`s for `odds_snapshots.subject/period` and the new `coverage` table applied (they run on connect; verify the schema). Existing stored events keep no sub-game odds until re-fetched — decide whether to refresh upcoming ones. |
 | B-2026-10-03-5 | Unlabelled special sub-groups (no `TG`, no `PN`; ~10 markets each) are not fetched — no stable label to store them under. Decide a labelling (e.g. by market content) if the consumer wants them. Also the engine exporter still emits only the nine combined scopes; per-team period lines are stored but not exported (consumer side). Also relabel H2H period key 4 ('4th period') as overtime in `_PERIOD_TYPE_NAMES`. |
 
