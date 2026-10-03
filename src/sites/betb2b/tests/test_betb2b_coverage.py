@@ -243,3 +243,42 @@ def test_started_matches_are_not_backfilled(conn):
     past = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
     store.persist_result(_result("2026-10-03T10:00:00+00:00", start=past), conn=conn)
     assert store.events_missing_h2h(conn) == []
+
+
+# --------------------------------------------------------------------------- #
+# A hard timeout keeps the events already fetched
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_timeout_keeps_the_events_fetched_so_far():
+    import asyncio
+    s = _scraper(_Feed())
+    done, sub = _event(), _event()
+    done.event_id, sub.event_id = "10", "11"     # 11 is a sub-game listing, not a match
+
+    async def run_action(**_):
+        s._partial_requested = ["10", "11", "12"]
+        s._partial_events.extend([done, sub])
+        s._partial_sub_ids.add("11")
+        await asyncio.sleep(5)                    # the cap fires here
+    s._run_action = run_action
+    s._started = True
+    for hook in ("_enrich_with_h2h", "_enrich_with_stats", "_enrich_with_stat_ids"):
+        setattr(s, hook, lambda *a, **k: asyncio.sleep(0))
+    res = await s.scrape(action="list_prematch", timeout_seconds=0.05)
+    assert [e["event_id"] for e in res["events"]] == ["10"]
+    assert res["success"] is True
+    assert s.last_fetch_stats["timed_out"] is True
+    assert s.last_fetch_stats["failed_ids"] == ["12"]      # 11 is a sub-game listing: not a miss
+
+
+@pytest.mark.asyncio
+async def test_timeout_with_nothing_fetched_is_still_an_error():
+    import asyncio
+    s = _scraper(_Feed())
+
+    async def run_action(**_):
+        await asyncio.sleep(5)
+    s._run_action = run_action
+    s._started = True
+    res = await s.scrape(action="list_prematch", timeout_seconds=0.05)
+    assert res["events"] == [] and "timed out" in res["error"]

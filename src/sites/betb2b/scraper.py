@@ -171,6 +171,11 @@ class BetB2BScraper:
             except ValueError:
                 concurrency = default_conc
         self.concurrency = max(1, min(concurrency, 32))
+        # Events fetched so far in the current pass, so a hard timeout keeps them
+        # instead of discarding the whole pass.
+        self._partial_events: List[Event] = []
+        self._partial_sub_ids: set = set()
+        self._partial_requested: List[str] = []
         self.id_filter = id_filter
         # Resilience: ids whose GetGameZip fails (timeout / dropped connection /
         # WAF challenge page) are retried with exponential backoff; whatever
@@ -337,6 +342,7 @@ class BetB2BScraper:
 
         start = datetime.now(timezone.utc)
         overall_timeout = timeout_seconds or 120.0
+        self._partial_events, self._partial_sub_ids, self._partial_requested = [], set(), []
 
         self._emit_phase("bootstrapping")
         try:
@@ -345,24 +351,40 @@ class BetB2BScraper:
                     action=action, sport_id=effective_sport_id, count=count,
                 )
         except asyncio.TimeoutError:
-            logger.error(
-                "skin=%s scrape '%s' timed out after %ss",
-                self.skin.name, action, overall_timeout,
-            )
-            self.telemetry.record_scrape_complete(
-                action=action, total_events=0, total_captures=0,
-                session_harvested=self.session_manager.has_session,
-                scrape_duration_seconds=(datetime.now(timezone.utc) - start).total_seconds(),
-                error=f"scrape timed out after {overall_timeout}s",
-            )
-            result = BetB2BScrapeResult(
-                skin=self.skin.name,
-                action=action,
-                url=self.skin.base_url,
-                scrape_duration_seconds=(datetime.now(timezone.utc) - start).total_seconds(),
-                error=f"scrape timed out after {overall_timeout}s",
-            )
-            return result.to_dict()
+            kept = [e for e in self._partial_events if str(e.event_id) not in self._partial_sub_ids]
+            if kept:
+                # The cap fired mid-pass: keep what was fetched. The events not reached
+                # are reported as failed ids (a fallback skin or the next run picks them up).
+                got = {str(e.event_id) for e in kept}
+                missing = [i for i in self._partial_requested
+                           if i not in got and i not in self._partial_sub_ids]
+                self.last_fetch_stats = {"requested": len(self._partial_requested),
+                                         "failed": len(missing), "failed_ids": missing,
+                                         "retried": 0, "timed_out": True}
+                logger.warning(
+                    "skin=%s scrape '%s' hit its %ss cap: keeping %d fetched events, "
+                    "%d not reached (raise --timeout to finish in one pass)",
+                    self.skin.name, action, overall_timeout, len(kept), len(missing))
+                captured, action_url, dom_events = [], self.skin.base_url, kept
+            else:
+                logger.error(
+                    "skin=%s scrape '%s' timed out after %ss",
+                    self.skin.name, action, overall_timeout,
+                )
+                self.telemetry.record_scrape_complete(
+                    action=action, total_events=0, total_captures=0,
+                    session_harvested=self.session_manager.has_session,
+                    scrape_duration_seconds=(datetime.now(timezone.utc) - start).total_seconds(),
+                    error=f"scrape timed out after {overall_timeout}s",
+                )
+                result = BetB2BScrapeResult(
+                    skin=self.skin.name,
+                    action=action,
+                    url=self.skin.base_url,
+                    scrape_duration_seconds=(datetime.now(timezone.utc) - start).total_seconds(),
+                    error=f"scrape timed out after {overall_timeout}s",
+                )
+                return result.to_dict()
 
         # Extract events (unless raw_capture).
         events: List[Event] = []
@@ -840,6 +862,8 @@ class BetB2BScraper:
         done = 0
 
         sub_game_ids: set = set()
+        self._partial_sub_ids = sub_game_ids
+        self._partial_requested = list(ids)
 
         async def _one(eid: str) -> Optional[List[Event]]:
             nonlocal done
@@ -857,6 +881,7 @@ class BetB2BScraper:
                         for ge in game_events:
                             await self._enrich_with_subgames(ge, gcap, root=root)
                         out = game_events
+                        self._partial_events.extend(game_events)
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("skin=%s GetGameZip id=%s failed: %s", self.skin.name, eid, exc)
             done += 1                                   # single-threaded loop → no lock needed
