@@ -75,6 +75,10 @@ Measured, not assumed:
   cookies earned by a real browser were accepted on plain HTTP calls from the same
   address. The limiter was the tunnel (latency, drops), which tripped the unreachable
   guard.
+- The stored run that followed got only 2 events (295 markets, every quarter, half and stat scope
+  present) before the tunnel dropped again ("server disconnected", then six failures in a row and a
+  5-minute rest). The unreached matches were reported as failed, nothing was lost, but the throughput
+  is a tunnel limit, not a scraper or Gcore one.
 - Cookies earned through the tunnel did not work from the US address directly: the
   validation is tied to the address it was earned from. Therefore: warm the profile and
   run the scraper on the **same** connection, from this machine.
