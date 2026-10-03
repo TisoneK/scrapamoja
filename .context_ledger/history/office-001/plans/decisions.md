@@ -1,0 +1,692 @@
+# Architectural Decisions (append-only, ADR-style)
+
+Decisions already made — future agents respect these rather than
+relitigating them. To reverse one, append a new ADR that supersedes it.
+
+<!-- TEMPLATE — copy below the last entry:
+---
+## ADR-N: <short title> (YYYY-MM-DD)
+- **Status:** accepted | superseded by ADR-M
+- **Context:** <what forced the decision>
+- **Decision:** <what was decided>
+- **Consequences:** <trade-offs accepted; what future agents must respect>
+-->
+
+---
+## ADR-1: Deploy the FastAPI control plane to Railway via Dockerfile (2026-07-17)
+- **Status:** accepted
+- **Context:** Scrapamoja ships two entry points — `src/api/main.py` (a long-running FastAPI control plane exposing feature-flag + failure-escalation REST endpoints, consumed by the React UI at `ui/app/`) and `src/main.py` (a CLI for one-off scrape jobs). The project needed a public deployment target. Railway was chosen because (a) the user already had a Railway account with a generous plan (8 vCPU / 8 GB per-replica cap), (b) Railway's GitHub integration gives auto-deploy on push to `main`, and (c) Railway supports Dockerfile builders — necessary because the app pulls in Playwright + Chromium, which need OS-level deps that Nixpacks (Railway's default buildpack) can't easily install.
+- **Decision:**
+  1. Deploy ONLY the FastAPI control plane (`src/api/main:app`) as the long-running web service. The CLI ships inside the image for `railway run python -m src.main ...` invocations but is NOT the deployed process.
+  2. Use a multi-stage Dockerfile on `python:3.12-slim-bookworm`: builder stage installs Python deps, runtime stage copies the venv + installs `playwright install --with-deps chromium` + runs as non-root `appuser` (uid 10001) + starts gunicorn with uvicorn workers.
+  3. Do NOT deploy the React UI in the same service. The UI is a separate Vite SPA — deploy it as a separate Railway static site pointing at the API service's public URL.
+  4. Do NOT run scrape jobs inside the API service in production. Each Chromium spawn costs ~500 MB; under load they'd compete with API requests for the same browser pool. Run scrapes as `railway run` jobs or a separate worker service.
+  5. Mount a Railway Volume at `/app/data` for the SQLite DB (`ADAPTIVE_DB_PATH=/app/data/adaptive.db`) — without it, every redeploy wipes feature flags + failure events.
+- **Consequences:**
+  - Image is ~1.5 GB (Chromium + Playwright + Python deps). First deploy takes ~5–8 min; subsequent builds hit the cache.
+  - Minimum viable service size is 1 GB RAM (Chromium needs ~500 MB just to spawn). The 8 GB plan headroom is more than enough — `GUNICORN_WORKERS=2` is the conservative default; safe to bump to 4–8 under real traffic.
+  - The non-root `appuser` constraint surfaced an import-time `os.makedirs` smell in `src/core/snapshot/__init__.py` (see `inefficiencies/log.md` 2026-07-17 entry). Dockerfile fix applied; source-level fix backlogged.
+  - Future agents: do NOT add the UI build to this Dockerfile. If the UI needs to ship in the same image, add a separate `Dockerfile.ui` and a multi-stage build that serves the built static assets from the FastAPI app via `StaticFiles` — but that's a separate decision (would require superceding this ADR).
+  - Future agents: if you swap the DB from SQLite to Postgres (Railway has a Postgres add-on), remove the Volume mount and the `ADAPTIVE_DB_PATH` env var; the Dockerfile's pre-created `/app/data` dir becomes unnecessary but harmless.
+
+---
+## ADR-2: Model a site's "access/transport" as a separate axis from its "extraction mode"; reserve `sw_replay` as a future 5th mode (2026-07-17)
+- **Status:** accepted
+- **Context:** `ExtractionMode` (in `src/sites/base/site_config.py`) has 4 values — `raw` / `playwright` / `intercepted` / `hybrid` — which all answer "HOW do I get the data out" (DOM vs API). Session 11's live linebet recon + the operator's prior abandoned linebet attempt revealed those 4 values conflate a second, orthogonal concern: "HOW is the data transported and what's required to reach it." Concretely, linebet:
+  - is `playwright`-extractable (odds render in the DOM) but **NOT** `intercepted`-able (the odds feed is invisible to page/context network interception + the HAR);
+  - serves live odds from a `/LineFeed/` endpoint (1xbet/melbet-family; heavily compressed; terse single-letter-key JSON) whose **auth token (with expiry) + a referer-like navigation header are injected by a service worker** (`ivpn-sw.js`) from an IndexedDB store (`vpn/headers`), so a plain HTTP scraper never has them;
+  - is geo-gated at the nginx edge (needs an allowed-country proxy) and runs mirror-domain failover (`domain-sw.js`).
+  These are transport/access facts, not extraction-mechanism facts. See `src/sites/linebet/RECON.md`.
+- **Decision:**
+  1. **Do not add a new ExtractionMode reflexively.** linebet ships as `playwright` (DOM extraction) today — the 4 modes stay clean.
+  2. **Add an `AccessProfile` descriptor to `SiteConfig`** to record the orthogonal transport/access facts, e.g. `geo_gated: bool`, `requires_proxy: bool`, `transport: dom|xhr|websocket|service_worker`, `interceptable: bool`, `mirror_domains: bool`, `header_source: page|cookies|indexeddb`. This is where "why interception won't work here" lives.
+  3. **Reserve `sw_replay` (a.k.a. `worker_mediated`) as a FUTURE 5th ExtractionMode**, added ONLY when direct-API odds polling (sub-second, browserless) becomes a real requirement. Its recipe: read the SW-injected headers from IndexedDB at runtime → replay the `/LineFeed/` request with them → decompress → parse. It is distinct from `intercepted` (passive observation — impossible when a SW mediates the transport) and from `hybrid` (cookie/session harvest — insufficient, because the "session" here is SW header-injection + domain rewriting, and the token expires).
+  4. **The classifier (the project deliverable) must emit BOTH** an `ExtractionMode` AND an `AccessProfile`. Key discriminating signal for SW transport: *"the DOM contains the data but network interception yields nothing"* → service-worker transport → recommend `playwright` (or `sw_replay`), flag `interceptable: false`, and record proxy/geo preconditions.
+- **Consequences:**
+  - Future agents: do NOT relitigate this by adding `service_worker` as an ExtractionMode value. If direct-API odds become required, add `sw_replay` per point 3 and keep the AccessProfile axis separate.
+  - `InterceptedConfig`/`HybridConfig` stay as-is; a new `AccessProfile` model (and, later, `SwReplayConfig`) are additive.
+  - The linebet package can adopt the AccessProfile now (`geo_gated + requires_proxy + transport: service_worker + interceptable: false + header_source: indexeddb`) as the first real example, even while it extracts via `playwright`.
+
+---
+## ADR-3: Linebet extraction mode is `hybrid` (cookie-harvest → direct httpx polling); refines ADR-2 (2026-07-18)
+- **Status:** accepted (refines ADR-2 — does NOT reverse the AccessProfile axis; corrects the linebet-specific classification)
+- **Context:** ADR-2 (2026-07-17) recorded that linebet's odds looked "service-worker-mediated / not interceptable / DOM-only," and reserved a future `sw_replay` mode for it. On 2026-07-18, with the Kenya proxy live, a live capture using an in-page `window.fetch` wrapper (init script) found the odds are a plain XHR — `GET /service-api/LiveFeed/Get1x2_VZip` (+ siblings `GetSportsShortZip`, `WebGetTopChampsZip`, `main-line-feed/v1`) — returning gzipped 1xbet terse-key JSON. Crucially, the endpoint was **replayed from `httpx` with no browser**: `status 200, Success=true, 9 events`, and it worked **without** the `x-hd` token. The earlier "invisible to interception" observation was a Playwright surfacing quirk (`page.on("response")`/context events/HAR missed these specific fetches), NOT a service-worker transport. See `src/sites/linebet/RECON.md` "SOLVED".
+- **Decision:**
+  1. **Linebet's extraction mode is `hybrid`**, not `playwright`/DOM-only and not a new `sw_replay` mode. Recipe: bootstrap a browser once through an allowed-country proxy to harvest session cookies (the framework's `HybridConfig` + `SessionHarvester` already model exactly this), then poll the `LiveFeed`/`main-line-feed` endpoints directly with `httpx`.
+  2. **Requirements to replay the odds feed:** allowed-country proxy + base betting headers (`is-srv:false`, `x-app-n:__BETTING_APP__`, `x-svc-source:__BETTING_APP__`, `x-requested-with:XMLHttpRequest`) + harvested cookies. `x-hd`/IndexedDB/service-worker header injection is an anti-block/telemetry layer and is NOT required for the odds feed.
+  3. **`sw_replay` as a future 5th mode is NO LONGER motivated by linebet.** Keep it only as a hypothetical for some other site that genuinely gates data behind SW-injected headers; do not build it for linebet.
+- **Consequences:**
+  - ADR-2's core point stands: the AccessProfile axis is still useful — linebet's profile is `geo_gated: true, requires_proxy: true, interceptable: true (via in-page fetch hook / httpx replay), transport: xhr, header_source: page+cookies`. (Note `interceptable` flips to true vs the ADR-2 draft.)
+  - The classifier's discriminating lesson is refined: "DOM has data but `page.on(response)` shows nothing" does NOT imply a SW transport — verify with an in-page `fetch`/XHR hook before concluding non-interceptable. A tool quirk masqueraded as an architecture.
+  - Next build step (backlog): implement the linebet `hybrid` scraper against these endpoints + map the terse `T`/`G` market ids.
+
+---
+## ADR-4: BetB2B direct-API is best-effort; DOM extraction is the primary path (2026-07-19)
+- **Status:** accepted (refines ADR-3)
+- **Context:** ADR-3 (2026-07-18) recorded linebet as `hybrid` (cookie-harvest → httpx `LiveFeed`/`LineFeed` polling) after a proven httpx replay. On 2026-07-19 (Session 13) that replay was re-verified and now returns **`406 feed/NotAcceptableException`** with the same base headers + cookies — AND a bare in-browser `fetch` also 406s. Two platform changes: (1) the feed request moved into a **worker context**, invisible to page `fetch`/XHR hooks and page-target CDP Network; (2) `ivpn-sw.js` now injects a required header (`x-dt` ← `x-project-id`) from a store the app fills via `postMessage`, active only when the SW is registered with `?i=`, and the old IndexedDB `vpn/headers` store is gone. So the direct-API auth-header contract **rotates** — it is not a stable static recipe. The endpoints/params/schema (RECON.md) are unchanged.
+- **Decision:**
+  1. **DOM extraction is the primary betb2b extractor** (`playwright` path) — the rendered odds are drift-proof against the API auth-header churn.
+  2. **Direct-API (httpx `LiveFeed`/`LineFeed`) is a best-effort optimization**, not the contract. When used, capture the genuine request headers **per session** at the worker level (CDP `Target.setAutoAttach {autoAttach:true,flatten:true}` to the service-worker/worker target + `Network.enable`), replay those, and treat `406` as a **re-harvest / DOM-fallback trigger**, never a hard failure.
+  3. Do NOT chase the specific injected header value in code — it rotates. Do NOT capture the feed via page `fetch`/XHR wrappers or a page-target CDP session (they see nothing now).
+- **Consequences:**
+  - The `src/sites/betb2b/` base scraper needs a DOM extractor added as the primary path; `BetB2BFeedClient` (httpx) becomes the fast-path with a DOM fallback + 406→re-harvest handling.
+  - RECON.md carries a "MOVING TARGET" warning atop the direct-API section.
+  - This is a live example of the README's "handles anti-bot measures / selector drift" promise — the framework must degrade gracefully, not depend on a frozen contract.
+
+---
+## ADR-5: `GetGameZip` (per-match) is the reliable market-depth path for DOM-extracted events, live and prematch — refines ADR-4 (2026-07-21)
+- **Status:** accepted
+- **Context:** ADR-4 established DOM extraction as primary and the direct-API feeds as best-effort (the list feeds — `Get1x2_VZip` etc. — return 406 from auth-header rotation). But the DOM grid renders at most one shallow market per event ("To Win Match"/"1x2"), which is insufficient for the downstream odds-comparison use case. Session 25 confirmed (from a WAF-blocked datacenter IP, direct) that the **per-match** endpoint `/(?:Line|Live)Feed/GetGameZip?id=<eventId>` returns HTTP 200 with the full nested `E[]`/`AE[]` market tree — even though the SPA and the *list* feeds are blocked/406 from the same IP. Verified: prematch id → 10 markets/33 selections; live ids → 40/9/7 markets with live scores.
+- **Decision:** DOM extraction supplies clean events (teams, numeric id, live score); market depth comes from enriching each DOM stub via `GetGameZip?id=` (`LineFeed` for prematch, `LiveFeed` for live), capped by `skin.enrich_dom_with_odds` + `max_odds_fetch`. The enrichment condition is "the event lacks a deep tree" (`len(markets) > 1`), NOT "has no markets" — the DOM stub always carries a shallow 1-market grid stub, so guarding on truthy-markets skips everything (the Session 24 "0 fetched" bug).
+- **Consequences:** The scraper always makes one extra per-match request per event (rate-limited, capped). `GetGameZip` is NOT SW/auth-gated the way the list feeds are, so it needs no `x-dt` rotation handling — do not chase the list-feed 406 (ADR-4 stands). Market-group id→name mapping is incomplete (some markets label as `G=NN`); odds are still captured. Future: a console-script/direct GetGameZip-only prematch path could bypass the browser entirely for allowed-country IPs, but the DOM step is still needed for the event-id list when the SPA is the only source of ids.
+
+---
+## ADR-6: Scraped odds data gets a structured SQLite store (time-series), not loose JSON (2026-07-21)
+- **Status:** accepted
+- **Context:** Both scrapers (betb2b `storage.py`, flashscore `OutputFormatter`) emit each run as a standalone JSON blob to stdout or `--output`. Nothing dedups matches, tracks odds over time, or joins across skins. The existing SQLite DBs (`data/adaptive.db`, `data/audit_log.db`) hold the Selector Engine subsystem (recipes/weights/audit/snapshots) — NOT scraped sports data. So the actual product (events/odds) had no queryable home, blocking the odds-comparison use case that Sessions 18–25 kept pointing at.
+- **Decision:** Add `src/sites/betb2b/store.py` — a SQLite store with 4 tables: `scrape_runs` (provenance), `events` (one row per match, UPSERT on `event_id` since all skins share backend ids), `event_states` (time-series of live status/score), `odds_snapshots` (time-series of prices, one row per selection per run). Input is the plain `BetB2BScrapeResult.to_dict()` dict, so it works on live scrapes AND saved JSON. Persistence is **opt-in and additive** — a `--db [PATH]` flag on `scrape`; JSON output is unchanged. SQLite first (stdlib, one file), schema kept Postgres-portable (TEXT/INTEGER/REAL, ISO-8601 timestamps).
+- **Consequences:** Enables the three queries loose JSON couldn't — line movement (`line_movement`), cross-skin comparison (`cross_skin_odds`, join on shared `event_id`), and dedup (events UPSERT). Validated on real Session-25 captures: 5 skins → 16 deduped events, 5505 odds snapshots; cross-skin Phoenix Asian-Handicap query returned 5 bookmaker prices sorted. Trade-offs: (1) odds_snapshots grows one row per selection per run — a busy live poll writes a lot; a future "only insert on price change" dedup + retention policy is backlogged. (2) betb2b-only for now; flashscore/other sites would need their models mapped to the same schema (or a shared `src/storage/odds/`). (3) still file-based SQLite — a real deployment would migrate to Postgres (schema is ready). This does NOT replace the JSON path (telemetry, snapshots, `view`), it adds a structured layer beside it.
+
+---
+## ADR-6 REVISION (2026-07-21, same session) — the store is the full match model, not odds-only
+- **Correction to ADR-6 above:** the first cut (commit `961f569`) had 4 tables and folded everything into events + odds — effectively treating odds as the whole DB. The operator flagged that the scraper already captures sports, countries, leagues, teams, period scores, and H2H, and those must be first-class in ONE betb2b DB (skin is a column, never a per-skin DB).
+- **Revised schema (commit `ebfbf30`):** dimensions (skin-agnostic, UPSERT) `sports`, `countries`, `leagues`, `teams`, `events`, `markets`; facts (skin-scoped time-series) `scrape_runs`, `event_states`, `period_scores`, `odds_snapshots`, `h2h_games`, `statistics`. `events` FK → sport/league/country/home_team/away_team; `teams` carry the H2H backend id + country (enriched from `h2h_data.teams[]`); `odds_snapshots` references a `markets` dimension by `market_id` and is now just one fact table. Validated on the real 5-skin captures (1 sport / 8 countries / 12 leagues / 46 teams / 16 events / 41 markets / 113 period_scores / 5505 odds / 376 h2h_games). The ADR-6 decision (SQLite-first, opt-in `--db`, Postgres-portable, additive to JSON) is unchanged — only the table set is broader.
+
+---
+## ADR-7: Scoped ingestion to scorewise-engine — one betb2b match → N prediction scopes (2026-07-21, Session 26 investigation)
+- **Status:** proposed (design; enabling store fix in progress)
+- **Context:** The engine's `PredictionScope` has 9 values — FULL_MATCH, FIRST_HALF, SECOND_HALF, QUARTER_1..4, HOME_TEAM_TOTAL, AWAY_TEAM_TOTAL. Scope is metadata-only to the pipeline; what changes per scope is the INPUT: `odds.match_total` (the rung whose **Over-odds is nearest 1.85**) + H2H scores that **match the scope** (Q1 scope → Q1 H2H scores, not full-match). So one betb2b match → up to 9 `PredictRequest`s, each carrying that scope's total line + scope-matched H2H, POSTed to `/api/ingest`.
+- **Data availability (verified on real captures):**
+  - **H2H per-scope scores: AVAILABLE in the feed.** 43/43 played `h2h_data.game_shorts` carry `periods[]` = per-quarter {home_score, away_score, period_key} (period_key 18/19/20/21 = Q1–Q4 per Session-21 `_PERIOD_TYPE_NAMES`). So: FULL=score1/score2; QUARTER_n=periods[n]; FIRST_HALF=Q1+Q2, SECOND_HALF=Q3+Q4; HOME/AWAY_TEAM_TOTAL=home/away side across games. Future fixtures (score 0-0, status=1) must be filtered out.
+  - **Full-match odds: AVAILABLE.** "Total Over/Under" market → match_total + over/under; "Moneyline 3-way"/"To Win Match" → home/away odds.
+  - **Quarter/half/team-total odds: PRESENT but UNMAPPED.** They are the `G=NNNN` markets (the event had 40 markets, only 4 name-mapped). `markets.py::DEFAULT_MARKET_GROUPS` maps groups 3/17 (full total), 9 (BTTS), a few others — NOT the basketball quarter/half/individual-total groups.
+- **Decision (design):**
+  1. **FULL_MATCH ingestion is buildable now** (full total market + score1/score2 H2H).
+  2. **Scoped (half/quarter/team) ingestion has two blockers:** (a) STORE must keep h2h `periods[]` — the `h2h_games` table currently drops them (fixing now — new `h2h_period_scores` table or periods on h2h_games); (b) MARKET G-map must gain the basketball quarter/half/individual-total group ids so the scope's total line is selectable by name.
+  3. **Exporter lives in the scraper** (`src/sites/betb2b/export/scorewise.py`): `event_to_predict_requests(event) -> List[PredictRequest]` (one per available scope) + an httpx ingest client (chunk ≤100, source="betb2b-scraper"). Read from the store via a scope-aware query. Repos stay isolated (scraper only knows the engine's HTTP contract).
+  4. **match_total selection = the totals rung whose over_odds is closest to 1.85** (engine's calculation-line rule), per scope.
+  5. **Cross-skin:** ingest one consensus/best line per match, not one per skin (the store makes this a query).
+- **Consequences:** enables full-match predictions immediately; half/quarter/team predictions after the store keeps h2h periods (done in this session) + the G-map is extended (backlog, needs the basketball group-id table). The H2H `periods[]` data is already flowing from GetGameZip — only the store dropped it.
+
+---
+## ADR-7 addendum (2026-07-21) — the "all modes" market taxonomy + how to map it
+- **Structure confirmed (real captures):** betb2b delivers prediction scopes across TWO places:
+  1. **Main event** E[]/AE[] = FULL-match markets. Combined total = `G=17`(or 3)`/T=9,10` (Over/Under, line=full total). Asian handicap = `G=2/T=7,8`. Moneyline/To-Win = `G=14/T=182,183` (2-way) and `G=101/T=401,402,403` (3-way). **Single-team ("full match single teams") totals** = the `individual_total` group (`G=4` in the code; a distinct group with ~half-magnitude lines) — combined-vs-individual is the key both-teams/single-team split the operator called out.
+  2. **Sub-games `SG[]`** = per-QUARTER / per-HALF scopes. Each is a SEPARATE event with its own id `I` + `PN` (e.g. "1st quarter", "1 Half"); its markets are NOT inline — fetch `GetGameZip?id=<sub I>`. Each sub-game repeats the same market types scoped to that period (its own combined total, individual totals, handicap). Short formats (3x3) have NO sub-games (single period).
+- **Market identity = (G, GS, T), not T alone.** `GS` is the group-specifier; the current `lookup_market` keys on `T` only and MISLABELS total variants (e.g. `G=62/T=13` → wrongly "Double Chance"; it has a line, so it's a total not a double-chance). Fix: key the lookup on `(G, GS, T)`.
+- **Mapping method (do with ONE clean 5v5 capture — NBA/EuroLeague, has sub-games):** GetGameZip the main event + every `SG` sub-game; for each, enumerate `(G, GS, T)` → (scope, market_name, selection, is_individual, side) using: line magnitude (full~146 / half~73 / quarter~36 / individual~half-of-combined), Over/Under structure, and the sub-game `PN` for the period. Then extend `markets.py::DEFAULT_MARKET_GROUPS`/types and rewrite `lookup_market` to `(G,GS,T)`. Also add SG sub-game fetching to the scraper enrichment so scoped markets are captured + tagged with their `PredictionScope`.
+- **Decision:** do NOT commit a guessed map — a mislabelled total feeds wrong odds to the engine (wrong predictions), which is worse than the `G=NNNN` placeholder. Blocked on a clean quartered-game capture (proxy was flapping + card was 3x3-heavy on 2026-07-21).
+
+---
+## ADR-7 VERIFIED MAPPING (2026-07-21) — betb2b basketball market (G,T) → mode, from a real PBA game
+Ground truth: `GetGameZip id=352961836` San Miguel Beermen(HOME/O1) v Converge Fiberxers(AWAY/O2), PBA, + all 11 sub-games (raw saved). Handicap G=2/T=7 P=-5.5 → home favored (scores more → higher individual total). **(G,T) is stable across ALL scopes; the SCOPE = which (sub-)game the market is in.**
+
+**CONFIRMED (G,T) → (market_name, selection):**
+| G | T | market | selection | note |
+|---|---|--------|-----------|------|
+| 17 | 9 / 10 | **Total** (combined, both teams) | Over / Under | line=full total (~216 full, ~104 half, ~52 quarter) |
+| 15 | 11 / 12 | **Individual Total — HOME** | Over / Under | ~half of combined; HOME=team1 (T=11/12) |
+| 62 | 13 / 14 | **Individual Total — AWAY** | Over / Under | AWAY=team2 (T=13/14). **FIXES current bug: T=13,14 wrongly mapped to "Double Chance"** |
+| 2 | 7 / 8 | **Asian Handicap** | W1(home) / W2(away) | P=handicap line |
+| 14 | 182 / 183 | **To Win Match** (moneyline 2-way) | 1(home) / 2(away) | no line |
+| 1 | 1 / 2 / 3 | **1x2** | 1 / X / 2 | seen in sub-games |
+| 101 | 401 / 402 / 403 | **Moneyline 3-way** | 1 / 2 / X | no line |
+
+**SCOPE ← sub-game:** main event = FULL_MATCH. Fetch each `main.Value.SG[].I` via GetGameZip; `PN` → scope: "1st/2nd/3rd/4th quarter"=QUARTER_1..4, "1 Half"=FIRST_HALF, "2 Half"=SECOND_HALF. Each sub-game repeats the SAME (G,T) groups scoped to its period. HOME/AWAY_TEAM_TOTAL scopes = main-event G=15 / G=62.
+
+**UNCERTAIN (do NOT guess, left as G=NN):** G=8/T=4,6; G=91/T=755,757; G=92/T=766,767; G=27/T=424-426; and the many no-line prop groups (G=176,228,230,232,234,236,238,920,922,930,934,936,1144,1148,2663,2665,2766,2768,3017-3023,7733,7735,9854,10487-10489).
+
+**IMPLEMENTATION TODO (was cut for tokens — NOT yet coded):**
+1. `markets.py`: add a `(G,T)` keyed lookup that takes precedence over the T-only map; add the CONFIRMED rows above; the T-only map's `T=11/12→"Total"` and `T=13/14→"Double Chance"` are WRONG for basketball — (G,T) overrides fix them.
+2. `rules.py::lookup_market`: check `(G,T)` first, fall back to T-only, then G-only.
+3. Scraper: fetch `SG[]` sub-games per event, tag each scoped market with its `PredictionScope`; store needs a `scope`/`period` column on `markets` or `odds_snapshots` (or a `scoped_markets` table). Then scoped ingestion (ADR-7) has real per-scope totals.
+4. Add the `BETB2B_ENGINE_URL` + `BETB2B_ENGINE_TOKEN` to `.context/memory/secrets/` and test a live POST.
+
+### Capability Matrix (current status, 2026-07-22)
+
+| Capability | Status | Why |
+|-----------|--------|-----|
+| `FULL_MATCH` ingestion | ✅ **Buildable** | Market mapped (G=17/T=9,10), H2H scores flowing, team-total H2H bug fixed (`20eda23`) |
+| H2H period scores in DB | ✅ **Done** | `h2h_period_scores` table (`d0117eb`), 172 period rows on a real capture |
+| H2H per scope (code) | ✅ **Implemented** | `_h2h_for_scope()` aggregates periods for QUARTER_1..4, FIRST/SECOND_HALF; zeroes non-relevant team for HOME/AWAY_TEAM_TOTAL. See ADR-8 for contract. |
+| `QUARTER_1..4` ingestion | ❌ **Blocked** | Market group IDs for quarter combined totals not yet mapped. H2H works. |
+| `FIRST_HALF` / `SECOND_HALF` ingestion | ❌ **Blocked** | Same blocker — half combined totals not mapped. H2H works (period aggregation). |
+| `HOME_TEAM_TOTAL` / `AWAY_TEAM_TOTAL` ingestion | ✅ **Buildable** | Markets mapped (G=15/T=11,12 home, G=62/T=13,14 away). H2H bug fixed in Session 27. |
+| Live POST to engine | ⏳ **Built, untested** | `post_ingest()` in `scorewise.py` + `scrape --ingest` flag. Needs `BETB2B_ENGINE_URL` + `BETB2B_ENGINE_TOKEN` in secrets to test. |
+| Cross-skin consensus | 📝 **Design only** | Send ONE best line per match across skins. The store makes this a query (`cross_skin_odds`) but no ingest flow built for it yet. |
+| Sub-game (`SG[]`) fetching | ❌ **Unimplemented** | Scraper doesn't fetch sub-games per event. ADR-7 addendum describes the method; not yet coded. |
+Raw captures were in scratchpad (pba/main.json + sub_*.json) — re-fetch id=352961836 to reproduce.
+
+---
+
+## ADR-8 — H2H scope contract rule (exporter)
+
+**Date:** 2026-07-22  
+**Status:** adopted  
+**Context:** Session 27 discovered that `_h2h_for_scope()` was sending full match
+scores for HOME_TEAM_TOTAL and AWAY_TEAM_TOTAL scopes. The engine's
+`H2HMatch` docstring says *"Scores must correspond to the same scope as the
+prediction"*, and `s02_h2h_totals.py` always computes `total = home_score +
+away_score`. Violating this contract produces false HIGH predictions because
+full match totals (~180) are compared against individual team lines (~89).
+
+**Decision:** The exporter MUST zero out the non-relevant team's H2H score when
+building team-total scopes. Specifically:
+
+| Scope | home_score | away_score | Engine sum | Meaning |
+|-------|-----------|-----------|------------|---------|
+| FULL_MATCH | O1 (full match) | O2 (full match) | game total | Total points |
+| HOME_TEAM_TOTAL | O1 (full match) | **0** | O1 | Home team's points |
+| AWAY_TEAM_TOTAL | **0** | O2 (full match) | O2 | Away team's points |
+| QUARTER_1..4 / HALF | period home | period away | period total | Period total points |
+
+**Rationale:**
+1. The engine pipeline always sums — it does not inspect scope to decide
+   whether to sum. This is by design (s02 is generic).
+2. Team-total predictions are about ONE team's output — the other team's
+   score is noise. Zeroing it makes the sum represent only the relevant team.
+3. This matches betting semantics: "Home Team Total Over 89.5" means "will
+   the home team score ≥90?" — only the home team's points matter.
+
+**Enforcement:**
+- `_h2h_for_scope()` in `export/scorewise.py` applies the zero-out logic.
+- Add unit tests that assert: for each scope, the home+away sum matches the
+  scope-relevant score (engine-visible number).
+- Verify script `scripts/verify_h2h_per_scope.py` displays the engine total
+  alongside the line so a human can spot future violations.
+
+---
+
+## CORRECTION (2026-07-22, Session 28) — the ADR-7 capability matrix above is stale
+
+The capability matrix added in `db3046c` (Session 27) contradicts what Sessions
+26–27 actually shipped. Append-only file, so the rows stay — read them with this
+correction. Verified against the code on 2026-07-22:
+
+| Matrix row | It says | Actually |
+|---|---|---|
+| `QUARTER_1..4` ingestion | ❌ Blocked — market group IDs not mapped | Mapped in `f321319`; `DEFAULT_MARKET_GT` in `markets.py` |
+| `FIRST_HALF`/`SECOND_HALF` ingestion | ❌ Blocked — same | Same — mapped |
+| Sub-game (`SG[]`) fetching | ❌ Unimplemented | Shipped in `5bd38cc` (`scraper.py::_enrich_with_subgames`) |
+| Live POST to engine | ⏳ Built, untested | Confirmed live in Session 26 — HTTP 200, real predictions returned |
+
+**But the corrected rows still overstate reality**, for a reason none of those
+sessions noticed: `_enrich_with_subgames` is gated on
+`skin.features["subgames"]`, which defaulted to `False`, was set by no skin YAML,
+and had no CLI flag. It never ran. So the half and quarter scopes were **mapped
+and implemented but unreachable** — `scrape --ingest` emitted 3 of 9 scopes
+(FULL_MATCH + the two team totals) and reported success. Fixed by `5f6e6db`
+(`--subgames` on `scrape` and `poll`).
+
+**Consequence for anyone reading Session 27's numbers:** its reported run_3
+breakdown (11 FIRST_HALF, 11 SECOND_HALF, 44 quarter requests) cannot have
+happened. That document also states, correctly, that all 4,115 odds snapshots
+were stored with `scope='FULL_MATCH'` — which is exactly why. The run yielded
+~30 requests, not 96, and the HOME_TEAM_TOTAL asymmetry investigated there was
+chased through variables that were never in play. **Half/quarter ingestion has
+never been exercised end-to-end against live data.** Do that first, with
+`--subgames`, before trusting any per-scope count in the record.
+
+---
+
+## ADR-9: A pipeline's composition gets one end-to-end assertion, not more unit tests (2026-07-22, Session 28)
+
+- **Status:** accepted
+- **Context:** Three defects found in Session 28 share one shape — a component
+  verified in isolation, a composition never run. The exporter's tests build
+  market dicts with `scope` pre-set, proving it handles scoped markets; nothing
+  proved a scrape ever produces one (F1). The CLI grammar tests proved the
+  parser; nothing proved `python -m …cli.main` runs anything at all (F2). ADR-8
+  itself came from the same shape one level down: fields validated, the sum the
+  engine derives from them never simulated.
+- **Decision:** Every pipeline in this repo carries at least one assertion over
+  its **composition**, not only its parts. For betb2b → engine, that is: a
+  scrape result fed to `build_ingest_matches` and checked for the scope set it
+  should contain. Fixtures may stand in for the network, but the seam between
+  stages must be crossed by the test, not assumed.
+- **Consequences:** Slightly slower suites, and fixtures that must be refreshed
+  when the feed shape moves. Accepted — three High findings in one session all
+  lived in seams that more unit tests could not reach. Corollary: a regression
+  test for a bug must be **seen red** against the unfixed code (mutate the fix,
+  run, confirm failure). An unfalsified regression test is a claim, not a guard.
+
+---
+
+## ADR-10: ADR-7 is blocked downstream — the engine stores one prediction per match_id, not per (match_id, scope) (2026-07-22, Session 28)
+
+- **Status:** accepted (finding); ADR-7 remains correct on the scraper side but cannot be realized until the engine changes
+- **Context:** The first-ever `--subgames --ingest` run (2026-07-22, linebet basketball prematch, via the user's bore.pub proxy) produced **65 requests from 11 events across all 9 scopes** — the half and quarter scopes had never been generated before (`5f6e6db`). POST → HTTP 200, `succeeded=36 failed=29 added=3 updated=62`.
+
+  `added=3` was the tell: 28 half/quarter requests were entirely new `(match_id, scope)` pairs, so a scope-keyed store would have added at least 28. Querying `/api/predictions` afterwards:
+
+  **11 of 11 matches store exactly one record, and it is the LAST scope sent.**
+
+  Send order per event is FULL_MATCH → halves → quarters → HOME_TEAM_TOTAL → AWAY_TEAM_TOTAL, so every match ends up stored as `AWAY_TEAM_TOTAL` — except the one event with no away-total market, stored as `HOME_TEAM_TOTAL`. Observed: 10 AWAY + 1 HOME from this run. Zero half or quarter records stored, despite 16 of them being accepted.
+
+- **Decision:** Record this as a downstream blocker and stop attributing it to scraper-side causes. The scraper's job — one match → N scoped `PredictRequest`s with scope-matched lines and H2H — is done and now verified against live data. Realizing it requires **scorewise-engine** (a different repo) to key its prediction store by `(match_id, scope)`.
+
+- **Consequences:**
+  1. Until the engine changes, `--subgames` costs ~6 extra requests per event and 54 of every 65 scoped predictions are discarded on arrival. Use it to validate the pipeline, not to feed production.
+  2. **This resolves the "HOME_TEAM_TOTAL asymmetry"** that Session 27 investigated (10 sent, 1 stored, 9 AWAY) — it is the identical signature, not engine state from old runs and not market data. See the CORRECTION above.
+  3. The 29 failures are a separate, understood cause: the engine requires strict H2H and only 4 of 11 events had any (the rest returned `204 No Content` from the statisticfeed endpoint). 36 accepted = exactly the 36 requests carrying H2H. Not a defect.
+  4. **ADR-8 confirmed on live data:** team-total H2H now sums to 86 / 91 / 109 against lines of 90.5 / 84.5 / 114.5. Pre-fix it would have compared game totals of 175 / 154 / 214 against those same lines — the false-HIGH mechanism, observed directly rather than inferred.
+
+---
+
+## ADR-10 RESOLVED (2026-07-22, Session 28) — the fix was written but never deployed; ADR-7 now works end-to-end
+
+The engine-side fix existed the whole time: `152bd48` in scorewise-engine
+("merge predictions by (match_id, scope) not match_id alone"), authored
+08:35 UTC and pushed — **2h33m before** the run that measured the old
+behaviour. It was not live, because the deploy failed at the build stage and
+**a failed Railway build leaves the previous deployment serving**. Every
+endpoint answered normally while running stale code. Root cause: the service's
+Root Directory was the repo root, which has no Python project (the app is at
+`repos/engine/`); Railpack could not detect a language. Fixed on the Railway
+side by the operator.
+
+**Verified live, then verified end-to-end** (same 11-event scrape, re-ingested
+from `data/telemetry/betb2b/result_snapshots/linebet_list_prematch_20260722_110956_1.json`):
+
+```
+65 requests sent, 65 stored — every scope survives
+FULL_MATCH 11/11 | FIRST_HALF 7/7 | SECOND_HALF 5/5
+QUARTER_1..4 6/6, 5/5, 5/5, 5/5 | HOME_TT 11/11 | AWAY_TT 10/10
+11 matches, 3–9 scopes each (was: 11 matches, exactly 1 scope each)
+added=64 updated=1 — the 1 update was a probe record
+```
+
+**ADR-7's premise is delivered.** `--subgames` is now a production feed, not
+just a validation tool.
+
+**What generalizes (this is the part worth keeping):** a deployment that fails
+is invisible from the outside — the old one keeps serving and every probe
+against the API answers 200. Two sessions attributed stale *deployment*
+behaviour to the scraper's data and the engine's code. Neither was wrong about
+what they measured; both were wrong about what they were measuring. **A green
+push is not a live fix.** Assert the new behaviour against the deployed
+service before drawing any conclusion from its output — for this contract the
+one-line probe is: POST a `(match_id, scope)` pair whose `match_id` exists but
+whose scope does not; `added: 1` means the fix is live, `added: 0` means it is
+not.
+
+**Still open:** the 29 of 65 failures are unchanged and understood — the engine
+requires strict H2H and only 4 of 11 events had any (statisticfeed returns 204
+for minor leagues). Backlogged separately as a coverage question, not a defect.
+
+---
+
+## ADR-11: BetB2B data moves to a shared Railway PostgreSQL; apps/services integrate via the DB, reached through the Python API (2026-07-25, spec kickoff)
+
+- **Status:** accepted (design; completes the "future Postgres" note in ADR-6 and supersedes ADR-1 point 5's Volume-mounted SQLite; no code shipped yet — this ADR authorizes the migration spec)
+- **Context:** The betb2b product data (`data/betb2b/odds.db`) and the Selector Engine's operational state (`data/adaptive.db` feature flags + `data/audit_log.db`) are all file-based **SQLite**. Two forces make that a ceiling: (1) Railway's filesystem is ephemeral — every redeploy wipes the DB unless a Volume is mounted (ADR-1 point 5; RAILWAY.md), and even then SQLite can't be safely shared by concurrent network clients; (2) the operator wants to link independent services — **scorewise, the scraper, and apps (mobile / website / desktop)** — through **one shared database as the integration point, not shared codebases**. SQLite (single-writer, file-local) cannot be that shared store. The betb2b schema is already a clean relational model (`sports`, `leagues`, `teams`, `events`, `odds_snapshots`, `h2h_games`, `scrape_runs`, …) with FK relationships and ISO-8601 timestamps — deliberately kept "Postgres-portable" since ADR-6. The stack already depends on **SQLAlchemy 2.0**, so the engine swap is mostly a connection-string change, not a rewrite. Access-model decision (operator, 2026-07-25): **all apps/services reach the data through the project's Python/FastAPI layer**, not by connecting to the DB directly.
+- **Decision:**
+  1. **Engine: PostgreSQL, hosted as the Railway Postgres plugin** — same platform as the deployed control plane (ADR-1), `DATABASE_URL` injected by Railway, private networking between the API service and the DB. No separate infra to manage or bill.
+  2. **Rejected: Supabase (or any direct-to-DB BaaS).** Its value-add — auto REST/realtime APIs, per-platform client SDKs, row-level security — is dead weight here because every consumer goes through our own FastAPI service (the access-model decision above). The FastAPI layer is the single front door; only the scraper + API hold DB credentials, giving a clean trust boundary. Revisit ONLY if a future requirement has app clients talking to the DB directly (that would supersede this ADR).
+  3. **Consolidate the three SQLite DBs into the one Postgres instance** as separate tables/schemas: betb2b product data (`odds.db`), plus the Selector Engine's `adaptive.db` (feature flags/failure events) and `audit_log.db`. This also retires ADR-1 point 5's Volume mount + `ADAPTIVE_DB_PATH` env var (their whole purpose was to survive redeploys — Postgres does that natively).
+  4. **Keep InfluxDB separate.** `influxdb-client` is for metrics/observability (a time-series/telemetry concern), NOT shared business data. Do not fold it into Postgres.
+  5. **Add Alembic for schema migrations.** The repo has none today; once multiple services depend on the schema, versioned migrations are mandatory, not optional.
+  6. **Keep SQLite as the local-dev / test fallback.** Connection is env-driven (`DATABASE_URL`); local runs and CI stay on SQLite files, only deployed environments point at Railway Postgres. The store code already reads/writes via SQLAlchemy, so both back ends are supported by one code path.
+- **Consequences:**
+  - The SQLite-isms in the existing schema need porting: `INTEGER PRIMARY KEY` → `IDENTITY`/`SERIAL`; `TEXT` timestamps (`start_time`, `first_seen`, `extracted_at`, …) → `timestamptz`; `success INTEGER` (0/1) → `boolean`. A one-time data copy (SQLAlchemy script over the shared models) moves existing rows.
+  - Index the hot query paths that back ADR-6's three queries: at minimum `odds_snapshots(event_id, extracted_at)` and `events(start_time)`; the cross-skin join already keys on the shared backend `event_id`.
+  - The scorewise-engine ADR-7/ADR-10 pipeline is unaffected by this change — it talks to the engine over HTTP, not to this DB. This ADR is about the scraper/product data store and the services that read it, not the prediction store.
+  - Future agents: do NOT reach for Supabase/Firebase/Mongo for this data — the decision is Postgres-relational, and the access path is via the Python API (points 1–2). Do NOT merge InfluxDB into it (point 4). If file-SQLite is still in a deployed path after this ships, that's the migration being incomplete, not a second supported deployment mode.
+
+
+---
+
+## ADR-11 PROGRESS (2026-07-25, Session 29) — code-layer foundation shipped; Railway cutover pending
+
+Session 29 shipped the four code-layer increments that make ADR-11 executable,
+all verified green on the SQLite fallback (189 tests):
+
+1. `e03da90` — shared env-driven engine factory (`src/core/db.py`): `DATABASE_URL`
+   → Postgres (deploy), else SQLite fallback. One SQLAlchemy code path, both
+   backends. Deps: `psycopg[binary]` + `alembic` added.
+2. `3629183` — 9 adaptive repository `create_engine(f"sqlite:///...")` sites →
+   `get_engine(db_path)`. The adaptive/SQLAlchemy half of ADR-11 point 3.
+3. `39e1c02` — portable betb2b ORM models (`src/sites/betb2b/models.py`) + ADR-11
+   hot-path indexes. Ports the SQLite-isms: `SurrogatePK = BigInteger().with_variant(Integer, "sqlite")`
+   (autoincrements on both backends), `Boolean` for success/is_live/is_suspended,
+   `DateTime(timezone=True)` for timestamps (→ timestamptz on Postgres).
+4. `c0802a2` — Alembic baseline (`c7ea08fedb55`, 27 tables) + one-time data-copy
+   script (`scripts/migrate_sqlite_to_postgres.py`, proven to move rows).
+
+**Two premise corrections from discovery** (future agents: read these before
+quoting ADR-11's text):
+- The store is **two SQLite files, not three**: `audit_log` is a *table* in
+  `adaptive.db` (AuditEventRepository uses the adaptive `Base`), not a separate
+  file.
+- ADR-11's "the engine swap is mostly a connection-string change, not a rewrite"
+  holds **only for the adaptive/SQLAlchemy side**. The betb2b store is raw
+  `sqlite3` with hand-written SQL; its schema needed a real port to ORM models
+  (3-c) before it can host on Postgres, and its **persist path is still raw
+  sqlite3** (F2 — the largest remaining piece, backlogged).
+
+**Still open (operator-side, needs Railway access this sandbox lacks):**
+provision the Postgres plugin → set `DATABASE_URL` → `alembic upgrade head` →
+run the copy script → swap the betb2b persist path to ORM (F2) → retire ADR-1
+point 5's Volume mount + `ADAPTIVE_DB_PATH` (ADR-11 point 5; `ADAPTIVE_DB_PATH`
+stays for local/CI SQLite only). Until F2 ships, the betb2b data still lands in
+`odds.db` — the Postgres path exists at the model/migration level but the
+scraper doesn't write through it yet.
+
+---
+
+## ADR-12: The scraper gets a remote-control API on the existing FastAPI service — single-flight background jobs, API-key auth (2026-07-27)
+
+- **Status:** accepted (deliberately deviates from ADR-1 point 4 for the control-plane MVP — see below)
+- **Context:** The betb2b scraper was CLI-only. The operator wants to drive it remotely (trigger scrapes, monitor, read odds) from apps/other services. Three forks were decided with the operator: (1) **deployment model** — Railway hosts the control plane (API + DB); scrapes execute against whatever proxy is configured, failing cleanly if none, because the Railway egress IP is WAF-blocked (203) and cannot scrape betb2b directly (backlog: "IP is WAF-blocked"); (2) **execution** — scrapes run as background jobs inside the API web service (not a separate worker); (3) **surface** — API-only (no website yet), secured by an API key.
+- **Decision:**
+  1. **Add `/api/scraper/*` to the existing `src/api/main.py` FastAPI app** (already the Railway-deployed service, ADR-1): `POST /runs` (queue), `GET /runs[/{id}]` (monitor), `GET /skins|sports|counts`, `GET /odds/{event_id}`.
+  2. **Auth: `x-api-key` vs `SCRAPER_API_KEY` env, fail-closed** — unset ⇒ 503 (feature disabled), wrong/missing ⇒ 401. No key handling beyond a constant-time compare; the operator sets the secret in Railway.
+  3. **Execution: single-flight background jobs in-process.** A `scraper_jobs` table is the queue/status; `ScraperService` (started in the app lifespan) drains it via `store.claim_next_job` — **one scrape at a time** (one Chromium bootstrap; ADR-1's memory concern). Jobs go queued→running→succeeded/failed; orphaned `running` rows are reset on startup. **Deploy with `GUNICORN_WORKERS=1`** so single-flight is global (the DB claim guards regardless, but one worker keeps it deterministic).
+  4. **Proxy from `BETB2B_PROXY_*` env.** No proxy / WAF block ⇒ the job is marked `failed` with the reason, never a hang — the caller polls a clear status.
+  5. **Store stays SQLite** (`BETB2B_DB_PATH`, on the Railway Volume). Apps read betb2b data **through this API**, which is exactly ADR-11's "apps reach the data via the Python API, not direct-to-DB" — so the Postgres cutover (ADR-11) is orthogonal and not required for remote control.
+- **Consequences:**
+  - **Deviation from ADR-1 point 4** ("do NOT run scrape jobs inside the API service"). Accepted deliberately for the control-plane MVP: the hybrid scraper only bootstraps a browser briefly, single-flight caps it at one Chromium, and a separate worker service (ADR-1's preference) is more infra/cost than this stage warrants. If scrape volume grows or API latency suffers, promote the runner to a separate Railway worker consuming the same `scraper_jobs` table — the queue/claim seam is already there, so it's an additive change, not a rewrite. Revisit then.
+  - The deployed scraper is only as reliable as its proxy. The bore.pub tunnel (operator's laptop, rotating port) is fine for validation but not production; a stable residential/KE proxy is the real dependency for always-on cloud scraping (backlogged).
+  - `GUNICORN_WORKERS=1` trades API concurrency for deterministic single-flight. The control plane is low-traffic, so this is fine; if the API needs more workers later, move the runner to its own service (above) rather than raising workers.
+  - Future agents: keep scrape execution behind the `scraper_jobs` queue. Do NOT add a second endpoint that scrapes inline in the request path (it would blow the request timeout and bypass single-flight).
+
+---
+
+## ADR-13: Supabase is the shared data + realtime + auth layer; Railway stays the compute — supersedes ADR-11's access model (2026-07-27)
+
+- **Status:** accepted (supersedes **ADR-11 point 2**'s "apps reach the data through the Python API, not direct-to-DB"; keeps ADR-11's Postgres-relational engine choice; refines ADR-1)
+- **Context:** ADR-11 chose Railway Postgres behind the Python API because the then-stated access model was "apps go through FastAPI." Since then the project gained a concrete **real-time, multi-client** direction: a live-progress UI (scrape `phase`, ADR-12) and planned **client apps + admin apps** consuming live odds. That is precisely the access model ADR-11 said would flip the decision toward Supabase. The operator chose the topology **scraper → Supabase → apps**.
+- **Decision:**
+  1. **Supabase (managed Postgres) is the shared store.** Its differentiators are now used, not wasted: **Realtime** (apps subscribe to odds/`phase` changes — no polling), **Auth** (app users), **RLS** (per-client read policies), and **client SDKs** (web/mobile/desktop).
+  2. **Railway remains the compute tier** — the scraper (Playwright/Chromium + proxy egress) and the control API (ADR-12). **Supabase cannot run the scraper** (Edge Functions are Deno; no Chromium, no long jobs), so this is a hard split, not a migration off Railway.
+  3. **Data flow:** the Railway scraper **writes to Supabase Postgres** via SQLAlchemy (`DATABASE_URL` = Supabase **pooler** URL). Apps **read Supabase directly** (Realtime + REST + RLS). The `scraper_jobs` table lives in the same store so apps read live job status/progress over Realtime alongside odds.
+  4. **Control (trigger) stays on the Railway API** for now (admin apps call `POST /api/scraper/runs`, then watch progress via Supabase Realtime). A later option (noted, not committed): admin apps insert a job row into Supabase and the Railway runner consumes it from there — fully Supabase-mediated control.
+- **Consequences:**
+  - **Enabling work (ADR-11 F2, now the active task):** the betb2b store's write path is still raw `sqlite3` (`store.persist_result` + job helpers). It must be ported to **SQLAlchemy** (one code path: SQLite locally/CI, Supabase Postgres deployed) so the scraper writes to Supabase. The ORM models (now incl. `ScraperJob`) + `core/db.py` + `scripts/migrate_sqlite_to_postgres.py` already exist; the port + a `DATABASE_URL`-driven persist is what remains.
+  - **Two providers.** More surface than Railway-alone, but each does what it's best at (Railway = browser compute; Supabase = data/realtime/auth). Accepted deliberately for the realtime-UI payoff.
+  - **Operator prerequisites (only the operator can do):** create the Supabase project; take the **pooler** (pgBouncer, port 6543) connection string; set `DATABASE_URL` on the Railway service (never shared with the agent — the code reads it from env); run `create_all`/the migration to build the schema + copy existing `odds.db`; enable **Realtime** on the read tables; author **RLS** policies (client apps: read-only on odds/events; admin apps: broader). Use the **pooler** URL for the scraper's many short writes, not a direct connection.
+  - **High-write caution:** `odds_snapshots` is time-series; apps should subscribe to **filtered** Realtime changes (a specific event/match), not the whole table. The change-only dedup already caps write volume.
+  - Future agents: do NOT try to run the scraper on Supabase. Keep compute on Railway; Supabase is data/realtime/auth. Do NOT point the scraper at a **direct** Supabase connection under load — use the pooler.
+
+---
+## ADR-14: The scraper↔engine link is the shared Supabase DB, not direct HTTP — supersedes ADR-7's ingest export (2026-07-27)
+- **Status:** accepted (supersedes ADR-7/ADR-8/ADR-10's direct HTTP `/api/ingest` link to scorewise-engine; refines ADR-13)
+- **Context:** ADR-7/8/10 built a point-to-point chain: the scraper's `export/scorewise.py` builds scoped `PredictRequest`s (match_total = the totals rung whose over-odds is nearest 1.85; H2H per scope) and POSTs them to the engine's `/api/ingest`; the engine holds predictions in an in-memory `_store` + `predictions.json` on disk and pushes them to the website by webhook. That chain is fragile (the engine store is ephemeral on Railway; the webhook died silently once — see the website's `engine-auto-sync`) and couples three services over a hand-kept HTTP contract. With betb2b now writing structured odds/events/teams/markets/h2h/scores to a shared **Supabase** (ADR-13), the operator's decision is: **integrate via the DATABASE, not direct communication — the scraper and the engine both read/write Supabase.**
+- **Decision:**
+  1. **The scraper's job ends at Supabase.** It writes the betb2b tables (ADR-13) and does **not** POST to the engine. The direct-ingest exporter (`export/scorewise.py`, the `/api/ingest` client) and the `--ingest` flag are **retired**.
+  2. **The engine reads its inputs from Supabase.** The scope-selection logic that lived in the scraper's exporter (ADR-7/8: pick the match_total line by over-odds ≈ 1.85; derive H2H per scope incl. team-total zeroing) **moves into the engine** (its own ADR-1), which reads the betb2b tables directly. The scraper no longer knows the engine's contract.
+  3. **The engine writes predictions to Supabase**, keyed by `(event_id/match_id, scope)` (ADR-10's keying, now as durable DB rows); the website reads them from Supabase. No engine→website webhook.
+- **Consequences:**
+  - Supabase is the integration bus; the three services decouple — no point-to-point HTTP, no shared HTTP contract to keep in sync, and the ADR-10 fragility class (ephemeral engine store, silent webhook death) is resolved by a durable single source.
+  - Retires on the scraper side: `export/scorewise.py` + `--ingest`. The engine side (its `/api/ingest`, disk `_store`, webhook_sender) is retired in **scorewise-engine ADR-1**.
+  - The ADR-7/8 scope logic is **re-homed in the engine**, not lost. The scrapamoja market-mapping (the `(G,T)` taxonomy, sub-games) stays — it's what populates the betb2b tables the engine reads.
+  - Follow-up: define the Supabase `predictions` table shape jointly with the engine (event_id FK + scope + recommendation/confidence/lines).
+
+---
+## ADR-15: The full odds pipeline is proxy-free — GetSportsZip discovery works from any IP (2026-07-27)
+- **Status:** accepted (finding + direction; resolves the proxy dependency flagged in ADR-12/13 and the geo-curated-top-leagues coverage limit)
+- **Context:** The scraper needed an allowed-country **residential** proxy (the operator's bore.pub tunnel) because the SPA/browser cookie-harvest bootstrap **and** the landing-page league discovery are WAF-blocked (HTTP 203 → `/block`) from datacenter IPs — the block is **datacenter-IP fingerprinting, not geo** (backlog 2026-07-17). ADR-5 already found the per-match `GetGameZip` returns 200 from a blocked datacenter IP. The one open question was **proxy-free DISCOVERY** (which leagues/games exist) without the browser.
+- **Discovery (verified live — NO proxy, NO cookies, NO browser, from a WAF-blocked datacenter IP):**
+  - `GET /service-api/LineFeed/GetSportsZip` returns the **full sports→leagues tree**: `Value[]` per sport; each sport's `L[]` lists every league with `LI` (champ id), `GC` (game count), name, country. Basketball (`I=3`): 14 leagues / 37 games. **200 OK, 190 KB.**
+  - Chained proxy-free end-to-end: `GetSportsZip` (leagues) → `GetChampZip(LI)` (events) → `GetGameZip(id)` (odds — WNBA game, **436 markets**). The **entire pipeline runs proxy-free.**
+  - The SW-gated aggregate feeds (`GetSportsShortZip` / `Get1x2_VZip` / `WebGetTopChampsZip` / `GetChampsZip`) stay **406** regardless of IP/cookies — but `GetSportsZip` is **not** gated and makes them unnecessary.
+  - **Confirmed across the family:** 7/8 skins return identical 200 (22bet, 888starz, betwinner, helabet, linebet, megapari, melbet — all 93 sports / 14 basketball leagues / 37 games). **paripesa = 203** (a domain-config outlier, not a backend gate).
+- **Decision:** The scraper's discovery + fetch no longer need the browser or the proxy. Build a browser-less **"direct mode"**: `GetSportsZip` → `GetChampZip` → `GetGameZip` → persist to Supabase, with **no Playwright bootstrap, no session cookies, no proxy.** The existing browser/session/landing-HTML path becomes a fallback (or is retired).
+- **Consequences:**
+  - The Railway scraper **drops the proxy for the odds pipeline entirely** — no bore.pub tunnel, no residential-proxy dependency, no Railway region change needed. The backlog "stable production proxy" item is largely moot for odds.
+  - **Bonus coverage:** `GetSportsZip` lists **all** leagues (incl. WNBA), not the landing page's ~6–8 geo-curated *minor* leagues — this also resolves the "full-card discovery" limitation.
+  - Still to verify (not blockers): **H2H** (statisticfeed) — does it work cookie-less like the odds feeds? If not, H2H runs on an occasional proxy pass; odds stay proxy-free. **paripesa** needs a domain fix (separate).
+  - `GetSportsZip`'s `GC` counts let discovery prioritise leagues that actually have games. Direct mode is the immediate build.
+
+---
+## ADR-16: Finished-match results + prediction validation — state-driven, cross-repo (2026-07-28)
+- **Status:** accepted (direction; the results-capture endpoint is open research)
+- **Context:** The state-aware scheduler (ADR-15 follow-up, `66f9d30`) has **scheduled + live** passes but no **results** pass. The Line/Live feeds **drop a match once it ends**, so a finished match's final score is not reachable via `GetGameZip`. Final scores are what **grade predictions** (did OVER/UNDER hit? did the team win?) — the whole research/validation loop needs them, and nothing in the new pipeline captures them yet.
+- **Decision:**
+  1. **A results pass (scrapamoja scheduler) captures each finished match's final score once** — matches with `start_time + ~2.5h < now` and no result yet — and writes it to Supabase (`event_states` final score / a result field on `events`). **State-driven** (ADR-14): it queries the DB for finished-without-result matches; no cross-scraper trigger.
+  2. **Grading is the engine's job** (its ADR-1 domain, not the scraper's): the engine reads *finished-with-result matches + ungraded predictions* from Supabase → marks **HIT/MISS** → writes back to `predictions`. DB-mediated; optionally Supabase-Realtime-accelerated. Track in the engine's own session.
+  3. **Open research (blocks the scraper side):** *which endpoint returns a finished match's final score once it's off the Line/Live feed* — candidates: a results/history `statisticfeed` endpoint, the game `SC` via a different feed, or the H2H feed (which lists the just-finished game with its score). Find it live from a datacenter IP, proxy-free — same method as the `GetSportsZip` discovery win (ADR-15).
+- **Consequences:** results are a research + build item, not shipped. Once the endpoint is found, the results pass slots in as the scheduler's third pass. Until then predictions are *made but not graded* → the website can't show ✓/✗ and there's no accuracy feedback. This is the highest-value open item for the product loop.
+
+---
+## ADR-17: Fetch concurrency + persist batching — the scaling model, with datacenter-IP rate discipline (2026-07-28)
+- **Status:** accepted (direction)
+- **Context:** With the browser gone (ADR-15), fetch is independent `httpx` calls but still **sequential** behind a rate limiter (120/min in direct mode). Persist batched the odds (`0053ff5`), but `h2h_games` (one `.returning()` insert each — ~586/run), the per-event dedup queries, and team lookups are still **one-round-trip-per-row** → the ~5.5-min persist on the live 102-event / 10,686-odds Railway run. The scheduler's tight live cadence (ADR-15/18) needs both faster.
+- **Decision:**
+  1. **Fetch: bounded concurrency, not a slow sequential rate.** Replace the sequential rate-limiter with a semaphore-bounded `asyncio.gather` over `GetGameZip`/`GetChampZip`/H2H (default ~8, `BETB2B_CONCURRENCY`). The un-gated feeds tolerate it (single-request proven; ramp under monitoring).
+  2. **Persist: batch the remaining per-row work.** `h2h_games` via `insert().returning()` executemany (then batch `h2h_period_scores`), **one** dedup query across all event ids, an in-memory **team cache** — target ~5.5 min → ~30 s.
+  3. **Datacenter-IP rate discipline (recorded constraint):** high-*volume* proxy-free access is **UNPROVEN** — only single requests are. Start conservative (concurrency ~8, live cadence ~10–15 s), watch for `429`/`403`/`203`, ramp deliberately. If the IP gets blocked, the proxy returns as a **fallback** — ADR-15 direct is opt-in, not exclusive.
+- **Consequences:** 5–10× faster fetch + persist → 5–15 s live polling becomes viable. Change-only dedup keeps DB writes sane regardless of cadence. Risk: abuse-limit blocking under aggressive settings — mitigated by the conservative defaults + the proxy fallback path. Do NOT remove the rate cap entirely; bound concurrency instead.
+
+---
+## ADR-18: The scheduler runs as a dedicated always-on worker, separate from the API job runner (2026-07-28)
+- **Status:** accepted (direction)
+- **Context:** The state-aware scheduler (ADR-15/16) is a **continuously looping** process (scheduled ~3h + live ~15s + results). The remote-control API (ADR-12) runs **single-flight, request-triggered** background jobs inside the web service — right for on-demand scrapes, but a wrong shape for an always-on loop (it would tie up the single worker indefinitely).
+- **Decision:** Run the scheduler as a **dedicated Railway worker service** (`python -m src.sites.betb2b.cli schedule …`), **separate** from the API web service — one always-on process, single-flight internally, restart-safe (each pass is idempotent + change-only, so a restart re-runs harmlessly). Do NOT run it inside the ADR-12 job runner. Both processes write to the **same Supabase**: the API stays for manual/ad-hoc triggers, the worker for continuous cadence.
+- **Consequences:** a second Railway service (cost) for clean separation — the always-on scheduler can't starve the API, and the API's `GUNICORN_WORKERS=1` is unaffected. Env for the worker: `DATABASE_URL` (Supabase pooler) + `BETB2B_DIRECT=1` (proxy-free) + the cadence vars (ADR-15). Single-flight is **per-process**, so running the same skin's scheduler *and* a manual API job at once isn't coordinated — harmless thanks to change-only dedup, but avoid it deliberately. Alternative rejected: a cron-style external trigger — the live 15s cadence is too tight for cron and a persistent process is simpler.
+
+---
+## ADR-19: Market naming — adopt the SPA's new-builder GetGameZip feed (MEC categories + SG sub-games); defer exotic per-group labels (2026-07-28)
+- **Status:** accepted (direction)
+- **Context:** `markets.name` persists as `"G=27"` for group ids not in `markets.py` (~15 of ~64 named). Traced the SPA's naming end-to-end (proxy + Playwright — see `reviews/2026-07-28-market-naming-mechanism.md`): the feed carries only numeric `G`/`T`; the SPA composes names **client-side** (`name = groupNames[GS] ?? getMarketGroupTemplatesByGroupId(G).name`, feed `G` = a "foreignId" resolved against **per-sport bet-model templates**). The `bets_model_short` files the CDN serves are a **different id-space** (verified: they can't reproduce a single basketball market — feed `G=17` Total → "Match Result Including Overtime"), and the odds grid is **canvas-rendered** (no DOM text). So there is **no static feed-`G`→name file** to import. BUT the SPA fetches a **new-builder** `GetGameZip` variant our scraper doesn't use, whose response includes real names: `MEC[]` (filter categories) and `SG[].TG` (sub-game names).
+- **Decision:**
+  1. **Switch the scraper's `GetGameZip` to the new-builder params** — `isNewBuilder=true&GroupEvents=true&marketType=1&countevents=250` (id via the event's `CI`). Parse `MEC` (category names: Total/Handicap/Points/Result+Total/Special/…) and `SG.TG` (sub-game names: Rebounds/Assists/3-pt FG/…) straight from the feed.
+  2. **Name markets by category + verified `(G,T)`** — keep the ADR-7 verified `(G,T)` map for core markets (1x2/totals/handicap/individual totals/moneyline); use the `MEC` category as the group label where `(G,T)` is unknown, replacing the bare `"G=<n>"`. Capture sub-game names as a new dimension.
+  3. **DEFER exact exotic per-group labels.** They require replicating the client's sport-aware template resolution (deep, uncertain) or ADR-7 render-and-read cross-map. Not worth it for a cosmetic field while odds + `(G,T)` ids are already correct. Keep the honest `"G=<n>"` fallback for the unmapped remainder. **Never guess names.**
+- **Consequences:** meaningfully-named markets across the board + a new sub-game dimension, from a contained feed-param change. Must validate the new-builder response parses cleanly for **prematch AND live**, and that `CI`-vs-`I` addressing works for our discovery ids. Rejected alternatives: (a) import `bets_model_short` — wrong id-space, would mislabel; (b) full client-logic replication now — disproportionate effort for a cosmetic label.
+- **ADDENDUM (2026-08-05, Session 39) — SOLVED. The naming table is `bets_model` indexed by `GS` (groupShortId), NOT feed `G`.** The 2026-07-28 recon's "wrong id-space" verdict was an *indexing* error: it keyed the bet-model files by feed `G` (or the internal group id) and got garbage. The SPA's own composition is `name = groupNames[GS]` — and `groupNames` is the **union of every template file's `GN` sub-map, which is keyed by `GS`**. Files (gzipped JSON, globally reachable — **no proxy/browser needed**): `https://v3.traincdn.com/genfiles/cms/betstemplates/bets_model_short_en_<0..77>.json`, structure `{templateId: {G: {"N": groupName, "GN": {GS: name}, "M": {...}}}}`. Unioning all 78 files' `GN` gives **5,419 `GS`→name entries with ZERO conflicts** — a static, authoritative table that names EVERY group the feed can carry (verified against the real fixture: every `(G,GS)` — core AND exotic `G=91/92/2766/2768/…` — resolves correctly). Our feed already extracts `gs_id` on every selection, so it drops straight in.
+  - **Shipped:** `data/market_group_names_en.json` (committed) + `scripts/fetch_market_names.py` (regenerator) + `markets.py::DEFAULT_MARKET_GROUP_NAMES` and a rewritten `lookup_market` — name order is verified `(G,GS,T)` → verified `(G,T)` → **GS table** → T-only → G-only → `G=<n>`; the selection SIDE still comes from the verified maps / T-table (the GS table names the group only). Exotic `G=<n>` labels are GONE.
+  - **Bug the GS table caught:** the hand-verified ADR-7 map had `(14,22,182/183)` → "To Win Match". WRONG — the SPA names `GS=22` "Total Even", and the fixture confirms it (odds 1.84/1.82, **no line**, symmetric → an Even/Odd market, not a moneyline). Those rows were removed from `DEFAULT_MARKET_GST`/`DEFAULT_MARKET_GT` so it resolves to "Total Even" via the GS table.
+  - **What earlier failed (for the record, so no one re-treads it):** render-and-read via DOM/Vue/plain-network IS impossible on this SPA (labels are canvas; feed + betting-app JS + dictionaries are all service-worker-mediated/cached → invisible to page-network; prod Vue exposes no devtools hook). The win came NOT from the browser but from fetching the static CDN dictionary directly and indexing it by the RIGHT key (`GS`).
+  - **Selection-side labels — ALSO DONE (same session).** The bet-model entry's `M` sub-map is keyed by feed `T`; `M[T].N` (cleaned of the `()` line- / `[]` param-placeholders) is the selection SIDE. Union across the 78 templates = **14,580 `T`→side entries, 0 conflicts** (feed `T` is globally unique). Shipped `data/market_selection_labels_en.json` + `data/market_group_names_by_g_en.json` (`G`→name, for feeds without GS + the DB backfill); `fetch_market_names.py` emits all three. `lookup_market` now resolves the NAME as verified `(G,GS,T)`→`(G,T)`→GS→**G**→T-only→`G=<n>` and the SIDE as verified→**T→label**→T-only→`T=<n>`. Exotic sides (Yes/No/Over/Under/W1/1X/…) are no longer bare `T=<n>`. Corrected more stale hand entries (T=13/14 were "1X"/"12", really individual-total Over/Under). **The three CDN tables are the durable naming layer — regenerate with `scripts/fetch_market_names.py` if the SPA adds markets.**
+  - **Existing-data backfill:** `scripts/backfill_market_names.py` (dry-run default, `--apply`) renamed 93 `G=<n>` `markets` rows on Supabase before the fresh-start wipe (see ADR-21). It also surfaced the historical scale that fed ADR-21 (millions of odds rows). Post-wipe the store starts clean, so no backfill is needed going forward — new writes carry correct names + sides.
+
+---
+## ADR-20: The results endpoint is statisticfeed `v1/Game` (`entity.status==3`) — resolves ADR-16's open research (2026-07-28)
+- **Status:** accepted (closes the open research in ADR-16 §3; the results pass is now a build)
+- **Context:** ADR-16 deferred *which endpoint returns a finished match's final score once it's off the Line/Live feed*. Found it live, proxy-free from a datacenter IP (recon: `reviews/2026-07-28-results-endpoint.md`).
+- **Decision:** the results source is **`GET /service-api/statisticfeed/api/v1/Game?id=<id>&lng=en&ref=<partner>&fcountry=<country>&gr=<gr>`** — same host/grammar as our H2H/stats calls, un-gated. Its **`entity`** object carries `status` (**3 = finished**, 2 = live), final **`score1`/`score2`**, **`winner`** (1/2), and **`periods[]`** (Q1–Q4 finals). Verified: it **retains finished games for weeks** (games 6–18 days old still return full results), so the LineFeed/LiveFeed dropping the match does not lose the score. `v1/Game` is a **superset of `/Game/h2h`** (also returns teams + gameShorts).
+- **Results-pass design:**
+  1. Capture `entity.id` (statisticfeed game id) + status during live/scheduled scraping — fold it into enrichment by using `v1/Game` in place of the separate `/Game/h2h` call (one request, both).
+  2. Results pass: for `start_time + ~2.5h < now` and no result yet → `v1/Game?id=<entity.id>` (retained); on `status==3` write final `score1/score2` + `winner` + `periods` to Supabase. Map team1/team2 → home/away by LineFeed O1/O2 order (same as the H2H `score1/score2` convention already stored). Try `id=<LineFeedEventId>` as a shortcut; keep the `entity.id` path as the guarantee.
+  3. Engine grades HIT/MISS from the stored result (engine ADR-1/2, DB-mediated).
+- **Consequences:** the scheduler's third pass (ADR-16 §1) is now implementable — the whole predict→grade→accuracy loop unblocks. Schema touch: a final-result store target (result fields on `events`, or a terminal `event_states` row) + a `stat_game_id` on `events` to hold `entity.id`. Rate discipline (ADR-17) still applies to the results polling. Optional follow-up: consolidate the H2H enrichment onto `v1/Game`.
+- **ADDENDUM (2026-08-05, Session 39) — the results pass is BROKEN in practice: step-1 `entity.id` capture isn't happening, and the `id=<LineFeedEventId>` shortcut does NOT resolve.** Live prod-DB audit (before the ADR-21 wipe): of 1,554 events, only **37 ever captured a `stat_game_id`** and **only those 18 finished ones got results** — every event WITH a result had a `stat_game_id`; every one WITHOUT lacked it (0 exceptions). So the ADR-20 "shortcut" (`v1/Game?id=<betting event id>`) is not a working fallback — the statisticfeed needs its own `entity.id`. Net: **1,517 of 1,536 pending events are structurally unable to get results** with the current code. Capture also stopped entirely on 2026-07-29 (coincident with the DB going read-only per ADR-21). `scheduler._results_pass` + `store.events_needing_results` are correctly wired and DO select the pending events; the gap is upstream — `entity.id` must be captured for (nearly) every event during scraping (ADR-20 step 1), OR the results pass must first resolve `entity.id` from the betting event (e.g. via `/Game/h2h` or a statisticfeed search) before calling `v1/Game`. **TODO (backlog):** make `entity.id` capture near-universal (fold `v1/Game` into the standard enrichment so every scraped event stores `stat_game_id`), and add an `entity.id`-resolution step to the results pass for legacy/stat-id-less events. Until then the predict→grade loop only grades the tiny fraction of events that happened to get enriched. Note `fetch_result` is geo-gated (203 without an allowed-country proxy) — prod has the proxy, so this is a capture-coverage gap, not a connectivity one.
+
+---
+## ADR-21: Supabase free-tier quota → forced read-only → app crash; resolved by a fresh-start wipe; retention is now mandatory (2026-08-05, Session 39)
+- **Status:** accepted (incident + resolution); retention policy is a follow-up build (see ADR-22).
+- **Context:** the deployed app began crash-looping at startup — `store_orm._ensure_columns` ran `ALTER TABLE … ADD COLUMN IF NOT EXISTS` and psycopg raised `ReadOnlySqlTransaction`. Root cause was NOT code: the Supabase project had grown to **1,603 MB, ~3× over the free-tier 500 MB limit**, so Supabase forced the whole project **read-only** (instance-level `default_transaction_read_only=on`; NOT in the role's `rolconfig`; `pg_is_in_recovery=false` so it's the primary, not a replica). `odds_snapshots` was **1,328 MB / 5.51M rows** — essentially the entire overage. This same read-only default is why the market-name backfill (ADR-19) first failed and why result-capture stopped on 2026-07-29.
+- **On the 5.51M rows — NOT duplication.** The store's change-only dedup (`store_orm.py` ~line 465) writes an odds row only when a selection's `(price, is_suspended)` changes from the last for its `(scope, market_id, selection_name, line)` key; identical consecutive polls store 0 rows. The volume is real: full tick-by-tick history for every line-rung of every market of every event, kept forever, with no retention — ~3.5k rows/event/week. The dominant cost is *unbounded history of finished games*, not repeats.
+- **Decisions:**
+  1. **App resilience (shipped, `e70f17a`):** `_ensure_columns` now inspects existing columns and only ALTERs genuinely-missing ones (normally zero on a redeploy), wrapped in try/except so a read-only DB logs a warning instead of crash-looping. The app **starts and serves reads** even while the DB is read-only; only writes are blocked. (It does NOT force writes on an over-quota DB — that would fight Supabase's enforcement and keep growing the overage.)
+  1b. **Write-path backoff (shipped, Session 39 cont.):** the always-on scheduler was hammering the read-only DB with a doomed `INSERT` every ~20s (Postgres SQLSTATE **`25006`** `read_only_sql_transaction` — the direct-Postgres equivalent of the HTTP layer's **402**; observed live). Added `store.is_read_only_error(exc)` (walks the SQLAlchemy `.orig`/cause chain for sqlstate 25006 / "read-only transaction") and taught `scheduler._loop` to, on a read-only failure, **back off to `read_only_backoff` (default 900s) + log a throttled warning (≤1/5min/pass)** instead of retrying at the normal cadence. Auto-resumes when the DB is writable again (chosen over a hard shutdown so it self-heals during the grace period). The web job-runner is wake-driven (not a continuous poll), so it isn't a hammer. If a supabase-js/PostgREST **402** write surface is ever added, route it through the same `is_read_only_error` gate.
+  2. **Quota resolution — operator chose a full fresh-start wipe** (over pruning-with-VACUUM or a paid plan upgrade). Executed live: `TRUNCATE <all 15 tables> RESTART IDENTITY CASCADE` (via a one-off `SET TRANSACTION READ WRITE` override, since TRUNCATE *reduces* size — aligned with the quota goal). **Result: 1,603 MB → 11 MB, 0 rows, schema intact.** TRUNCATE reclaims storage immediately (no VACUUM needed), unlike DELETE.
+  3. **Lifting read-only is a Supabase-dashboard action, not ours.** Immediately post-wipe `transaction_read_only` was still `on` (normal writes still blocked) — Supabase re-checks on its own cadence / needs the operator to click "restore" on the read-only banner now that we're under 500 MB. Do NOT hack around it with `ALTER DATABASE … default_transaction_read_only=off` (circumvents platform enforcement); let Supabase lift it.
+  4. **The first wipe DID NOT STICK — Supabase auto-restored it.** Hours later the DB was back at **1,579 MB / 5.55M rows** (row counts didn't match a re-scrape, and read-only blocked writes → it was a platform restore while the project was over-quota/restricted, NOT re-scraped). A **second full wipe** was needed, done via Option B: the operator used Supabase's **"disable read-only mode"** temporary write window in the dashboard, then we re-ran the `TRUNCATE` → **1,579 MB → 11 MB → held (28 MB after light growth)**. Lesson: on the free tier, a wipe only sticks once the project is out of the restricted/restore state — do it inside the dashboard's temp write window, and never click "Restore from backup" (that's what brought the data back).
+  5. **Grace period active.** Supabase moved the org to a **grace period until 2026-09-06** (over-quota in the prior cycle). Until then projects keep working; after, the Fair Use Policy applies and restrictions return **HTTP 402** (and the direct-Postgres read-only / SQLSTATE 25006 — see §1b). So there's runway, but the underlying usage (DB size + egress, ADR-23) must come down or go Pro before Sep 6.
+- **Consequences:** all historical odds/events/results are GONE (operator-authorized) — a documented cost of the wipe. The store restarts clean and, with the ADR-19 naming fixes, every new write carries correct market names + selection sides (so the pre-wipe `G=<n>` / To-Win-Match cleanups are moot for fresh data). **Retention is now mandatory** or the DB is back at 1.3 GB/week (ADR-22). The `SET TRANSACTION READ WRITE` gotcha is real for any tooling that writes through the pooled Supabase role — the backfill scripts already handle it. **DB size is no longer the binding constraint — egress is (ADR-23).**
+
+---
+## ADR-22: `odds_snapshots` needs a retention/rollup policy — unbounded tick history is the quota killer (2026-08-05, Session 39)
+- **Status:** proposed (build after the DB is writable again).
+- **Context:** ADR-21 traced the free-tier blow-out entirely to `odds_snapshots` growing without bound (~1.3 GB/week; 96% of the DB). Change-only dedup keeps it honest per-tick but nothing ever prunes finished games. A live-odds + prediction-grading product does not need minute-by-minute history of games that finished days ago — only their final result (kept on `events` per ADR-20) and, at most, a downsampled trace.
+- **Decision (to build):** a retention job that, for events finished > N days ago (or `result_status` set + aged), **deletes** their `odds_snapshots` (and optionally `event_states`/`period_scores`/`h2h_*`), keeping the final result on `events`. Options to weigh: hard-delete old ticks vs. rollup to open/close/high/low per (market, selection, line); a size-based trigger; a scheduled pass alongside the results pass. Because DELETE bloats until vacuum, pair it with a periodic `VACUUM` (or prefer partition-drop by day/week if we repartition `odds_snapshots`). Ties to ADR-17 (scaling) and the existing "grow the store: dedup, retention, flashscore, Postgres" backlog item (retention sub-item was already open). Dry-run + counts before any destructive run; operator-gated on prod.
+- **Consequences:** keeps the free tier viable (or makes a paid tier last far longer), and keeps queries fast. Must not delete data the engine still needs to grade an ungraded prediction — gate deletion on `result_status IS NOT NULL` (or a safe age well past grading).
+- **SHIPPED complement (2026-08-05, Session 39) — "scheduled-only" ingestion mode.** Retention prunes *existing* data; this cuts the *inflow*. The scheduler's **live pass is the firehose** (15s polling of constantly-moving odds — it produced ~all of the 5.5M rows); the scheduled/prematch pass (3h) and results pass (10min) are tiny by comparison. Made each scheduler pass **disabled when its interval `<= 0`** (`scheduler.run()`), and set the Railway worker default `SCHED_LIVE_INTERVAL:-0` (Procfile) so **live is OFF by default = scheduled-only, low-storage**. Operator's plan: run scheduled-only on the free tier now; **on a paid tier, set `SCHED_LIVE_INTERVAL=15`** (Railway env) to re-enable live + full-category capture. This is the near-term storage control; retention (above) is still worth building for when live is back on.
+- **ADDENDUM (2026-09-07, Session 42) — the scheduled-only default REGRESSED for a month: `railway.worker.json` (the file the worker actually deploys with) was missed.** `1c072ac` fixed only the Procfile; the worker service's config-as-code still said `SCHED_LIVE_INTERVAL:-15`, and Railway config-as-code **overrides the dashboard start command** — so the live firehose never stopped and re-filled the DB 28 MB → 1.67 GB in ~4.5 weeks; Fair-Use restrictions returned 2026-09-06 (until 2026-09-27). Fixed in `9cb7fcf`: every deploy surface now defaults live OFF, RAILWAY.md warns that dashboard-set variables override the config `:-0` fallback, and a regression test (`test_deploy_configs_default_live_off`) pins both files. Lesson: a "deploy default" decision must enumerate every deploy surface by grep (not memory) and be enforced by a test, not a doc line.
+
+---
+## ADR-23: Egress — not DB size — is now the binding Supabase free-tier constraint (2026-08-05, Session 39)
+- **Status:** accepted (finding); mitigations partly shipped (scheduled-only), an in-process dedup cache is a proposed follow-up.
+- **Context:** after the ADR-21 wipe, the free-tier dashboard read **DB size 28 MB / 500 MB (fine) but Egress 9.21 GB / 5 GB (184% over)**. Egress = data transferred *out* of the DB (query results returned to clients), and unlike DB size it's a **per-cycle flow, not a stored amount** — you cannot wipe it away; it resets at the next billing cycle. With 0 monthly active users and 0 file storage, the egress is entirely **backend reads**, dominated by:
+  1. **The scraper's change-only dedup reads** — `store_orm.persist_result` calls `_last_odds(event_id, skin)` before every persist to fetch the event's current latest odds (per scope/market/selection/line) so it only writes changes. Under the **15s live pass** these reads are hot and per-event — the main egress source, accumulated during the live-polling period.
+  2. **The engine/website reads** of the betb2b tables (ADR-14, DB-mediated link) — depends on their poll cadence; lives in the *engine* repo, not here.
+- **Decision / mitigations:**
+  1. **Scheduled-only mode (already shipped, ADR-22 complement) is also the primary egress fix** — with the live pass off, dedup reads happen only every 3h (prematch) + 10min (results), so scraper egress falls to near-zero. The 9.21 GB was mostly the pre-scheduled-only live period and resets next cycle.
+  2. **Proposed: an in-process last-odds cache** in the scheduler/persist path — remember `(price, is_suspended)` per `(event, scope, market, selection, line)` in memory so a poll doesn't re-`SELECT` `_last_odds` from Supabase each cycle. This is the big egress win **when live is turned back on** (paid tier). Cache is per-process (lost on restart → first poll after a restart still reads); that's fine. Backlog item added.
+  3. **On Pro**, egress limit is far higher (250 GB), so this becomes a non-issue if the operator upgrades.
+- **Consequences:** the free tier is viable *as long as live stays off*; turning live on without the dedup cache will re-spend egress fast. Grace period (ADR-21 §5) covers the current overage to 2026-09-06. Two distinct free-tier ceilings now tracked: **DB size** (fixed by scheduled-only + retention) and **egress** (fixed by scheduled-only + the dedup cache). Both point the same way: keep live off on free, or go Pro for full live capture.
+
+---
+## ADR-24: Supabase outage/restriction → local fallback store with an outbox replay (2026-09-07, Session 43)
+
+- **Status:** accepted (shipped, `ce24540`)
+- **Context:** the Supabase free tier restricts an over-quota project to
+  **read-only** (SQLSTATE 25006; Fair-Use window until 2026-09-27 after the
+  second quota re-fill — see ADR-21/22). The ADR-21 §1b mitigation backed the
+  scheduler off and **dropped** every write during the window — weeks of
+  scheduled+results data lost by design. The operator asked for a fallback:
+  "if Supabase fails or gets restricted we switch to local storage db."
+- **Decision (`src/sites/betb2b/store_fallback.py` + `store.py` seams):**
+  1. **Fail over, don't fail silently.** A primary write/connect that fails
+     with a fallback-eligible error (read-only 25006, connection-class 08xx,
+     resource 53xxx, shutdown 57P0x) flips the process into **fallback mode**:
+     `store.init_db` then hands out a connection to a **local SQLite mirror**
+     (same store schema; `BETB2B_FALLBACK_DB_PATH` or the local-mode store
+     path). Deliberately NOT eligible: auth errors (28P01 — a config bug to
+     surface), integrity/programming errors (our bugs), pool timeouts.
+  2. **Outbox replay, not dual-source-of-truth.** Every write made in fallback
+     mode is also appended as JSON to a `fallback_outbox` table (FIFO) in the
+     mirror. On recovery each payload is replayed through the **store's own
+     persist path** (upsert dims + change-only dedup), so replay is
+     idempotent and line-movement chronology (payload `captured_at`) is
+     preserved. A mirrored-full-schema-replay was rejected: replaying raw rows
+     would break FK identity across the two DBs.
+  3. **Probe = a real write, throttled.** After each fallback write, a
+     throwaway `INSERT … ROLLBACK` on the primary (default every 300s) —
+     reads stay allowed on a restricted project, so only a write proves
+     recovery. First successful probe flips back and drains (bounded: 500
+     payloads / 60s per pass; leftovers drain on later primary writes via the
+     post-write hook). A drain failure re-activates fallback; the undrained
+     rows stay queued. Outbox cap 5000, oldest dropped (logged).
+  4. **Per-process state, two seams.** Worker and web each keep their own
+     mirror/outbox. `scraper_jobs` (the control queue) is NOT outboxed —
+     coordination must stay coherent across services; during an outage remote
+     job submission fails loudly while the always-on data pipeline continues
+     locally. `BETB2B_FALLBACK=0` restores the old fail-loudly behavior.
+- **Consequences:**
+  - Data written during a restriction now survives (queued for replay) — but
+    lives on the worker's **ephemeral disk** unless the operator points
+    `BETB2B_FALLBACK_DB_PATH` at a Volume; a redeploy mid-restriction loses
+    the mirror. Documented in RAILWAY.md as the accepted trade-off.
+  - While fallback is active, engine/website reads of Supabase see nothing
+    new until the replay — unchanged from the outage itself.
+  - The scheduler's ADR-21 §1b read-only backoff stays as a safety net but no
+    longer triggers for persist failures (fallback absorbs them); probe
+    traffic to a restricted Supabase is one rejected INSERT per 5 min.
+  - The mirror DB is never dropped after recovery (small in scheduled-only
+    mode); a future retention pass may clean it.
+  - Tests: 14 in `tests/test_betb2b_store_fallback.py` — the "primary" is a
+    real sqlite ORM store via `DATABASE_URL` with 25006 injected at the
+    `store_orm` seam; the full failover→outbox→probe→flip-back→replay cycle
+    is asserted end-to-end (no network).
+
+---
+## ADR-25: Quota monitor + auto-prune — the store polices its own size (2026-09-08, Session 44)
+- **Status:** accepted (shipped, `0398c94`)
+- **Context:** the second quota re-fill (2026-09-06; ADR-21/22 history) plus the operator ask: "create a monitor for the database so that we never hit the threshold in the first place." The ADR-22 retention pass had never been built; the ADR-24 fallback catches writes during a restriction but cannot stop the store from growing into the provider's read-only wall in the first place.
+- **Decision (`quota.py` + scheduler quota pass + store/db_bytes/prune + CLI `quota`):**
+  1. The scheduler runs a **quota pass** (hourly; `SCHED_QUOTA_INTERVAL`, <=0 disables) that reads the **primary's server-side size** — `pg_database_size`, the same number the provider's dashboard reports and its quota acts on. It connects to the primary **even while ADR-24 fallback mode owns writes**: the mirror's size is irrelevant to the provider's quota.
+  2. **Levels:** ok <80% ≤ warn <92% ≤ critical (`BETB2B_DB_WARN_PCT`/`BETB2B_DB_CRITICAL_PCT`; `BETB2B_DB_LIMIT_MB` default 500 = the Supabase free per-project limit).
+  3. **Auto-prune at critical:** `store.prune_expired` deletes fact rows (`odds_snapshots`, `event_states`, `period_scores`, `h2h_*`, `statistics`, `sub_games`) for events whose `start_time` is older than `BETB2B_PRUNE_DAYS` (7) — batched so no mega-DELETE. **`events` rows always survive**: final results/grades live there (the engine reads results, not tick history — the ADR-22 gate).
+  4. **One-shot CLI** `quota`: size, level, prunable counts (dry-run default), `--prune`/`--force` to apply; `schedule --quota-interval` tunes/disables the pass.
+- **Consequences:** in scheduled-only mode the store now self-caps — growth stops at the critical level instead of sailing into read-only. A store ALREADY flipped read-only cannot prune itself (DELETEs hit 25006); the pass logs a pointer to the dashboard TRUNCATE, and the existing 1.67 GB overage still needs the operator's one-time prune (unchanged decision). DELETEs stop growth immediately but the provider's reported size only shrinks after its vacuum. Egress remains unmonitored (would need the provider's management API — future work only if the engine's read cadence makes it binding again).
+- **ADDENDUM (2026-09-08, Session 44 cont.) — escalation rung added: automatic fact-history reset when OVER the hard limit (`f5ee4c0`).** The aged-prune ladder cannot reclaim the reported size of an already-over store (batched DELETEs are vacuum-dependent), and the operator's manual dashboard TRUNCATE attempts all failed (25006 — the read-only flag is enforced uniformly across every dashboard surface; the Session-39-era session `SET` override no longer defeats it, likely transaction-mode pooling or hardened platform enforcement). New behavior: when the quota pass finds the store OVER `BETB2B_DB_LIMIT_MB`, it runs `store.truncate_facts` — a single-statement TRUNCATE of all fact/run tables (FK-safe: referenced + referencing tables listed together; `events`/results/dimensions always survive) — the operator's dashboard playbook executed by the machine. While critical/over, the pass re-checks every 10 min instead of hourly (`_loop` now honors a pass-requested delay), so the reset completes itself in the first writable window after a restriction lifts (e.g. the 2026-09-27 cycle reset) without operator action. `BETB2B_QUOTA_HARD=0` disables (require a human); `quota --truncate-facts --force` is the manual escape hatch. The read-only deadlock itself remains unfixable by any code — a DELETE/TRUNCATE against a restricted store is still a write — so the design point is: the moment the store becomes writable, it heals itself to under the limit before re-restriction can re-engage.
+
+---
+## ADR-26: Local SQLite is the default scrape target; any Postgres (Neon) is the optional shared store; a stored match is scraped once (2026-10-02, Session 50)
+- **Status:** accepted (shipped: `48aced2`, `d135e61`, `32659f9`)
+- **Context:** the operator wants local SQLite as the main store "for now", with an optional remote store reachable from wherever the scraper runs, and no re-scraping of processed matches unless a score is updating. Supabase is paused/over-quota (ADR-21..25); the operator moved to **Neon free** (1 GB storage, 100 compute-hours, scale-to-zero). Railway is no longer available (subscription ended); Vercel was considered and rejected for the scraper (no long-running workers) — Postgres only.
+- **Decision:**
+  1. `scrape` **persists by default** to `$BETB2B_DB_PATH` / `data/betb2b/odds.db` (`--no-db` opts out). The remote store is just `DATABASE_URL` (any Postgres; bare `postgresql://` is rewritten to the psycopg driver by `core/db.py`). `BETB2B_STORE_MODE` (ADR-24 follow-up) still selects auto/local/mirror/remote; the operator runs `mirror` (local write + replay to Neon).
+  2. **Rejected: a shared JSON file as the store** — no atomic claim, concurrent writers overwrite each other, whole-file transfer per access. A SQL database is the correct shared medium.
+  3. **Skip policy:** `--skip-processed` (default window = inf) never re-fetches a match already stored, nor one that has already started (live pass owns it), nor an id known as a sub-game. Live scrapes are never filtered (they are the score-update path); finished matches get their final score via the results update that runs after every scrape (`--no-results` to skip). Scheduler `--refresh-window` default is now inf too. **Consequence accepted by the operator's rule:** prematch odds are captured once; price movement before kickoff is no longer a time-series (use `--skip-processed SECONDS` to re-scrape older ones).
+  4. **Cross-machine skip:** the skip filter reads the SHARED remote store as well as the local copy (`store.unprocessed_ids`) — in `mirror` mode `init_db()` returns only the local copy, which silently broke cross-machine skipping until the offline e2e test caught it. Remote unreachable → local only.
+  5. **Per-skin config lives in `src/sites/betb2b/.env`** (gitignored; also repo-root `.env`), loaded by the CLI (skipped under pytest / `BETB2B_NO_DOTENV`): `BETB2B_SKIN/SPORT/ACTION/COUNT/TIMEOUT/RATE`, `BETB2B_FALLBACK_SKINS`, `BETB2B_RETRIES/RETRY_BACKOFF/CONCURRENCY`, `NEON_DATA_API_URL/TOKEN` (reserved, unused by the scraper). The proxy lines stay **commented out**: operator rule — a proxy is for the website/browser bypass, **never for API calls**.
+- **Consequences:** Neon free is 1 GB, but the ADR-25 quota monitor defaults to a 500 MB limit (`BETB2B_DB_LIMIT_MB`) — set it for Neon. Neon scales to zero, so the first connection after idle is slow (mirror mode covers failures).
+
+---
+## ADR-27: Match identity — event ids are NOT stable across skins or time; sub-games are not matches; failed ≠ empty (2026-10-02, Session 50)
+- **Status:** accepted (shipped: `a80750f`, `ee7c5dd`, `f8e16ea`, `197a9d1`, `7d57a94`, `32659f9`)
+- **Context:** a read-only audit of the Neon store (334 events) found 7 "duplicate" matches and 9 junk events. Verified against the live feed rather than assumed (the operator warned they might be period splits): **they are not period splits** — periods are `SG[]` sub-games *inside* one event.
+  - **Relisting:** the bookmaker re-lists a match under a NEW, higher id (e.g. `757618816` → `757884023`); the old id then returns nothing, and the new id's `SG[]` names the old id's neighbouring sub-games. The same match can therefore carry different ids across skins AND across time. **Supersedes the earlier assumption (AGENTS.md "same events and ids across sister sites") — the feed/odds are shared, ids are mostly but not always identical.**
+  - **Sub-game stubs:** a champ-list "game" whose id sits at parent+N and is named in the parent's `SG[]` (one special market, no venue) is a sub-game, not a match. Also `Home (Points)`/`Away (Points)` special-market listings.
+- **Decision:**
+  1. `events.superseded_by` (SQLite + Postgres, idempotent, non-destructive): same teams + start + league and an older id → the newest id; a replacement must be as complete (venue) as the row it replaces — a venue-less stub never supersedes a match (`store.mark_superseded`, run after every persist).
+  2. `fetch_events` drops events whose id appears in a fetched parent's `SG[]`; `sub_games` now also records unlabelled sub-games, and `unprocessed_ids` skips any id known there. `is_placeholder_event` drops generic Home/Away listings.
+  3. **A fetch that times out / is blocked is FAILED, not "no data":** retried with backoff, leftovers in `last_fetch_stats`, optionally recovered on other skins (`--fallback-skins`; each batch stored under the skin that served it — margins differ per brand). A run whose discovery is blocked is `success=False` (the steady-state "everything already stored" run is NOT an error: direct mode's list feed is gated by design).
+  4. Statisticfeed `entity.id` is captured per event while fresh (`Event.stat_game_id`, never overwritten by NULL) with a bounded self-healing backfill; both stop after 6 consecutive FAILED requests (no 15-min timeout waits).
+- **Open / unverified:** whether `v1/Game?id=<event id>` resolves for UPCOMING matches (the 0/37 live result coincided with the site dropping connections; ADR-20's addendum says the shortcut may not resolve) — re-test when a skin answers. The cause of the large share of discovered ids that return no usable event is not established (stale relisted ids explain some).
+
+---
+## ADR-28: linebet's access control = geo-block on the website + Gcore WAAP bot protection (browser validation) on top — findings, no bypass built (2026-10-02, Session 50)
+- **Status:** accepted (findings); any browser-session / cookie-reuse work needs the operator's explicit go-ahead.
+- **Context:** from the dev IP (US) linebet answered plain HTTP clients with a Gcore "Browser Validation Page" while betwinner/melbet/22bet served real JSON. The operator observed: validation runs once per browser, a new tab in the same browser is not re-validated, a *different browser on the same machine* is validated again. In the in-app browser the validation passed and then redirected to `/en/block` — **"Access denied! This website is not available in your country"** (US, dev IP).
+- **Findings (Gcore's public docs, `g-core/product-documentation`):**
+  1. **The page is Gcore WAAP's `handshake` action = "browser validation (JavaScript-based challenge)"**, a rule-driven challenge a site owner can apply conditionally — on country (`whois.country`), request rate per IP (`request.limit_rate`), cookie presence/absence, IP, tags. Rules can exempt clients carrying specific cookies.
+  2. **Bot-protection policies** the owner can switch on (most are OFF by default, so the site can turn them on at any time — consistent with the operator's "their new security"): *Traffic anomaly* (challenge clients that don't keep cookies or run JavaScript), *Automated clients*, *Headless browsers*, *Anti-scraping* ("rapid and aggressive scraping"), *Vulnerability scanner*.
+  3. **JavaScript injection:** WAAP injects JS that collects a *client fingerprint* (installed components), a *browser-type signature* and *GUI interactions*, and sends them via cookies it generates per session and via `{domain}/sbbi/` requests.
+  4. **TLS fingerprinting:** JA3 and JA4 are computed on every request, stay stable across IP changes, and can be matched by rules (`malicioustlsfp` tag for known-bad stacks). A plain Python HTTP client has a distinctive, stable fingerprint.
+  5. **Penalty tag:** an IP that trips a block rule with a duration is tagged `penalty` and can stay blocked after the burst ends.
+- **Interpretation (evidence, not proof):** the once-per-browser behaviour = a cookie set by the injected JS, tied to that browser's fingerprint (hence new tab: shared jar → no re-validation; second browser: new jar and fingerprint → validated again). Plain `httpx` cannot run the JS or keep those cookies, so it gets the handshake; the scraper's headless Chromium also failed (37 cookies harvested, still challenged) which fits the *Headless browsers* policy. The website itself is geo-blocked for US IPs, separately from the challenge. **Which policy fired on linebet is unknown** — only the site owner can see that.
+- **Correction:** the 2026-07-17 inefficiency entry concluded the linebet block is "NOT geolocation, IP-reputation only" — wrong for the website (`/en/block` is an explicit country block; the same entry's data showed US proxies blocked while a Kenyan egress worked). The challenge and the country block are two layers.
+- **Decision:** (1) don't build or tune anything to defeat the challenge; (2) use the skins that serve the shared feed without a challenge (betwinner/melbet/22bet) as the default — they returned identical 270,009-byte feeds today; (3) keep the proxy for website/browser-path access only (operator rule); (4) if linebet-specific data is ever required, the options are an operator-validated *headed* browser session whose requests stay inside that browser (cookies are fingerprint-bound, so exporting them to `httpx` is unlikely to work) — a design decision for the operator, not started.
+- **Consequences:** linebet is a poor default until its policy changes; the fallback-skins list (`BETB2B_FALLBACK_SKINS`) should keep linebet last.
+
+---
+## ADR-29: Security guard + persistent browser profiles — block handling becomes framework policy, challenge handling is allowed (2026-10-02, Session 51)
+- **Status:** accepted. Supersedes the "build nothing to defeat the challenge" part of ADR-28 (its findings stand).
+- **Context:** the operator wants (1) a general, site-agnostic user/browser-profile feature and (2) a website-security package that handles blockages, "also challenge-solving/evasion" (asked explicitly, after the ADR-28 gate). Before: every bootstrap opened a fresh Chromium (so each run looked like a new browser to Gcore), the only detection was `status==203 || url.endswith('/block')`, and any 401/403/419/440 meant "re-bootstrap" — a challenge could trigger a request burst, the way an IP earns Gcore's `penalty` tag.
+- **Decision:** `src/security/` classifies responses/pages (geo, JS challenge, CAPTCHA, rate limit, ban, access denied, auth expired) and walks a per-type ladder by attempt number (wait → real Chrome + masks → headed Chrome → human handoff → failover → cooldown); cooldowns persist in a JSON ledger; unavailable rungs (no display, non-interactive, no failover list, no proxy pool) are skipped. `src/browser/profiles/` provides named persistent Chromium profiles (pid lock, per-launch identity never persisted, headed `warmup` CLI). betb2b bootstrap/DOM-render/feed client route through the guard; profile `betb2b-<skin>` by default (`BETB2B_PROFILE=off` opts out).
+- **Scope of "evasion" — what was and was NOT built:** only browser *fidelity* (persistent profile, the installed real Chrome, dropping automation switches, the existing `src/stealth` masker) and patience/human handoff. NOT built: CAPTCHA-solving services, TLS/JA3 spoofing, exporting a browser's cookies to httpx as a bypass (ADR-28: fingerprint-bound, unlikely to work). A country block is never "solved" by the browser — geo is `rotate proxy → failover → cooldown`; the operator's rule stands that a proxy is for the website/browser path only, never API calls.
+- **Evidence (live, dev IP US):** linebet: Gcore handshake detected → waited → landed on `/en/block` → classified geo_block (two layers, as ADR-28 found). betwinner's website also answers 203 geo from this IP (the feed endpoints are what work in direct mode). Real Chrome tier verified: `navigator.webdriver` undefined, real macOS UA; bundled Chromium reports `webdriver=true` and a Linux UA on this Mac (skin `stealth_profile` UA) — a fidelity gap the stronger tiers close.
+- **Consequences:** a block no longer causes a request storm (≤5 requests then cooldown, tested); a cooling skin fails fast so the CLI's skin fallback takes over. Known gaps: direct-httpx calls inside `scraper.py` (not via `client.fetch`) are unguarded; the human-handoff and headed-tier paths are unit-tested with fakes but not exercised against a live challenge; `ROTATE_PROXY` has no pool behind it yet; whether the persistent profile actually avoids re-validation on linebet cannot be tested while the country block applies.
+- **Clarification (same day, operator):** the country/IP block on the website path is the thing the Kenyan proxy has been getting past all along (the allowed-country egress passes where the US/datacenter IP gets 203 → `/block`), so `geo_block` stays the right label and the ladder's "a browser change cannot fix it" holds. The proxy is supplied up front from `BETB2B_PROXY_*` (browser path only), so the guard's `ROTATE_PROXY` rung adds nothing today; a block seen THROUGH the proxy means the proxy is at fault, and the session now logs that. Cooldowns are keyed per egress (`skin@proxy`), so a direct-IP block never rests the proxied route. The feed endpoints work direct (no proxy) except linebet's, which now returns the Gcore challenge — in direct mode the wait/escalate rungs cannot act (no browser).
+- **Live trial through the Kenyan tunnel (2026-10-02, operator-requested):** (1) browser path: a fresh profile through the tunnel loaded the real linebet site in bundled headless Chromium AND real Chrome headless — no Gcore page (the operator did see one from the same Kenyan IP earlier, so the challenge is conditional, not constant; ADR-28's "headless Chromium fails" was from a different egress/time). (2) cookies harvested through the tunnel (13) did NOT let a direct call from the US IP through: the feed still returned the 12,775-byte Gcore challenge — clearance is bound to the egress/browser, as ADR-28 predicted. (3) So for linebet the feed must be fetched from the same egress as the validated browser; given the operator rule (proxy never carries API calls) the remaining option is fetching INSIDE the tunnelled browser, not built. Sister skins serve the same feed direct, so linebet is only needed if its own data is. A bug was found and fixed: a failed first navigation skipped block classification.
+
+---
+## ADR-30: Every request path goes through the guard; timeouts rest a site like blocks do; requests are paced per second (2026-10-02, Session 50)
+- **Status:** accepted (shipped: `a79ebf1`, `0190634`, `dc78eee`, `17b3d88`, `37b8b79`, `f2c96e7`). Builds on ADR-29's guard; does not change its ladders.
+- **Context:** the first live run with the security guard in place (betwinner) fetched fine, then every statistics/H2H/stat-id call timed out, and afterwards betwinner, melbet and 22bet refused TCP connections from the dev machine. The log showed ~20 requests/second: direct mode disables the client's serial spacing because "the semaphore is the throttle", but a semaphore bounds requests IN FLIGHT, not requests PER SECOND. Four workers on a site answering in 200 ms is a burst. Connection refusals that later cleared (as they did several times today) are consistent with the sites dropping the address, not with dead sites. Separately, four direct `httpx` call sites in `scraper.py` bypassed the guard.
+- **Decision:**
+  1. The scraper's direct calls (landing-page harvest, H2H, statistics, result fetch) use the same preflight/classify/on_block path as the feed client; a block stops the batch (one warning); result fetches return FAILED so callers' breakers trip.
+  2. `SecurityGuard(has_browser=False)` (direct mode) marks wait/escalate-browser/human/refresh rungs unavailable, so a challenge goes straight to failover or cooldown.
+  3. Transport failures (timeout, dropped connection) are recorded in the same ledger (`BlockType.UNREACHABLE`): `BETB2B_FAIL_THRESHOLD` (6) in a row rest the site `BETB2B_FAIL_COOLDOWN` seconds (300, doubling per streak); any answer resets; failures already in flight when a rest began do not lengthen it. Failures can be **scoped** to an endpoint group (`stats`) so an optional slow service rests only itself.
+  4. Optional `BETB2B_HOURLY_BUDGET` (default 0 = off) through the same preflight.
+  5. `Pacer` (`src/security/pacer.py`): a per-skin minimum spacing between request starts shared by the feed client and the direct calls — `BETB2B_MAX_RPS`, default 3/s (0 = off).
+- **Consequences:** a full prematch scrape is slower (roughly 450 requests at 3/s ≈ 2.5 minutes); in return fewer drops and no wasted 15-second timeouts. The default of 3/s is a judgment call: lower it if drops recur, raise it only with evidence. The pacing fix is unverified live (hosts were still refusing connections when it shipped).
+
+- **ADDENDUM (2026-10-02, Session 50, diagnosis round) — why the hosts drop this machine's connections: what is established and what is not.**
+  - **Established (measured from the dev machine, 135.180.70.225 / Sonic Telecom, San Jose):** (1) it is not a general outage — other sites connect instantly; (2) it is TCP-level: `connect()` gets NO answer (SYN dropped), not a refusal and not an HTTP error; (3) it is **per destination and per port, and it expires**: betwinner `45.150.232.214` dropped both 443 and 80 for 10+ minutes; melbet `94.241.134.8` dropped only 443 (80 open); 22bet `94.241.132.4` recovered within ~20 minutes; (4) each drop began right after one of our runs; the last run logged ~164 match requests in ~8 s (~20 req/s) and its stat/H2H calls then all timed out; (5) **only linebet is behind G-Core Labs** (`92.223.84.84`, AS199524). betwinner sits at Melbikomas UAB (AS56630, Frankfurt) and melbet/22bet at Redstart Group (AS201936) — plain hosting networks, so Gcore's bot protection is NOT what drops these three.
+  - **Interpretation (not proven):** an automatic per-source-address rate limit at the hosting/firewall level (fail2ban / iptables-recent / provider anti-DDoS style: a source over a threshold is dropped for a while, sometimes per port). Which threshold (requests/s, NEW connections/s, or volume) and the exact duration are unknown. Mitigations shipped on that hypothesis: the `Pacer` (3 req/s), one pooled client for the direct calls (fewer new TCP+TLS handshakes; result fetches used to open one per call), and the shared rest.
+  - **Not established / how to find out:** (a) is the drop specific to this source IP? One request from another egress (the Kenyan tunnel) while this IP is dropped would show it; the tunnel crashed at ~12:58Z (`bore` "frame error, invalid byte length" after a burst of ~12 simultaneous connections) and was down at 13:34Z. (b) the threshold: a controlled, slow ramp after recovery (1 → 2 → 3 req/s, stopping at the first sign of a drop); each trigger costs tens of minutes, so do it once, deliberately. (c) the duration: a TCP-connect watch (one `connect()` per 30 s per host, no HTTP) was left running.
+  - **RESULT of the vantage test (2026-10-02 ~13:55Z, operator restarted the tunnel; ONE request, diagnostic only):** while this machine's TCP to betwinner:443 and melbet:443 was being DROPPED (control probe seconds earlier), the same `GetSportsZip` request through the Kenyan egress (Safaricom, Nairobi, `41.139.206.175`) returned **HTTP 200 with the full 273 KB feed**. **The drop is therefore tied to this machine's source address (135.180.70.225), not to the host.** Still unknown: the trigger threshold and how long a drop lasts (betwinner:443/80 had been dropped for 30+ minutes by then; the 30 s TCP watch never saw it recover). Practical consequences: (1) when a host drops the dev IP the host is fine — wait, or use another egress for diagnostics; (2) pacing + pooled connections are the right mitigations because the address, not the site, is what gets penalised; (3) whether to route feed traffic through the Kenyan egress is the operator's call — their standing rule is proxy for the website path only, never the API.
+
+- **WORDING CORRECTION (2026-10-02, Session 50, operator) — applies to ADR-28, ADR-29, ADR-30 and the matching inefficiency/session entries.** Where those entries say "Kenya", "Kenyan proxy/egress/tunnel" or "from Kenya", read **"an allowed-country egress"**. Kenya is only where the operator's tunnel happens to exit (and the country the feed's internal id 87 refers to); it is NOT a requirement. What was actually established: an address that the site has not penalised, in a country the site allows, can reach it; the US dev address was being dropped/blocked. It does NOT show that only Kenyan addresses work, and research should not be anchored on Kenya. Product docs, skins and scripts were reworded the same day (endpoint label `proxy`, not a country name).
+
+- **LIVE VERIFICATION of ADR-30 (2026-10-02 14:03Z, after the dev address's penalty expired — it lasted about 30 minutes after the ~20 req/s burst):** one paced run (3 req/s, one pooled client, shared rest): 497 ids discovered, 118 fetched in 39 s (= 3/s), **no retries, no rests, no drops**; all three hosts still accepted connections afterwards. **Stat ids resolve live** — `v1/Game?id=<event id>`: 10 of 21 new events and 128 of 150 backfilled stored events (the earlier 0/37 was the block, not the endpoint). The threshold above 3 req/s remains unknown and is not worth probing unless speed is needed.
+- **WHY ~80% of discovered ids never became events (the long-open question, now answered with data):** 127 of 497 discovered ids were not stored. All 28 sampled were **season-long outright/futures listings** ("NBA 2026/27 MVP", "Regular season", "NBA Cup groups": one participant, empty second side, hundreds of markets, one shared start time) and the 30 generic `Home (Points)`/`Away (Points)` listings; it was never throttling or stale ids. The league list already carries `O1`/`O2`: all 370 stored matches have a second participant there, 97 of the 127 unstored have none, the other 30 are the placeholders. So discovery now drops them from the list alone (`is_non_match_listing`, sharing the extractor's placeholder-name rule), removing about a quarter of every run's requests and letting `--skip-processed` reach "nothing left to fetch".
+
+---
+## ADR-31: Import health is a tested invariant; fix safe findings in the tree you touch (2026-10-02, Session 50)
+- **Status:** accepted (shipped: `7951bb2` `6f0e41e` `ecaa396` `2b18083` `e2e2ff9` `de01b9c` `8a9d9ad`).
+- **Context:** while working in betb2b I found a `SyntaxError` in `src/sites/base/plugin_permissions.py`, said it was not my change, and logged it instead of fixing it. The operator asked whether the rules say to leave things because they are not my problem — they do not: this repo's standing scope is "discovery + review + **fix all safe issues**; flag architectural". Chasing that file led to a repo-wide import sweep: **~100 of 756 modules under `src/` could not be imported at all**, in about 25 root causes, hidden because `ast.parse` accepts what `compile()` rejects (a repeated keyword) and because nothing imports those packages in tests.
+- **Decision:** (1) fix every safe cause found (missing imports; wrong relative depths where exactly one other depth resolves to a real module; names re-exported from nowhere; a dataclass field order via `kw_only`; late-binding `Depends` instead of a service declared as a query parameter; additive fields/aliases that call sites already assume) — each verified by import and, where behaviour is involved, a test; (2) **flag, don't invent,** anything needing design (missing classes whose fields would have to be reverse-engineered from usage, missing packages, renamed fields); (3) `tests/unit/test_src_modules_importable.py` imports every `src` module from a scratch directory and fails **both ways** — a new breakage, or a listed `KNOWN_BROKEN` module that starts working — so the list of remaining breakage is explicit and cannot rot; (4) use `compile()`, not `ast.parse`, when checking for breakage by script.
+- **Result:** 100 -> 13 unimportable modules (each in `KNOWN_BROKEN` with its reason); `ruff F821` undefined-name sites 138 -> 78 (latent NameErrors in function bodies, in the backlog). The adaptive dashboard API now starts and answers (`/failures` 200, `/health` 200).
+- **Consequences / honest limits:** importable is not correct — the plugin permission module needed three further layers of fixes to make request->approve->export work and still has unimplemented statistics and an import/export format mismatch; the adaptive API integration tests (never collectable before) now run and fail because they call routes the app doesn't mount (`/test-feature-flags`); `tests/unit` has many pre-existing failures and one test that hangs forever on a subprocess wait.
+
+---
+## ADR-32: linebet's Gcore browser validation — the measured contract (2026-10-03, Session 53)
+- **Status:** accepted (findings; two fixes shipped under it — `ec05ca0`, session.py grid-wait).
+- **Context:** the Kenya-machine brief left the challenge's lifecycle unknown ("not verified: whether the validation survives for days, or whether a changed address invalidates it"). Measured today from a Nairobi egress with controlled probes (fresh contexts, timed rounds, cookie-subset matrix, and the scraper's own bootstrap path).
+- **Findings (all measured):** the challenge is a Gcore WAAP "browser validation" page served with **HTTP 200** + HTML (title `Gcore`), running the `/sbbi/` SBBI flow and setting `sbtsck` + `SPSI`/`SPSE`/`PRLST`/`spcsrf`/`sp_lit`. A real browser — **headless Chromium included** — clears it automatically in ~3 s; a fresh context is challenged on first load, the same context never again; the clearance is cookie-bound and not permanent (a profile warmed at 18:06 was re-challenged at 19:00 and re-cleared itself in ~3 s). Plain HTTP needs the **full** cookie jar: with the browser's complete set both the feed and `statisticfeed` answer JSON; with `sbtsck` alone, the `sp*` family alone, or everything-except-`sbtsck`, every request gets the challenge page. Endpoint tolerance differs: with a fresh clearance both answer; by ~4 min the `statisticfeed` (H2H) path served the interstitial while the feed still answered. The headerless/"bare 403" responses are separate: a plain curl gets a bare 403, and 406 on `/Get1x2_VZip` is the known header rotation, not a block.
+- **Decision / consequences:** (1) the hybrid path is correct as designed — the browser is the credential earner, plain HTTP replays its cookies; never reimplement the challenge's JS (ADR-29's boundary: fidelity + patience + a person, not a bypass). (2) Harvest only **after** the SPA renders (the grid the extractors already wait for) — the session/protection cookies are set on that boot, so a harvest the moment the challenge disappears captures a jar the site still refuses. (3) The scraper must keep the whole jar on the wire: session cookies (`expires=-1` in browser APIs) are valid for the session and were being dropped by the cookie serializer (`ec05ca0`). (4) H2H probes are the most exposed (a stricter path, and they run minutes into a scrape): refresh the session before them or expect periodic gaps; a challenge there must cost that batch, not the run (ADR-33). (5) Re-verification is open: after tonight's repeated challenge hits the address was rested by the guard; a fresh-window run with the fixes is the next step.
+- **Evidence:** review `2026-10-03-review.md`; probe scripts' outputs in the session (fresh-context first/second-load matrix; cookie-subset matrix: full set → JSON, every subset → challenge; timed rounds: JSON at t≈6 s/122 s, interstitial at t≈244 s; live A/B of `to_cookie_header` vs full context cookies).
+
+---
+## ADR-33: a burst of identical blocks is ONE guard incident (2026-10-03, Session 53)
+- **Status:** accepted (shipped `fb32cd1`, `6fa14bb`; regression test drives five concurrent challenges through the H2H batch).
+- **Context:** a batch (H2H, statistics, stat-ids) fires several requests at once; when the site challenges them all, each response called `guard.on_block` and spent its own ladder rung. Five concurrent challenges walked WAIT → ESCALATE → ESCALATE → FAILOVER → COOLDOWN in about one second and rested the site for six hours — aborting a run whose main data path was healthy. A *sequential* retry loop, by contrast, must still escalate normally (that behaviour is what the existing storm test pins).
+- **Decision:** the burst is distinguished at the batch, not by a time window in the guard: `guard_response` returns whether the response was a block; each concurrent batch stops after the first blocked answer (siblings already in flight check a flag after their response and skip the guard), leaving the unattempted events to another run — recorded as `not_attempted`, which is what happened. Single result/stat fetches treat a challenge page as a failed fetch. The sequential feed-client path is unchanged, so repeated sequential challenges still escalate to a cooldown (the storm test still passes).
+- **Consequences:** a challenge incident costs at most one rung per batch; escalation across phases still works (each phase re-bootstraps on the refreshed session); the site is no longer rested for hours because of one burst. The two CLI backfill batches (results, stats) remain sequential and unprotected — backlogged, not silently ignored.

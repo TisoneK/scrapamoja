@@ -1,0 +1,430 @@
+# Inefficiency Log (append-only, mandatory)
+
+Every session appends one block — honestly. Friction you absorb silently
+is friction the next agent hits blind. "None this session" is valid only
+if literally nothing slowed you down.
+
+<!-- TEMPLATE — copy below the last entry:
+---
+## YYYY-MM-DD — <agent> / <model>
+- **Problem:** <what went wrong or was slower than it should be>
+- **Cost:** <rough time/effort wasted>
+- **Cause:** <root cause if known>
+- **Workaround / fix:** <what worked, or "unresolved">
+- **Prevent next time:** <protocol/context change that would have avoided it>
+-->
+
+---
+## 2026-07-12 — Claude Code / claude-opus-4-8
+- **Problem:** Could not run the Phase-1 baseline (pytest/ruff/mypy) — the machine has only system Python 3.9.6 but the project requires >=3.12. No venv, no `uv`, no newer interpreter.
+- **Cost:** ~Whole session's dynamic verification lost; review reduced to static-only.
+- **Cause:** Toolchain gap on Baos-Mac-mini (see `system/environments.md`); protocol forbids installing to system Python / installing global packages without asking.
+- **Workaround / fix:** Verified the one code change with `python3 -m py_compile` only. Left a backlog item + report note with exact setup commands.
+- **Prevent next time:** Install `python@3.12` + `.venv` on this machine before the next review; record verified commands in `system/environments.md` so the next agent skips this discovery.
+
+---
+## 2026-07-12 — Claude Code / claude-fable-5 (Session 4)
+- **Problem:** Template-framework test runs littered the repo root with `*_error_*.png/html` error captures, and any `template` CLI invocation drops `template_cli.log` into the cwd — both dirty `git status` mid-session and risk being committed accidentally.
+- **Cost:** ~10 min of repeated artifact cleanup + a stray `src/sites/templates/` dir created as a side effect of the (buggy) scaffolder path.
+- **Cause:** Product code wrote captures/logs to bare filenames in the process cwd.
+- **Workaround / fix:** Captures fixed in-product (`681f3da` — now `data/snapshots/`, gitignored). CLI log file backlogged. Ran CLI smoke tests from the scratchpad dir to keep the repo clean.
+
+---
+## 2026-07-18 — GitHub Copilot / DeepSeek V4 Flash Free (Session 3)
+- **Problem:** `_build_page_script()` in `dom.py` used naive `f'"{s}"'` quoting for CSS selectors, producing broken JS when a selector contained double quotes (e.g. `[class*="bet"]` → `"[class*="bet"]"`). This caused a JS `SyntaxError: Unexpected identifier` at runtime, blocking ALL DOM extraction.
+- **Cost:** ~30 min of debugging (first blamed proxy, then browser config, then finally read the generated JS).
+- **Cause:** Undocumented assumption that CSS selectors never contain double-quote characters. The BetB2B default selectors in the sports registry use `[class*="bet"]` etc.
+- **Workaround / fix:** Added `_js_str()` helper that escapes `"` → `\"` and `\` → `\\` before embedding in JS template strings.
+- **Prevent next time:** Any code that generates JavaScript strings from Python values must quote-escape. Add a lint rule or test that catches unescaped quotes in generated JS.
+- **Prevent next time:** Run anything that might write files from a scratch dir first; check `git status` after every test run in this repo.
+
+---
+## 2026-07-17 — Super Z / GLM (Z.ai cloud sandbox)
+- **Problem:** First Railway deploy of the FastAPI control plane failed. Every gunicorn worker crashed on startup with `PermissionError`, so the server never bound and the `/health` healthcheck timed out. Railway's deploy log identified the root cause: `src/core/snapshot/__init__.py` calls `os.makedirs("config")` + `os.makedirs("data/snapshots")` at IMPORT time, but the container runs as non-root `appuser` and the `/app` directory was root-owned (only `/app/data` had been chowned).
+- **Cost:** One failed deploy + one extra iteration cycle (~15 min of build + debug time on Railway's side, since this sandbox has no Docker to pre-verify locally).
+- **Cause:** Two compounding issues:
+  1. **Product code smell (root cause):** `src/core/snapshot/__init__.py:_initialize_module()` runs at module-import time and calls `os.makedirs()` with RELATIVE paths (`"config"`, `"data/snapshots"`) — resolved against whatever the cwd is at import time. Import-time side effects that touch the filesystem are fragile: they crash any environment where the cwd isn't writable by the importing user (containers, read-only installs, CI sandboxes).
+  2. **Dockerfile gap (trigger):** `WORKDIR /app` creates `/app` owned by root. The original `RUN mkdir -p /app/data && chown -R appuser:appuser /app/data` only chowned the `data/` subtree — not `/app` itself. So `appuser` could write to `/app/data/...` but NOT create a new top-level dir like `/app/config/`.
+- **Workaround / fix:** Dockerfile-only fix (commit pending): pre-create `config/`, `data/snapshots/`, `output/`, `logs/`, `.checkpoints/` AND `chown -R appuser:appuser /app` (the directory itself, not just its contents). Pre-creation makes the import-time `os.makedirs(..., exist_ok=True)` a no-op; the `/app` chown covers any future runtime-created dirs. Source-level fix is backlogged (see `tasks/backlog.md`).
+- **Prevent next time:** (a) When deploying Python apps as non-root in containers, ALWAYS chown the WORKDIR itself, not just the subdirs you pre-create — `WORKDIR` creates the dir as root and `COPY --chown=...` only chowns the files it brings in, not the parent. (b) When smoke-testing a Dockerfile locally without Docker (venv-only), grep the codebase for `os.makedirs` / `Path(...).mkdir` at MODULE LEVEL (not inside functions) — those are import-time side effects that will crash the same way under any restricted cwd. Found one such call here: `src/core/snapshot/__init__.py:260 _initialize_module()`.
+
+---
+## 2026-07-17 — Linebet WAF block: datacenter-IP fingerprinting, not geo-blocking
+
+**Context:** Session 9 continuation — tried to validate the Linebet
+scraper against the live site from the Z.ai cloud sandbox.
+
+**What happened:**
+- Every Playwright profile (default Chromium, Chrome 124 Linux/Win,
+  Firefox) gets HTTP 203 → redirect to `/en/block` from linebet.com.
+- Tried 3 free US proxies (from proxyscrape.com list) — same 203 block.
+- Tried 5 alt entry points (/en/prematch, /en/live, /m/en, /en/sport/1,
+  /en/sport/football) — all 203.
+- The block response comes from nginx (header `x-id: hk2-hw-edge-gc21`)
+  NOT from a JS challenge — it's a server-side decision based on the
+  incoming request, before any SPA code runs.
+- Even when blocked, the technical-pages app DOES fire real API calls
+  to `/bff-api/config/group/get`, `/bff-api/config/v2/contacts.json`,
+  `/analytics-module-api/v1/analytics`, `/fatman-api/<hash>/...`. Those
+  were captured and committed as snapshots
+  (`src/sites/linebet/snapshots/raw/waf_block_page_bodies.json`).
+
+**Root cause:** Linebet's WAF recognises datacenter IP ranges (including
+datacenter proxies) and hard-blocks them at the edge. The block is NOT
+based on user-agent (we tried real Chrome 124 UAs), NOT based on
+headers (we sent full sec-ch-ua / sec-fetch-* suites), NOT based on
+geolocation (US proxies also blocked). It's IP-reputation-based.
+
+**Workaround built this session:** HAR export + replay pipeline
+(`src/sites/linebet/scripts/har_export.py` +
+`har_replay.py`). Operator runs `har_export` from a residential IP,
+ships the HAR file, developer runs `har_replay` to extract events
+without a live browser. End-to-end tested with a synthetic HAR fixture
+(`src/sites/linebet/snapshots/raw/synthetic_prematch.har`) — works.
+
+**Prevent next time:**
+1. When targeting a site with a known WAF (Linebet, Cloudflare-protected
+   sites, etc.), build the HAR export + replay path FIRST, before
+   attempting live validation. The sandbox is almost always blocked.
+2. Don't waste time on free proxies — they're datacenter IPs too, the
+   WAF blocks them just the same. Either use a paid residential-proxy
+   service (Bright Data, Soax, IPRoyal) or accept the HAR workflow.
+3. When the extractor returns 0 events but captures > 0 responses,
+   suspect that the captured responses are from the technical-pages /
+   block page (not the main app) and check the captured URLs against
+   the known sports-data endpoint patterns.
+
+---
+## 2026-07-20 — GitHub Copilot / DeepSeek V4 Flash Free (Session 21)
+
+- **Problem:** Knew the platform was Windows (recorded in user prefs since Session 3) but never audited `.context/core/` scripts against it. The protocol's `context-sync` is POSIX-only and the `sh` commands in `kickoff.md` Step 1 are broken on this system — yet every session that followed the literal instructions silently failed or skipped this step without logging why.
+- **Cost:** Multiple sessions with a silently broken Step 1. The user had to point out the gap directly before it was investigated. ~15 min of discovery work that should have been done in Session 3.
+- **Cause:** Instructions were treated as literal truth rather than as data to validate against the environment. "The protocol says run `sh ...`" was processed as a command, not as a proposition to check. Also, no cross-reference existed between "environment facts" and "protocol requirements" — the agent had the facts but never connected them.
+- **Workaround / fix:** PowerShell alternative commands documented in `overrides/rules.md`. Flaw logged in `flaws/log.md`.
+- **Prevent next time:** Before executing any environment-dependent command from the protocol, cross-reference against known platform facts. When the protocol says `sh` or `bash` or `/bin/`, verify it exists on PATH first. If the protocol ships platform-specific tooling, audit it proactively — don't assume it works on your platform just because it's documented.
+---
+  Assumed a *local* agent on Baos-Mac-mini would present the user's residential
+  IP (Sessions 9/10 blamed the WAF on the Z.ai datacenter IP). Wrong: BOTH
+  `mcp__Claude_Browser__*` (in-app cloud browser) AND `mcp__claude-in-chrome__*`
+  ("Claude in Chrome") egress from `135.180.70.225`, flagged US, and hit
+  linebet's geo-block (203 → `/en/block`). Neither routes through the user's
+  home network. Cost: ~2 browser round-trips confirming the block.
+  - **Prevent next time:** a local Claude Code agent does NOT get the user's
+    residential IP for free — the browser tools egress from Anthropic infra
+    (US). Reaching a geo/WAF-blocked site requires an explicit proxy the USER
+    supplies (VPN on their machine, or a proxy endpoint). Don't assume "local =
+    residential." Also: linebet's block IS geo-based here (names the country),
+    distinct from the Session 9 sandbox block which read as datacenter-IP
+    fingerprinting — both can be true depending on the egress.
+
+- **Problem 2 — pytest async config is inert (repo config bug).** New
+  `async def` tests errored with "async def not natively supported" despite
+  `asyncio_mode = "auto"` in `pyproject.toml`. Root cause: `pytest.ini` exists
+  and shadows pyproject, but its section header is `[tool:pytest]` (setup.cfg
+  style) so pytest reads NO config from it either — asyncio_mode never applies.
+  (Already a known backlog item.) Cost: ~1 test-run cycle.
+  - **Prevent next time:** in this repo, mark async tests explicitly with
+    `@pytest.mark.asyncio` (the established convention — see
+    `tests/unit/test_feature_flag_service.py`); do not rely on
+    `asyncio_mode=auto` until the `pytest.ini` header bug is fixed. Custom
+    markers (`integration`/`unit`) also warn as "unknown" for the same reason,
+    but `-m "not integration"` selection still works.
+
+---
+## 2026-07-19 — GitHub Copilot / DeepSeek V4 Flash Free
+- **Problem:** After reading `.context/kickoff.md` + Step 3 memory + the protocol edition, I asked the user "What's next?" instead of continuing autonomously on the existing task (cross-skin H2H failure investigation). Then I ran through Phase 1 protocol steps mechanically without connecting them to the conversation's active target — the protocol became the task instead of the method.
+- **Cost:** ~2 wasted round-trips (my question + user correcting me + running redundant Phase 1 steps).
+- **Cause:** Lost the conversation context after reading protocol. Treated the protocol as the session's purpose rather than its guide. Didn't log my own violation in real time.
+- **Workaround / fix:** After the user pointed it out, logged this entry. The standing target was already established in conversation — should have proceeded with investigation immediately after loading context.
+- **Prevent next time:** When entering a conversation with an active task, note the existing target BEFORE running Phase 1. The protocol's "check the user's first chat message for a target" rule applies even after protocol re-reads mid-conversation. And log inefficiencies as they happen, not when prompted.
+
+---
+## 2026-07-20 — GitHub Copilot / DeepSeek V4 Flash Free (Session 19)
+- **Problem:** After implementing period_scores extraction (code changes + tests passing), I updated AGENTS.md to document the work — but ignored `.context/memory/` files entirely. The user corrected me twice: first about API-first vs DOM extraction emphasis, then about .context memory protocol vs AGENTS.md. The protocol's Phase 5 (Steps 15-17) explicitly says to update memory files — I knew this but still defaulted to AGENTS.md.
+- **Cost:** ~3 user corrections + rework of which files to update.
+- **Cause:** Protocol knowledge was present but not activated at the right time. AGENTS.md was attached in context and felt like "the right place" for project documentation. Memory of the .context protocol phases faded after reading 700+ lines of protocol text earlier.
+- **Workaround / fix:** The user redirecting me forced me to re-read kickoff.md and follow Phase 1-6 properly. Memory files are now updated.
+- **Prevent next time:** After making code changes, run through Phase 1-6 mentally BEFORE asking the user what to do next. Phase 5 (memory updates) is mandatory, not optional — treat it as part of "done."
+
+---
+## 2026-07-20 — GitHub Copilot / DeepSeek V4 Flash Free (Session 21 — H2H integration)
+- **Problem:** Relied on the conversation-summary artifact instead of reading actual `.context/` files before working. Three concrete failures:
+  1. Did not read `kickoff.md` at session start — the summary claimed I had, but that described the *previous* session.
+  2. Did not read `workflows/active.md`, `inefficiencies/log.md`, or `flaws/log.md` before acting.
+  3. Trusted the summary's claim that `config.py` already had `"h2h": True` — but when I actually grepped for it, it wasn't there. If I hadn't checked by accident, the feature flag would have been missing from the commit.
+- **Cost:** ~10 min of rework (had to add the missing feature flag after-the-fact, plus this audit). Risk of shipping incomplete code.
+- **Cause:** Conversation-summary over-reliance. The summary is a compressed orientation tool, not an authoritative source. I treated it as equivalent to having read the files themselves.
+- **Prevent next time:** Treat conversation summaries as "directional hints" only. Before any code change, verify the actual file state by reading it. Always run Entry Steps (kickoff → memory → protocol) at session start regardless of what the summary says.
+
+---
+## 2026-07-20 — Claude Code / claude-opus-4-8 (Session 23 — betb2b e2e + compression)
+- **Problem:** The task ("make sure it runs e2e and all endpoints collect data") cannot be fully satisfied on-demand: every betb2b feed is geo/WAF-gated and depends on the operator's Kenya proxy tunnel (bore.pub:1074), which was down (TCP conn refused). No sandbox/local egress can substitute.
+- **Cost:** ~5 min confirming the blocker (TCP probe + reading the last validate summary) before pivoting to the offline-verifiable slice + the compression deliverable.
+- **Cause:** Live validation is inherently operator-gated (residential/allowed-country egress). The proxy is an ephemeral tunnel, up only when the operator runs it on their Windows box.
+- **Workaround / fix:** Verify everything offline (tests, CLI JSON shape, compression); ship the compression feature; report the live blocker with the exact resume command. Left `tasks/current.md` pointing at the blocker.
+- **Prevent next time:** Before promising a live betb2b run, TCP-probe bore.pub:1074 first (`socket.connect`); if refused, the tunnel is down — do the offline slice and hand the live step back to the operator with env vars + command.
+
+---
+## 2026-07-21 — GitHub Copilot / DeepSeek V4 Flash Free (Session 24)
+- **Problem 1 — Proxy assumption was wrong.** Sessions 9–23 all assumed linebet needed a proxy tunnel (bore.pub:1074) from Kenya. Session 23 was blocked entirely because "proxy tunnel down." Session 24 discovered that running *without* the proxy (`BETB2B_PROXY_URL` unset) works perfectly from Kenya — linebet's `allowed_countries: ["KE"]` allows direct Kenya egress. The proxy assumption persisted unexamined for 15 sessions.
+- **Cost:** At minimum Session 23's entire live e2e goal was abandoned (~30 min). Prior sessions may have been slowed by proxy setup/teardown overhead. Unknown sessions where the operator was asked to start a tunnel unnecessarily.
+- **Cause:** The proxy was declared in the original skin YAML config as the default, and "linebet needs proxy" became accepted truth. No one tried running without it — the env vars were always set, so the code never exercised the direct path. Also, no test/doc explicitly said "try without proxy if your egress is in an allowed country."
+- **Workaround / fix:** This session ran without any proxy env vars. Scrape succeeded (28 prematch events, 63.6s). Added `BETB2B_PROXY_URL` docs in AGENTS.md saying it's optional.
+- **Prevent next time:** Before declaring a site unreachable, try direct mode first — especially for `allowed_countries` skins. The proxy is a fallback, not a requirement. Document in `AGENTS.md` for each skin whether direct mode works from which egress.
+- **Problem 2 — CLI argparse `%` formatting bug.** The `--compress` help string `"~85-90%"` causes `ValueError: badly formed help string` because Python argparse interprets `%` as format specifiers. This bug was shipping since the compress feature was added (Session 23), blocking ALL CLI commands. Not caught by tests (no CLI smoke tests).
+- **Cost:** ~5 min to diagnose + fix once a CLI command was actually run. Could have been caught by a single integration test.
+- **Cause:** No test exercises the CLI entry point. The `%` literal needs `%%` in argparse help strings — a known Python pitfall.
+- **Workaround / fix:** Changed to `"~85-90%%"`. All CLI commands now work.
+- **Prevent next time:** Add a CLI smoke test that calls `parser.parse_args(["--help"])` or similar for each subcommand. Better yet, add a single integration test that runs `python -m src.sites.betb2b.cli.main --help` and verifies exit code 0.
+
+---
+## 2026-07-21 — Claude Code / claude-opus-4-8 (Session 25 — betb2b live DOM + markets)
+- **Problem 1 — wrong CLI entry point in the handoff (silent no-op).** Both `tasks/current.md` (Session 25 setup) and the Session 24 inefficiency "prevent next time" recommend `python -m src.sites.betb2b.cli.main`. But `cli/main.py` has NO `if __name__ == "__main__"` guard — running it as a module executes nothing and exits 0 with zero output. The real entry point is `python -m src.sites.betb2b.cli` (the package `__main__.py`). Ran the "correct-looking" command 3× getting empty output + exit 0 before checking for `__main__`.
+- **Cost:** ~10 min chasing "why does the CLI print nothing?" across three invocations + reading argparse/dispatch/footer.
+- **Cause:** A wrong invocation got written into project memory (current.md + an inefficiency's prevent-next-time) and propagated. `.cli.main` *looks* right (it's where `BetB2BCLI` lives) but isn't runnable as `-m`.
+- **Workaround / fix:** Use `python -m src.sites.betb2b.cli`. Corrected the command in `tasks/current.md` + backlog. Left a NOTE in the new backlog items.
+- **Prevent next time:** When a `-m` module invocation exits 0 with NO output, suspect a missing `__main__` guard — check `python -c "import runpy"`-style or just `grep __main__`. And: a console-script entry in `pyproject.toml` would remove the ambiguity entirely (backlog candidate).
+- **Problem 2 — handoff over-scoped the GetGameZip work.** `current.md` Phase 2 said enrichment "is NOT running... add `_enrich_with_markets()` mirroring `_enrich_with_h2h()`." It already existed (`_enrich_dom_events_with_odds`, wired + default-on) — the real issue was a one-line skip-condition bug. Reading the code (Phase 1) surfaced this quickly, so low cost, but the plan would have had me build a duplicate method.
+- **Cost:** ~0 (caught during mandatory code-read) — noted so future handoffs verify "missing feature" claims against the code before scoping a rebuild.
+- **Prevent next time:** A handoff claiming a feature is missing should cite the grep that proves absence; "0 fetched" is a symptom, not proof the code path doesn't exist.
+- **Problem 3 — bore proxy dropped mid-session.** `bore.pub:50670` was up for the captures + GetGameZip fetches, then dropped to HTTP 000 and did not recover, blocking the *integrated* end-to-end run. Consistent with the standing "tunnels rotate" warning.
+- **Cost:** ~5 min of retries; the integrated confirmation is now backlogged.
+- **Prevent next time:** Capture all live artifacts you'll need (HTML + a few real GetGameZip responses) in ONE proxy window early, so later code validation doesn't depend on the tunnel staying up. (Did this — every fix was validated from the early captures.)
+
+---
+## 2026-07-21 — Claude Code / claude-opus-4-8 (Session 25 addendum — CLI entry points)
+- **Problem:** Third CLI entry-point defect of the session. flashscore's
+  `python -m src.sites.flashscore.cli` crashed (`'list' has no attribute
+  'config'`) — `__main__.py` passed raw argv to a `run()` that wanted a parsed
+  Namespace. Earlier: betb2b `.cli.main` silently no-ops (no `__main__` guard),
+  and the handoff recommended that wrong command. A pattern: the per-site CLI
+  packages have inconsistent, partly-broken `-m` entry points, and only the
+  `src.main <site>` dispatcher is reliably wired.
+- **Cost:** ~5 min each to discover (they fail in different ways — silent
+  no-op vs AttributeError vs works-only-via-dispatcher).
+- **Cause:** No CLI smoke tests across sites; each site's `cli/__main__.py`
+  was hand-written differently. `run()` signatures differ (some take argv,
+  some take a Namespace), so a copy-paste entry point breaks.
+- **Workaround / fix:** Fixed flashscore (`6b5ae82`) + added an AST regression
+  test. betb2b's real entry point is `-m src.sites.betb2b.cli`.
+- **Prevent next time:** Add a parametrized smoke test over every site CLI —
+  `subprocess: python -m <site.cli> --help` (or `src.main <site> --help`)
+  asserting exit 0. Would catch all three at once. Backlog candidate. And:
+  standardize on ONE invocation convention (`python -m src.main <site>`) +
+  register betb2b there so there's a single documented path.
+
+---
+## 2026-07-21 — Claude Code / claude-opus-4-8 (Session 25 — re-probing the feed 406)
+- **Problem:** Re-investigated the list-feed 406 (can we bypass it via browser+endpoint?) before fully absorbing that ADR-4 already answers it. The operator corrected me: "read the context — the hidden headers + 406 are documented." ADR-4: the feed moved into the `ivpn-sw.js` service-worker context; it injects a rotating `x-dt` header; decision = don't chase it, use DOM/HTML extraction.
+- **Cost:** ~30 min of live proxy probes re-confirming known facts.
+- **Extra finding (worth keeping so nobody repeats it):** attempted ADR-4's suggested capture (Playwright `context.new_cdp_session` + `Target.setAutoAttach{flatten:true}` + `Network.enable`) to grab the SW feed request/headers. It captured **0** — Playwright Python does NOT surface flattened child-session (service-worker) Network events on the parent CDPSession, and `context.on("response")` / in-page fetch hooks also see nothing. Truly tapping the feed needs **raw CDP over the DevTools websocket** with manual sessionId routing (outside Playwright). Given ADR-4 says don't chase it, this is not worth building. The raw page HTML (browser-free) carries the full card (~38 live-basketball ids) and is the practical equivalent of the feed's output.
+- **Prevent next time:** For any betb2b feed/406/header question, read ADR-3 → ADR-4 + RECON.md FIRST. The `x-dt`-rotation dead-end is settled; the supported path is HTML-harvest (discovery) + GetGameZip (per-match).
+
+
+---
+## 2026-07-22 — GitHub Copilot / DeepSeek V4 Flash Free (Session 27 — H2H scope bug)
+
+- **Problem:** Validated the exporter's data format, field presence, and
+  individual score correctness — but NEVER simulated what the engine would
+  compute from that data. The engine's s02 always sums home+away. For team-total
+  scopes, the exporter sent both teams' full match scores, producing full game
+  totals vs individual lines. The verify script showed "3 above, 3 below" for
+  AWAY_TEAM_TOTAL (correct human reading), but the engine saw full match totals
+  and returned OVER HIGH.
+- **Cost:** ~45 min of tracing the cross-repo pipeline (engine s01→s10, exporter
+  code, verify script) before finding the root cause. Plus the wasted session
+  time before the user challenged the predictions — the bug existed since the
+  exporter was built (Session 26 continued, commit `fb4b41d`).
+- **Cause:** Verification was structural, not semantic. I checked: is the field
+  present? Is it a number? Does the H2H count match? Does the line look right?
+  But I never checked: "What would the engine compute from this?" The engine's
+  sum-invariant was invisible in the verification pipeline.
+- **Workaround / fix:** Zero-out logic in `_h2h_for_scope()` (`20eda23`).
+  The fix is 4 lines. The bug took 45 minutes to find because the mental model
+  was "exporter produces correct-looking data" → "engine must be wrong" —
+  but it was the exporter violating an invariant the engine assumes.
+- **Prevent next time:**
+  1. When building a pipeline where data crosses repo boundaries, ALWAYS
+     simulate the downstream computation in the verification step. For the
+     exporter, that means: produce a PredictRequest, compute home+away, and
+     assert the sum equals the scope-relevant score.
+  2. Add a "data contract" test file that parametrizes over all 9 scopes and
+     asserts the engine-visible invariant for each.
+  3. When the user challenges a prediction, trace the full pipeline starting
+     from the RAW database values, not from the exporter output. The raw DB
+     values were correct — the bug was in the transformation layer. If I had
+     started from "what scores are in the DB for this event?" rather than
+     "what does the exporter output look like?", I'd have found it faster.
+
+
+---
+## 2026-07-22 — GitHub Copilot / DeepSeek V4 Flash Free (meta-inefficiency — not following AGENTS.md while writing .context docs)
+
+- **Problem:** Wrote flaw and inefficiency entries about "validated format not
+  semantics" while simultaneously violating the AGENTS.md/kickoff.md protocol
+  in the same session. Skipped entry steps (pull, context-sync, read order,
+  protocol load), went straight to editing. The documentation content is correct,
+  but the process violation means I can't be sure I didn't miss something — same
+  failure class as the code bug.
+- **Cost:** ~5 min for the user to point it out + this follow-up. More importantly:
+  erodes trust that the `.context/` documentation is reliable, since it was written
+  by an agent that didn't follow the protocol for writing it.
+- **Cause:** The conversation summary described the task as "update .context/memory/
+  files" — I treated the summary as the instruction set and skipped the entry steps
+  because they weren't in the summary. The summary is a reference, not a protocol.
+- **Workaround:** None — the protocol is correct. The fix is to run entry steps
+  before any work, every session.
+- **Prevent next time:** When any task says "update .context/" — that's a session
+  like any other and must start at kickoff.md Step 1. `.context/` work is not
+  exempt from the protocol. Add a personal reminder: if I'm about to edit
+  `.context/memory/`, the FIRST thing to do is run the entry steps — NOT read
+  the files I plan to edit.
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28)
+- **Problem:** The betb2b test suite is not where any documentation says it is. AGENTS.md gives `pytest tests/ -k "betb2b"`; the Session 27 handoff said "add to the existing betb2b test suite" and its write-up referenced `tests/unit/betb2b/`. Neither exists — the suite is `src/sites/betb2b/tests/`, next to the code. The documented command collects nothing AND dies on 15 unrelated pre-existing collection errors under `tests/`, which reads like the suite is broken rather than absent.
+- **Cost:** ~10 min of `ls`/`find` across three wrong locations before grepping the filesystem for `test_*betb2b*`.
+- **Cause:** Tests were placed next to the code (a reasonable choice) and no doc was updated to match.
+- **Workaround / fix:** `.venv/bin/python -m pytest src/sites/betb2b/tests/ --no-cov` — 173 tests, 3.5s, no hangs. Corrected AGENTS.md (`9942014`) and recorded it in `system/environments.md`.
+- **Prevent next time:** When a suite lives outside `tests/`, the path belongs in the environment block's verified commands, not only in prose. Done.
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28, second entry)
+- **Problem:** A feature can be fully implemented, mapped, unit-tested and documented in an ADR while being impossible to execute. `_enrich_with_subgames` (ADR-7 sub-games) had all four and had never run once: its feature flag defaulted off, no skin set it, no flag exposed it. Two sessions reported per-scope results that the code could not have produced.
+- **Cost:** Not this session's — Session 27 spent an entire investigation (7 throwaway scripts, a full re-scrape, a re-ingest) on an asymmetry inside data that never contained the scopes it was reasoning about.
+- **Cause:** Each layer was verified against the layer it was written next to. Nobody ran the composition. The unit tests construct market dicts with `scope` already set, which is exactly the value production never produced.
+- **Workaround / fix:** `--subgames` on `scrape`/`poll` (`5f6e6db`), plus a stderr note when `--ingest` runs without it stating which scopes are actually going.
+- **Prevent next time:** ADR-9 — every pipeline gets at least one assertion over its composition, not only its parts. And the tell to watch for: **when every test for a component builds that component's input by hand, ask what builds it in production.** That question is what found this.
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28, third entry)
+- **Problem:** `timeout 300 <cmd>` — reflex habit from Linux — fails on this Mac with "command not found" (no coreutils, no Homebrew).
+- **Cost:** One wasted tool call.
+- **Cause:** macOS ships no GNU `timeout`; the environment block didn't say so.
+- **Workaround / fix:** pytest's own `--timeout=`, or the harness's per-call timeout.
+- **Prevent next time:** Added to the Baos-Mac-mini quirks in `system/environments.md`.
+
+---
+## 2026-07-22 — Claude Code / claude-opus-4-8 (Session 28, fourth entry — live run)
+- **Problem:** Two sessions spent real effort on the "HOME_TEAM_TOTAL asymmetry" (Session 27: 7 throwaway scripts, a full re-scrape, a re-ingest; this session: the re-check it backlogged) when the answer was one field in the ingest response. `added=3` alongside 28 brand-new `(match_id, scope)` pairs says immediately that the store is not keyed by scope.
+- **Cost:** Session 27's investigation, effectively in full.
+- **Cause:** The ingest response summary (`total/succeeded/failed/added/updated/store_total`) was being read for pass/fail only. `added` vs `updated` describes the store's *keying*, which is exactly what "why did only 1 of 10 survive?" is asking about — and it was in the response body the whole time.
+- **Workaround / fix:** Read `added`/`updated` against the number of genuinely-new `(match_id, scope)` pairs you sent, then confirm with `/api/predictions`. Two minutes, conclusive: 11/11 matches store one record, always the last scope sent.
+- **Prevent next time:** When a downstream store "loses" records, compare what you sent against what its own write summary claims it did, before hypothesizing about the sender. Cheapest possible discriminator — and it points at the key, which is usually the answer.
+
+---
+
+## 2026-07-25 — Z.ai Code / unknown (Session 29)
+- **Problem:** `tests/integration/test_feature_flag_api.py` and `test_audit_api.py` fail at COLLECTION with `fastapi.exceptions.FastAPIError: Invalid args for response field! ... FailureService is a valid Pydantic field type`. This blocks the entire adaptive/API integration suite from running on this sandbox.
+- **Cost:** Could not run the adaptive/API integration tests as a regression guard for the ADR-11 adaptive-repository refactor (3-b). Fell back to: betb2b suite (173, green) + core_db tests (11, green) + a smoke-test that all 10 refactored repository classes construct on :memory:/file/env-override.
+- **Cause:** Version drift. The installed fastapi is 0.140.0 (project pins only `>=0.110.0`); a newer FastAPI/Pydantic rejects `FailureService` (a service class, not a Pydantic model) as a response-model annotation. **Verified pre-existing via `git stash`** — reproduces on clean HEAD without this session's changes. NOT caused by the ADR-11 work.
+- **Workaround / fix:** None applied this session (out of ADR-11 scope). Fix is either pin fastapi to a version that accepts the annotation, or add `response_model=None` to the routes returning `FailureService`. Backlogged.
+- **Prevent next time:** When a test suite fails at collection (not assertion) on a sandbox, suspect version drift between the loose pins and the freshly-installed versions. `git stash` confirms pre-existing vs. introduced in <1 min.
+
+---
+
+## 2026-08-01 — Buffy (Freebuff) / deepseek-v4-flash (Session 35)
+- **Problem:** The `read_files` tool truncates large memory files at ~20k estimated tokens — `.context/memory/agents/sessions.md` and `tasks/backlog.md` both hit it this session, silently dropping their tails (the exact files kickoff Step 2 says to read last-3-5-entries from). I had to re-read the tails via `tail`/`grep` shell commands to see the recent Session 30–34 entries.
+- **Cost:** Two extra tool calls + the risk of acting on partial memory (the truncated read ends mid-entry, and it is not obvious the file was cut).
+- **Cause:** Tool-side token budget, not the repo. The biggest memory files (sessions.md ~40+ entries, backlog.md ~50 items) exceed it.
+- **Workaround / fix:** For kickoff Step 2 on this repo, read the tail of the big logs first (`tail -60 .context/memory/agents/sessions.md`), or grep the session number you care about.
+- **Prevent next time:** Read `.context/memory/agents/sessions.md` and `tasks/backlog.md` with a targeted `tail`/`grep` on this repo (they are the two files that exceed the read limit), not with a full-file read.
+
+---
+## 2026-09-06 — ZCode / GLM-5.3-Flash (Session 41)
+- **Problem:** `gates.conf` (initialized 2026-08-18 on the Mac) hardcodes POSIX venv paths (`.venv/bin/python`), so every `context-gates run` on Windows fails its configured command ("The term '.venv/bin/python' is not recognized...") even though the suite itself is green via `.venv/Scripts/python.exe`. The universal staged-diff checks pass; only the configured command fails.
+- **Cost:** one failed gate run to diagnose; manual gate-equivalent runs needed on this machine.
+- **Cause:** conf written per-machine when only the Mac ran sessions; the gates registry format has no OS-scoped command syntax.
+- **Workaround / fix:** on Windows run the configured commands manually: `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q` (session 41: 232 passed). Conf left unchanged so the Mac keeps passing.
+- **Prevent next time:** either (a) extend the gates registry format with per-OS lines (e.g. `windows|pre-commit|<cmd>`), or (b) point the conf at a small cross-platform wrapper script that picks `.venv/Scripts/python.exe` vs `.venv/bin/python` by OS. Upstream candidate for the gates registry format.
+---
+## 2026-09-07 — ZCode / GLM-5.3-Flash (Session 42)
+- **Problem:** The scheduled-only deploy default drifted: Procfile said `SCHED_LIVE_INTERVAL:-0` but `railway.worker.json` (the surface the Railway worker actually boots from) still said `:-15`. Memory + tasks/current.md recorded "live OFF" (from the Procfile) while production ran the live firehose for a month — the memory was right about intent and wrong about deployed state, and nothing could detect the divergence.
+- **Cost:** a full Supabase quota cycle (DB 28 MB → 1.67 GB; Fair-Use restrictions to 2026-09-27) plus the operator's diagnosis time.
+- **Cause:** the ADR-22 fix enumerated deploy surfaces by memory instead of by grep, and no test pinned deploy-config defaults.
+- **Workaround / fix:** `9cb7fcf` — all deploy surfaces default live OFF; `test_deploy_configs_default_live_off` pins Procfile + railway.worker.json; RAILWAY.md warns dashboard-set variables override config fallbacks.
+- **Prevent next time:** when a decision changes a default, grep the whole repo for every surface carrying it (Procfiles, railway.*.json, Dockerfile CMD, compose files) and add a test asserting the new default per surface — docs and memory don't enforce.
+---
+## 2026-09-07 — ZCode / GLM-5.3-Flash (Session 43)
+- **Problem:** the gates.conf Windows trap (logged 2026-09-06, Session 41) re-cost a gate run this session: `context-gates run pre-commit` fails its configured pytest command (`.venv/bin/python` is a POSIX path) on this machine, so every gate invocation ends FAILED (127) even when the suite is green.
+- **Cost:** one failed gate run + one manual equivalent run per commit boundary (~1 min total this session).
+- **Cause:** gates.conf has no per-OS command syntax; the conf is shared with the Mac.
+- **Workaround / fix:** run `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov` manually and record the result (247 passed this session); conf left untouched so the Mac keeps passing.
+- **Prevent next time:** the fix belongs to the gates registry format (per-OS lines or a wrapper script) — upstream candidate, still open from Session 41.
+---
+## 2026-09-08 — Alex (S443) / GLM-5.3-Flash (Session 45)
+- **Problem:** Two friction points during the secret sweep. (1) Bash `grep -E` pattern batteries on Git Bash/Windows silently dropped matches for quoting-heavy patterns (URL-embedded credentials) — the same patterns found everything when re-run from a Python driver; a naive agent would have reported "clean" on the strength of the first battery. (2) `context-mem.cmd lint` produced no output at all when run standalone (exit fast, nothing printed) — unusable as a pre-commit check on this machine; had to self-police the `.context`-vocabulary-in-product rule instead.
+- **Cost:** ~15 min of double-work re-running the battery in Python after noticing the first pass's holes; the lint check is simply unavailable here.
+- **Cause:** (1) nested single/double-quote escaping in Git Bash on Windows mangles complex `-E` alternations. (2) Not diagnosed (time-boxed); possibly the ps1 port expects args differently than `check`.
+- **Workaround / fix:** for any secret/regex sweep on this machine, drive `git ls-files` / `git cat-file --batch` from a short Python script (see session 45's `.triage_s443.py` / `.hist_scan_s443.py` pattern, deleted post-session); skip `context-mem lint` and review staged product diffs manually for `.context` vocabulary.
+- **Prevent next time:** record the Python-driver pattern as the standard sweep method here; upstream, `context-mem lint` deserves a Windows runtime pass (same category as the gates.conf trap).
+---
+## 2026-09-08 — Sam (S442) / GLM-5.3-Flash (Session 44 cont.)
+- **Problem:** Advised the operator (twice — Session 42 report and the pause-assessment turn) that "the dashboard SQL editor keeps full access / pruning does NOT have to wait". The operator's TRUNCATE attempt returned 25006 — the SQL editor is subject to the same instance-level `default_transaction_read_only=on` as every other connection. Cost: one failed operator attempt + a correction turn.
+- **Cost:** ~one operator round-trip; minor credibility damage to agent advice.
+- **Cause:** I over-read Supabase's quota email ("full access through the dashboard") as including SQL writes; the correct fact was already in ADR-21 (§2/§4): the August wipe needed a one-off `SET TRANSACTION READ WRITE` override, and "the SET TRANSACTION READ WRITE gotcha is real for any tooling that writes through the pooled Supabase role".
+- **Workaround / fix:** the override IS the path (see tasks/current.md operator block): session-level `SET default_transaction_read_only = off;` (or `BEGIN; SET TRANSACTION READ WRITE; … COMMIT;`), then TRUNCATE. Session-scoped only — the ADR-21 prohibition on `ALTER DATABASE … default_transaction_read_only=off` (persistent, platform-wide) stands.
+- **Prevent next time:** before telling the operator any write path works on a restricted store, check ADR-21's playbook first — it already contains the working override and the gotcha note. Over-reading marketing language in provider emails ("full access") over the repo's own field-tested notes was the mistake.
+---
+## 2026-09-08 — Kai (S444) / GLM-5.3-Flash (Session 46)
+- **Problem:** `pytest -q` summary line ("N passed in Xs") does not survive the Git Bash pipe on this machine — `pytest ... | tail -3` shows only progress dots, and `grep passed` matched nothing, so the standard one-shot evidence command reported nothing.
+- **Cost:** two extra pytest invocations (~1 min) before falling back to exit code + dot count.
+- **Cause:** output buffering/pipe behavior between pytest and the Git Bash capture; not diagnosed further (time-boxed).
+- **Workaround / fix:** run `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ --no-cov -q > file 2>&1`, then `echo "exit=$?"` + count dots/inspect the file — or just trust `exit=0` plus the dot count (3×72 + 35 = 251). Session 43's manual-gate-equivalent workaround still stands for the failing gates.conf command.
+- **Prevent next time:** when a suite run's summary text matters, redirect to a file; when only pass/fail matters, `echo $?` immediately after the run is sufficient evidence.
+---
+## 2026-09-14 — Leo (S445) / qwen3.8-flash (Session 47)
+- **Problem:** Standing up a dev env on the brand-new Lameck-Windows box took three install attempts. (1) `pip install -e ".[dev]"` refused outright: `requires-python >= 3.12` vs the machine's pythons (3.14 default, 3.11 secondary — no 3.12 present). (2) With `--ignore-requires-python`, the install died generating metadata for the **latest numpy**, whose meson build hard-rejects 3.11 — the flag cleared the *project's* floor but not dependency floors, and pip chose the sdist because numpy had stopped shipping cp311 wheels. (3) `PIP_ONLY_BINARY=:all:` + the flag finally worked by making pip backtrack to the newest numpy/scipy with 3.11 wheels.
+- **Cost:** ~2 failed installs (~4 min of wheel downloads burned on the first pass) before the working recipe.
+- **Cause:** operator directive to use py 3.11 against a 3.12-floor project; `--ignore-requires-python` is project-scoped only, a subtlety not recorded anywhere.
+- **Workaround / fix:** recorded the exact recipe + rationale in `system/environments.md` (Lameck-Windows block): `py -3.11 -m venv .venv` then `PIP_ONLY_BINARY=:all: pip install --ignore-requires-python -e ".[dev]"`.
+- **Prevent next time:** on any Windows box without a 3.12+ interpreter, go straight to the recorded recipe; and remember both gates are independent — the project floor needs the flag, dependency wheels need the binary-only policy.
+
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50)
+- **Problem:** Read `kickoff.md` at the start, then ran a very long product session without Phase 1 (memory read), roster check-in, gate checkpoints, `ledger-mem lint`, session log, ADRs or `current.md` — the operator had to ask "are you following ledger rules?" mid-session. Also ran `git reset --hard origin/main` (after the operator approved resetting) before reading the ledger, discarding 4 local commits (kept on `backup/pre-reset-main`), and used the stale helper names (`context-gates`) from the project's AGENTS.md.
+- **Cost:** a large retroactive ledger catch-up; the stale Session 49 lock went unnoticed, risking a clash with a live peer; ADR citations leaked into 3 product lines.
+- **Cause:** the task arrived as conversational requests ("let's work on the scraper"); AGENTS.md's pointer to the ledger was treated as a one-time read instead of a gate on every turn, and each follow-up looked "too small" for Phase 1 (Pitfall #28).
+- **Workaround / fix:** caught up: roster, gates (pre-commit green), `ledger-mem lint`, ADR-26/27, session entry, backlog; stripped own leaks.
+- **Prevent next time:** on ANY session in a ledger repo — before the first edit — check in on the roster, run `ledger-gates checkpoint`, read `tasks/current.md` for a live lock, then proceed; run `pre-commit` + `ledger-mem lint` before each product commit. AGENTS.md still names `context-gates`/`.context/...` in places — the real helpers are `ledger-*`.
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50, addendum)
+- **Problem:** the first wrap-up used the wrong shapes: backlog items appended as legacy checkboxes (the schema wants priority-table rows with `B-<date>-<n>` IDs), no review report, no `ai-models`/`preferences` update, "Report: none", and a second session entry would have been appended instead of editing the first; also placeholders (`aa…`) in a commit list. Separately, a regex-based bulk strip of 262 comment citations left six broken sentences (`retires's`, `the's market`, stray `)`, `(backlogged —)`, `(addendum)`, `(point 3)`) that no test can catch.
+- **Cost:** a second full bookkeeping pass; manual line-by-line diff review.
+- **Cause:** wrote the memory entries from memory of "what a session entry looks like" instead of re-reading Phase 5 and the schema first; trusted a mechanical rewrite.
+- **Fix:** re-read Phases 4–6 + `ledger-schema.md`, re-did the wrap in the right shapes; reviewed the whole diff and fixed each broken sentence.
+- **Prevent next time:** before the wrap-up, re-read Steps 13–19 and the backlog/registry schemas (the Exit checklist rule); after any bulk text rewrite, read the full `git diff` of the added lines — tests don't cover prose.
+- **Gate slip (same session):** ran `ledger-gates run pre-commit` inside a `;`-chained command, so a FAILED gate (`git diff --cached --check`: blank lines at EOF in two staged memory logs) did not stop the following `git commit`/`git push` of an unrelated product file. The product commit itself was clean (tests + lint passed, only its two paths committed) but the rule is: a failing gate blocks the commit. **Prevent:** always `&&`-chain the gate before the commit, and read its output, not just the pytest line.
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50, correction to the 2026-07-17 linebet WAF entry)
+- **Problem:** the 2026-07-17 entry ("Linebet WAF block: datacenter-IP fingerprinting, not geo-blocking") was repeated as fact this session ("not geography"). In the browser the website redirected to `/en/block` — "This website is not available in your country" (US IP). The same entry's own data (US proxies blocked, Kenyan egress worked) pointed to a country rule.
+- **Cost:** a wrong explanation given to the operator, who had said "it's geo-blocked" from the start.
+- **Cause:** trusted a recorded conclusion over the page the site actually shows; didn't open the site in a browser until the operator did.
+- **Fix:** ADR-28 records the two layers (country block on the website; Gcore WAAP browser validation for non-browser clients).
+- **Prevent next time:** when a site blocks a client, look at what a real browser sees (screenshot) before deciding the cause; treat recorded root causes as hypotheses.
+---
+## 2026-10-02 — Noor (S449) / claude-sonnet-5-5 (Session 51, `src.browser` import prints to stdout)
+- **Problem:** importing `src.browser` (even `src.browser.profiles`) runs the framework's structlog setup, which writes `[debug] Retry config registered …` lines to **stdout**; the betb2b CLI prints JSON on stdout, so a top-level import in `session.py` broke `test_documented_module_entry_points_actually_run` (`JSONDecodeError: Extra data`).
+- **Cost:** one failed suite run + a diagnosis round.
+- **Cause:** betb2b had never imported `src.browser`; the package `__init__` pulls in resilience/logging that print on import.
+- **Fix:** lazy import inside `BetB2BSessionManager.profiles` / `_open_page`.
+- **Prevent next time:** in `src/sites/betb2b/` import `src.browser.*` lazily (and keep `src/security/` free of it); run the CLI-entrypoint test after adding any new top-level import.
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50, open-items round)
+- **Problem:** direct mode sent ~20 requests/second and the betb2b hosts then refused TCP connections from the dev machine for tens of minutes — repeatedly across the day. It was explained at various points as "sites dead", "burst throttling" and "geo-block" without measurement; the real number only surfaced when a live run logged 164 match requests in ~8 s. Cause: `client.py` disables its serial spacing in direct mode ("the semaphore is the throttle"), but a semaphore bounds requests IN FLIGHT, not PER SECOND.
+- **Cost:** most of the day's live runs hit a refusing host; two scrapes that "worked" were followed by an hour of unreachability each; confusion about the sites' state.
+- **Fix:** per-skin `Pacer` (`BETB2B_MAX_RPS`, default 3/s) shared by the feed client and the direct calls (ADR-30).
+- **Prevent next time:** before blaming a site, compute the request rate your own run produced (requests ÷ seconds from the log). After any change to concurrency or spacing, check requests/second, not just worker count. Connection timeouts that start right after a run are usually the sites dropping YOUR address.
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50, import-health round)
+- **Problem:** found a `SyntaxError` in `src/sites/base/plugin_permissions.py` during an unrelated task, said it was "not mine / pre-existing" and logged it to the backlog instead of fixing it. The operator asked whether the rules say to leave things because they are not my problem. They do not: the standing scope is "discovery + review + fix all safe issues". The file was the tip: ~100 of 756 `src` modules could not be imported, for ~25 reasons, and no test noticed.
+- **Cost:** the fix came a few hours late and only after being challenged; two earlier checks (`compileall` on the packages I was touching, then `ast.parse` over the tree) missed it — `ast.parse` accepts a repeated keyword argument that `compile()` rejects, and `compileall -q` stops at the first error per file.
+- **Cause:** a "not my change" reflex instead of the rule; and scoping every check to the packages under edit.
+- **Fix:** repo-wide import sweep -> fixed the safe causes, flagged the design ones, added a smoke test with an explicit known-broken list (ADR-31).
+- **Prevent next time:** on any session, run an import sweep (or the smoke test) once at the start and after bulk edits; check with `compile()`/real import, not `ast.parse`; "pre-existing" is a reason to LOG a finding only when it needs design — otherwise fix it. After fixing an un-importable module, read its function bodies too (`ruff --select F821`): behind a SyntaxError there are usually runtime NameErrors.
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50, diagnostics round)
+- **Problem:** after clocking out (roster row removed, `current.md` idle) I kept working on the operator's follow-ups — snapshot/telemetry wiring, retention — and committed product code without checking back in. Same slip as the earlier clock-out entries.
+- **Cost:** commits 1fb28d0..6ac6c27 landed while the board said nobody was in the office; a peer reading it would have believed the repo idle.
+- **Fix:** logged here; session entry Follow-up 8 records the work; clocked out again at the end.
+- **Prevent next time:** a new operator message after clock-out is a new check-in: add the roster row and set `current.md` BEFORE the first edit, and clock out only when the operator says so ("clockout"), not after each report.

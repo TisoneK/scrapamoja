@@ -1,13 +1,32 @@
-# Session Summary (current group - prunable)
+# Session Summary (compressed history — entries are removable)
 
-One line per session: date, agent, model, one-line outcome. Closed groups
-are in .context/history/. Keep this small.
-- 2026-09-07 — ZCode — GLM-5.3-Flash — Deploy regression fixed: `railway.worker.json` booted the worker with live ON since Aug (missed by the scheduled-only fix) → Supabase re-filled to 1.67 GB, restricted to Sep 27; all deploy surfaces now default live OFF, pinned by `test_deploy_configs_default_live_off`; operator must delete a stale dashboard `SCHED_LIVE_INTERVAL` var.
-- 2026-09-07 — ZCode — GLM-5.3-Flash — Shipped the local fallback store (`ce24540`): Supabase write failures (quota read-only 25006 / connection outages) now fail over to a local SQLite mirror with a FIFO outbox; a throttled write-probe flips back and replays idempotently when the primary recovers — no more dropped writes during a restriction window (ADR-24).
-- 2026-09-08 — Sam (S442) — GLM-5.3-Flash — Quota monitor + auto-prune shipped (`0398c94`, ADR-25): hourly pass reads primary pg_database_size, warns at 80%, prunes fact history older than 7 days at 92% (events/results kept); CLI `quota` one-shot; suite 251. Collab: answered Alex (S443)'s sweep note. Operator 1.67 GB prune still pending.
-- 2026-09-08 — Alex (S443) — GLM-5.3-Flash — Secret-leak sweep of the public repo: found a real bore.pub proxy user:password committed 9× in 8 files (public since Jul 18); redacted all occurrences in current tree (`0053b9e` product, `452adac` memory) and scanned all 5,930 history blobs — otherwise clean. Operator must rotate the credential (history keeps the old value); pre-commit secret scanner + optional filter-repo purge backlogged. Collab: coordinated with Sam (S442) via notes on issue security-scan.
-- 2026-09-08 — Kai (S444) — GLM-5.3-Flash — Context sync: core 0.16.1→0.17.0 migrated + verified (universal roster check-in era begins); kickoff/AGENTS digests refreshed; missing `memory/collaboration/README.md` installed (backfill gap, flaw logged). Context-only — no product code; peer's quota escalation interleaved cleanly.
-- 2026-09-14 — Leo (S445) — qwen3.8-flash — Context sync + repo init on a new machine (Lameck-Windows): fresh clone synced to `5ec14bf`, core 0.17.0 verified (no update), py 3.11 venv per operator directive (two-flag recipe recorded), baseline suite **253 green**. Context-only — no product code.
-- 2026-09-14 — Miles (S446) — qwen3.8-flash — Context sync → correction → **the Context Ledger migration**: sync pass checked only local signals (flaw logged; operator corrected), the real upstream `TisoneK/context-ledger` held a MAJOR; on the operator's "Migrate" the core went **0.17.0 → 1.1.1 → 1.1.2** — dir `.context/`→`.context_ledger/`, tools `ledger-*`, memory regrouped into `memory/office/`, entry points regenerated, backlog closeout swept 23 tombstones; suite **253 green** pre & post. Context-only — no product code. Report: `office/reviews/2026-09-14-review-3.md`.
-- 2026-10-02 — Ada (S448) — claude-sonnet-5-5 — Local-SQLite-default scrape + optional Neon store, scrape-once `--skip-processed`, retry+skin fallback, DB audit fixes (relist `superseded_by`, sub-game/placeholder filters, stat ids), offline e2e test that caught 3 bugs, 262 ADR citations stripped from product code (ADR-26/27). Live sites unreachable at the end → live verification open; protocol slips corrected in-session. Open-items round: direct calls guarded, shared rest + budget, per-second pacing after a ~20 req/s burst got the IP dropped (ADR-30), `reset` command; post-pacing live check pending. Later: egress wording neutralised; import-health sweep 100 -> 13 unimportable modules + guard test (ADR-31); paced live run clean, stat ids resolve, outright/placeholder listings skipped at discovery.
-- 2026-10-03 — Achieng (S451) — deepseek/deepseek-flash — Kenyan-machine linebet session: measured the Gcore challenge contract, fixed the dropped session cookies in the harvested Cookie header (`ec05ca0`) and the burst-per-response guard ladder burn (`fb32cd1`), added a pre-harvest grid wait; betwinner/22bet persisted from this machine, linebet live re-verification open (address rested).
+One compact entry per session, newest at the bottom. Unlike
+`agents/sessions.md` (the formal registry, append-only forever), this
+file is a **working summary**: entries may be removed when a session is
+no longer useful, and older detail is expected to compress over time.
+
+The purpose is **continuity, not archival completeness**. A future agent
+should understand at a glance what important work happened recently,
+what significant decisions were made, and where to find detail if needed.
+
+Entries are separated by `---` so agents can parse them as discrete
+records.
+
+<!-- TEMPLATE — copy below the last entry:
+---
+- **YYYY-MM-DD — Session N** — <agent> / <model> — <one-line outcome>.
+  <Key decision or discovery, if any.>
+  Detail: .context_ledger/memory/office/sessions/YYYY-MM-DD-N/notes.md (or \"summary only\").
+-->
+
+<!-- GC GUIDANCE (not part of the template — remove this comment before committing):
+- Keep all entries from the last ~10 sessions.
+- Older entries: distill key facts into the durable logs (decisions,
+  inefficiencies, backlog) if they haven't been promoted already, then
+  remove the summary line. The compact entry in agents/sessions.md is
+  the permanent record that the session happened.
+- Never let SUMMARY.md become another giant history file — if it exceeds
+  ~40 lines, it's time to compress.
+- A removed summary line MUST have a corresponding permanent entry in
+  agents/sessions.md — never delete the only record of a session.
+-->

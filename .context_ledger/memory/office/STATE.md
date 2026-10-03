@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-03T16:50:06Z_
+_Regenerated: 2026-10-03T16:54:51Z_
 
 ## Standing params
 - **Core:** 2.0.3 (locked, verified 2026-10-03)
@@ -15,22 +15,21 @@ _Regenerated: 2026-10-03T16:50:06Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Kai** (S447) — Done — Operator: env-only switch to run workers locally during the Supabase pause
-- **Mei** (S450) — Done — Engineer: full market/odds/H2H capture build
+(office empty — no live roster rows)
 
 ## Current task
-(idle — no task recorded)
+- **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
-| B-2026-10-03-6 | **linebet live re-verification with the fixes in place, in a rested window.** The cookie-header fix (`ec05ca0`), the burst-halt (`fb32cd1`/`6fa14bb`) and the pre-harvest grid wait are in but not yet proven end-to-end: tonight's address was rested by the guard after repeated challenges. Run the stored run (`scrape linebet scheduled --sport basketball --timeout 3600`), then a second run with no person present, then watch `python -m src.security status` and the per-skin rows from the Kenya brief's section 7 query. Also re-run **melbet** (its loop run was killed mid-scrape by mistake; earlier data intact). |
-| B-2026-10-03-4 | Run the H2H backfill and sub-game capture against Neon and watch request volume: sub-games cost up to ~12 requests per new event (was 1). Confirm the Postgres `ALTER`s for `odds_snapshots.subject/period` and the new `coverage` table applied (they run on connect; verify the schema). Existing stored events keep no sub-game odds until re-fetched — decide whether to refresh upcoming ones. |
+| B-2026-10-03-1 | **linebet live re-verification with the fixes in place, in a rested window.** The cookie-header fix (`ec05ca0`), the burst-halt (`fb32cd1`/`6fa14bb`) and the pre-harvest grid wait are in but not yet proven end-to-end: tonight's address was rested by the guard after repeated challenges. Run the stored run (`scrape linebet scheduled --sport basketball --timeout 3600`), then a second run with no person present, then watch `python -m src.security status` and the per-skin rows from the Kenya brief's section 7 query. Also re-run **melbet** (its loop run was killed mid-scrape by mistake; earlier data intact). |
+| B-2026-10-03-2 | Run the H2H backfill and sub-game capture against Neon and watch request volume: sub-games cost up to ~12 requests per new event (was 1). Confirm the Postgres `ALTER`s for `odds_snapshots.subject/period` and the new `coverage` table applied (they run on connect; verify the schema). Existing stored events keep no sub-game odds until re-fetched — decide whether to refresh upcoming ones. |
 
-_15 medium, 6 low priority row(s) — see tasks/backlog.md_
+_14 medium, 4 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 19 entries, last added 2026-10-02
-- inefficiencies/log.md (project code/env friction): 36 entries, last added 2026-10-02
-- plans/decisions.md (ADRs in force — respected, not relitigated): 38 entries, last added 2026-07-28
+- flaws/log.md (protocol/.context_ledger friction): 0 entries
+- inefficiencies/log.md (project code/env friction): 0 entries
+- plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-10-03
 
 ## Collaboration
 - 2 event(s) on file; most recent: `20261003T162900Z-S451-e500e76e.json`
