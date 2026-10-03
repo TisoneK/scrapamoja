@@ -31,3 +31,13 @@ names them), and roll-up candidates.
   a template, a rule>
 - **Status:** open | fixed in package <commit-sha or date>
 -->
+
+---
+## 2026-10-03 — Noor / claude-sonnet-5-5 (Session 1)
+
+- **Flaw:** a core migration done from memory of the protocol instead of the protocol: stale kickoff read, no edition read, check-in after reading, no claim/release, no gates, no upstream check, no flaw/preference/ai-models bookkeeping, and the migration reported "complete" three times while pieces were missing. The operator had to say so twice.
+- **Symptom:** `ledger-sync status` named a local sibling clone as the update source ("source: 2.0.3"), and that read as "current"; public upstream was already 2.0.4 (a Windows-port fix the operator's Windows box needed). `migrate` also leaves the root `AGENTS.md`/`CLAUDE.md` on the old shape without saying so.
+- **Root cause:** `status` reports the best *reachable* source without saying it may be stale, and `migrate` prints only a fill-facts list, not a checklist of what a finished migration includes (office close, entry-point regeneration, upstream check).
+- **Suggested fix:** `ledger-sync status` should print "local sibling clone — not checked against the package remote" when the source is a sibling directory; `migrate` should end with an explicit done-list (core version vs upstream, entry points regenerated or left, office size vs `office_size`).
+- **Status:** open
+

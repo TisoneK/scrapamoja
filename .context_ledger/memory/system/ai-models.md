@@ -17,7 +17,7 @@ accordingly).
 | Buffy (Freebuff) | deepseek-v4-pro | 2026-08-01 | 2026-08-18 | 2 |
 | ZCode | GLM-5.3-Flash | 2026-09-06 | 2026-09-08 | 4 |
 | ZCode | qwen3.8-flash | 2026-09-14 | 2026-09-14 | 2 |
-| Claude Code | claude-sonnet-5-5 | 2026-10-02 | 2026-10-02 | 1 |
+| Claude Code | claude-sonnet-5-5 | 2026-10-02 | 2026-10-03 | 3 |
 | ZCode | deepseek/deepseek-flash | 2026-10-03 | 2026-10-03 | 1 |
 
 ## Observations
@@ -53,3 +53,4 @@ Update in place when a newer session contradicts an old observation.
 - **Claude Code / claude-sonnet-5-5:** Model id taken from the agent's own system prompt (stated fact, not a guess). Session 50 — shipped the local-SQLite-default / shared-Neon betb2b pipeline and fixed what a read-only DB audit found, and its offline end-to-end test (replayed feed → real scraper → store → export, on both store backends) caught three bugs in its OWN earlier work, so recorded-feed replay is the check to trust when the live sites are unreachable. Limits shown: skipped most ledger steps for a long stretch until the operator flagged it; made an unverified "ids are identical across skins" claim and a wrong "table doesn't store sub-game ids" claim (both corrected by checking the data); a regex-based bulk comment edit broke six sentences that tests cannot catch — review the full diff. (2026-10-02)
 
 - **ZCode / deepseek/deepseek-flash:** Model id taken from the agent's own system prompt (stated fact, not a guess). Session 53 — the "Kenyan machine" linebet/Gcore session: designed and ran controlled live probes (fresh-context first/second-load matrix, cookie-subset matrix, timed clearance-lifetime rounds) and turned them into two real fixes (session cookies dropped from the harvested Cookie header; concurrent challenges walking the guard ladder once per response) plus a pre-harvest grid wait. Fixed three Windows-only baseline failures (store-fallback connect-timeout classification, a path-vs-name test assertion, the Pacer collapsing starts on Windows' ~15.6 ms timer). Operated the other skins from this machine (betwinner/22bet persisted). Limit to know: did not get linebet's live end-to-end verification done — the address was rested by the guard after the evening's challenge hits; the retry is backlogged. (2026-10-03)
+- **Claude Code / claude-sonnet-5-5:** Core 1.1.3 -> 2.0.4 migration (2026-10-03): needed two operator corrections — first pass skipped the protocol reads, gates, upstream check, office close and entry-point regeneration. Treat a "migration done" claim from this pairing as unverified until `ledger-sync verify`, `ledger-sync status` against the package remote and the exit gate are shown. (2026-10-03)

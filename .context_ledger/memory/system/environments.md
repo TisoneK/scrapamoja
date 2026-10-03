@@ -27,8 +27,9 @@ block (and its "last verified" date) every time you run on it again.
 > post-migration verified set.
 
 ---
-## Baos-Mac-mini (last verified 2026-10-02, session 50)
+## Baos-Mac-mini (last verified 2026-10-03, session 1)
 - **Identify by:** hostname `Baos-Mac-mini.local`, `$USER` = `bao`, workspace `/Users/bao/Code/scrapamoja`
+- **Ledger tools (verified 2026-10-03):** `sh .context_ledger/core/bin/ledger-sync|ledger-gates|ledger-mem|ledger-state|ledger-history` all run with POSIX `sh` on macOS; `sed -i` needs `-i ''`; no PowerShell engine, so the `.ps1` parse check is skipped in `verify`. The sibling `../context` clone can be behind the public package — compare with a fresh `git clone --depth 1 https://github.com/TisoneK/context-ledger.git` before trusting `ledger-sync status`.
 - **OS:** macOS 15.7.7 (build 24G720, Darwin 24.6.0), Intel **x86_64**
 - **Runtimes:** system python3 = 3.9.6 (too old); **project runtime = uv-managed CPython 3.12.13 in `.venv/`**; node v24.17.0
 - **Package manager:** **uv 0.11.28** at `~/.local/bin/uv` (installed 2026-07-12; not on default PATH — prefix commands with `export PATH="$HOME/.local/bin:$PATH"`). No Homebrew/pyenv/conda.

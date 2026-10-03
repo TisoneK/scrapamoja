@@ -62,6 +62,7 @@ correction twice.
 - Before investigating/probing a known problem (e.g. the betb2b feed 406), READ the context first (ADRs, RECON.md, backlog) — much is already solved and documented; don't re-derive it. The 406 root cause + decision is ADR-4 (rotating SW-injected `x-dt` header; don't chase it — use DOM/HTML-harvest) (correction, 2026-07-21)
 - "Sync context" means checking the **actual package upstream remote** — `TisoneK/context-ledger` (renamed from `TisoneK/.context`, 2026-09; now public). A `ledger-sync status` "no reachable source / this is fine" (pre-1.1.1: `context-sync`) is a LOCAL finding only; clone or `ls-remote` the recorded URL and compare core versions before claiming sync complete (correction, 2026-09-14)
 - Core MAJOR migrations (e.g. the 0.17.0 → 1.1.1 Context Ledger migration — applied 2026-09-14 on the operator's "Migrate") require the operator's explicit go-ahead — record availability, stop, don't apply (correction, 2026-09-14)
+- **Follow the protocol by reading it, not by remembering it** — on "Migrate ledger" the operator's words: I did not follow protocol "because you think you have mastered it". Read the current `kickoff.md` phase by phase and the edition before acting; run the gates; check the real upstream remote, not a sibling clone; do not call a migration done until the office is closed if due, entry points are regenerated, bookkeeping (flaw, preferences, ai-models, report, session entry, release) is written and the exit gate has run. One flaws entry per session, not one per slip (correction, 2026-10-03)
 
 ## Code style
 

@@ -30,3 +30,7 @@ records.
 - A removed summary line MUST have a corresponding permanent entry in
   agents/sessions.md — never delete the only record of a session.
 -->
+---
+- **2026-10-03 — Session 1** — Noor / claude-sonnet-5-5 — ledger core 1.1.3 to 2.0.4, office 001 closed and recorded, entry points regenerated.
+  First pass skipped the protocol (stale sibling source, no gates, no reads); redone properly after two corrections.
+  Detail: reviews/2026-10-03-review.md.
