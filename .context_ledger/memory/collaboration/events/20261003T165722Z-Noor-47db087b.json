@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261003T165722Z-Noor-47db087b",
+  "type": "claim",
+  "session": "S001",
+  "agent": "Noor",
+  "created": "2026-10-03T16:57:22Z",
+  "issue": "ledger-migration",
+  "body": "Noor (S001): finishing the 2.0.3 migration properly. Updating core to upstream 2.0.4, closing process gaps from my first pass (gates, lint, flaw log, preferences, ai-models). Ledger memory only; no product code.",
+  "paths": [".context_ledger/core", ".context_ledger/memory", "AGENTS.md", "CLAUDE.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

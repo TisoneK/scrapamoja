@@ -6,12 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 its roster row (if left behind) says who was here; check the session
 entry and backlog before starting.
 
-<!-- TEMPLATE — replace everything below this comment:
-- **Session:** YYYY-MM-DD — <agent> / <model>
-- **Task:** <what is being worked on right now>
-- **Status:** in-progress | done | blocked (<blocker>)
--->
-
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-10-03 — Noor (S001) / claude-sonnet-5-5
+- **Task:** operator: audit and finish the core migration properly — sibling clone was stale (upstream is 2.0.4), run the protocol phases and gates I skipped, log the flaw, record the correction
+- **Status:** in-progress
