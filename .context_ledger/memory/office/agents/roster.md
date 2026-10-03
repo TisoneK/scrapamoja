@@ -52,7 +52,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
-| Noor | S001 | claude-sonnet-5-5 | Operator: audit own 2.0.3 migration against the protocol (gates, reads, flaw log) | Working | Checked back in; re-reading kickoff phases 3-6 and the edition |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

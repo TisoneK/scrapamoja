@@ -5,17 +5,17 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-03T16:56:49Z_
+_Regenerated: 2026-10-03T17:00:22Z_
 
 ## Standing params
-- **Core:** 2.0.3 (locked, verified 2026-10-03)
+- **Core:** 2.0.4 (locked, verified 2026-10-03)
 - **Target:** general sweep
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Noor** (S001) — Working — Operator: audit own 2.0.3 migration against the protocol (gates, reads, flaw log)
+(office empty — no live roster rows)
 
 ## Current task
 - **—** — none — no session in progress — *idle*
@@ -27,10 +27,10 @@ _Regenerated: 2026-10-03T16:56:49Z_
 _14 medium, 4 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 0 entries
-- inefficiencies/log.md (project code/env friction): 0 entries
+- flaws/log.md (protocol/.context_ledger friction): 1 entry, last added 2026-10-03
+- inefficiencies/log.md (project code/env friction): 3 entries, last added 2026-10-03
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-10-03
 
 ## Collaboration
-- 2 event(s) on file; most recent: `20261003T162900Z-S451-e500e76e.json`
+- 4 event(s) on file; most recent: `20261003T170022Z-Noor-8c5bf250.json`
 - Full trail + rules: `memory/collaboration/README.md`; live status: `ledger-collab status --session <S> --issue <slug>`

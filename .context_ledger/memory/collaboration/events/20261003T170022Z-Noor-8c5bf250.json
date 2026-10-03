@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261003T170022Z-Noor-8c5bf250",
+  "type": "release",
+  "session": "S001",
+  "agent": "Noor",
+  "created": "2026-10-03T17:00:22Z",
+  "issue": "ledger-migration",
+  "body": "Noor (S001) released. Core at 2.0.4, office 001 closed, entry points regenerated, bookkeeping written. No product code touched.",
+  "paths": [".context_ledger/core", ".context_ledger/memory", "AGENTS.md", "CLAUDE.md"],
+  "refs": ["dad3cfd"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
