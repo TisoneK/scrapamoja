@@ -50,7 +50,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Kai | S447 | qwen3.8-flash | Operator: env-only switch to run workers locally during the Supabase pause | Done | Shipped: BETB2B_STORE_MODE (auto/local/mirror/remote) + 9 tests, suite 262 green; core 1.1.3 + office compaction. Operator still to stop the Railway worker |
-| Mei | S450 | claude-sonnet-5-5 | Engineer: build full market/odds/H2H capture — H2H backfill, all sub-games, subject/period lines, coverage record | Working | Re-checked in after wrap; reading store layers |
+| Mei | S450 | claude-sonnet-5-5 | Engineer: full market/odds/H2H capture build | Done | Shipped: all sub-games by default, subject/period labels, coverage table, H2H backfill (both stores, 22 tests); Postgres not yet verified live |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

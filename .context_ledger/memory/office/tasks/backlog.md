@@ -12,9 +12,8 @@ don't remove the line.
 
 | ID | Summary |
 |----|---------|
-| B-2026-10-03-1 | H2H completeness: the store holds H2H for ~28% of events but the source returns it for ~70% (sample 15/16 and 41/60). H2H/stat-id are requested once at first sight and never retried; `--skip-processed` treats any stored match as done. Add a backfill pass (both stores: `store.py` and `store_orm.py`) for stored upcoming events with no H2H and no recorded source-said-none; retry failures. Evidence: `docs/proposals/MARKET_PERIOD_COVERAGE.md` section 0. Consumer impact: 101 of 333 full-match predictions skipped. |
-| B-2026-10-03-2 | Coverage record so a gap says whether the source lacks it or we never looked: per event/subject/period/run status `offered`/`not_offered`/`not_attempted`/`fetch_failed`. Today the 18 period scopes read as empty only because a default scrape never fetches sub-games. |
-| B-2026-10-03-3 | Basketball sub-games on by default, with `subject` (MATCH/HOME_TEAM/AWAY_TEAM) and `period` (FULL_TIME/HALF_n/QUARTER_n) stored per totals line; confirm Under prices on period team totals. Awaiting the consumer's reply on the vocabulary. Also relabel H2H period key 4 ('4th period') as overtime. |
+| B-2026-10-03-4 | Run the H2H backfill and sub-game capture against Neon and watch request volume: sub-games cost up to ~12 requests per new event (was 1). Confirm the Postgres `ALTER`s for `odds_snapshots.subject/period` and the new `coverage` table applied (they run on connect; verify the schema). Existing stored events keep no sub-game odds until re-fetched — decide whether to refresh upcoming ones. |
+| B-2026-10-03-5 | Unlabelled special sub-groups (no `TG`, no `PN`; ~10 markets each) are not fetched — no stable label to store them under. Decide a labelling (e.g. by market content) if the consumer wants them. Also the engine exporter still emits only the nine combined scopes; per-team period lines are stored but not exported (consumer side). Also relabel H2H period key 4 ('4th period') as overtime in `_PERIOD_TYPE_NAMES`. |
 
 ### Medium Priority
 
