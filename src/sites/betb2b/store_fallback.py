@@ -72,6 +72,10 @@ _SHUTDOWN_SQLSTATES = {"57P01", "57P02", "57P03"}
 _CONN_MESSAGES = (
     "connection refused", "connection reset", "server closed the connection",
     "could not connect", "connection timed out", "timed out",
+    # psycopg's connect-timeout wording ("connection timeout expired") — a host
+    # that drops the SYN instead of refusing it looks like this, and it must
+    # fail over to the mirror like any other connectivity loss.
+    "connection timeout",
     "name or service not known", "temporary failure in name resolution",
     "getaddrinfo failed", "no route to host", "network is unreachable",
     "broken pipe", "failed to establish", "connection is closed",
