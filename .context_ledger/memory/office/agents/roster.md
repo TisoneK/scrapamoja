@@ -52,6 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Achieng | S002 | deepseek/deepseek-flash | Engineer: verify Windows gate execution, then sweep product code for `.context_ledger` vocabulary | Working | Stage: check-in — gates + lint sweep next |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
