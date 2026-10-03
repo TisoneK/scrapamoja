@@ -32,3 +32,13 @@ def test_cli_parses_flags():
     p = BetB2BCLI().parser
     a = p.parse_args(["scrape", "linebet", "scheduled", "--skip-processed", "--no-db"])
     assert a.skip_processed == float('inf') and a.no_db
+
+
+def test_skipping_processed_matches_is_the_default():
+    from src.sites.betb2b.cli.main import BetB2BCLI
+    p = BetB2BCLI().parser
+    a = p.parse_args(["scrape", "linebet", "scheduled"])
+    assert a.skip_processed == float("inf") and a.refetch is False
+    assert p.parse_args(["scrape", "linebet", "scheduled", "--refetch"]).refetch is True
+    assert p.parse_args(["scrape", "linebet", "scheduled", "--no-skip-processed"]).refetch is True
+    assert p.parse_args(["scrape", "linebet", "scheduled", "--skip-processed", "3600"]).skip_processed == 3600.0

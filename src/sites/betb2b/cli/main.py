@@ -417,13 +417,16 @@ class BetB2BCLI:
                                  "JSON output is unaffected.")
         scrape.add_argument("--no-db", action="store_true",
                             help="Don't persist this run to the odds store.")
-        scrape.add_argument("--skip-processed", nargs="?", const=float("inf"), default=None,
+        scrape.add_argument("--skip-processed", nargs="?", const=float("inf"), default=float("inf"),
                             type=float, metavar="SECONDS",
-                            help="Never re-scrape a match already in the store (default); with "
-                                 "SECONDS, re-scrape it once older than that. Also skips "
+                            help="ON by default: never re-scrape a match already in the store; "
+                                 "with SECONDS, re-scrape it once older than that. Also skips "
                                  "matches already started. Live scrapes are never "
                                  "filtered (they update scores). Direct mode only; "
                                  "needs the store (not --no-db).")
+        scrape.add_argument("--refetch", "--no-skip-processed", dest="refetch", action="store_true",
+                            help="Turn skipping off: fetch every discovered match again, "
+                                 "stored or not.")
         scrape.add_argument("--fallback-skins", default=_env("BETB2B_FALLBACK_SKINS", ""),
                             metavar="SKIN,SKIN",
                             help="If some matches fail to fetch (timeouts/blocks), retry just "
@@ -662,7 +665,7 @@ class BetB2BCLI:
         failed_ids: list = []
         db_target = getattr(args, "db", None) or db_path()
         id_filter = None
-        skip = getattr(args, "skip_processed", None)
+        skip = None if getattr(args, "refetch", False) else getattr(args, "skip_processed", None)
         if skip is not None and not no_db:
             from src.sites.betb2b.store import unprocessed_ids
 
