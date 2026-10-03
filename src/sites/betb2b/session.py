@@ -291,6 +291,24 @@ class BetB2BSessionManager:
         if verdict.blocked:
             await self._resolve_block(page, verdict, tier)
 
+    async def _wait_for_app_ready(self, page: Any, timeout_ms: int = 15000) -> None:
+        """Wait (bounded) for the betting grid so the app has finished booting.
+
+        The browser-validation page clears before the SPA runs its startup calls;
+        the session and protection cookies that boot sets are what the plain-HTTP
+        feed calls need. Harvesting the moment the challenge disappears captures a
+        cookie jar the site still refuses. A page that never shows the grid (a raw
+        feed, a skin with another layout) just pays the timeout once.
+        """
+        try:
+            await page.wait_for_selector(
+                ".dashboard-champ, .dashboard-champ__game, .dashboard-champ-name__label",
+                state="attached", timeout=timeout_ms,
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort: harvest anyway
+            logger.debug("skin=%s app-ready grid not seen in %dms (%s) — harvesting anyway",
+                         self.skin.name, timeout_ms, str(exc)[:80])
+
     async def _resolve_block(self, page: Any, verdict: BlockVerdict, tier: BrowserTier) -> None:
         """Walk the policy ladder for a block seen on ``page``.
 
@@ -405,6 +423,13 @@ class BetB2BSessionManager:
 
                 # Never harvest cookies from a page that is showing a challenge.
                 await self._check_page(page, None, tier)
+
+                # A browser-validation page clears before the app has booted; the
+                # session and protection cookies the app sets on that boot are what
+                # the feed calls need. Give the grid a bounded moment to appear —
+                # a page where it never does (a raw feed, a different layout) just
+                # pays the timeout once.
+                await self._wait_for_app_ready(page)
 
                 # Harvest cookies + UA via the framework's SessionHarvester.
                 session = await self._harvester.harvest(
