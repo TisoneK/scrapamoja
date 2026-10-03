@@ -422,3 +422,9 @@ without a live browser. End-to-end tested with a synthetic HAR fixture
 - **Cause:** a "not my change" reflex instead of the rule; and scoping every check to the packages under edit.
 - **Fix:** repo-wide import sweep -> fixed the safe causes, flagged the design ones, added a smoke test with an explicit known-broken list (ADR-31).
 - **Prevent next time:** on any session, run an import sweep (or the smoke test) once at the start and after bulk edits; check with `compile()`/real import, not `ast.parse`; "pre-existing" is a reason to LOG a finding only when it needs design — otherwise fix it. After fixing an un-importable module, read its function bodies too (`ruff --select F821`): behind a SyntaxError there are usually runtime NameErrors.
+---
+## 2026-10-02 — Ada (S448) / claude-sonnet-5-5 (Session 50, diagnostics round)
+- **Problem:** after clocking out (roster row removed, `current.md` idle) I kept working on the operator's follow-ups — snapshot/telemetry wiring, retention — and committed product code without checking back in. Same slip as the earlier clock-out entries.
+- **Cost:** commits 1fb28d0..6ac6c27 landed while the board said nobody was in the office; a peer reading it would have believed the repo idle.
+- **Fix:** logged here; session entry Follow-up 8 records the work; clocked out again at the end.
+- **Prevent next time:** a new operator message after clock-out is a new check-in: add the roster row and set `current.md` BEFORE the first edit, and clock out only when the operator says so ("clockout"), not after each report.
