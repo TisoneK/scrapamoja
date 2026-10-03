@@ -1121,7 +1121,8 @@ class BetB2BScraper:
             async with self._shared_http() as client:
                 await self.session_manager.pacer.wait()
                 resp = await client.get(url, params=params, headers=headers)
-            self._guard_check(resp, "stats")
+            if self._guard_check(resp, "stats"):        # a challenge page is not a result
+                return None, True
             if resp.status_code in (200, 204) and not resp.text:
                 return None, False                      # answered: no data
             if resp.status_code != 200:
@@ -1158,7 +1159,8 @@ class BetB2BScraper:
             async with self._shared_http() as client:
                 await self.session_manager.pacer.wait()
                 resp = await client.get(url, params=params, headers=headers)
-            self._guard_check(resp, "stats")
+            if self._guard_check(resp, "stats"):        # a challenge page is not statistics
+                return None, True
             if resp.status_code in (200, 204) and not resp.text:
                 return None, False
             if resp.status_code != 200:
@@ -1218,18 +1220,25 @@ class BetB2BScraper:
         if isinstance(exc, httpx.TransportError):
             self.session_manager.guard.note_failure(scope, error=exc, url=url)
 
-    def _guard_check(self, resp: httpx.Response, scope: Optional[str] = None) -> None:
+    def _guard_check(self, resp: httpx.Response, scope: Optional[str] = None) -> bool:
         """Classify a direct ``httpx`` response; raises :class:`SiteBlocked` on a block
         that needs a cooldown. Direct calls used to bypass the guard, so a challenge
-        page there was neither recognised nor rested."""
+        page there was neither recognised nor rested.
+
+        Returns True when the response was a block, so a batch that fires several
+        requests at once can stop after the first one: every other response already
+        in flight is the same incident and must not walk the ladder again.
+        """
         try:
             latency_ms = resp.elapsed.total_seconds() * 1000.0
         except RuntimeError:                # httpx: elapsed only exists once the response is closed
             latency_ms = 0.0
         self._health(str(resp.url), resp.status_code, len(resp.content), latency_ms, scope)
-        self.feed_client.guard_response(resp, str(resp.url), resp.headers.get("content-type", ""))
+        blocked = self.feed_client.guard_response(
+            resp, str(resp.url), resp.headers.get("content-type", ""))
         if scope:                                       # an answer came back: that group's streak is over
             self.session_manager.guard.note_ok(scope)
+        return blocked
 
     def _apply_probe_filter(self, dataset: str, events: List[Event], status_attr: str) -> List[Event]:
         """Drop events whose probe the store already answers; mark them so coverage stays right."""
@@ -1350,7 +1359,15 @@ class BetB2BScraper:
                         }
                         await self.session_manager.pacer.wait()
                         resp = await client.get(url, params=params, headers=headers)
-                        self._guard_check(resp, "stats")
+                        if halted:
+                            return          # an earlier response in this batch already hit the block
+                        if self._guard_check(resp, "stats"):
+                            halted = True
+                            ev.h2h_status = "failed"
+                            logger.warning(
+                                "skin=%s H2H batch stopped: challenge at event=%s; the rest of "
+                                "the batch is left to another run", self.skin.name, eid)
+                            return
 
                         if resp.status_code == 204:
                             ev.h2h_status = "none"
@@ -1456,7 +1473,14 @@ class BetB2BScraper:
                         }
                         await self.session_manager.pacer.wait()
                         resp = await client.get(url, params=params, headers=headers)
-                        self._guard_check(resp, "stats")
+                        if halted:
+                            return          # an earlier response in this batch already hit the block
+                        if self._guard_check(resp, "stats"):
+                            halted = True
+                            logger.warning(
+                                "skin=%s stats batch stopped: challenge at event=%s; the rest of "
+                                "the batch is left to another run", self.skin.name, eid)
+                            return
 
                         if resp.status_code == 204:
                             # 204 = no stats for this match (minor league).

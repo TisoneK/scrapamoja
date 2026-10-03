@@ -222,3 +222,47 @@ def test_a_challenge_is_caught_even_when_the_navigation_errored(skin, tmp_path, 
                 return "Linebet"
         await mgr._check_page(Clean(), None, mgr.guard.tier)          # clean page: no raise
     asyncio.run(go())
+
+
+def test_h2h_batch_records_one_block_for_a_burst_of_challenges(skin, tmp_path, monkeypatch):
+    """Responses already in flight when the first challenge lands are one incident.
+
+    Every one of them used to call the guard, so a burst of five concurrent
+    challenges walked the whole policy ladder to a six-hour cooldown in about a
+    second and aborted the run."""
+    from src.sites.betb2b.scraper import BetB2BScraper
+    from src.sites.betb2b.extraction.models import Event, Sport
+
+    monkeypatch.setenv("BETB2B_STORE_MODE", "local")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    s = BetB2BScraper(skin, sport="basketball", direct=False)   # hybrid: the guard keeps its browser rungs
+
+    class _Session:                                  # no browser in the test: a fake harvested session
+        def to_cookie_header(self):
+            return "SESSION=fake; sbtsck=fake"
+
+    async def _fake_get_session(*a, **k):
+        return _Session()
+    monkeypatch.setattr(s.session_manager, "get_session", _fake_get_session)
+
+    events = [Event(event_id=str(900000100 + i), sport=Sport.BASKETBALL, competition="L",
+                    home=f"H{i}", away=f"A{i}") for i in range(5)]
+
+    async def go():
+        transport = httpx.MockTransport(
+            lambda req: httpx.Response(200, headers={"content-type": "text/html"}, text=GCORE))
+        s._direct_http = httpx.AsyncClient(transport=transport)
+        try:
+            await s._enrich_with_h2h(events)
+        finally:
+            await s._direct_http.aclose()
+
+    asyncio.run(go())
+    st = s.session_manager.guard.ledger.state(skin.name)
+    assert st.consecutive_blocks == 1                       # one incident, not five
+    assert st.attempts.get("js_challenge") == 1
+    assert s.session_manager.guard.ledger.cooldown_left(skin.name)[0] == 0
+    failed = [e for e in events if e.h2h_status == "failed"]
+    assert len(failed) == 1                                 # the challenged response
+    assert all(e.h2h_status is None for e in events if e is not failed[0])
+                                                            # the rest were never asked: not_attempted

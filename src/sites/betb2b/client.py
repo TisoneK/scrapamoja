@@ -358,8 +358,14 @@ class BetB2BFeedClient:
             except Exception:  # noqa: BLE001 -- health reporting must never break a request
                 pass
 
-    def guard_response(self, resp: httpx.Response, url: str, content_type: str) -> None:
-        """Classify the response; on a real block record it and fail fast or re-session."""
+    def guard_response(self, resp: httpx.Response, url: str, content_type: str) -> bool:
+        """Classify the response; on a real block record it and fail fast or re-session.
+
+        Returns True when the response was a block (the guard acted on it). Batch
+        callers use this to stop after the first blocked answer: every other request
+        already in flight would otherwise record the same incident again and walk the
+        policy ladder one rung per response.
+        """
         guard = self.session_manager.guard
         is_json_ok = resp.status_code == 200 and "json" in content_type.lower()
         verdict = guard.inspect(
@@ -369,7 +375,7 @@ class BetB2BFeedClient:
         if verdict.type not in self._ACTED_ON:
             if is_json_ok:
                 guard.on_success()
-            return
+            return False
         decision = guard.on_block(verdict)
         if decision.action in (Action.COOLDOWN, Action.FAILOVER_SITE, Action.ABORT):
             raise guard.blocked(verdict, decision)
@@ -377,6 +383,7 @@ class BetB2BFeedClient:
             # The harvested cookies are no good against a challenge: drop them
             # so the next call bootstraps again at the guard's (escalated) tier.
             self.session_manager.clear()
+        return True
 
     async def _respect_rate_limit(self) -> None:
         if self._min_interval <= 0 or self._last_request_at is None:
