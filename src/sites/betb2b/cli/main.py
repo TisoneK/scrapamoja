@@ -212,6 +212,42 @@ async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
     print(f"  [{skin_name}] stat ids backfilled: {len(found)}/{len(ids)}", file=sys.stderr)
 
 
+async def _backfill_h2h(scraper, db_target: str, skin_name: str) -> None:
+    """Fetch H2H for stored upcoming events that have none. H2H is requested once
+    when a match is first stored; failures were never retried, so most stored
+    matches had none. A bounded batch per run; an event the source answered
+    "no H2H" for waits a day before it is asked again."""
+    from src.sites.betb2b import store
+    from src.sites.betb2b.extraction.models import Event, Sport
+    conn = store.init_db(db_target)
+    try:
+        ids = store.events_missing_h2h(conn)
+    finally:
+        conn.close()
+    if not ids:
+        return
+    stubs = [Event(event_id=i, sport=Sport.OTHER, competition="", home="", away="") for i in ids]
+    await scraper._enrich_with_h2h(stubs)
+    at = datetime.now(timezone.utc).isoformat()
+    conn = store.init_db(db_target)
+    got = 0
+    try:
+        run_id = store.begin_backfill_run(conn, skin_name, "backfill_h2h", at=at)
+        for ev in stubs:
+            if ev.h2h_data is not None and ev.h2h_data.game_shorts:
+                store.record_h2h(conn, run_id, ev.event_id, skin_name, ev.h2h_data.to_dict(),
+                                 "offered", at=at)
+                got += 1
+            elif ev.h2h_status in ("ok", "none"):
+                store.record_h2h(conn, run_id, ev.event_id, skin_name, None, "not_offered", at=at)
+            elif ev.h2h_status == "failed":
+                store.record_h2h(conn, run_id, ev.event_id, skin_name, None, "fetch_failed", at=at)
+            # h2h_status None: the batch stopped before this one — not attempted, retried next run
+    finally:
+        conn.close()
+    print(f"  [{skin_name}] h2h backfilled: {got}/{len(ids)}", file=sys.stderr)
+
+
 def _guard_state(guard) -> dict:
     """What the security guard currently knows about this skin (for `probe`)."""
     try:
@@ -402,10 +438,13 @@ class BetB2BCLI:
                                  "(one PredictRequest per scope). Value = engine URL, "
                                  "or omit for $SCOREWISE_ENGINE_URL. Auth: $SCOREWISE_API_KEY (x-api-key).")
         scrape.add_argument("--subgames", action="store_true",
-                            help="Fetch each event's per-quarter/half sub-games so the "
-                                 "half and quarter scopes carry their own totals line "
-                                 ". Without it only FULL_MATCH and the two team "
-                                 "totals can be exported. Costs extra requests per event.")
+                            help="Fetch each event's sub-games (quarters, halves, per-stat "
+                                 "groups) with their own markets. ON by default; this flag "
+                                 "is kept for scripts.")
+        scrape.add_argument("--no-subgames", action="store_true",
+                            help="Skip sub-games: only the main game's markets are stored "
+                                 "(about 1 request per event instead of up to 12). Coverage "
+                                 "records the periods as not_attempted.")
         scrape.add_argument("--direct", action="store_true",
                             help="Direct mode: browser+proxy-free discovery via "
                                  "GetSportsZip → GetChampZip → GetGameZip (no Playwright, "
@@ -615,7 +654,9 @@ class BetB2BCLI:
         from src.sites.betb2b import BetB2BScraper
 
         skin = _load_skin(skin_name)
-        if getattr(args, "subgames", False):
+        if getattr(args, "no_subgames", False):
+            skin = skin.with_overrides(features={**skin.features, "subgames": False})
+        elif getattr(args, "subgames", False):
             skin = skin.with_overrides(features={**skin.features, "subgames": True})
         no_db = getattr(args, "no_db", False)
         failed_ids: list = []
@@ -644,6 +685,11 @@ class BetB2BCLI:
                     await _backfill_stat_ids(scraper, db_target, skin_name)
                 except Exception as exc:  # noqa: BLE001 — best-effort
                     print(f"  [{skin_name}] WARNING: stat id backfill failed: {exc}", file=sys.stderr)
+                if skin.features.get("h2h", True):
+                    try:
+                        await _backfill_h2h(scraper, db_target, skin_name)
+                    except Exception as exc:  # noqa: BLE001 — best-effort
+                        print(f"  [{skin_name}] WARNING: h2h backfill failed: {exc}", file=sys.stderr)
             failed_ids = list((getattr(scraper, "last_fetch_stats", None) or {}).get("failed_ids", []))
 
         if result.get("error"):
@@ -679,7 +725,7 @@ class BetB2BCLI:
                         build_ingest_matches, post_ingest,
                     )
                     matches = build_ingest_matches(result.get("events") or [])
-                    if not skin.features.get("subgames", False):
+                    if not skin.features.get("subgames", True):
                         print(f"  [{skin_name}] note: only FULL_MATCH and the two team "
                               "totals are being ingested — the half and quarter scopes "
                               "need their own totals line, which comes from --subgames.",

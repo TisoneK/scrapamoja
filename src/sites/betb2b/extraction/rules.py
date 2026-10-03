@@ -169,18 +169,10 @@ _SPORT_NAME_ALIASES: Dict[str, Sport] = {
 }
 
 
-# Sub-game period name (``SG[].PN``) → engine PredictionScope.
-_SUBGAME_SCOPES: Dict[str, str] = {
-    "1st quarter": "QUARTER_1", "2nd quarter": "QUARTER_2",
-    "3rd quarter": "QUARTER_3", "4th quarter": "QUARTER_4",
-    "1 half": "FIRST_HALF", "1st half": "FIRST_HALF",
-    "2 half": "SECOND_HALF", "2nd half": "SECOND_HALF",
-}
-
-
 def scope_from_period_name(pn: Any) -> Optional[str]:
-    """Map a sub-game period name to an engine PredictionScope, or None."""
-    return _SUBGAME_SCOPES.get(str(pn or "").strip().lower())
+    """Map a sub-game period name to a scope, or None (see :mod:`..labels`)."""
+    from ..labels import scope_from_period_name as _impl
+    return _impl(pn)
 
 
 def _coerce_sport(sport_name: Any, sport_id: Optional[int], skin: BetB2BSkinConfig) -> Tuple[Sport, str]:

@@ -391,6 +391,8 @@ class BetB2BScraper:
         if events and action != "raw_capture" and self.skin.features.get("stat_ids", True):
             await self._enrich_with_stat_ids(events)
 
+        self._finalize_coverage(events)
+
         # Did the session get harvested?
         session_harvested = self.session_manager.has_session
 
@@ -693,34 +695,64 @@ class BetB2BScraper:
         return events
 
     async def _enrich_with_subgames(self, event: Event, cap: Any, *, root: str) -> None:
-        """Fetch the event's per-quarter/half sub-games and append their markets,
-        tagged with the PredictionScope. Opt-in (``subgames`` flag) —
-        each sub-game is an extra GetGameZip. Best-effort.
+        """Fetch every labelled sub-game of the event and append its markets,
+        tagged with a scope: the per-period ones (quarters, halves) get their
+        period scope, the per-stat ones (rebounds, fouls, ...) a ``STAT_<NAME>``
+        scope. On by default (``subgames`` flag); each sub-game is one extra
+        GetGameZip. Best-effort — what was tried is kept in ``event.subgame_fetch``
+        so coverage can tell a failed fetch from an absent market.
         """
-        if not self.skin.features.get("subgames", False):
+        if not self.skin.features.get("subgames", True):
             return
-        from .extraction.rules import scope_from_period_name
+        from .labels import scope_from_period_name, stat_scope
 
         value = (getattr(cap, "decoded", None) or {}).get("Value") or {}
-        limit = int(getattr(self.skin, "max_subgames", 8) or 8)
+        limit = int(getattr(self.skin, "max_subgames", 40) or 40)
         fetched = 0
         for sg in value.get("SG") or []:
-            scope = scope_from_period_name(sg.get("PN"))
             sub_id = sg.get("I")
-            if not scope or not sub_id or fetched >= limit:
-                continue
+            scope = scope_from_period_name(sg.get("PN")) or (
+                stat_scope(sg.get("TG")) if not (sg.get("PN") or "").strip() else None)
+            if not scope or not sub_id or scope in event.subgame_fetch:
+                continue   # unlabelled special groups carry no stable label
+            if fetched >= limit:
+                break
             try:
                 sub_cap = await self.feed_client.fetch_game(str(sub_id), root=root)
-                event.markets.extend(
-                    self.extraction_rules.extract_markets_scoped(sub_cap, scope)
-                )
+                got = self.extraction_rules.extract_markets_scoped(sub_cap, scope)
+                if not got:
+                    raise ValueError("sub-game answered without markets")
+                event.markets.extend(got)
+                event.subgame_fetch[scope] = "fetched"
                 fetched += 1
             except Exception as exc:  # noqa: BLE001
+                event.subgame_fetch[scope] = "failed"
                 logger.debug("skin=%s subgame %s (%s) failed: %s",
                              self.skin.name, sub_id, scope, exc)
         if fetched:
             logger.info("skin=%s event=%s: +%d scoped sub-games",
                         self.skin.name, event.event_id, fetched)
+
+    def _finalize_coverage(self, events: List[Event]) -> None:
+        """Record, per event, which totals lines were offered / absent / not
+        looked at, and what the H2H request said. Run after all enrichment."""
+        from .labels import build_totals_coverage, scope_from_period_name
+        for ev in events:
+            if not ev:
+                continue
+            listed = {sc for sc in (scope_from_period_name(sg.get("period"))
+                                    for sg in ev.sub_games) if sc}
+            rows = build_totals_coverage(
+                ev.sport, [m.to_dict() for m in ev.markets],
+                subgames_enabled=bool(self.skin.features.get("subgames", True)),
+                listed_scopes=listed, fetch_status=ev.subgame_fetch)
+            if ev.h2h_data is not None and ev.h2h_data.game_shorts:
+                h2h = "offered"
+            else:
+                h2h = {"ok": "not_offered", "none": "not_offered",
+                       "failed": "fetch_failed"}.get(ev.h2h_status or "", "not_attempted")
+            rows.append({"dataset": "h2h", "subject": None, "period": None, "status": h2h})
+            ev.coverage = rows
 
     async def _discover_events(self, *, is_live: bool) -> List[Event]:
         """Primary discovery = HTML harvest (full card); DOM render is the
@@ -1220,6 +1252,7 @@ class BetB2BScraper:
                         self._guard_check(resp, "stats")
 
                         if resp.status_code == 204:
+                            ev.h2h_status = "none"
                             # 204 = no H2H data for this match (minor league).
                             logger.debug(
                                 "skin=%s H2H 204 (no data) for event=%s",
@@ -1228,6 +1261,7 @@ class BetB2BScraper:
                             return
 
                         if resp.status_code != 200:
+                            ev.h2h_status = "failed"
                             logger.warning(
                                 "skin=%s H2H status=%d for event=%s",
                                 self.skin.name, resp.status_code, eid,
@@ -1236,6 +1270,7 @@ class BetB2BScraper:
 
                         raw = resp.json()
                         h2h_data = BetB2BExtractionRules.extract_h2h_data(raw)
+                        ev.h2h_status = "ok" if h2h_data is not None else "none"
                         if h2h_data is not None:
                             ev.h2h_data = h2h_data
                             logger.debug(
@@ -1249,12 +1284,14 @@ class BetB2BScraper:
                             logger.warning("skin=%s statisticfeed enrichment stopped: %s",
                                            self.skin.name, exc)
                     except httpx.HTTPError as exc:
+                        ev.h2h_status = "failed"
                         self._guard_failure(exc, "stats", url)
                         logger.warning(
                             "skin=%s H2H HTTP error for event=%s: %s",
                             self.skin.name, eid, exc,
                         )
                     except Exception as exc:  # noqa: BLE001
+                        ev.h2h_status = "failed"
                         logger.warning(
                             "skin=%s H2H parse error for event=%s: %s",
                             self.skin.name, eid, exc,

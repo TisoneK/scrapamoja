@@ -195,6 +195,12 @@ class Event:
     # deferred (never guess). Empty when the feed carries no MEC.
     market_categories: List[Dict[str, Any]] = field(default_factory=list)
     stat_game_id: Optional[str] = None   # statisticfeed entity.id: lets the results pass resolve the final score
+    # What we asked the source for and what it said — see labels.build_totals_coverage.
+    # ``h2h_status``: ok | none (source has no H2H) | failed | None (never asked).
+    h2h_status: Optional[str] = None
+    # scope -> fetched | failed, for the sub-games we tried (not serialised).
+    subgame_fetch: Dict[str, str] = field(default_factory=dict)
+    coverage: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -233,6 +239,7 @@ class Event:
             "sub_games": self.sub_games,
             "market_categories": self.market_categories,
             "stat_game_id": self.stat_game_id,
+            "coverage": self.coverage,
         }
 
 

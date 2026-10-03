@@ -235,11 +235,30 @@ class OddsSnapshot(Base):
     raw_t: Mapped[Optional[int]] = mapped_column(Integer)
     scope: Mapped[str] = mapped_column(Text, default="FULL_MATCH")
     captured_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
+    subject: Mapped[Optional[str]] = mapped_column(Text)  # MATCH | HOME_TEAM | AWAY_TEAM
+    period: Mapped[Optional[str]] = mapped_column(Text)   # FULL_TIME | HALF_n | QUARTER_n | PERIOD_n
     __table_args__ = (
         Index("ix_odds_event", "event_id", "skin", "captured_at"),
         Index("ix_odds_market", "event_id", "skin", "market_id", "selection_name", "captured_at"),
         Index("ix_odds_event_extracted", "event_id", "captured_at"),  # Hot path
     )
+
+
+class Coverage(Base):
+    """What we asked the source for and what it said (stored on change only):
+    offered | not_offered | not_attempted | fetch_failed, per dataset
+    (totals by subject x period; h2h)."""
+    __tablename__ = "coverage"
+    id: Mapped[int] = mapped_column(SurrogatePK, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(SurrogatePK, ForeignKey("scrape_runs.run_id"), nullable=False)
+    event_id: Mapped[str] = mapped_column(Text, ForeignKey("events.event_id"), nullable=False)
+    skin: Mapped[str] = mapped_column(Text, nullable=False)
+    dataset: Mapped[str] = mapped_column(Text, nullable=False)
+    subject: Mapped[Optional[str]] = mapped_column(Text)
+    period: Mapped[Optional[str]] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    captured_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (Index("ix_coverage_event", "event_id", "dataset", "subject", "period", "id"),)
 
 
 class H2HGame(Base):

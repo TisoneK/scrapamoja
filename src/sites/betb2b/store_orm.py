@@ -21,8 +21,9 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import insert as _pg_insert
 from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 
+from .labels import classify
 from .models import (
-    Base, Country, Event, EventState, H2HGame, H2HPeriodScore, League,
+    Base, Country, Coverage, Event, EventState, H2HGame, H2HPeriodScore, League,
     Market, OddsSnapshot, PeriodScore, ScrapeRun, ScraperJob, Sport,
     Statistic, SubGame, Team,
 )
@@ -35,6 +36,7 @@ _events, _markets, _runs = Event.__table__, Market.__table__, ScrapeRun.__table_
 _states, _periods, _odds = EventState.__table__, PeriodScore.__table__, OddsSnapshot.__table__
 _h2h, _h2hp, _stats, _jobs = H2HGame.__table__, H2HPeriodScore.__table__, Statistic.__table__, ScraperJob.__table__
 _subgames = SubGame.__table__
+_coverage = Coverage.__table__
 
 # One engine per resolved URL (pool reuse); schema ensured once.
 _engines: Dict[str, Any] = {}
@@ -51,6 +53,8 @@ _ADDED_COLUMNS_PG = [
     ("events", "result_status", "INTEGER"),
     ("events", "result_captured_at", "TIMESTAMPTZ"),
     ("events", "superseded_by", "TEXT"),
+    ("odds_snapshots", "subject", "TEXT"),
+    ("odds_snapshots", "period", "TEXT"),
 ]
 
 
@@ -320,6 +324,21 @@ def _last_odds_bulk(conn, event_ids, skin):
 # --------------------------------------------------------------------------- #
 # Persist
 # --------------------------------------------------------------------------- #
+def _last_coverage_bulk(conn: Connection, ids: List[str]) -> Dict[str, Dict[Any, str]]:
+    """``{event_id: {(dataset, subject, period): latest status}}`` in one query per chunk."""
+    from sqlalchemy import bindparam
+    out: Dict[str, Dict[Any, str]] = {}
+    for i in range(0, len(ids), 400):
+        stmt = sa_text(
+            "SELECT c.event_id, c.dataset, c.subject, c.period, c.status FROM coverage c "
+            "JOIN (SELECT event_id, dataset, subject, period, MAX(id) mid FROM coverage "
+            "WHERE event_id IN :ids GROUP BY event_id, dataset, subject, period) m "
+            "ON c.id = m.mid").bindparams(bindparam("ids", expanding=True))
+        for r in conn.execute(stmt, {"ids": ids[i:i + 400]}):
+            out.setdefault(r[0], {})[(r[1], r[2], r[3])] = r[4]
+    return out
+
+
 def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
     skin = result.get("skin") or ""
     at = _dt(result.get("extracted_at"))
@@ -346,6 +365,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
     odds_batch: List[dict] = []
     period_batch: List[dict] = []
     stat_batch: List[dict] = []
+    cov_batch: List[dict] = []
     # H2H games are inserted in one batch after the loop (each needs its returned
     # id for the period-scores FK), so accumulate (game-values, periods) together.
     h2h_game_batch: List[dict] = []
@@ -359,6 +379,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
     last_states = _last_states_bulk(conn, all_ids, skin)
     last_periods_all = _last_periods_bulk(conn, all_ids, skin)
     last_odds_all = _last_odds_bulk(conn, all_ids, skin)
+    last_cov_all = _last_coverage_bulk(conn, all_ids)
 
     def _sport_c(sid, name):
         if sid is None:
@@ -459,6 +480,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
         for m in ev.get("markets") or []:
             market_id = _market_c(m.get("name"), m.get("market_type"), m.get("raw_g"))
             scope = m.get("scope") or "FULL_MATCH"
+            subject, period = classify(m.get("name"), scope)
             for s in m.get("selections") or []:
                 price = s.get("price")
                 if price is None:
@@ -471,7 +493,8 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                 odds_batch.append(dict(
                     run_id=run_id, event_id=event_id, skin=skin, market_id=market_id,
                     selection_name=s.get("name"), line=s.get("line"), price=price,
-                    is_suspended=susp, raw_t=_as_int(s.get("raw_t")), scope=scope, captured_at=at))
+                    is_suspended=susp, raw_t=_as_int(s.get("raw_t")), scope=scope, captured_at=at,
+                    subject=subject, period=period))
                 last_odds[key] = (price, susp)
 
         # facts: H2H (+ enrich teams dim). Games are accumulated and inserted in
@@ -497,6 +520,17 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                          period_key=_as_int(ps.get("period_key")), period_name=ps.get("period_name"),
                          home_score=_as_int(ps.get("home_score")), away_score=_as_int(ps.get("away_score")))
                     for ps in g.get("periods") or []])
+
+        # facts: coverage (only when a status changed) → batch
+        last_cov = last_cov_all.get(event_id, {})
+        for c in ev.get("coverage") or []:
+            ck = (c.get("dataset"), c.get("subject"), c.get("period"))
+            if last_cov.get(ck) == c.get("status"):
+                continue
+            cov_batch.append(dict(
+                run_id=run_id, event_id=event_id, skin=skin, dataset=c.get("dataset"),
+                subject=c.get("subject"), period=c.get("period"), status=c.get("status"),
+                captured_at=at))
 
         # dimension: sub-games (SG[] — named per-period/per-stat groups) → upsert
         for sg in ev.get("sub_games") or []:
@@ -543,6 +577,8 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
         conn.execute(_h2hp.insert(), h2hp_batch)
     if stat_batch:
         conn.execute(_stats.insert(), stat_batch)
+    if cov_batch:
+        conn.execute(_coverage.insert(), cov_batch)
     conn.commit()
     logger.info("persist run %s (skin=%s): %d events, %d odds → Postgres",
                 run_id, skin, len(events), len(odds_batch))
@@ -661,9 +697,51 @@ def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
     conn.commit()
 
 
+def begin_backfill_run(conn: Connection, skin: str, action: str, at: str) -> int:
+    run_id = conn.execute(_runs.insert().values(
+        skin=skin, action=action, extracted_at=_dt(at), event_count=0, success=True,
+    ).returning(_runs.c.run_id)).scalar()
+    conn.commit()
+    return run_id
+
+
+def record_h2h(conn: Connection, run_id: int, event_id: str, skin: str,
+               h2h: Optional[Dict[str, Any]], status: str, at: str) -> None:
+    """ORM twin of ``store.record_h2h``: H2H games + periods + a coverage row."""
+    when = _dt(at)
+    if h2h:
+        sport_id = _as_int(h2h.get("sport_id"))
+        for t in h2h.get("teams") or []:
+            tc = t.get("country") or {}
+            _team(conn, t.get("title"), sport_id,
+                  backend_id=str(t.get("id")) if t.get("id") else None,
+                  country_id=_country(conn, tc.get("title")))
+        games = h2h.get("game_shorts") or []
+        if games:
+            rows = [dict(
+                run_id=run_id, event_id=event_id, skin=skin, game_id=g.get("game_id"),
+                sport_id=sport_id, team1_backend_id=g.get("team1_id"),
+                team2_backend_id=g.get("team2_id"), date_start=_dt(g.get("date_start")),
+                score1=_as_int(g.get("score1")), score2=_as_int(g.get("score2")),
+                sub_score1=_as_int(g.get("sub_score1")), sub_score2=_as_int(g.get("sub_score2")),
+                winner=_as_int(g.get("winner")), status=_as_int(g.get("status")),
+                captured_at=when) for g in games]
+            ids = conn.execute(_h2h.insert().returning(_h2h.c.id), rows).scalars().all()
+            periods = [dict(h2h_game_id=gid, event_id=event_id,
+                            period_key=_as_int(ps.get("period_key")), period_name=ps.get("period_name"),
+                            home_score=_as_int(ps.get("home_score")), away_score=_as_int(ps.get("away_score")))
+                       for gid, g in zip(ids, games) for ps in g.get("periods") or []]
+            if periods:
+                conn.execute(_h2hp.insert(), periods)
+    conn.execute(_coverage.insert().values(
+        run_id=run_id, event_id=event_id, skin=skin, dataset="h2h", subject=None,
+        period=None, status=status, captured_at=when))
+    conn.commit()
+
+
 def counts(conn) -> Dict[str, int]:
     tables = [_sports, _countries, _leagues, _teams, _events, _markets, _subgames, _runs,
-              _states, _periods, _odds, _h2h, _h2hp, _stats]
+              _states, _periods, _odds, _h2h, _h2hp, _stats, _coverage]
     return {t.name: conn.execute(select(func.count()).select_from(t)).scalar() for t in tables}
 
 
@@ -715,7 +793,7 @@ def prune_expired(conn: Connection, *, days: float = 7.0, batch: int = 2000,
                                "h2h_period_scores", "h2h_games", "statistics",
                                "sub_games", "events_pruned")}
     out: Dict[str, int] = {}
-    for t in (_odds, _states, _periods, _stats, _subgames):
+    for t in (_odds, _states, _periods, _stats, _subgames, _coverage):
         res = conn.execute(t.delete().where(t.c.event_id.in_(old_ids)))
         out[t.name] = max(res.rowcount or 0, 0)
     res = conn.execute(_h2hp.delete().where(_h2hp.c.h2h_game_id.in_(
@@ -736,7 +814,7 @@ def prune_counts(conn: Connection, *, days: float = 7.0) -> Dict[str, int]:
     old = select(_events.c.event_id).where(
         _events.c.start_time.isnot(None), _events.c.start_time < cutoff).subquery()
     out: Dict[str, int] = {}
-    for t in (_odds, _states, _periods, _stats, _subgames, _h2h):
+    for t in (_odds, _states, _periods, _stats, _subgames, _h2h, _coverage):
         out[t.name] = conn.execute(
             select(func.count()).select_from(t).where(t.c.event_id.in_(select(old.c.event_id)))
         ).scalar() or 0
@@ -756,7 +834,7 @@ def prune_counts(conn: Connection, *, days: float = 7.0) -> Dict[str, int]:
 # referenced table and its referencing tables in the same TRUNCATE, even when
 # the referencing table is empty — odds_snapshots.run_id → scrape_runs).
 _FACT_TABLES = ("odds_snapshots", "scrape_runs", "event_states", "period_scores",
-                "h2h_games", "h2h_period_scores", "statistics", "sub_games")
+                "h2h_games", "h2h_period_scores", "statistics", "sub_games", "coverage")
 
 
 def truncate_facts(conn: Connection, *, commit: bool = True) -> Dict[str, Any]:

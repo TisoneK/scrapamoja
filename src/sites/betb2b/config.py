@@ -225,7 +225,7 @@ class BetB2BSkinConfig:
             "html_harvest": True,   # browser-free event-id discovery from page HTML
             "champ_discovery": True,  # broaden discovery via per-league GetChampZip (un-gated)
             "direct": False,        # Browser+proxy-free discovery via GetSportsZip (opt-in)
-            "subgames": False,      # fetch per-quarter/half sub-games (scoped ingestion; costs extra requests)
+            "subgames": True,       # fetch every labelled sub-game (quarters, halves, per-stat groups); one extra GetGameZip each
             "new_builder_markets": False,  # GetGameZip with the SPA's new-builder params (isNewBuilder/GroupEvents/marketType) → MEC category + SG.TG names. Default OFF until CI-vs-I addressing is validated live (the ADR's own consequence gate); the verified (G,T) core map + honest G=<n> fallback are unaffected either way.
         }
     )

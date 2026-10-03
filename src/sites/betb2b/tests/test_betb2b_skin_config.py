@@ -27,7 +27,7 @@ def test_features_override_a_default_that_is_on():
 def test_features_absent_leaves_the_family_defaults():
     cfg = _minimal()
     assert cfg.features["prematch"] is True
-    assert cfg.features["subgames"] is False
+    assert cfg.features["subgames"] is True
 
 
 def test_lookup_tables_still_merge_onto_the_family_defaults():

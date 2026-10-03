@@ -70,7 +70,7 @@ def test_orm_persist_populates_all_tables(orm_conn):
         "sports": 1, "countries": 1, "leagues": 1, "teams": 2, "events": 1,
         "markets": 1, "sub_games": 2, "scrape_runs": 1, "event_states": 1,
         "period_scores": 1, "odds_snapshots": 2, "h2h_games": 1,
-        "h2h_period_scores": 1, "statistics": 2,
+        "h2h_period_scores": 1, "statistics": 2, "coverage": 0,
     }
 
 

@@ -97,6 +97,8 @@ class _FakeFeedClient:
 
 
 def _make_scraper(skin: BetB2BSkinConfig, fake_client: _FakeFeedClient) -> BetB2BScraper:
+    # These tests are about the main-game fetch; sub-games are covered in test_betb2b_coverage.
+    skin = skin.with_overrides(features={**skin.features, "subgames": False})
     scraper = BetB2BScraper(skin, proxy_manager=None, telemetry_enabled=False)
     scraper.feed_client = fake_client  # type: ignore[assignment]
     return scraper

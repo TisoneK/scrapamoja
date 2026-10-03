@@ -33,6 +33,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .labels import classify
+
 
 def _is_orm(conn: Any) -> bool:
     """A non-sqlite3 connection means the ORM/Postgres path."""
@@ -265,8 +267,27 @@ CREATE TABLE IF NOT EXISTS odds_snapshots (
     is_suspended    INTEGER,
     raw_t           INTEGER,
     scope           TEXT DEFAULT 'FULL_MATCH',
-    captured_at     TEXT NOT NULL
+    captured_at     TEXT NOT NULL,
+    subject         TEXT,                   -- MATCH | HOME_TEAM | AWAY_TEAM (totals ladders only)
+    period          TEXT                    -- FULL_TIME | HALF_n | QUARTER_n | PERIOD_n
 );
+
+-- What we asked the source for and what it said, per event: one row per dataset
+-- (totals by subject x period; h2h) and status offered | not_offered |
+-- not_attempted | fetch_failed. Stored on change only, so a gap says whether the
+-- source lacks the data or we never looked.
+CREATE TABLE IF NOT EXISTS coverage (
+    id           INTEGER PRIMARY KEY,
+    run_id       INTEGER NOT NULL REFERENCES scrape_runs(run_id),
+    event_id     TEXT NOT NULL REFERENCES events(event_id),
+    skin         TEXT NOT NULL,
+    dataset      TEXT NOT NULL,
+    subject      TEXT,
+    period       TEXT,
+    status       TEXT NOT NULL,
+    captured_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_coverage_event ON coverage(event_id, dataset, subject, period, id);
 
 CREATE TABLE IF NOT EXISTS h2h_games (
     id                 INTEGER PRIMARY KEY,
@@ -424,6 +445,8 @@ _ADDED_COLUMNS = [
     ("events", "result_status", "INTEGER"),
     ("events", "result_captured_at", "TEXT"),
     ("events", "superseded_by", "TEXT"),
+    ("odds_snapshots", "subject", "TEXT"),
+    ("odds_snapshots", "period", "TEXT"),
 ]
 
 
@@ -432,6 +455,47 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
         cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
         if column not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
+
+def _insert_h2h_games(conn, run_id: int, event_id: str, skin: str,
+                      h2h: Dict[str, Any], at: str) -> None:
+    """Insert an event's H2H games and their per-period scores (SQLite path)."""
+    for g in h2h.get("game_shorts") or []:
+        h2h_game_id = int(conn.execute(
+            "INSERT INTO h2h_games "
+            "(run_id, event_id, skin, game_id, sport_id, team1_backend_id, "
+            " team2_backend_id, date_start, score1, score2, sub_score1, "
+            " sub_score2, winner, status, captured_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (run_id, event_id, skin, g.get("game_id"), _as_int(h2h.get("sport_id")),
+             g.get("team1_id"), g.get("team2_id"), g.get("date_start"),
+             _as_int(g.get("score1")), _as_int(g.get("score2")),
+             _as_int(g.get("sub_score1")), _as_int(g.get("sub_score2")),
+             _as_int(g.get("winner")), _as_int(g.get("status")), at),
+        ).lastrowid)
+        # Per-period breakdown, stored as the source reports it (no derived periods).
+        for ps in g.get("periods") or []:
+            conn.execute(
+                "INSERT INTO h2h_period_scores "
+                "(h2h_game_id, event_id, period_key, period_name, home_score, away_score) "
+                "VALUES (?,?,?,?,?,?)",
+                (h2h_game_id, event_id, _as_int(ps.get("period_key")),
+                 ps.get("period_name"), _as_int(ps.get("home_score")),
+                 _as_int(ps.get("away_score"))),
+            )
+
+
+def _last_coverage(conn, event_id: str) -> Dict[Any, str]:
+    """Latest status per (dataset, subject, period) for an event."""
+    sql = ("SELECT c.dataset, c.subject, c.period, c.status FROM coverage c "
+           "JOIN (SELECT dataset, subject, period, MAX(id) mid FROM coverage "
+           "WHERE event_id = {p} GROUP BY dataset, subject, period) m ON c.id = m.mid")
+    if _is_orm(conn):
+        from sqlalchemy import text as _t
+        rows = conn.execute(_t(sql.format(p=":e")), {"e": event_id}).fetchall()
+    else:
+        rows = conn.execute(sql.format(p="?"), (event_id,)).fetchall()
+    return {(r[0], r[1], r[2]): r[3] for r in rows}
 
 
 def _as_int(v: Any) -> Optional[int]:
@@ -738,6 +802,7 @@ def persist_result(
             for m in ev.get("markets") or []:
                 market_id = _get_or_create_market(conn, m.get("name"), m.get("market_type"), m.get("raw_g"))
                 scope = m.get("scope") or "FULL_MATCH"
+                subject, period = classify(m.get("name"), scope)
                 for s in m.get("selections") or []:
                     price = s.get("price")
                     if price is None:
@@ -751,9 +816,10 @@ def persist_result(
                     conn.execute(
                         "INSERT INTO odds_snapshots "
                         "(run_id, event_id, skin, market_id, selection_name, line, price, "
-                        " is_suspended, raw_t, scope, captured_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        " is_suspended, raw_t, scope, captured_at, subject, period) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (run_id, event_id, skin, market_id, s.get("name"), s.get("line"),
-                         price, susp, _as_int(s.get("raw_t")), scope, at),
+                         price, susp, _as_int(s.get("raw_t")), scope, at, subject, period),
                     )
                     last_odds[key] = (price, susp)
                     odds_ins += 1
@@ -768,29 +834,19 @@ def persist_result(
                         backend_id=str(t.get("id")) if t.get("id") else None,
                         country_id=_get_or_create_country(conn, tc.get("title")),
                     )
-                for g in h2h.get("game_shorts") or []:
-                    h2h_game_id = int(conn.execute(
-                        "INSERT INTO h2h_games "
-                        "(run_id, event_id, skin, game_id, sport_id, team1_backend_id, "
-                        " team2_backend_id, date_start, score1, score2, sub_score1, "
-                        " sub_score2, winner, status, captured_at) "
-                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (run_id, event_id, skin, g.get("game_id"), _as_int(h2h.get("sport_id")),
-                         g.get("team1_id"), g.get("team2_id"), g.get("date_start"),
-                         _as_int(g.get("score1")), _as_int(g.get("score2")),
-                         _as_int(g.get("sub_score1")), _as_int(g.get("sub_score2")),
-                         _as_int(g.get("winner")), _as_int(g.get("status")), at),
-                    ).lastrowid)
-                    # Per-quarter H2H breakdown → scoped ingestion.
-                    for ps in g.get("periods") or []:
-                        conn.execute(
-                            "INSERT INTO h2h_period_scores "
-                            "(h2h_game_id, event_id, period_key, period_name, home_score, away_score) "
-                            "VALUES (?,?,?,?,?,?)",
-                            (h2h_game_id, event_id, _as_int(ps.get("period_key")),
-                             ps.get("period_name"), _as_int(ps.get("home_score")),
-                             _as_int(ps.get("away_score"))),
-                        )
+                _insert_h2h_games(conn, run_id, event_id, skin, h2h, at)
+
+            # --- facts: coverage (only when a status changed) ---
+            last_cov = _last_coverage(conn, event_id)
+            for c in ev.get("coverage") or []:
+                ck = (c.get("dataset"), c.get("subject"), c.get("period"))
+                if last_cov.get(ck) == c.get("status"):
+                    continue
+                conn.execute(
+                    "INSERT INTO coverage (run_id, event_id, skin, dataset, subject, period, "
+                    "status, captured_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (run_id, event_id, skin, c.get("dataset"), c.get("subject"),
+                     c.get("period"), c.get("status"), at))
 
             # --- dimension: sub-games (SG[] — named per-period/per-stat groups) ---
             for sg in ev.get("sub_games") or []:
@@ -888,7 +944,7 @@ def counts(conn) -> Dict[str, int]:
     tables = [
         "sports", "countries", "leagues", "teams", "events", "markets", "sub_games",
         "scrape_runs", "event_states", "period_scores", "odds_snapshots",
-        "h2h_games", "h2h_period_scores", "statistics",
+        "h2h_games", "h2h_period_scores", "statistics", "coverage",
     ]
     return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
 
@@ -1114,6 +1170,89 @@ def events_missing_stat_id(conn, *, limit: int = 150) -> List[str]:
     return [r[0] for r in conn.execute(sql)]
 
 
+def _parse_ts(v: Any) -> Optional[datetime]:
+    """An ISO string (SQLite) or datetime (Postgres) → aware UTC datetime."""
+    if v is None or v == "":
+        return None
+    if isinstance(v, str):
+        try:
+            v = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+
+
+def events_missing_h2h(conn, *, limit: int = 300, retry_none_hours: float = 24.0) -> List[str]:
+    """Event ids of upcoming real matches with no H2H stored — the H2H backfill
+    queue. H2H is requested when a match is first stored and a failed attempt
+    was never retried; this is the retry. An event the source answered "no H2H"
+    for is left alone for ``retry_none_hours`` before it is asked again."""
+    sql = ("SELECT e.event_id, e.start_time FROM events e WHERE e.superseded_by IS NULL "
+           "AND e.away_name IS NOT NULL AND e.away_name <> '' "
+           "AND NOT EXISTS (SELECT 1 FROM h2h_games h WHERE h.event_id = e.event_id) "
+           "ORDER BY e.start_time")
+    cov_sql = ("SELECT c.event_id, c.status, c.captured_at FROM coverage c JOIN "
+               "(SELECT event_id, MAX(id) mid FROM coverage WHERE dataset = 'h2h' "
+               "GROUP BY event_id) m ON c.id = m.mid")
+    if _is_orm(conn):
+        from sqlalchemy import text as _t
+        rows = conn.execute(_t(sql)).fetchall()
+        cov = conn.execute(_t(cov_sql)).fetchall()
+    else:
+        rows = conn.execute(sql).fetchall()
+        cov = conn.execute(cov_sql).fetchall()
+    now = datetime.now(timezone.utc)
+    recent_none = set()
+    for eid, status, at in cov:
+        when = _parse_ts(at)
+        if status == "not_offered" and when and (now - when).total_seconds() < retry_none_hours * 3600:
+            recent_none.add(eid)
+    out: List[str] = []
+    for eid, start in rows:
+        st = _parse_ts(start)
+        if (st is None or st > now) and eid not in recent_none:
+            out.append(eid)
+    return out[:limit]
+
+
+def begin_backfill_run(conn, skin: str, action: str, *, at: Optional[str] = None) -> int:
+    """A ``scrape_runs`` row to hang backfilled facts on; returns its run_id."""
+    at = at or datetime.now(timezone.utc).isoformat()
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.begin_backfill_run(conn, skin, action, at)
+    run_id = int(conn.execute(
+        "INSERT INTO scrape_runs (skin, action, sport, url, extracted_at, event_count, success) "
+        "VALUES (?,?,?,?,?,?,?)", (skin, action, None, None, at, 0, 1)).lastrowid)
+    conn.commit()
+    return run_id
+
+
+def record_h2h(conn, run_id: int, event_id: str, skin: str, h2h: Optional[Dict[str, Any]],
+               status: str, *, at: Optional[str] = None) -> None:
+    """Store an H2H payload fetched after the event was first stored, and log the
+    attempt in ``coverage`` (always — it is the retry throttle). ``status`` is the
+    coverage status (offered | not_offered | fetch_failed); ``h2h`` the
+    ``H2HData.to_dict()`` payload, or None when there is none."""
+    at = at or datetime.now(timezone.utc).isoformat()
+    if _is_orm(conn):
+        from . import store_orm
+        return store_orm.record_h2h(conn, run_id, event_id, skin, h2h, status, at)
+    if h2h:
+        sport_id = _as_int(h2h.get("sport_id"))
+        for t in h2h.get("teams") or []:
+            tc = t.get("country") or {}
+            _get_or_create_team(
+                conn, t.get("title"), sport_id,
+                backend_id=str(t.get("id")) if t.get("id") else None,
+                country_id=_get_or_create_country(conn, tc.get("title")))
+        _insert_h2h_games(conn, run_id, event_id, skin, h2h, at)
+    conn.execute(
+        "INSERT INTO coverage (run_id, event_id, skin, dataset, subject, period, status, captured_at) "
+        "VALUES (?,?,?,?,?,?,?,?)", (run_id, event_id, skin, "h2h", None, None, status, at))
+    conn.commit()
+
+
 def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):
     """(event_id, stat_game_id) for real matches past ``min_age`` (default 2.5h)
     with no result yet — the results pass's work list. Oldest first."""
@@ -1228,7 +1367,7 @@ def _prune_delete(conn, event_ids: List[str]) -> Dict[str, int]:
     params = list(event_ids)
     out: Dict[str, int] = {}
     for table in ("odds_snapshots", "event_states", "period_scores",
-                  "statistics", "sub_games"):
+                  "statistics", "sub_games", "coverage"):
         cur = conn.execute(f"DELETE FROM {table} WHERE event_id IN ({ph})", params)
         out[table] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
     # h2h_period_scores references h2h_games — children first.
@@ -1271,7 +1410,7 @@ def prune_counts(conn, *, days: float = 7.0) -> Dict[str, int]:
         return store_orm.prune_counts(conn, days=days)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     tables = ("odds_snapshots", "event_states", "period_scores", "statistics",
-              "sub_games", "h2h_games")
+              "sub_games", "h2h_games", "coverage")
     out: Dict[str, int] = {}
     for table in tables:
         row = conn.execute(
@@ -1339,7 +1478,7 @@ def truncate_facts(conn) -> Dict[str, Any]:
         from . import store_orm
         return store_orm.truncate_facts(conn)
     tables = ("odds_snapshots", "event_states", "period_scores", "statistics",
-              "sub_games", "h2h_period_scores", "h2h_games", "scrape_runs")
+              "sub_games", "coverage", "h2h_period_scores", "h2h_games", "scrape_runs")
     out: Dict[str, Any] = {"tables": list(tables), "deleted": {}}
     for table in tables:
         cur = conn.execute(f"DELETE FROM {table}")
