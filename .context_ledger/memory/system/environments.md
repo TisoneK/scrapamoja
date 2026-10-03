@@ -131,7 +131,7 @@ block (and its "last verified" date) every time you run on it again.
   - Secret-sweep method that works here: Python driver over `git ls-files` (tree) + `git cat-file --batch-all-objects --batch-check` (all blobs, incl. unreachable) with masked output. Bash `grep -E` batteries lose quoting-heavy patterns on Git Bash/Windows — do not trust them for security sweeps.
 
 ---
-## Lameck-Windows (last verified 2026-09-14, session 48)
+## Lameck-Windows (last verified 2026-10-03, session 53)
 - **Identify by:** hostname `DESKTOP-3LRR8MD`, `$USERNAME` = `Lameck`, workspace `C:\Users\Lameck\Tisone\scrapamoja` (second Windows box; distinct user + path from the TisoneK-Windows block above)
 - **OS:** Windows 11 (build 26200), Git Bash + ZCode agent shell
 - **Runtimes:** `py -0p` → **3.14.7** (`C:\Python314`, default) and **3.11.0** (`AppData\Local\Programs\Python\Python311`). No 3.12/3.13 installed; no `uv` on PATH.
@@ -151,3 +151,11 @@ block (and its "last verified" date) every time you run on it again.
 
 **Post-migration (core 1.1.1, 2026-09-14 — this block is the ledger-era reference):**
 - **Verified commands (this box):** `.context_ledger/core/bin/ledger-sync.cmd {verify,status}` · `ledger-mem.cmd check` · `ledger-history.cmd status` · `ledger-gates.cmd {checkpoint,run pre-commit,run exit}` — all green via the `.cmd` launchers from Git Bash. The migration dance itself (`context-sync update -Major` → `ledger-sync migrate` → `ledger-sync rename`) ran here first: old `context-sync` refuses a cross-MAJOR bump without `-Major`, and its self-re-exec error after the swap is documented-expected (MIGRATION.md). `sed`-style path sweeps mangle Windows paths when the replacement contains `\U`/`\L` (GNU sed case directives) — verify any swept line with a diff, and the rename sweep also rewrote historical package names (`TisoneK/.context` → `TisoneK/.context_ledger` — a name that never existed; repaired in kickoff.md).
+
+**Session 53 additions (2026-10-03 — the "Kenyan machine"; egress verified as Nairobi, Safaricom AS37061; no proxy configured, direct mode):**
+- `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ src/security/tests/ src/browser/profiles/tests/ --no-cov -q` — verified: **283 passed, exit 0** (the full gated set; the summary line is still suppressed on this platform — trust exit code + dot count: 4×72 + 67).
+- `.venv/Scripts/python.exe -m playwright install chromium` — installed the bundled Chromium (`chromium-1234` + headless shell) into `%LOCALAPPDATA%\ms-playwright`; real Google Chrome already at `C:\Program Files\Google\Chrome\Application\chrome.exe` (the profiles' default `--channel chrome`).
+- `.venv/Scripts/python.exe -m src.security status|clear|evidence` — verified; `evidence` shows every recorded block with an example body.
+- **CLI post-run hang:** the betb2b CLI can sit ~12 minutes after `BetB2BScraper closed` + a persisted run, then exit 1 (data safe; seen twice, direct mode, remote Neon store). Backlog B-2026-10-03-9. Do not assume a silent process is stuck mid-write — check `scrape_runs` before killing anything; a PID alone can mislead (one was killed by mistake this session).
+- **Evening network flakiness on this link:** intermittent `getaddrinfo failed` / connect timeouts to several hosts (melbet/22bet unreachable streaks, one linebet connect timeout). Retry rather than diagnosing the scraper when it coincides.
+- linebet/Gcore contract measured today: see `office/reviews/2026-10-03-review.md` and ADR-32 — the challenge clears itself in a real headless browser in ~3 s; the API needs the **full** browser cookie jar.

@@ -40,6 +40,9 @@ correction twice.
 - **Per-skin defaults live in `src/sites/betb2b/.env`** (gitignored); give the operator a file with every field to fill (stated, 2026-10-02)
 - **No Supabase assumptions** — the operator never named it for the new store; use provider-neutral wording (Neon / "any Postgres") (correction, 2026-10-02)
 
+- **Measure the mechanism before changing code** — the operator's words: "Understanding HOW it appears is the key to figuring out HOW to fix it." Controlled live probes (A/B with and without a variable) over speculative edits (stated, 2026-10-03)
+- **Use the project's own diagnostics when investigating** — the snapshot/evidence system (including page screenshots) exists for this; the operator expects it to carry the diagnosis, not ad-hoc probes alone (stated, 2026-10-03)
+
 ## Communication
 - Conventional Commits with scope; `chore(ledger):` for `.context_ledger/` updates (prefix was `chore(context):` until the core 1.1.1 rename, 2026-09-14) (stated, 2026-07-12)
 - Agent must log inefficiencies in real time, not wait to be prompted (correction, 2026-07-19)

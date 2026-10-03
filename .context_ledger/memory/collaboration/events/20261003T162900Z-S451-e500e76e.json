@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261003T162900Z-S451-e500e76e",
+  "type": "release",
+  "session": "S451",
+  "agent": "S451",
+  "created": "2026-10-03T16:29:01Z",
+  "issue": "kenya-machine-runs",
+  "body": "Achieng (S451) released. Shipped the linebet/Gcore findings and fixes (session cookies in the Cookie header; one guard block per challenge burst; harvest after the grid renders) plus three Windows baseline fixes. Report: .context_ledger/memory/office/reviews/2026-10-03-review.md. Open: linebet live re-verification in a rested window; melbet re-run; backlog B-2026-10-03-6..10.",
+  "paths": ["src/sites/betb2b/", "src/security/", "src/network/", "docs/proposals/KENYA_MACHINE_BRIEF.md"],
+  "refs": ["9e439bd", "479d43b", "624c94e", "fb32cd1", "ec05ca0", "6fa14bb"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
