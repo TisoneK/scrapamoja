@@ -380,6 +380,8 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
     last_periods_all = _last_periods_bulk(conn, all_ids, skin)
     last_odds_all = _last_odds_bulk(conn, all_ids, skin)
     last_cov_all = _last_coverage_bulk(conn, all_ids)
+    from .store import _h2h_have, _h2h_key
+    h2h_have = _h2h_have(conn, all_ids)
 
     def _sport_c(sid, name):
         if sid is None:
@@ -507,7 +509,11 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                 _team_c(t.get("title"), _as_int(h2h.get("sport_id")) or sport_id,
                         backend_id=str(t.get("id")) if t.get("id") else None,
                         country_id=_country_c(tc.get("title")))
+            have = h2h_have.setdefault(event_id, set())
             for g in h2h.get("game_shorts") or []:
+                if _h2h_key(g) in have:
+                    continue          # already stored with this result: don't double the history
+                have.add(_h2h_key(g))
                 h2h_game_batch.append(dict(
                     run_id=run_id, event_id=event_id, skin=skin, game_id=g.get("game_id"),
                     sport_id=_as_int(h2h.get("sport_id")), team1_backend_id=g.get("team1_id"),
@@ -716,7 +722,9 @@ def record_h2h(conn: Connection, run_id: int, event_id: str, skin: str,
             _team(conn, t.get("title"), sport_id,
                   backend_id=str(t.get("id")) if t.get("id") else None,
                   country_id=_country(conn, tc.get("title")))
-        games = h2h.get("game_shorts") or []
+        from .store import _h2h_have, _h2h_key
+        have = _h2h_have(conn, [event_id]).get(event_id, set())
+        games = [g for g in (h2h.get("game_shorts") or []) if _h2h_key(g) not in have]
         if games:
             rows = [dict(
                 run_id=run_id, event_id=event_id, skin=skin, game_id=g.get("game_id"),

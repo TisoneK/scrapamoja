@@ -457,10 +457,60 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
 
 
+def _h2h_key(g: Dict[str, Any]) -> tuple:
+    """Identity of a stored H2H game row: the game and its result."""
+    return (str(g.get("game_id")), _as_int(g.get("status")),
+            _as_int(g.get("score1")), _as_int(g.get("score2")))
+
+
+def _h2h_have(conn, event_ids: List[str]) -> Dict[str, set]:
+    """``{event_id: {_h2h_key}}`` of H2H games already stored for the events."""
+    out: Dict[str, set] = {}
+    ids = [str(i) for i in event_ids]
+    for i in range(0, len(ids), 400):
+        chunk = ids[i:i + 400]
+        if _is_orm(conn):
+            from sqlalchemy import bindparam, text as _t
+            stmt = _t("SELECT event_id, game_id, status, score1, score2 FROM h2h_games "
+                      "WHERE event_id IN :ids").bindparams(bindparam("ids", expanding=True))
+            rows = conn.execute(stmt, {"ids": chunk}).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT event_id, game_id, status, score1, score2 FROM h2h_games WHERE event_id IN (%s)"
+                % ",".join("?" * len(chunk)), chunk).fetchall()
+        for r in rows:
+            out.setdefault(r[0], set()).add((str(r[1]), r[2], r[3], r[4]))
+    return out
+
+
+def dedupe_h2h_games(conn) -> int:
+    """Remove duplicate stored H2H games (same event, game and result), keeping the
+    newest row, with their period scores. Idempotent; returns the games removed."""
+    dup = ("SELECT id FROM h2h_games WHERE id NOT IN (SELECT MAX(id) FROM h2h_games "
+           "GROUP BY event_id, game_id, status, score1, score2)")
+    # NULL-safe grouping: GROUP BY treats NULLs as one group, so NULL results dedupe too.
+    if _is_orm(conn):
+        from sqlalchemy import text as _t
+        conn.execute(_t(f"DELETE FROM h2h_period_scores WHERE h2h_game_id IN ({dup})"))
+        res = conn.execute(_t(f"DELETE FROM h2h_games WHERE id IN ({dup})"))
+    else:
+        conn.execute(f"DELETE FROM h2h_period_scores WHERE h2h_game_id IN ({dup})")
+        res = conn.execute(f"DELETE FROM h2h_games WHERE id IN ({dup})")
+    conn.commit()
+    return max(res.rowcount or 0, 0)
+
+
 def _insert_h2h_games(conn, run_id: int, event_id: str, skin: str,
                       h2h: Dict[str, Any], at: str) -> None:
-    """Insert an event's H2H games and their per-period scores (SQLite path)."""
+    """Insert an event's H2H games and their per-period scores (SQLite path).
+
+    A game already stored for the event with the same result is not inserted again
+    (a re-scrape used to double the history); a game whose result changed (a fixture
+    that has since been played) is added as the newer row."""
+    have = _h2h_have(conn, [event_id]).get(event_id, set())
     for g in h2h.get("game_shorts") or []:
+        if _h2h_key(g) in have:
+            continue
         h2h_game_id = int(conn.execute(
             "INSERT INTO h2h_games "
             "(run_id, event_id, skin, game_id, sport_id, team1_backend_id, "

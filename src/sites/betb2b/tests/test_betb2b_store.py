@@ -217,7 +217,7 @@ def test_league_shared_across_skins_is_one_row(db, tmp_path):
     assert c["leagues"] == 1          # shared backend LI → one row
     assert c["events"] == 1           # shared event_id → one row
     assert c["scrape_runs"] == 3      # three observations
-    assert c["h2h_games"] == 3        # one per skin's observation
+    assert c["h2h_games"] == 1        # H2H history is the same for every skin: stored once
 
 
 # ---------------------------------------------------------------------------

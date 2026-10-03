@@ -328,3 +328,46 @@ def test_stored_basketball_h2h_periods_are_relabelled(conn):
     assert store.relabel_h2h_periods(conn) == 0                      # idempotent
     names = sorted(r[0] for r in _q(conn, "SELECT period_name FROM h2h_period_scores"))
     assert names == ["OVERTIME_1", "QUARTER_1"]
+
+
+def test_a_rescrape_does_not_double_the_h2h_history(conn):
+    h2h = {"sport_id": 3, "teams": [], "game_shorts": [
+        {"game_id": "g1", "team1_id": "a", "team2_id": "b", "score1": 90, "score2": 80, "status": 3,
+         "periods": [{"period_key": 18, "period_name": "x", "home_score": 20, "away_score": 18}]}]}
+    store.persist_result(_result("2026-10-03T10:00:00+00:00", h2h=h2h), conn=conn)
+    store.persist_result(_result("2026-10-03T11:00:00+00:00", h2h=h2h), conn=conn)
+    assert _q(conn, "SELECT COUNT(*) FROM h2h_games")[0][0] == 1
+    assert _q(conn, "SELECT COUNT(*) FROM h2h_period_scores")[0][0] == 1
+    # a fixture that has since been played is a different result: kept as the newer row
+    played = {"sport_id": 3, "teams": [], "game_shorts": [
+        {"game_id": "g1", "team1_id": "a", "team2_id": "b", "score1": 95, "score2": 70, "status": 3, "periods": []}]}
+    store.persist_result(_result("2026-10-03T12:00:00+00:00", h2h=played), conn=conn)
+    assert _q(conn, "SELECT COUNT(*) FROM h2h_games")[0][0] == 2
+
+
+def test_dedupe_removes_existing_duplicates_and_their_periods(conn):
+    store.persist_result(_result("2026-10-03T10:00:00+00:00"), conn=conn)
+    run = store.begin_backfill_run(conn, "linebet", "x")
+    for _ in range(3):   # simulate the old behaviour: same game stored three times
+        if store._is_orm(conn):
+            from sqlalchemy import text
+            conn.execute(text("INSERT INTO h2h_games (run_id,event_id,skin,game_id,score1,score2,status,captured_at) "
+                              "VALUES (:r,'E1','linebet','g',9,8,3,'2026-10-03 10:00:00')"), {"r": run})
+            conn.commit()
+        else:
+            conn.execute("INSERT INTO h2h_games (run_id,event_id,skin,game_id,score1,score2,status,captured_at) "
+                         "VALUES (?,'E1','linebet','g',9,8,3,'2026-10-03T10:00:00')", (run,))
+            conn.commit()
+    gid = _q(conn, "SELECT MIN(id) FROM h2h_games")[0][0]
+    for suffix in (1, 2):
+        _q_exec = ("INSERT INTO h2h_period_scores (h2h_game_id,event_id,period_key,period_name,home_score,away_score) "
+                   "VALUES (%d,'E1',18,'x',1,1)" % gid)
+        if store._is_orm(conn):
+            from sqlalchemy import text
+            conn.execute(text(_q_exec)); conn.commit()
+        else:
+            conn.execute(_q_exec); conn.commit()
+    assert store.dedupe_h2h_games(conn) == 2
+    assert _q(conn, "SELECT COUNT(*) FROM h2h_games")[0][0] == 1
+    assert _q(conn, "SELECT COUNT(*) FROM h2h_period_scores")[0][0] == 0   # belonged to a removed copy
+    assert store.dedupe_h2h_games(conn) == 0
