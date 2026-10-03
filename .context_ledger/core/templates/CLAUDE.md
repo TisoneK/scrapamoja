@@ -1,32 +1,37 @@
 # CLAUDE.md — read this first, every session
 
-<!-- Installed at bootstrap from .context_ledger/core/templates/CLAUDE.md. This is a
-pointer, not the digest: agent tools that auto-load CLAUDE.md (Claude Code)
-land here and are routed into the protocol. The full digest is AGENTS.md;
-the authority is .context_ledger/kickoff.md + .context_ledger/core/. Keep this file short —
-update AGENTS.md and the vendored core, not this pointer. -->
+<!-- Installed at bootstrap from .context_ledger/core/templates/CLAUDE.md.
+Claude Code auto-loads THIS file, not AGENTS.md, so the same weak-agent-
+floor rules AGENTS.md carries (check in; close a full office; no leaked
+secrets; no mixed commit surfaces; don't stop without pushing) are
+stated here too, not only routed onward — the two floors should agree
+even though only one of them loads automatically here. Keep everything
+else short — update kickoff.md and the vendored core, not this pointer
+(core 2.0.0 trimmed this file to a pointer; core 2.0.2 put the check-in
+line back after it caused a real collision; core 2.0.3 put the rest of
+this list back on the same reasoning — see CHANGELOG). -->
 
-This repo runs the `.context_ledger/` engineering protocol (persistent agent
-memory plus the full workflow, vendored into git). Your agent tool loaded
-**this** file, but the protocol entrypoint is elsewhere — don't start work
-from memory of this file alone.
+This repo runs the `.context_ledger/` engineering protocol.
 
-## First action (before any edit, even a one-liner)
+**Before reading anything else here — including the rest of this
+file — check in:** add your row to
+[`.context_ledger/memory/office/agents/roster.md`](.context_ledger/memory/office/agents/roster.md)
+(a real name — never "Claude" — plus codename `S<NNN>`, model, Status
+`Working`), then commit and push it. Reading or analyzing first is how
+two sessions collide before either ever sees the other on the board.
 
-1. **Read [`AGENTS.md`](AGENTS.md)** — the protocol digest for this repo.
-2. **Read `.context_ledger/kickoff.md` and follow it** (Step 0 → Step 1). It
-   routes you to the right instruction set in `.context_ledger/core/rules/`.
-3. **Sync and orient:** pull, then read
-   `.context_ledger/memory/workflows/active.md` (standing params + push policy),
-   `.context_ledger/memory/office/agents/sessions.md` (last few entries — the real HEAD
-   and session number live here, not in the harness's start-of-session git
-   snapshot, which can be stale), and `.context_ledger/memory/office/tasks/current.md`.
-4. **Record the task** in `.context_ledger/memory/office/tasks/current.md` before editing.
+**Before that push, check `.context_ledger/memory/office/agents/sessions.md`:**
+if it already holds more than `office_size` sessions (default 20), the
+office is full — close it first (`sh .context_ledger/core/bin/ledger-history close`,
+dry run then `--confirm`) and sign the fresh board instead.
 
-Skipping this is a logged protocol failure — an agent once ran an entire
-session with zero `.context_ledger/` discipline until the user had to ask whether
-it had followed the protocol. This file exists so the kickoff read is the
-first thing that happens, not the thing that gets skipped.
+**Then** read
+[`.context_ledger/kickoff.md`](.context_ledger/kickoff.md) and follow it,
+in order — its Phase 2 covers both of the above with full mechanics,
+then routes you onward. Do not start work from memory of this file alone.
 
-Everything else — git flow, gates, secrets, collaboration, exit checklist —
-is in `AGENTS.md` and `.context_ledger/core/`.
+Never write under `.context_ledger/core/`. No secret values in any
+tracked file, ever — only in `.context_ledger/memory/secrets/`. Stage and
+commit project code and `.context_ledger/` memory separately, never both
+with `git add -A`. And the session is not done until it's committed
+**and pushed** — a user reminder to push is a logged protocol failure.
