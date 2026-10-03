@@ -1097,9 +1097,22 @@ class BetB2BScraper:
         group — the optional statistics service) is cooling down."""
         self.session_manager.guard.preflight(scope)
 
+    def _health(self, url: str, status: int, size: int, latency_ms: float,
+                scope: Optional[str]) -> None:
+        """Report a direct call (stats / H2H / results / bootstrap fetch) to telemetry, so the
+        per-scrape health summary covers every request, not only the feed client's."""
+        try:
+            tail = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1] or "root"
+            self.telemetry.record_feed_poll(
+                feed=tail, root=scope or "direct", status=status, body_bytes=size,
+                latency_ms=latency_ms, decoded=200 <= status < 300)
+        except Exception:  # noqa: BLE001 -- health reporting must never break a request
+            pass
+
     def _guard_failure(self, exc: BaseException, scope: Optional[str] = None, url: str = "") -> None:
         """A direct call got no answer (timeout / dropped connection): count it toward resting
         the skin (or the ``scope`` endpoint group), shared with every other component."""
+        self._health(url, 0, 0, 0.0, scope)
         if isinstance(exc, httpx.TransportError):
             self.session_manager.guard.note_failure(scope, error=exc, url=url)
 
@@ -1107,6 +1120,11 @@ class BetB2BScraper:
         """Classify a direct ``httpx`` response; raises :class:`SiteBlocked` on a block
         that needs a cooldown. Direct calls used to bypass the guard, so a challenge
         page there was neither recognised nor rested."""
+        try:
+            latency_ms = resp.elapsed.total_seconds() * 1000.0
+        except RuntimeError:                # httpx: elapsed only exists once the response is closed
+            latency_ms = 0.0
+        self._health(str(resp.url), resp.status_code, len(resp.content), latency_ms, scope)
         self.feed_client.guard_response(resp, str(resp.url), resp.headers.get("content-type", ""))
         if scope:                                       # an answer came back: that group's streak is over
             self.session_manager.guard.note_ok(scope)

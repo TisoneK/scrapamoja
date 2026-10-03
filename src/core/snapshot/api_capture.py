@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from .models import SnapshotBundle, SnapshotConfig, SnapshotContext, SnapshotMode
+from .retention import sweep_once
 from .normalize import NormalizerConfig, normalize_captured_response
 
 RAW_BODY_CHARS = 20_000
@@ -39,6 +40,7 @@ def capture_response_bundle(
     """Write one response bundle; returns its directory, or None if it could not be written."""
     try:
         now = datetime.now()
+        sweep_once(base_path)
         ctx = SnapshotContext(
             site=_SAFE.sub("_", site), module=_SAFE.sub("_", module),
             component=_SAFE.sub("_", component),

@@ -20,7 +20,11 @@ import json
 import os
 from typing import TYPE_CHECKING, Any
 
+import time
+
 import httpx
+
+from src.observability import diagnostics as _diag
 
 from src.network.errors import NetworkError, Retryable
 from src.network.direct_api.interfaces import AuthConfig
@@ -175,9 +179,12 @@ class RequestBuilder:
             request_kwargs["content"] = self._body
 
         # Make the request with error handling
+        started = time.monotonic()
         try:
             response = await self._client._client.request(**request_kwargs)
         except httpx.HTTPStatusError as e:
+            _diag.report_request(domain, str(self._url), 0, (time.monotonic() - started) * 1000.0)
+            _diag.report_failure("unreachable", domain, str(self._url), error=e, method=self._method)
             # HTTP errors (4xx, 5xx) - extract status code
             status_code = e.response.status_code if e.response else None
             return NetworkError(
@@ -189,6 +196,8 @@ class RequestBuilder:
                 retryable=self._classify_error(status_code),
             )
         except httpx.HTTPError as e:
+            _diag.report_request(domain, str(self._url), 0, (time.monotonic() - started) * 1000.0)
+            _diag.report_failure("unreachable", domain, str(self._url), error=e, method=self._method)
             # Other HTTP errors (connection errors, timeouts, etc.)
             return NetworkError(
                 module="direct_api",
@@ -206,6 +215,13 @@ class RequestBuilder:
                 detail=str(e),
                 retryable=Retryable.TERMINAL,
             )
+
+        # Diagnostics: every request is a health data point; a non-2xx answer keeps its evidence
+        _diag.report_request(domain, str(self._url), response.status_code,
+                             (time.monotonic() - started) * 1000.0, len(response.content))
+        if not response.is_success:
+            _diag.report_failure("http_error", domain, str(self._url), status=response.status_code,
+                                 headers=response.headers, body=response.content, method=self._method)
 
         # Log response with redaction
         self._log_response(response)

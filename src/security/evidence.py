@@ -107,7 +107,7 @@ class EvidenceLog:
                 rec["response"] = response
             if extra:
                 rec["extra"] = extra
-            if self.snapshots and kind in ("block", "unreachable") and body is not None:
+            if self.snapshots and kind in ("block", "unreachable", "http_error") and body is not None:
                 from src.core.snapshot.api_capture import capture_response_bundle
                 bundle = capture_response_bundle(
                     site=site, module="security", component=kind, url=url, status=status,

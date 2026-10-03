@@ -6,6 +6,7 @@ capture, storage, triggers, monitoring, and integration components.
 """
 
 import asyncio
+from .retention import sweep_once
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 import uuid
@@ -44,6 +45,7 @@ class SnapshotManager:
         
         # Initialize core components
         self.storage = SnapshotStorage(storage_path)  # Use provided storage_path directly, not settings.base_path
+        sweep_once(storage_path)   # age out / cap old bundles (nothing used to call cleanup)
         self.deduplicator = ContentDeduplicator(
             max_cache_size=self.settings.dedup_cache_size
         )
