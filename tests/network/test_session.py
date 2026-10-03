@@ -171,6 +171,24 @@ class TestSessionPackage:
         assert "valid=xyz" in header
         assert "expired=" not in header
 
+    def test_session_cookies_with_expires_minus_one_are_kept(self):
+        """Playwright reports session cookies as expires=-1, not None.
+
+        They must stay in the header: sites that protect API calls with a WAF
+        session cookie (set for the browser session only) reject requests that
+        omit it, and the scraper replays the header on every direct call."""
+        cookies = [
+            SessionCookies(name="SPSI", value="abc", domain=".example.com", expires=-1),
+            SessionCookies(name="sbtsck", value="tok", domain=".example.com", expires=-1.0),
+            SessionCookies(name="kept", value="1", domain=".example.com", expires=None),
+        ]
+
+        header = SessionPackage(site_name="test", cookies=cookies).to_cookie_header()
+
+        assert "SPSI=abc" in header
+        assert "sbtsck=tok" in header
+        assert "kept=1" in header
+
     def test_get_auth_header(self):
         """Test getting specific auth header."""
         headers = [

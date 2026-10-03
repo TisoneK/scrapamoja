@@ -134,13 +134,14 @@ class SessionPackage:
             Formatted cookie header string (e.g., "name1=value1; name2=value2")
         """
         cookie_parts = []
+        now = datetime.now(UTC).timestamp()
         for cookie in self.cookies:
-            # Skip cookies that have expired
-            if cookie.expires is not None:
-                # Check if expired (compare with current time)
-                now = datetime.now(UTC).timestamp()
-                if cookie.expires < now:
-                    continue
+            # Skip only cookies with a real deadline in the past. Browser APIs report
+            # session cookies (no expiry) as 0 or -1 — those are valid for the session
+            # and dropping them strips exactly the first-party session/protection
+            # cookies some sites require on later HTTP calls.
+            if cookie.expires is not None and cookie.expires > 0 and cookie.expires < now:
+                continue
             cookie_parts.append(f"{cookie.name}={cookie.value}")
         return "; ".join(cookie_parts)
 
