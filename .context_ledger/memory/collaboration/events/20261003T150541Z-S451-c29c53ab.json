@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261003T150541Z-S451-c29c53ab",
+  "type": "claim",
+  "session": "S451",
+  "agent": "S451",
+  "created": "2026-10-03T15:05:41Z",
+  "issue": "kenya-machine-runs",
+  "body": "Achieng (S451) on the Kenyan machine: warm the betb2b-linebet browser profile and run linebet + betwinner/melbet/22bet into the shared store per the Kenya machine brief; also the three Windows-only baseline test failures (store-fallback classifier, snapshot-cap path check, pacer spacing).",
+  "paths": ["src/sites/betb2b/", "src/security/", "docs/proposals/KENYA_MACHINE_BRIEF.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
