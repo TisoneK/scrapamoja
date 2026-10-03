@@ -152,3 +152,13 @@ at session start). Rotate with context-history.
 - **Open items:** backlog B-2026-10-03-6..10 — linebet live re-verification with the fixes; results/stats CLI batches lack the burst halt; H2H/session refresh before statisticfeed; betwinner post-run hang (12 min, exit 1); melbet re-run; block-time screenshot capture.
 - **Notes:** exit gate: the configured `.venv/bin/python -m pytest …` command fails on Windows (known trap, `environments.md`); the equivalent `.venv/Scripts/python.exe -m pytest src/sites/betb2b/tests/ src/security/tests/ src/browser/profiles/tests/ --no-cov -q` ran green at exit — **283 passed, exit 0**.
 - **Report:** .context_ledger/memory/office/reviews/2026-10-03-review.md
+
+---
+## 2026-10-03 — Session 54 (Noor/S452)
+- **Agent:** Noor (S452) | **Model:** claude-sonnet-5-5 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** operator | **Core:** 2.0.3
+- **Task:** operator: "Migrate ledger" — read as bringing the vendored core current (1.1.3 -> 2.0.3, MAJOR).
+- **Commits:** ledger only (check-in, migration `c6e3e20`, wrap).
+- **Outcome:** done — `ledger-sync migrate --major` from the sibling `../context` package; core verified at 2.0.3; new `STATE.md`, `parking-lot.md`, playbooks, `ledger-state`; `kickoff.md` regenerated from the new template with the project facts. `AGENTS.md`/`CLAUDE.md` not overwritten by the tool (it only seeds them when missing) so the project digest stays.
+- **Open items:** `ledger-mem check` now warns: backlog 23 rows past cap 20, flaws log 19 past cap 15, inefficiencies 36 past cap 15 (`ledger-mem prune --apply` for the closed ones; backlog needs a human call on what goes to the parking lot). `AGENTS.md` is still the 1.1.x digest, not the 2.0.x router.
+- **Notes:** none
+

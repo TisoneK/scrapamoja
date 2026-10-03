@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-03T16:49:47Z_
+_Regenerated: 2026-10-03T16:50:06Z_
 
 ## Standing params
 - **Core:** 2.0.3 (locked, verified 2026-10-03)
@@ -17,7 +17,6 @@ _Regenerated: 2026-10-03T16:49:47Z_
 ## Office — who's in, right now
 - **Kai** (S447) — Done — Operator: env-only switch to run workers locally during the Supabase pause
 - **Mei** (S450) — Done — Engineer: full market/odds/H2H capture build
-- **Noor** (S452) — Working — Operator: migrate the vendored ledger core 1.1.3 -> 2.0.3
 
 ## Current task
 (idle — no task recorded)
