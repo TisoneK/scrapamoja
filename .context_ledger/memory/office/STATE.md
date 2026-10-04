@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-03T17:43:56Z_
+_Regenerated: 2026-10-04T08:47:52Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-10-03)
@@ -15,7 +15,8 @@ _Regenerated: 2026-10-03T17:43:56Z_
 - Full params: `memory/workflows/active.md`
 
 ## Office — who's in, right now
-- **Achieng** (S002) — Working — Engineer: verify Windows gate execution, then sweep product code for `.context_ledger` vo…
+- **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
+- **Wanjiru** (S003) — Working — Speeding up the slow Postgres persist (ADR-17) in store_orm
 
 ## Current task
 - **—** — none — no session in progress — *idle*
@@ -28,7 +29,7 @@ _14 medium, 4 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 1 entry, last added 2026-10-03
-- inefficiencies/log.md (project code/env friction): 3 entries, last added 2026-10-03
+- inefficiencies/log.md (project code/env friction): 4 entries, last added 2026-10-03
 - plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-10-03
 
 ## Collaboration
