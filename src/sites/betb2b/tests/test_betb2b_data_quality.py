@@ -174,3 +174,124 @@ def test_dedupe_removes_the_same_game_stored_under_two_game_ids(conn):
     conn.commit()
     assert store.dedupe_h2h_games(conn) == 1
     assert _q(conn, "SELECT COUNT(*) FROM h2h_games")[0][0] == 1
+
+
+# --------------------------------------------------------------------------- #
+# Results, removed lines, superseded events, aliases, repair
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("h,a,void", [(0, 0, True), (20, 0, True), (0, 20, True), (88, 81, False)])
+def test_finished_basketball_with_a_placeholder_score_is_not_a_result(conn, h, a, void):
+    store.persist_result(_result(), conn=conn)
+    store.record_result(conn, "E1", stat_game_id="s1", score_home=h, score_away=a, winner=1, status=3,
+                        at="2026-10-04T10:00:00+00:00")
+    row = _q(conn, "SELECT result_status, final_score_home, final_score_away, winner FROM events")[0]
+    assert row == ((-2, None, None, None) if void else (3, h, a, 1))
+    assert store.events_needing_results(conn, min_age_seconds=0) == []   # not asked again either way
+
+
+def test_a_football_nil_nil_is_still_a_result(conn):
+    r = _result()
+    r["events"][0].update(sport="football", sport_id=1)
+    store.persist_result(r, conn=conn)
+    store.record_result(conn, "E1", score_home=0, score_away=0, winner=0, status=3, at="2026-10-04T10:00:00+00:00")
+    assert _q(conn, "SELECT result_status, final_score_home, final_score_away FROM events") == [(3, 0, 0)]
+
+
+def _with_totals(lines, event_id="E1"):
+    r = _result(event_id=event_id)
+    r["events"][0]["markets"] = [{"name": "Total", "market_type": "total", "raw_g": 17, "scope": "FULL_MATCH",
+                                  "selections": [s for line in lines for s in (
+                                      {"name": "Over", "price": 1.9, "line": line},
+                                      {"name": "Under", "price": 1.9, "line": line})]}]
+    return r
+
+
+def test_a_line_the_source_withdrew_is_stored_suspended(conn):
+    store.persist_result(_with_totals([160.5, 161.5]), conn=conn)
+    store.persist_result(_with_totals([161.5]), conn=conn)                # 160.5 is gone
+    latest = _q(conn, "SELECT line, MAX(snap_id), is_suspended FROM odds_snapshots GROUP BY line, selection_name "
+                      "ORDER BY line")
+    assert {(line, bool(susp)) for line, _, susp in latest} == {(160.5, True), (161.5, False)}
+    store.persist_result(_with_totals([161.5]), conn=conn)                # nothing new to say
+    assert _q(conn, "SELECT COUNT(*) FROM odds_snapshots")[0][0] == 6
+
+
+def test_a_scope_that_did_not_come_back_withdraws_nothing(conn):
+    store.persist_result(_with_totals([160.5]), conn=conn)
+    store.persist_result(_result(), conn=conn)                            # no markets at all this time
+    assert _q(conn, "SELECT COUNT(*) FROM odds_snapshots WHERE is_suspended IN (1, TRUE)")[0][0] == 0
+
+
+def test_a_superseded_event_gets_no_new_odds_or_h2h(conn):
+    store.persist_result(_with_totals([160.5], event_id="E1"), conn=conn)
+    store.persist_result(_with_totals([160.5], event_id="E2"), conn=conn)      # the re-listing, higher id
+    store._run_sql(conn, "UPDATE events SET start_time = (SELECT start_time FROM events WHERE event_id = 'E1')", {})
+    conn.commit()
+    assert store.mark_superseded(conn) == 1
+    assert _q(conn, "SELECT superseded_by FROM events WHERE event_id = 'E1'") == [("E2",)]
+    before = _q(conn, "SELECT COUNT(*) FROM odds_snapshots WHERE event_id = 'E1'")[0][0]
+    r = _with_totals([150.5], event_id="E1")
+    r["events"][0]["h2h_data"] = _h2h(_g("1", "ta", "tb", 90, 80))
+    store.persist_result(r, conn=conn)
+    assert _q(conn, "SELECT COUNT(*) FROM odds_snapshots WHERE event_id = 'E1'")[0][0] == before
+    assert _q(conn, "SELECT COUNT(*) FROM h2h_games WHERE event_id = 'E1'")[0][0] == 0
+
+
+def _insert_game(conn, run, event_id, gid, t1, t2, s1, s2, date="2026-01-01 00:00:00", sport=3):
+    params = dict(r=run, e=event_id, g=gid, t1=t1, t2=t2, s1=s1, s2=s2, d=date, sp=sport,
+                  c=store._ts_for(conn, "2026-10-03T10:00:00+00:00"))
+    sql = ("INSERT INTO h2h_games (run_id, event_id, skin, game_id, sport_id, team1_backend_id, team2_backend_id, "
+           "date_start, score1, score2, captured_at) VALUES (:r,:e,'l',:g,:sp,:t1,:t2,:d,:s1,:s2,:c)")
+    store._run_sql(conn, sql, params)
+    conn.commit()
+
+
+def test_repair_cleans_old_rows_and_learns_aliases(conn):
+    # E1 = Alpha v Beta (ta, tb). Beta's history also lists a game under a second id "tb2".
+    h = {"sport_id": 3, "teams": TEAMS, "game_shorts": []}
+    store.persist_result(_result(h2h=h), conn=conn)
+    run = store.begin_backfill_run(conn, "linebet", "x")
+    _insert_game(conn, run, "E1", "g1", "tb", "q", 70, 60, date="2026-02-02 19:00:00")      # known id
+    _insert_game(conn, run, "E1", "g2", "tb2", "q", 70, 60, date="2026-02-02 19:00:00")     # same game, alias
+    _insert_game(conn, run, "E1", "g3", "tb2", "r", 55, 54, date="2026-02-09 19:00:00")     # only under the alias
+    _insert_game(conn, run, "E1", "g4", "ta", "tb", 0, 0, date="2026-03-01 19:00:00")       # placeholder
+    _insert_game(conn, run, "E1", "g5", "ta", "z", 20, 0, date="2026-03-02 19:00:00")       # forfeit token
+    _insert_game(conn, run, "E1", "g6", "u", "v", 80, 70, date="2026-03-03 19:00:00")       # matches nothing
+    store._run_sql(conn, "INSERT INTO h2h_period_scores (h2h_game_id, event_id, period_key, period_name, "
+                         "home_score, away_score) SELECT id, event_id, 18, 'QUARTER_1', 0, 0 FROM h2h_games "
+                         "WHERE game_id = 'g1'", {})
+    store._run_sql(conn, "UPDATE events SET sport_id = 3, result_status = 3, final_score_home = 0, "
+                         "final_score_away = 0 WHERE event_id = 'E1'", {})
+    conn.commit()
+
+    out = store.repair_data_quality(conn)
+    assert out["placeholder_h2h_games"] == 2 and out["voided_results"] == 1 and out["aliases_added"] == 1
+    assert out["h2h_games_with_empty_periods"] == 1
+    assert _q(conn, "SELECT alias_backend_id, backend_id FROM team_aliases") == [("tb2", "tb")]
+    kinds = dict(_q(conn, "SELECT game_id, kind FROM h2h_games"))
+    assert kinds == {"g1": "team2_form", "g2": "team2_form", "g3": "team2_form", "g4": "h2h",
+                     "g5": "team1_form", "g6": "unmapped"}
+    assert _q(conn, "SELECT score1, score2, result_flag FROM h2h_games WHERE game_id IN ('g4', 'g5') "
+                    "ORDER BY game_id") == [(None, None, "no_score"), (None, None, "forfeit")]
+    assert _q(conn, "SELECT result_status, final_score_home FROM events") == [(-2, None)]
+    assert store.repair_data_quality(conn) == {"duplicate_h2h_games": 0, "placeholder_h2h_games": 0,
+                                               "h2h_games_with_empty_periods": 0, "voided_results": 0,
+                                               "aliases_added": 0, "h2h_kind_changed": 0}
+
+
+def test_an_alias_that_matches_two_teams_is_left_unmapped(conn):
+    store.persist_result(_result(h2h={"sport_id": 3, "teams": TEAMS, "game_shorts": []}), conn=conn)
+    run = store.begin_backfill_run(conn, "linebet", "x")
+    _insert_game(conn, run, "E1", "g1", "ta", "q", 70, 60)
+    _insert_game(conn, run, "E1", "g2", "tb", "q", 70, 60)          # same date/opponent/score under both teams
+    _insert_game(conn, run, "E1", "g3", "mystery", "q", 70, 60)
+    assert store.resolve_team_aliases(conn) == 0
+
+
+def test_backfill_queue_asks_again_only_for_events_whose_teams_lack_backend_ids(conn):
+    store.persist_result(_result(), conn=conn)
+    run = store.begin_backfill_run(conn, "linebet", "x")
+    _insert_game(conn, run, "E1", "g1", "ta", "tb", 70, 60)           # has H2H, but the teams are unlinked
+    assert store.events_missing_h2h(conn) == ["E1"]
+    store.record_coverage(conn, run, "E1", "linebet", "h2h", "offered")   # asked just now: leave it alone
+    assert store.events_missing_h2h(conn) == []

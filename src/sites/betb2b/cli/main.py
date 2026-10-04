@@ -721,6 +721,14 @@ class BetB2BCLI:
         qt.add_argument("--prune-batch", type=int, default=None,
                         help="Max events to prune in one pass (default: $BETB2B_PRUNE_BATCH / 2000)")
 
+        # repair-data — one-off cleanup of rows stored before the data-quality rules
+        rd = sub.add_parser("repair-data",
+                            help="Clean rows stored before the data-quality rules: duplicate H2H games, "
+                                 "placeholder (0-0 / 20-0) scores, 0-0 period rows, voided results, "
+                                 "team aliases and the H2H 'kind' tag. Idempotent.")
+        rd.add_argument("--db", nargs="?", const="", default=None,
+                        help="Store path (default: $BETB2B_DB_PATH / DATABASE_URL if set)")
+
         # compare-match
         cm = sub.add_parser("compare-match", help="Compare match page UI data vs API endpoints")
         cm.add_argument("--skin", "-s", default=_env("BETB2B_SKIN", "linebet"), help="Skin name (default: linebet)")
@@ -775,6 +783,8 @@ class BetB2BCLI:
             return await self._cmd_schedule(args)
         if args.command == "quota":
             return await self._cmd_quota(args)
+        if args.command == "repair-data":
+            return self._cmd_repair_data(args)
         if args.command == "reset":
             return self._cmd_reset(args)
         if args.command == "view":
@@ -1012,6 +1022,23 @@ class BetB2BCLI:
             finally:
                 conn.close()
         return rc
+
+    def _cmd_repair_data(self, args: argparse.Namespace) -> int:
+        """Clean already-stored rows (see ``store.repair_data_quality``)."""
+        from src.sites.betb2b import store
+
+        db = args.db
+        if db == "" or db is None:
+            from src.sites.betb2b.service import db_path
+            db = db_path()
+        conn = store.init_db(db)
+        try:
+            out = store.repair_data_quality(conn)
+        finally:
+            conn.close()
+        for name, n in out.items():
+            print(f"{name:32s}: {n}")
+        return 0
 
     async def _cmd_quota(self, args: argparse.Namespace) -> int:
         """One-shot hosted-store size check; optional bounded prune."""

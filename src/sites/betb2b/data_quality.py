@@ -162,3 +162,18 @@ def prepare_h2h_games(h2h: Mapping[str, Any], *, sport_id: Any = None,
         row["periods"] = [] if flag else clean_periods(g.get("periods") or [], sport)
         out.append(row)
     return out
+
+
+def removed_selections(last_odds: Mapping[tuple, tuple], seen_scopes: Iterable[str],
+                       current_keys: Iterable[tuple]) -> List[tuple]:
+    """Stored selections the latest fetch no longer offers.
+
+    ``last_odds`` is ``{(scope, market_id, selection, line): (price, is_suspended)}``.
+    A selection counts as removed only when its scope came back with markets this
+    time (a scope that failed to fetch says nothing) and it is not among
+    ``current_keys`` and was not already suspended. Returned as ``(key, price)``;
+    the caller stores each as a suspended row, which is how a withdrawn line
+    reaches a consumer reading the latest price per line."""
+    scopes, current = set(seen_scopes), set(current_keys)
+    return [(k, v[0]) for k, v in last_odds.items()
+            if k[0] in scopes and k not in current and not v[1]]

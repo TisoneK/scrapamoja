@@ -34,7 +34,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .data_quality import RESULT_STATUS_VOID, match_event_teams, placeholder_flag, prepare_h2h_games
+from .data_quality import (
+    RESULT_STATUS_VOID, match_event_teams, placeholder_flag, prepare_h2h_games, removed_selections,
+)
 from .labels import classify
 
 
@@ -148,6 +150,7 @@ __all__ = [
     "init_db",
     "reset_all",
     "mark_superseded",
+    "repair_data_quality",
     "is_read_only_error",
     "persist_result",
     "latest_odds",
@@ -529,6 +532,100 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
         cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
         if column not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
+
+def resolve_team_aliases(conn) -> int:
+    """Learn the second backend ids a team is seen under; returns aliases added.
+
+    The same real game is listed in several events' H2H, once under each team's
+    id of the moment. An id that is not any team's ``backend_id`` is an alias of
+    team T when a game with that id matches a game of T on date, opponent id and
+    score, and every such match names the same T. Nothing else is inferred — an
+    id that matches no known game stays unmapped."""
+    known = {str(r[0]) for r in _run_sql(
+        conn, "SELECT backend_id FROM teams WHERE backend_id IS NOT NULL", {}).fetchall()}
+    aliases = load_team_aliases(conn)
+    games = _run_sql(conn, "SELECT team1_backend_id, team2_backend_id, date_start, score1, score2 "
+                           "FROM h2h_games WHERE date_start IS NOT NULL AND score1 IS NOT NULL "
+                           "AND score2 IS NOT NULL AND team1_backend_id IS NOT NULL "
+                           "AND team2_backend_id IS NOT NULL", {}).fetchall()
+    sides = []      # (team id, opponent id, date, own score, opponent score), both orientations
+    for t1, t2, d, s1, s2 in games:
+        sides.append((str(t1), str(t2), str(d), s1, s2))
+        sides.append((str(t2), str(t1), str(d), s2, s1))
+    by_game: Dict[tuple, set] = {}
+    for tid, opp, d, own, other in sides:
+        if tid in known:
+            by_game.setdefault((opp, d, own, other), set()).add(tid)
+    votes: Dict[str, set] = {}
+    for tid, opp, d, own, other in sides:
+        if tid in known or tid in aliases:
+            continue
+        for cand in by_game.get((opp, d, own, other), ()):
+            if cand != opp:
+                votes.setdefault(tid, set()).add(cand)
+    added = 0
+    for alias, cands in votes.items():
+        if len(cands) != 1:
+            continue          # ambiguous: leave unmapped
+        _run_sql(conn, "INSERT INTO team_aliases (alias_backend_id, backend_id, source) "
+                       "VALUES (:a, :b, 'h2h_game_match')", {"a": alias, "b": next(iter(cands))})
+        added += 1
+    conn.commit()
+    return added
+
+
+def reclassify_h2h_kinds(conn) -> int:
+    """Recompute ``h2h_games.kind`` for stored rows (event teams + aliases); returns rows changed."""
+    from .data_quality import h2h_kind
+    aliases = load_team_aliases(conn)
+    rows = _run_sql(
+        conn, "SELECT h.id, h.team1_backend_id, h.team2_backend_id, h.kind, th.backend_id, ta.backend_id "
+              "FROM h2h_games h JOIN events e ON e.event_id = h.event_id "
+              "LEFT JOIN teams th ON th.team_id = e.home_team_id "
+              "LEFT JOIN teams ta ON ta.team_id = e.away_team_id", {}).fetchall()
+    by_kind: Dict[str, List[int]] = {}
+    for hid, t1, t2, cur, a, b in rows:
+        kind = h2h_kind(t1, t2, a, b, aliases)
+        if kind != cur:
+            by_kind.setdefault(kind, []).append(int(hid))
+    changed = 0
+    for kind, ids in by_kind.items():
+        for i in range(0, len(ids), 400):
+            chunk = ",".join(str(x) for x in ids[i:i + 400])       # ints from the database itself
+            _run_sql(conn, f"UPDATE h2h_games SET kind = :k WHERE id IN ({chunk})", {"k": kind})
+        changed += len(ids)
+    conn.commit()
+    return changed
+
+
+def repair_data_quality(conn) -> Dict[str, int]:
+    """One-off cleanup of rows stored before the data-quality rules (``data_quality.py``)
+    existed: duplicate games, placeholder scores, 0-0 period rows, voided results,
+    team aliases and the ``kind`` of every H2H row. Idempotent; returns counts."""
+    out: Dict[str, int] = {"duplicate_h2h_games": dedupe_h2h_games(conn)}
+    placeholder = ("sport_id = 3 AND result_flag IS NULL AND "
+                   "((score1 = 0 AND score2 = 0) OR (score1 = 20 AND score2 = 0) OR (score1 = 0 AND score2 = 20))")
+    ids = "SELECT id FROM h2h_games WHERE " + placeholder
+    _run_sql(conn, f"DELETE FROM h2h_period_scores WHERE h2h_game_id IN ({ids})", {})
+    out["placeholder_h2h_games"] = _run_sql(
+        conn, "UPDATE h2h_games SET result_flag = CASE WHEN score1 = 0 AND score2 = 0 THEN 'no_score' "
+              "ELSE 'forfeit' END, score1 = NULL, score2 = NULL, sub_score1 = NULL, sub_score2 = NULL, "
+              f"winner = NULL WHERE {placeholder}", {}).rowcount or 0
+    out["h2h_games_with_empty_periods"] = _run_sql(
+        conn, "DELETE FROM h2h_period_scores WHERE h2h_game_id IN (SELECT g.id FROM h2h_games g "
+              "JOIN h2h_period_scores p ON p.h2h_game_id = g.id WHERE g.sport_id = 3 AND "
+              "((p.home_score = 0 AND p.away_score = 0) OR p.home_score IS NULL OR p.away_score IS NULL))",
+        {}).rowcount or 0
+    out["voided_results"] = _run_sql(
+        conn, "UPDATE events SET final_score_home = NULL, final_score_away = NULL, winner = NULL, "
+              f"result_status = {RESULT_STATUS_VOID} WHERE result_status = 3 AND sport_id = 3 AND "
+              "((final_score_home = 0 AND final_score_away = 0) OR (final_score_home = 20 AND final_score_away = 0) "
+              "OR (final_score_home = 0 AND final_score_away = 20))", {}).rowcount or 0
+    conn.commit()
+    out["aliases_added"] = resolve_team_aliases(conn)
+    out["h2h_kind_changed"] = reclassify_h2h_kinds(conn)
+    return out
 
 
 def _h2h_key(g: Dict[str, Any]) -> tuple:
@@ -969,7 +1066,13 @@ def persist_result(
 
             # --- facts: odds (only when a selection's price/suspension changed) ---
             last_odds = _last_odds(conn, event_id, skin)
-            for m in ev.get("markets") or []:
+            # A re-listed match (superseded_by) is represented by its newer id: no new odds/H2H for it.
+            superseded = conn.execute("SELECT superseded_by FROM events WHERE event_id=?",
+                                      (event_id,)).fetchone()
+            skip_facts = bool(superseded and superseded[0])
+            seen_scopes: set = set()
+            current_keys: set = set()
+            for m in ([] if skip_facts else ev.get("markets") or []):
                 market_id = _get_or_create_market(conn, m.get("name"), m.get("market_type"), m.get("raw_g"))
                 scope = m.get("scope") or "FULL_MATCH"
                 subject, period = classify(m.get("name"), scope)
@@ -980,6 +1083,8 @@ def persist_result(
                     price = float(price)
                     susp = 1 if s.get("is_suspended") else 0
                     key = (scope, market_id, s.get("name"), s.get("line"))
+                    seen_scopes.add(scope)
+                    current_keys.add(key)
                     if last_odds.get(key) == (price, susp):
                         odds_skip += 1
                         continue
@@ -993,9 +1098,21 @@ def persist_result(
                     )
                     last_odds[key] = (price, susp)
                     odds_ins += 1
+            for key, price in removed_selections(last_odds, seen_scopes, current_keys):
+                # The line is gone from the source: store it suspended so it is not read as live.
+                mname = conn.execute("SELECT name FROM markets WHERE market_id=?", (key[1],)).fetchone()
+                subject, period = classify(mname[0] if mname else None, key[0])
+                conn.execute(
+                    "INSERT INTO odds_snapshots "
+                    "(run_id, event_id, skin, market_id, selection_name, line, price, "
+                    " is_suspended, raw_t, scope, captured_at, subject, period) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (run_id, event_id, skin, key[1], key[2], key[3], price, 1, None, key[0],
+                     at, subject, period))
+                last_odds[key] = (price, 1)
 
             # --- facts: H2H (+ enrich teams dim from h2h team metadata) ---
-            h2h = ev.get("h2h_data")
+            h2h = None if skip_facts else ev.get("h2h_data")
             if h2h:
                 for t in h2h.get("teams") or []:
                     tc = t.get("country") or {}
@@ -1267,17 +1384,29 @@ def known_sub_game_ids(conn, ids) -> set:
     return out
 
 
+# Odds for a match starting soon go stale fast: re-fetch them hourly (see unprocessed_ids).
+NEAR_START_HORIZON = 12 * 3600.0
+NEAR_START_REFRESH = 3600.0
+
+
 def unprocessed_ids(pairs, path: PathLike | None = None, *,
                     refresh_window: float = float('inf'),
                     skip_started: bool = True,
-                    retry_incomplete_after: float = 3600.0) -> List[str]:
+                    retry_incomplete_after: float = 3600.0,
+                    near_horizon: float = NEAR_START_HORIZON,
+                    near_refresh: float = NEAR_START_REFRESH) -> List[str]:
     """Filter discovered ``[(event_id, start_epoch)]`` down to ids worth fetching:
     drop events already scraped within ``refresh_window`` seconds (default inf =
     never re-scrape a stored event; 0 = always re-fetch) and, if ``skip_started``, ones that have kicked off.
     A stored event whose coverage shows a failed or never-attempted totals fetch is kept
     once ``retry_incomplete_after`` seconds have passed since it was last seen.
     Works on whichever store ``init_db`` resolves (local SQLite or remote DB), so
-    several machines sharing one remote store skip each other's work."""
+    several machines sharing one remote store skip each other's work.
+
+    A stored match that starts within ``near_horizon`` seconds is the one a bettor
+    (and the engine) will act on, so its odds are re-fetched once they are
+    ``near_refresh`` seconds old whatever ``refresh_window`` says: an old totals
+    line is a different bet from the bookmaker's current one."""
     import time
     ids = [i for i, _ in pairs]
     last_seen: Dict[str, Any] = {}
@@ -1327,7 +1456,13 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
             age = now - dt.timestamp()
         except ValueError:
             age = float("inf")
-        if age >= refresh_window:
+        window = refresh_window
+        try:
+            if start is not None and 0 < float(start) - now <= near_horizon:
+                window = min(window, near_refresh)
+        except (TypeError, ValueError):
+            pass
+        if age >= window:
             keep.append(eid)
         elif eid in incomplete and age >= retry_incomplete_after:
             keep.append(eid)      # stored, but part of its market data failed or was never fetched
@@ -1460,9 +1595,12 @@ def events_missing_h2h(conn, *, limit: int = 300, retry_none_hours: float = 24.0
     queue. H2H is requested when a match is first stored and a failed attempt
     was never retried; this is the retry. An event the source answered "no H2H"
     for is left alone for ``retry_none_hours`` before it is asked again."""
-    sql = ("SELECT e.event_id, e.start_time FROM events e WHERE e.superseded_by IS NULL "
-           "AND e.away_name IS NOT NULL AND e.away_name <> '' "
-           "AND NOT EXISTS (SELECT 1 FROM h2h_games h WHERE h.event_id = e.event_id) "
+    sql = ("SELECT e.event_id, e.start_time, "
+           "EXISTS (SELECT 1 FROM h2h_games h WHERE h.event_id = e.event_id) FROM events e "
+           "WHERE e.superseded_by IS NULL AND e.away_name IS NOT NULL AND e.away_name <> '' "
+           "AND (NOT EXISTS (SELECT 1 FROM h2h_games h WHERE h.event_id = e.event_id) "
+           "     OR EXISTS (SELECT 1 FROM teams t WHERE t.backend_id IS NULL "
+           "                AND t.team_id IN (e.home_team_id, e.away_team_id))) "
            "ORDER BY e.start_time")
     cov_sql = ("SELECT c.event_id, c.status, c.captured_at FROM coverage c JOIN "
                "(SELECT event_id, MAX(id) mid FROM coverage WHERE dataset = 'h2h' "
@@ -1475,15 +1613,20 @@ def events_missing_h2h(conn, *, limit: int = 300, retry_none_hours: float = 24.0
         rows = conn.execute(sql).fetchall()
         cov = conn.execute(cov_sql).fetchall()
     now = datetime.now(timezone.utc)
-    recent_none = set()
+    recent_none, recent_any = set(), set()
     for eid, status, at in cov:
         when = _parse_ts(at)
-        if status == "not_offered" and when and (now - when).total_seconds() < retry_none_hours * 3600:
-            recent_none.add(eid)
+        if when and (now - when).total_seconds() < retry_none_hours * 3600:
+            recent_any.add(eid)
+            if status == "not_offered":
+                recent_none.add(eid)
     out: List[str] = []
-    for eid, start in rows:
+    for eid, start, has_h2h in rows:
         st = _parse_ts(start)
-        if (st is None or st > now) and eid not in recent_none:
+        # An event that already has H2H is only asked again to learn its teams' backend ids,
+        # and not more than once per window (the answer may simply not name them).
+        skip = recent_any if has_h2h else recent_none
+        if (st is None or st > now) and eid not in skip:
             out.append(eid)
     return out[:limit]
 
@@ -1739,9 +1882,16 @@ def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
     if stat_game_id:
         sets.append("stat_game_id=?"); params.append(str(stat_game_id))
     if status == 3:
+        row = conn.execute("SELECT sport_id FROM events WHERE event_id=?", (str(event_id),)).fetchone()
+        if row and placeholder_flag(row[0], score_home, score_away):
+            # A "finished" match with a placeholder score (0-0, 20-0 forfeit token) is not a
+            # result: keep no score, and a status that says so (and stops it being asked again).
+            score_home = score_away = winner = None
+            status = RESULT_STATUS_VOID
         sets += ["final_score_home=?", "final_score_away=?", "winner=?",
                  "result_status=?", "result_captured_at=?"]
-        params += [_as_int(score_home), _as_int(score_away), _as_int(winner), 3, at]
+        params += [_as_int(score_home), _as_int(score_away), _as_int(winner),
+                   3 if status == 3 else RESULT_STATUS_VOID, at]
     if not sets:
         return
     params.append(str(event_id))

@@ -22,7 +22,9 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import insert as _pg_insert
 from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 
-from .data_quality import match_event_teams, prepare_h2h_games
+from .data_quality import (
+    RESULT_STATUS_VOID, match_event_teams, placeholder_flag, prepare_h2h_games, removed_selections,
+)
 from .labels import classify
 from .models import (
     Base, Country, Coverage, Event, MatchStat, PlayerStat, EventState, H2HGame, H2HPeriodScore, League,
@@ -427,6 +429,12 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
     from .store import _h2h_have, _h2h_key, load_team_aliases
     h2h_have = _h2h_have(conn, all_ids)
     aliases = load_team_aliases(conn)
+    # Re-listed matches (superseded_by) are represented by their newer id: no new odds/H2H for them.
+    superseded_ids = set()
+    for i in range(0, len(all_ids), 400):
+        superseded_ids.update(conn.execute(select(_events.c.event_id).where(
+            _events.c.event_id.in_(all_ids[i:i + 400]), _events.c.superseded_by.isnot(None))).scalars())
+    market_names: Dict[int, Optional[str]] = {}
     _marks.append(("prefetch", time.monotonic()))
 
     def _sport_c(sid, name):
@@ -515,7 +523,10 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
 
         # facts: odds (only when a selection's price/suspension changed) → batch
         last_odds = last_odds_all.get(event_id, {})
-        for m in ev.get("markets") or []:
+        skip_facts = event_id in superseded_ids
+        seen_scopes: set = set()
+        current_keys: set = set()
+        for m in ([] if skip_facts else ev.get("markets") or []):
             market_id = _market_c(m.get("name"), m.get("market_type"), m.get("raw_g"))
             scope = m.get("scope") or "FULL_MATCH"
             subject, period = classify(m.get("name"), scope)
@@ -526,6 +537,8 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                 price = float(price)
                 susp = bool(s.get("is_suspended"))
                 key = (scope, market_id, s.get("name"), s.get("line"))
+                seen_scopes.add(scope)
+                current_keys.add(key)
                 if last_odds.get(key) == (price, susp):
                     continue
                 odds_batch.append(dict(
@@ -534,11 +547,22 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                     is_suspended=susp, raw_t=_as_int(s.get("raw_t")), scope=scope, captured_at=at,
                     subject=subject, period=period))
                 last_odds[key] = (price, susp)
+        for key, price in removed_selections(last_odds, seen_scopes, current_keys):
+            # The line is gone from the source: store it suspended so it is not read as live.
+            if key[1] not in market_names:
+                market_names[key[1]] = conn.execute(
+                    select(_markets.c.name).where(_markets.c.market_id == key[1])).scalar()
+            subject, period = classify(market_names[key[1]], key[0])
+            odds_batch.append(dict(
+                run_id=run_id, event_id=event_id, skin=skin, market_id=key[1],
+                selection_name=key[2], line=key[3], price=price, is_suspended=True, raw_t=None,
+                scope=key[0], captured_at=at, subject=subject, period=period))
+            last_odds[key] = (price, True)
 
         # facts: H2H (+ enrich teams dim). Games are accumulated and inserted in
         # one batch after the loop — each game's periods carry the game's list
         # index so they can be re-linked to the returned id (see the flush below).
-        h2h = ev.get("h2h_data")
+        h2h = None if skip_facts else ev.get("h2h_data")
         if h2h:
             for t in h2h.get("teams") or []:
                 tc = t.get("country") or {}
@@ -759,8 +783,14 @@ def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
     if stat_game_id:
         vals["stat_game_id"] = str(stat_game_id)
     if status == 3:
-        vals.update(final_score_home=_as_int(score_home), final_score_away=_as_int(score_away),
-                    winner=_as_int(winner), result_status=3, result_captured_at=_dt(at))
+        void = placeholder_flag(conn.execute(select(_events.c.sport_id).where(
+            _events.c.event_id == str(event_id))).scalar(), score_home, score_away)
+        if void:   # a placeholder score (0-0, 20-0 forfeit token) is not a result — see data_quality
+            vals.update(final_score_home=None, final_score_away=None, winner=None,
+                        result_status=RESULT_STATUS_VOID, result_captured_at=_dt(at))
+        else:
+            vals.update(final_score_home=_as_int(score_home), final_score_away=_as_int(score_away),
+                        winner=_as_int(winner), result_status=3, result_captured_at=_dt(at))
     if not vals:
         return
     conn.execute(_events.update().where(_events.c.event_id == str(event_id)).values(**vals))

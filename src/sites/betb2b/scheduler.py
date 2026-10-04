@@ -352,7 +352,13 @@ class BetB2BScheduler:
                 started = False
             if started:
                 continue
-            if _age_seconds(last_seen.get(eid)) >= self.refresh_window:
+            window = self.refresh_window
+            try:
+                if start is not None and 0 < float(start) - now <= store.NEAR_START_HORIZON:
+                    window = min(window, store.NEAR_START_REFRESH)   # starts soon: keep its odds fresh
+            except (TypeError, ValueError):
+                pass
+            if _age_seconds(last_seen.get(eid)) >= window:
                 keep.append(eid)   # new (inf age) or stale
         return keep
 

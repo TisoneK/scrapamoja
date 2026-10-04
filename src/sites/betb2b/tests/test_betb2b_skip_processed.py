@@ -1,5 +1,6 @@
 """--skip-processed: already-stored events are not re-fetched."""
 import time
+from datetime import datetime, timezone
 
 from src.sites.betb2b import store
 
@@ -60,9 +61,27 @@ def test_stored_match_with_failed_or_unattempted_totals_is_fetched_again(tmp_pat
                          "VALUES (1,?,?,?,?,?,?,?)", (eid, "s", "totals", "MATCH", "QUARTER_1", status, long_ago))
     conn.commit()
     conn.close()
-    future = time.time() + 3600
+    future = time.time() + 3 * 86400      # beyond the near-start horizon: only the retry rule applies
     pairs = [(e, future) for e in ("failed", "untried", "complete", "none", "new")]
     # stored long ago, so the incomplete ones come back; complete / unknown ones do not
     assert store.unprocessed_ids(pairs, db) == ["failed", "untried", "new"]
     # ...but not again straight away: a match just seen waits out the retry delay
     assert store.unprocessed_ids(pairs, db, retry_incomplete_after=10 ** 12) == ["new"]
+
+
+def test_a_match_starting_soon_is_refetched_when_its_odds_are_an_hour_old(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("BETB2B_STORE_MODE", "local")
+    db = str(tmp_path / "o.db")
+    seen = time.time() - 2 * 3600
+    stamp = datetime.fromtimestamp(seen, timezone.utc).isoformat()
+    conn = store.init_db(db)
+    for eid in ("soon", "later"):
+        conn.execute("INSERT INTO events (event_id, first_seen, last_seen) VALUES (?,?,?)", (eid, stamp, stamp))
+    conn.commit()
+    conn.close()
+    now = time.time()
+    pairs = [("soon", now + 5 * 3600), ("later", now + 3 * 86400)]
+    # stored matches are otherwise never re-fetched; one that starts within the horizon is, once stale
+    assert store.unprocessed_ids(pairs, db) == ["soon"]
+    assert store.unprocessed_ids(pairs, db, near_refresh=10 ** 9) == []
