@@ -1195,8 +1195,12 @@ class BetB2BScraper:
         if c is None or c.is_closed:
             proxy_url = self.proxy_endpoint.to_httpx_proxy() if self.proxy_endpoint is not None else None
             n = self.concurrency + 2
+            # A dropped new connection used to stall a whole batch for the full 15s timeout with
+            # nothing logged: fail the CONNECT fast (5s) and retry it once on a fresh socket.
             c = self._direct_http = httpx.AsyncClient(
-                proxy=proxy_url, timeout=15.0, follow_redirects=True,
+                proxy=proxy_url, timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=True,
+                transport=httpx.AsyncHTTPTransport(retries=1, proxy=proxy_url) if proxy_url
+                else httpx.AsyncHTTPTransport(retries=1),
                 limits=httpx.Limits(max_connections=n, max_keepalive_connections=n, keepalive_expiry=60.0),
             )
         yield c
@@ -1223,6 +1227,9 @@ class BetB2BScraper:
         """A direct call got no answer (timeout / dropped connection): count it toward resting
         the skin (or the ``scope`` endpoint group), shared with every other component."""
         self._health(url, 0, 0, 0.0, scope)
+        # httpx timeouts stringify to "", which is why these stalls used to be invisible.
+        logger.warning("skin=%s %s request failed: %s %s", self.skin.name, scope or "direct",
+                       type(exc).__name__, (url or "").split("?")[0].rsplit("/", 1)[-1])
         if isinstance(exc, httpx.TransportError):
             self.session_manager.guard.note_failure(scope, error=exc, url=url)
 
