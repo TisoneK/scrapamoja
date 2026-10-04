@@ -26,3 +26,5 @@ Example:
 - **`kickoff.md` Step 1 — `git pull --ff-only`** → **No change needed** — git works fine from PowerShell on Windows. (set by agent, 2026-07-20)
 
 - **Read order ends at the edition's overrides** → **also read `project-guide.md` (this directory) at orientation** — it holds the project architecture and the BetB2B rules (11-17) that used to live in the root `AGENTS.md`, which core 2.0.x regenerates (set by agent, 2026-10-03)
+
+- **Agents may probe/test a betting site from any machine** → **on a geo-restricted machine (outside the allowed countries; `SCRAPAMOJA_GEO_RESTRICTED=1` in its `.env`) no agent loads a site's pages without the allowed-country proxy — data fetching only, via `scrape ... --direct`** — a page load from a blocked connection is a recorded country block against the machine; the code enforces it, never route around the refusal (full rule: `project-guide.md`, BetB2B rule 18) (set by user, 2026-10-04)

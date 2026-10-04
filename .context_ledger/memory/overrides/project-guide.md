@@ -422,6 +422,21 @@ python -m src.sites.betb2b.cli.main compare-match --skin linebet --sport basketb
 
 17. **The H2H `id` param is NOT the URL event ID.** It must be extracted from `GetGameZip` or `GetSubsOptionsForGame` response bodies. They are different numbers with no obvious relationship.
 
+18. **Geo-restricted machines never load a site's pages without a proxy — fetch data only.** Betting sites
+    country-block whole countries: a page request from a blocked connection is redirected to `/en/block`
+    (HTTP 203), the guard records a `geo_block` against the machine, and (before the 2026-10 fix) the
+    cooldown also stopped the direct feed runs, although the feeds are not country-gated. On a machine
+    outside the allowed countries: **no browser, no page load, no hybrid-mode scrape, no profile warm-up,
+    no probe/compare/discover scripts, no "just testing the site" — unless traffic goes through the
+    allowed-country proxy (`BETB2B_PROXY_URL`).** The allowed path is feed fetching without a page:
+    `scrape <skin> scheduled --sport basketball --direct`. Set `SCRAPAMOJA_GEO_RESTRICTED=1` in that
+    machine's `.env`; the code then refuses the browser paths (`PageLoadsRefused`). A page-level country
+    block seen without a proxy switches page loads off for that site automatically (`python -m src.security
+    status` shows it; `python -m src.security clear <site>` lifts it). Do not clear it, unset the variable,
+    or route around the refusal to make a run proceed; if a task needs a browser, say the machine cannot do
+    it and name the allowed-country machine instead. Tests must not touch the real site from such a machine:
+    use the offline fixtures. (set by user, 2026-10-04)
+
 ### Development Setup
 
 ```bash
