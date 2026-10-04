@@ -1783,17 +1783,21 @@ def events_missing_match_stats(conn, *, limit: int = 100, retry_none_hours: floa
                                max_age_days: float = 7.0) -> List[tuple]:
     """``(event_id, stat_game_id)`` of finished matches (final score recorded, started within
     ``max_age_days``) with no team statistics stored yet — the post-match statistics queue. A
-    match the source had no statistics for waits ``retry_none_hours`` before it is asked again."""
+    match the source had no statistics for waits ``retry_none_hours`` before it is asked again; one
+    it gave only player (or only team) statistics for is complete and not asked again."""
     rows = _run_sql(conn,
         "SELECT e.event_id, e.stat_game_id, e.start_time FROM events e WHERE e.result_status = 3 "
         "AND NOT EXISTS (SELECT 1 FROM match_stats m WHERE m.event_id = e.event_id) "
+        "AND NOT EXISTS (SELECT 1 FROM player_stats p WHERE p.event_id = e.event_id) "
         "ORDER BY e.start_time DESC", {}).fetchall()
     cov = _run_sql(conn,
         "SELECT c.event_id, c.status, c.captured_at FROM coverage c JOIN (SELECT event_id, MAX(id) mid "
         "FROM coverage WHERE dataset = 'match_stats' GROUP BY event_id) x ON c.id = x.mid", {}).fetchall()
     now = datetime.now(timezone.utc)
-    recent = {eid for eid, st, at in cov if st == "not_offered" and _parse_ts(at)
-              and (now - _parse_ts(at)).total_seconds() < retry_none_hours * 3600}
+    # "offered" means statistics were stored (team and/or player rows): never ask again, even
+    # when the source gave only one of the two. "not_offered" waits out the retry window.
+    recent = {eid for eid, st, at in cov if st == "offered" or (st == "not_offered" and _parse_ts(at)
+              and (now - _parse_ts(at)).total_seconds() < retry_none_hours * 3600)}
     out = []
     for eid, sid, start in rows:
         st = _parse_ts(start)

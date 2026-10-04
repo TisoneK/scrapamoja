@@ -571,3 +571,21 @@ async def test_backfills_run_even_when_no_match_is_newly_due(tmp_path, monkeypat
     c = store.init_db(db)
     assert c.execute("SELECT COUNT(*) FROM match_stats").fetchone()[0] == 3
     assert c.execute("SELECT COUNT(*) FROM period_scores").fetchone()[0] == 1
+
+
+def test_a_match_with_only_player_statistics_is_not_asked_again(conn):
+    store.persist_result(_result("2026-10-03T10:00:00+00:00", start=(datetime.now(timezone.utc)
+                                                                      - timedelta(days=1)).isoformat()), conn=conn)
+    store.record_result(conn, "E1", stat_game_id="sg", score_home=9, score_away=8, winner=1, status=3,
+                        at="2026-10-03T12:00:00+00:00")
+    assert store.events_missing_match_stats(conn) == [("E1", "sg")]
+    run = store.begin_backfill_run(conn, "linebet", "backfill_match_stats")
+    # the source gave a player table but no team periods: 0 team rows, some player rows
+    assert store.record_match_stats(conn, run, "E1", "linebet",
+                                    {"team": [], "players": [{"team_title": "Alpha", "tab_index": 0, "player_id": "p1",
+                                                              "stat_code": "Pts", "value": "9"}]}) == (0, 1)
+    assert store.events_missing_match_stats(conn) == []             # player rows alone end the queue
+    # ...and the coverage marker does too, even if the rows were pruned
+    run2 = store.begin_backfill_run(conn, "linebet", "x")
+    store.record_coverage(conn, run2, "E1", "linebet", "match_stats", "offered")
+    assert store.events_missing_match_stats(conn) == []
