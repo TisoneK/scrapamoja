@@ -76,4 +76,5 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Notes:** none
 - **Report:** .context_ledger/memory/office/reviews/2026-10-04-review.md
 - **Correction (appended, never edited above):** the bullet "Follow-up 8 (geo-restricted machines, operator rule)" at the end of Session 4's entry was written by S005 (Imani), not by S004; it landed there because the office had been reset and the file tail then belonged to S004. Its content is covered by ADR-2 and this entry.
+- **Closing addendum:** after the wrap the operator's three-skin refetch finished on the Mac (Neon: 681 events, 230 finished, statistics for 183 matches, 81k player rows; betwinner 477 / melbet 361 / 22bet 332 events, linebet 2) and one more bug surfaced and was fixed: a match whose source gave only player statistics (no team periods) was re-asked every run (`fix(betb2b)`, test added). The betwinner follow-up was refused once by the old `geo_block` cooldown (started 3 minutes early) and re-ran clean. All work committed and pushed; no background jobs left running.
 
