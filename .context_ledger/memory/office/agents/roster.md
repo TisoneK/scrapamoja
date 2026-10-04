@@ -53,6 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Achieng | S002 | deepseek/deepseek-flash | Engineer: Windows gate fix + product-tree ledger-vocabulary sweep | Done | Shipped: `tools/gates/pytest.sh` + portable `gates.conf` launcher (`80220d6`, `698d297`) — both gate runners PASS on Windows; tree sweep clean outside the managed entry points |
+| Imani | S005 | claude-sonnet-5-5 | Engineer: ledger update for the full-capture work + the geo-restricted-machine rule (continues the work of the closed office's Mei session; a different Mei holds S004 here) | Working | Checked in; correcting a misplaced session note, then ADRs, preferences, flaws, backlog, report |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
