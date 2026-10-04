@@ -77,6 +77,12 @@ own totals line (the rung whose **Over** price is nearest 1.85, and whose line
 **must end in .5** — an engine rule) plus H2H matches whose scores match the
 scope.
 
+**Defaults come from `src/sites/betb2b/.env`** (gitignored; the CLI loads it, then the repo-root `.env`):
+`BETB2B_SKIN` (currently `betwinner`), `BETB2B_SPORT`, `BETB2B_ACTION`, `BETB2B_TIMEOUT`,
+`BETB2B_FALLBACK_SKINS`. The code's own fallback skin is `linebet`, which is geo-blocked from some
+addresses. The examples below name `linebet` explicitly only to show the syntax. For the operator's
+normal run, name no skin: `.venv/bin/python -m src.sites.betb2b.cli scrape --timeout 3600`.
+
 ```bash
 # Scrape, store and ingest (all 9 engine scopes when the sub-games offer them):
 python -m src.sites.betb2b.cli scrape linebet scheduled --sport basketball --ingest
