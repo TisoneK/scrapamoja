@@ -1196,11 +1196,9 @@ class BetB2BScraper:
             proxy_url = self.proxy_endpoint.to_httpx_proxy() if self.proxy_endpoint is not None else None
             n = self.concurrency + 2
             # A dropped new connection used to stall a whole batch for the full 15s timeout with
-            # nothing logged: fail the CONNECT fast (5s) and retry it once on a fresh socket.
+            # nothing logged: fail the CONNECT fast (5s) instead.
             c = self._direct_http = httpx.AsyncClient(
                 proxy=proxy_url, timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=True,
-                transport=httpx.AsyncHTTPTransport(retries=1, proxy=proxy_url) if proxy_url
-                else httpx.AsyncHTTPTransport(retries=1),
                 limits=httpx.Limits(max_connections=n, max_keepalive_connections=n, keepalive_expiry=60.0),
             )
         yield c
