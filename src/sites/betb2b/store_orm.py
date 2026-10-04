@@ -13,6 +13,7 @@ API (``init_db`` → a connection, helpers take that ``conn``, return dicts).
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -372,6 +373,14 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
     h2h_game_batch: List[dict] = []
     h2h_periods_batch: List[List[dict]] = []
     h2hp_batch: List[dict] = []
+    # Per-event upserts/inserts, also batched (one statement per table, not per
+    # event/sub-game — sub-games alone were thousands of round-trips per run).
+    # Keyed so a repeat within the batch collapses (ON CONFLICT cannot touch a row twice).
+    event_batch: Dict[str, dict] = {}
+    subgame_batch: Dict[str, dict] = {}
+    state_batch: List[dict] = []
+    _t0 = time.monotonic()
+    _marks: List[tuple] = []
 
     # Bulk-prefetch the change-only dedup state for every event at once (one query
     # each) instead of one round-trip per event.
@@ -383,6 +392,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
     last_cov_all = _last_coverage_bulk(conn, all_ids)
     from .store import _h2h_have, _h2h_key
     h2h_have = _h2h_have(conn, all_ids)
+    _marks.append(("prefetch", time.monotonic()))
 
     def _sport_c(sid, name):
         if sid is None:
@@ -436,31 +446,19 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                           feed_id=_as_int(ev.get("away_team_feed_id")), image=ev.get("away_team_image"),
                           feed_country_id=_as_int(ev.get("away_team_country_id")))
 
-        estmt = _ins(conn)(_events).values(
+        event_batch[event_id] = dict(
             event_id=event_id, sport_id=sport_id, league_id=league_id, country_id=country_id,
             home_team_id=home_id, away_team_id=away_id, home_name=ev.get("home"),
             away_name=ev.get("away"), start_time=_dt(ev.get("start_time")),
             venue=ev.get("venue"), stage=ev.get("stage"), first_seen=at, last_seen=at,
             stat_game_id=ev.get("stat_game_id"))
-        estmt = estmt.on_conflict_do_update(index_elements=["event_id"], set_={
-            "sport_id": func.coalesce(estmt.excluded.sport_id, _events.c.sport_id),
-            "league_id": func.coalesce(estmt.excluded.league_id, _events.c.league_id),
-            "country_id": func.coalesce(estmt.excluded.country_id, _events.c.country_id),
-            "home_team_id": func.coalesce(estmt.excluded.home_team_id, _events.c.home_team_id),
-            "away_team_id": func.coalesce(estmt.excluded.away_team_id, _events.c.away_team_id),
-            "start_time": func.coalesce(estmt.excluded.start_time, _events.c.start_time),
-            "venue": func.coalesce(estmt.excluded.venue, _events.c.venue),
-            "stage": func.coalesce(estmt.excluded.stage, _events.c.stage),
-            "stat_game_id": func.coalesce(_events.c.stat_game_id, estmt.excluded.stat_game_id),
-            "last_seen": estmt.excluded.last_seen})
-        conn.execute(estmt)
 
         # facts: live state (only when changed)
         state = (ev.get("status"), bool(ev.get("is_live")), _as_int(ev.get("score_home")),
                  _as_int(ev.get("score_away")), _as_int(ev.get("minute")),
                  ev.get("period"), ev.get("time_remaining"))
         if last_states.get(event_id) != state:
-            conn.execute(_states.insert().values(
+            state_batch.append(dict(
                 run_id=run_id, event_id=event_id, skin=skin, status=state[0], is_live=state[1],
                 score_home=state[2], score_away=state[3], minute=state[4], period=state[5],
                 time_remaining=state[6], wp_home=ev.get("wp_home"), wp_away=ev.get("wp_away"),
@@ -544,20 +542,11 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
             sgid = str(sg.get("sub_game_id") or "").strip()
             if not sgid:
                 continue
-            sstmt = _ins(conn)(_subgames).values(
+            subgame_batch[sgid] = dict(
                 sub_game_id=sgid, event_id=event_id, name=sg.get("name"),
                 period=sg.get("period"), period_index=_as_int(sg.get("period_index")),
                 market_count=_as_int(sg.get("market_count")),
                 sport_id=_as_int(sg.get("sport_id")), first_seen=at, last_seen=at)
-            sstmt = sstmt.on_conflict_do_update(index_elements=["sub_game_id"], set_={
-                "event_id": sstmt.excluded.event_id,
-                "name": func.coalesce(sstmt.excluded.name, _subgames.c.name),
-                "period": func.coalesce(sstmt.excluded.period, _subgames.c.period),
-                "period_index": func.coalesce(sstmt.excluded.period_index, _subgames.c.period_index),
-                "market_count": func.coalesce(sstmt.excluded.market_count, _subgames.c.market_count),
-                "sport_id": func.coalesce(sstmt.excluded.sport_id, _subgames.c.sport_id),
-                "last_seen": sstmt.excluded.last_seen})
-            conn.execute(sstmt)
 
         # facts: statistics (flatten name/value) → batch
         for st in ev.get("statistics") or []:
@@ -567,6 +556,36 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                         run_id=run_id, event_id=event_id, skin=skin,
                         name=str(k), value=str(v), captured_at=at))
 
+    _marks.append(("loop", time.monotonic()))
+    # Dimensions first (facts reference events), each as one batched upsert.
+    if event_batch:
+        estmt = _ins(conn)(_events)
+        estmt = estmt.on_conflict_do_update(index_elements=["event_id"], set_={
+            "sport_id": func.coalesce(estmt.excluded.sport_id, _events.c.sport_id),
+            "league_id": func.coalesce(estmt.excluded.league_id, _events.c.league_id),
+            "country_id": func.coalesce(estmt.excluded.country_id, _events.c.country_id),
+            "home_team_id": func.coalesce(estmt.excluded.home_team_id, _events.c.home_team_id),
+            "away_team_id": func.coalesce(estmt.excluded.away_team_id, _events.c.away_team_id),
+            "start_time": func.coalesce(estmt.excluded.start_time, _events.c.start_time),
+            "venue": func.coalesce(estmt.excluded.venue, _events.c.venue),
+            "stage": func.coalesce(estmt.excluded.stage, _events.c.stage),
+            "stat_game_id": func.coalesce(_events.c.stat_game_id, estmt.excluded.stat_game_id),
+            "last_seen": estmt.excluded.last_seen})
+        conn.execute(estmt, list(event_batch.values()))
+    if subgame_batch:
+        sstmt = _ins(conn)(_subgames)
+        sstmt = sstmt.on_conflict_do_update(index_elements=["sub_game_id"], set_={
+            "event_id": sstmt.excluded.event_id,
+            "name": func.coalesce(sstmt.excluded.name, _subgames.c.name),
+            "period": func.coalesce(sstmt.excluded.period, _subgames.c.period),
+            "period_index": func.coalesce(sstmt.excluded.period_index, _subgames.c.period_index),
+            "market_count": func.coalesce(sstmt.excluded.market_count, _subgames.c.market_count),
+            "sport_id": func.coalesce(sstmt.excluded.sport_id, _subgames.c.sport_id),
+            "last_seen": sstmt.excluded.last_seen})
+        conn.execute(sstmt, list(subgame_batch.values()))
+    if state_batch:
+        conn.execute(_states.insert(), state_batch)
+    _marks.append(("dimensions", time.monotonic()))
     # One executemany per fact type — the big round-trip saving.
     if period_batch:
         conn.execute(_periods.insert(), period_batch)
@@ -586,9 +605,15 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
         conn.execute(_stats.insert(), stat_batch)
     if cov_batch:
         conn.execute(_coverage.insert(), cov_batch)
+    _marks.append(("facts", time.monotonic()))
     conn.commit()
-    logger.info("persist run %s (skin=%s): %d events, %d odds → Postgres",
-                run_id, skin, len(events), len(odds_batch))
+    _marks.append(("commit", time.monotonic()))
+    prev, parts = _t0, []
+    for name, t in _marks:
+        parts.append(f"{name} {t - prev:.1f}s")
+        prev = t
+    logger.info("persist run %s (skin=%s): %d events, %d odds → Postgres [%s]",
+                run_id, skin, len(events), len(odds_batch), ", ".join(parts))
     return run_id
 
 
