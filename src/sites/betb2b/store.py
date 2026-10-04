@@ -34,6 +34,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .data_quality import RESULT_STATUS_VOID, match_event_teams, placeholder_flag, prepare_h2h_games
 from .labels import classify
 
 
@@ -367,7 +368,16 @@ CREATE TABLE IF NOT EXISTS h2h_games (
     sub_score2         INTEGER,
     winner             INTEGER,
     status             INTEGER,
-    captured_at        TEXT NOT NULL
+    captured_at        TEXT NOT NULL,
+    kind               TEXT,                -- h2h | team1_form | team2_form | unmapped
+    result_flag        TEXT                 -- NULL | no_score | forfeit (scores are NULL then)
+);
+
+-- A second backend id a team is seen under -> its canonical teams.backend_id.
+CREATE TABLE IF NOT EXISTS team_aliases (
+    alias_backend_id TEXT PRIMARY KEY,
+    backend_id       TEXT NOT NULL,
+    source           TEXT
 );
 
 -- Per-quarter breakdown of a historical H2H game — the raw material for
@@ -509,6 +519,8 @@ _ADDED_COLUMNS = [
     ("events", "superseded_by", "TEXT"),
     ("odds_snapshots", "subject", "TEXT"),
     ("odds_snapshots", "period", "TEXT"),
+    ("h2h_games", "kind", "TEXT"),
+    ("h2h_games", "result_flag", "TEXT"),
 ]
 
 
@@ -549,7 +561,10 @@ def dedupe_h2h_games(conn) -> int:
     """Remove duplicate stored H2H games (same event, game and result), keeping the
     newest row, with their period scores. Idempotent; returns the games removed."""
     dup = ("SELECT id FROM h2h_games WHERE id NOT IN (SELECT MAX(id) FROM h2h_games "
-           "GROUP BY event_id, game_id, status, score1, score2)")
+           "GROUP BY event_id, game_id, status, score1, score2) "
+           "OR id NOT IN (SELECT MAX(id) FROM h2h_games WHERE date_start IS NOT NULL "
+           "GROUP BY event_id, date_start, team1_backend_id, team2_backend_id, score1, score2) "
+           "AND date_start IS NOT NULL")
     # NULL-safe grouping: GROUP BY treats NULLs as one group, so NULL results dedupe too.
     if _is_orm(conn):
         from sqlalchemy import text as _t
@@ -562,28 +577,65 @@ def dedupe_h2h_games(conn) -> int:
     return max(res.rowcount or 0, 0)
 
 
+def load_team_aliases(conn) -> Dict[str, str]:
+    """``{alias_backend_id: canonical backend_id}`` — the second ids a team is seen under."""
+    try:
+        return {str(r[0]): str(r[1]) for r in _run_sql(
+            conn, "SELECT alias_backend_id, backend_id FROM team_aliases", {}).fetchall()}
+    except Exception:  # noqa: BLE001 — older store without the table
+        return {}
+
+
+def link_event_team_backend_ids(conn, event_id: str, h2h: Dict[str, Any]) -> None:
+    """Give an event's two teams their ``backend_id`` from its H2H team list.
+
+    A team stored from the feed (feed spelling) has no ``backend_id`` until its H2H
+    arrives, and the H2H list may spell it differently, so a second team row gets
+    the id. Match by name (see ``match_event_teams``); if the id already belongs to
+    another row, point the event at that row instead of leaving the id unused."""
+    row = _run_sql(conn, "SELECT home_name, away_name, home_team_id, away_team_id "
+                         "FROM events WHERE event_id = :e", {"e": str(event_id)}).fetchone()
+    if not row:
+        return
+    hb, ab = match_event_teams(h2h, row[0], row[1])
+    for col, team_id, bid in (("home_team_id", row[2], hb), ("away_team_id", row[3], ab)):
+        if not team_id or not bid:
+            continue
+        owner = _run_sql(conn, "SELECT team_id FROM teams WHERE backend_id = :b", {"b": bid}).fetchone()
+        if owner is None:
+            _run_sql(conn, "UPDATE teams SET backend_id = :b WHERE team_id = :t AND backend_id IS NULL",
+                     {"b": bid, "t": team_id})
+        elif owner[0] != team_id:
+            _run_sql(conn, f"UPDATE events SET {col} = :t WHERE event_id = :e",
+                     {"t": owner[0], "e": str(event_id)})
+
+
 def _insert_h2h_games(conn, run_id: int, event_id: str, skin: str,
-                      h2h: Dict[str, Any], at: str) -> None:
+                      h2h: Dict[str, Any], at: str, *, sport_id: Optional[int] = None) -> None:
     """Insert an event's H2H games and their per-period scores (SQLite path).
 
-    A game already stored for the event with the same result is not inserted again
-    (a re-scrape used to double the history); a game whose result changed (a fixture
-    that has since been played) is added as the newer row."""
+    Games are deduplicated, classified (``kind``) and cleaned of placeholder scores
+    first (see ``data_quality``). A game already stored for the event with the same
+    result is not inserted again (a re-scrape used to double the history); a game
+    whose result changed (a fixture that has since been played) is added as the
+    newer row."""
     have = _h2h_have(conn, [event_id]).get(event_id, set())
-    for g in h2h.get("game_shorts") or []:
+    for g in prepare_h2h_games(h2h, sport_id=sport_id, aliases=load_team_aliases(conn)):
         if _h2h_key(g) in have:
             continue
+        have.add(_h2h_key(g))
         h2h_game_id = int(conn.execute(
             "INSERT INTO h2h_games "
             "(run_id, event_id, skin, game_id, sport_id, team1_backend_id, "
             " team2_backend_id, date_start, score1, score2, sub_score1, "
-            " sub_score2, winner, status, captured_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " sub_score2, winner, status, kind, result_flag, captured_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (run_id, event_id, skin, g.get("game_id"), _as_int(h2h.get("sport_id")),
              g.get("team1_id"), g.get("team2_id"), g.get("date_start"),
              _as_int(g.get("score1")), _as_int(g.get("score2")),
              _as_int(g.get("sub_score1")), _as_int(g.get("sub_score2")),
-             _as_int(g.get("winner")), _as_int(g.get("status")), at),
+             _as_int(g.get("winner")), _as_int(g.get("status")),
+             g.get("kind"), g.get("result_flag"), at),
         ).lastrowid)
         # Per-period breakdown, stored as the source reports it (no derived periods).
         for ps in g.get("periods") or []:
@@ -676,9 +728,13 @@ def _get_or_create_team(
         row = conn.execute("SELECT team_id FROM teams WHERE backend_id=?", (backend_id,)).fetchone()
         if row:
             if name:  # enrich name/country if we now know them
+                # (name, sport) is unique: never rename onto another team's name.
+                clash = conn.execute(
+                    "SELECT 1 FROM teams WHERE name=? AND sport_id IS ? AND team_id<>?",
+                    (name, sport_id, row["team_id"])).fetchone()
                 conn.execute(
                     "UPDATE teams SET name=COALESCE(?, name), country_id=COALESCE(?, country_id) "
-                    "WHERE team_id=?", (name, country_id, row["team_id"]),
+                    "WHERE team_id=?", (None if clash else name, country_id, row["team_id"]),
                 )
             return _backfill(row["team_id"])
     if not name:
@@ -846,13 +902,15 @@ def persist_result(
             country_id = _get_or_create_country(conn, ev.get("country"))
             league_id = _upsert_league(
                 conn, ev.get("league_id"), ev.get("competition"), sport_id, country_id)
+            home_bid, away_bid = (match_event_teams(ev["h2h_data"], ev.get("home"), ev.get("away"))
+                                  if ev.get("h2h_data") else (None, None))
             home_id = _get_or_create_team(
-                conn, ev.get("home"), sport_id, country_id=country_id,
+                conn, ev.get("home"), sport_id, country_id=country_id, backend_id=home_bid,
                 feed_id=_as_int(ev.get("home_team_feed_id")),
                 image=ev.get("home_team_image"),
                 feed_country_id=_as_int(ev.get("home_team_country_id")))
             away_id = _get_or_create_team(
-                conn, ev.get("away"), sport_id, country_id=country_id,
+                conn, ev.get("away"), sport_id, country_id=country_id, backend_id=away_bid,
                 feed_id=_as_int(ev.get("away_team_feed_id")),
                 image=ev.get("away_team_image"),
                 feed_country_id=_as_int(ev.get("away_team_country_id")))
@@ -1461,7 +1519,8 @@ def record_h2h(conn, run_id: int, event_id: str, skin: str, h2h: Optional[Dict[s
                 conn, t.get("title"), sport_id,
                 backend_id=str(t.get("id")) if t.get("id") else None,
                 country_id=_get_or_create_country(conn, tc.get("title")))
-        _insert_h2h_games(conn, run_id, event_id, skin, h2h, at)
+        link_event_team_backend_ids(conn, event_id, h2h)
+        _insert_h2h_games(conn, run_id, event_id, skin, h2h, at, sport_id=sport_id)
     conn.execute(
         "INSERT INTO coverage (run_id, event_id, skin, dataset, subject, period, status, captured_at) "
         "VALUES (?,?,?,?,?,?,?,?)", (run_id, event_id, skin, "h2h", None, None, status, at))

@@ -279,7 +279,20 @@ class H2HGame(Base):
     winner: Mapped[Optional[int]] = mapped_column(Integer)  # enum-like code, not a flag
     status: Mapped[Optional[int]] = mapped_column(Integer)  # enum-like code, not a flag
     captured_at: Mapped[str] = mapped_column(DateTime(timezone=True), nullable=False)
+    # h2h = the event's two teams met | team1_form / team2_form = that team vs someone
+    # else | unmapped = neither team under any known id (see data_quality.py)
+    kind: Mapped[Optional[str]] = mapped_column(Text)
+    # NULL = a real result; no_score / forfeit = the source's 0-0 / 20-0 placeholder (scores are NULL)
+    result_flag: Mapped[Optional[str]] = mapped_column(Text)
     __table_args__ = (Index("ix_h2h_event", "event_id"),)
+
+
+class TeamAlias(Base):
+    """A second backend id a team is seen under, mapped to its canonical ``teams.backend_id``."""
+    __tablename__ = "team_aliases"
+    alias_backend_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    backend_id: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[Optional[str]] = mapped_column(Text)
 
 
 class H2HPeriodScore(Base):

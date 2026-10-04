@@ -22,6 +22,7 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import insert as _pg_insert
 from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 
+from .data_quality import match_event_teams, prepare_h2h_games
 from .labels import classify
 from .models import (
     Base, Country, Coverage, Event, MatchStat, PlayerStat, EventState, H2HGame, H2HPeriodScore, League,
@@ -57,6 +58,8 @@ _ADDED_COLUMNS_PG = [
     ("events", "superseded_by", "TEXT"),
     ("odds_snapshots", "subject", "TEXT"),
     ("odds_snapshots", "period", "TEXT"),
+    ("h2h_games", "kind", "TEXT"),
+    ("h2h_games", "result_flag", "TEXT"),
 ]
 
 
@@ -421,8 +424,9 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
     last_periods_all = _last_periods_bulk(conn, all_ids, skin)
     last_odds_all = _last_odds_bulk(conn, all_ids, skin)
     last_cov_all = _last_coverage_bulk(conn, all_ids)
-    from .store import _h2h_have, _h2h_key
+    from .store import _h2h_have, _h2h_key, load_team_aliases
     h2h_have = _h2h_have(conn, all_ids)
+    aliases = load_team_aliases(conn)
     _marks.append(("prefetch", time.monotonic()))
 
     def _sport_c(sid, name):
@@ -470,10 +474,12 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
         sport_id = _sport_c(_as_int(ev.get("sport_id")), ev.get("sport"))
         country_id = _country_c(ev.get("country"))
         league_id = _league_c(ev.get("league_id"), ev.get("competition"), sport_id, country_id)
-        home_id = _team_c(ev.get("home"), sport_id, country_id=country_id,
+        home_bid, away_bid = (match_event_teams(ev["h2h_data"], ev.get("home"), ev.get("away"))
+                              if ev.get("h2h_data") else (None, None))
+        home_id = _team_c(ev.get("home"), sport_id, country_id=country_id, backend_id=home_bid,
                           feed_id=_as_int(ev.get("home_team_feed_id")), image=ev.get("home_team_image"),
                           feed_country_id=_as_int(ev.get("home_team_country_id")))
-        away_id = _team_c(ev.get("away"), sport_id, country_id=country_id,
+        away_id = _team_c(ev.get("away"), sport_id, country_id=country_id, backend_id=away_bid,
                           feed_id=_as_int(ev.get("away_team_feed_id")), image=ev.get("away_team_image"),
                           feed_country_id=_as_int(ev.get("away_team_country_id")))
 
@@ -540,7 +546,7 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                         backend_id=str(t.get("id")) if t.get("id") else None,
                         country_id=_country_c(tc.get("title")))
             have = h2h_have.setdefault(event_id, set())
-            for g in h2h.get("game_shorts") or []:
+            for g in prepare_h2h_games(h2h, sport_id=sport_id, aliases=aliases):
                 if _h2h_key(g) in have:
                     continue          # already stored with this result: don't double the history
                 have.add(_h2h_key(g))
@@ -550,7 +556,8 @@ def persist_result(conn: Connection, result: Dict[str, Any]) -> int:
                     team2_backend_id=g.get("team2_id"), date_start=_dt(g.get("date_start")),
                     score1=_as_int(g.get("score1")), score2=_as_int(g.get("score2")),
                     sub_score1=_as_int(g.get("sub_score1")), sub_score2=_as_int(g.get("sub_score2")),
-                    winner=_as_int(g.get("winner")), status=_as_int(g.get("status")), captured_at=at))
+                    winner=_as_int(g.get("winner")), status=_as_int(g.get("status")),
+                    kind=g.get("kind"), result_flag=g.get("result_flag"), captured_at=at))
                 h2h_periods_batch.append([
                     dict(event_id=event_id,
                          period_key=_as_int(ps.get("period_key")), period_name=ps.get("period_name"),
@@ -779,9 +786,11 @@ def record_h2h(conn: Connection, run_id: int, event_id: str, skin: str,
             _team(conn, t.get("title"), sport_id,
                   backend_id=str(t.get("id")) if t.get("id") else None,
                   country_id=_country(conn, tc.get("title")))
-        from .store import _h2h_have, _h2h_key
+        from .store import _h2h_have, _h2h_key, link_event_team_backend_ids, load_team_aliases
+        link_event_team_backend_ids(conn, event_id, h2h)
         have = _h2h_have(conn, [event_id]).get(event_id, set())
-        games = [g for g in (h2h.get("game_shorts") or []) if _h2h_key(g) not in have]
+        games = [g for g in prepare_h2h_games(h2h, aliases=load_team_aliases(conn))
+                 if _h2h_key(g) not in have]
         if games:
             rows = [dict(
                 run_id=run_id, event_id=event_id, skin=skin, game_id=g.get("game_id"),
@@ -790,6 +799,7 @@ def record_h2h(conn: Connection, run_id: int, event_id: str, skin: str,
                 score1=_as_int(g.get("score1")), score2=_as_int(g.get("score2")),
                 sub_score1=_as_int(g.get("sub_score1")), sub_score2=_as_int(g.get("sub_score2")),
                 winner=_as_int(g.get("winner")), status=_as_int(g.get("status")),
+                kind=g.get("kind"), result_flag=g.get("result_flag"),
                 captured_at=when) for g in games]
             ids = conn.execute(_h2h.insert().returning(_h2h.c.id), rows).scalars().all()
             periods = [dict(h2h_game_id=gid, event_id=event_id,
