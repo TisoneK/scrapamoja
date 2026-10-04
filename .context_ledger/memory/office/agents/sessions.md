@@ -54,3 +54,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** confirm timings on a real run; mid-fetch 10-16s stalls may be server throttling, not fixable client-side.
 - **Notes:** none
 - **Report:** none
+
+---
+## 2026-10-04 — Session 4 (Mei/S004)
+- **Agent:** Mei (S004) | **Model:** claude-sonnet-5-5 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** engineer | **Core:** 2.0.4
+- **Task:** operator: read the engine's `SCRAPER_DATA_ISSUES.md` (scorewise-engine) and fix all eight scraper-side data issues.
+- **Commits:** product: `fix(betb2b)` H2H kind / dedupe / placeholder scores / team backend ids; `fix(betb2b)` void placeholder results, near-start odds refresh, withdrawn-line marker, `repair-data`. Ledger: check-in, project-guide section.
+- **Outcome:** done in code, unverified on live data — new `data_quality.py` + 37 tests (both backends), suite green. Issues 1, 3, 5, 6, 7 fixed at write time; 2 via `team_aliases` learned from matching games; 4 no new facts for superseded events (replacement is always a stored event by construction); 8 hourly refresh for matches starting within 12h + suspended row for a withdrawn line. Existing rows need `cli repair-data` (not run: it writes the hosted store).
+- **Open items:** run `repair-data` against Neon with the owner's say-so, then re-run `python -m engine.dataquality`; schema `ALTER`s for `h2h_games.kind/result_flag` + new `team_aliases` apply on connect (verify); the extra refresh raises request volume (see B-2026-10-03-2).
+- **Notes:** none
+- **Report:** none
