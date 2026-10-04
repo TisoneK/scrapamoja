@@ -41,3 +41,8 @@ names them), and roll-up candidates.
 - **Suggested fix:** `ledger-sync status` should print "local sibling clone — not checked against the package remote" when the source is a sibling directory; `migrate` should end with an explicit done-list (core version vs upstream, entry points regenerated or left, office size vs `office_size`).
 - **Status:** open
 
+
+- **Symptom:** S003 pushed a commit while `ledger-gates run pre-commit` had FAILED (6 tests), because the gate output was piped through `tail` inside an `&&` chain, which masked the exit code.
+- **Root cause:** gate result checked via pipeline, not `$?`/`pipefail`.
+- **Suggested fix:** run the gate on its own line and test its exit status before committing; fixed forward within the session (next commit restored green).
+- **Status:** fixed

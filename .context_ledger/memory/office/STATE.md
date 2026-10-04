@@ -5,10 +5,10 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-04T08:47:52Z_
+_Regenerated: 2026-10-04T09:34:38Z_
 
 ## Standing params
-- **Core:** 2.0.4 (locked, verified 2026-10-03)
+- **Core:** 2.0.4 (locked, verified 2026-10-04)
 - **Target:** general sweep
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
@@ -16,7 +16,6 @@ _Regenerated: 2026-10-04T08:47:52Z_
 
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
-- **Wanjiru** (S003) — Working — Speeding up the slow Postgres persist (ADR-17) in store_orm
 
 ## Current task
 - **—** — none — no session in progress — *idle*

@@ -44,3 +44,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none new; the upstream `lint --tree` entry-point limitation remains the only tree-sweep exit-1 cause.
 - **Notes:** none
 - **Report:** .context_ledger/memory/office/reviews/2026-10-03-review-2.md
+
+---
+## 2026-10-04 — Session 3 (Wanjiru/S003)
+- **Agent:** Wanjiru (S003) | **Model:** claude-sonnet-5-5 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** engineer | **Core:** 2.0.4
+- **Task:** operator: find and fix the minutes-long silences in a betb2b scrape (remote Neon persist and backfill passes).
+- **Commits:** product: `perf(betb2b)` batch event/sub-game/state writes + phase timings; one-transaction backfill passes (`store.batched`) + `_team` rename-clash fix; 5s connect timeout + warning log for direct-call failures. Ledger: check-in, codename S003 (S002 was Achieng's).
+- **Outcome:** partial — unverified against Neon (no DATABASE_URL in the session); gate + SQLite smoke tests pass. Operator should rerun and read the `persist run … [prefetch …]` timing line.
+- **Open items:** confirm timings on a real run; mid-fetch 10-16s stalls may be server throttling, not fixable client-side.
+- **Notes:** none
+- **Report:** none

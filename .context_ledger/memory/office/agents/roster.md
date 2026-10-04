@@ -78,4 +78,3 @@ close` freezes this whole directory verbatim into `.context_ledger/history/`
 (every shift preserved), and the next office starts with an empty board.
 The permanent record `history/office-<NNN>.md` keeps each office's duty
 summary forever.
-| Wanjiru | S003 | claude-sonnet-5-5 | Speeding up the slow Postgres persist (ADR-17) in store_orm | Working | Phase 2 check-in |
