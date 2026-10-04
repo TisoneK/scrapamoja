@@ -110,6 +110,29 @@ that is structurally perfect can still be semantically wrong here — the guard 
 `src/sites/betb2b/tests/test_betb2b_export.py`, which simulates the engine's sum
 per scope rather than inspecting fields.
 
+### Data-quality rules (`src/sites/betb2b/data_quality.py`)
+
+Added after the engine's audit of the store (`scorewise-engine/repos/engine/engine/SCRAPER_DATA_ISSUES.md`,
+2026-10-04). Applied on every store write, both backends:
+
+* `h2h_games.kind` = `h2h` (the event's two teams met) | `team1_form` | `team2_form` | `unmapped`;
+  `team_aliases` maps a team's second backend id to its canonical one (learned by `resolve_team_aliases`
+  from games that match on date + opponent + score; ambiguous ids stay unmapped).
+* A game listed twice (same game id, or same date + teams + score) is stored once.
+* Basketball placeholder scores (0-0, 20-0 / 0-20 forfeit token) are NOT results: H2H rows keep the row with
+  NULL scores and `result_flag` = `no_score` | `forfeit`; an event finished with such a score gets
+  `result_status = -2` and NULL scores (never `3`). Football/hockey 0-0 is real and untouched.
+* A basketball game with a 0-0 / missing period row is stored with no period rows.
+* An event's two teams get `teams.backend_id` from the H2H team list (matched by name, then by elimination);
+  events whose teams still lack one are re-queued by `events_missing_h2h` (at most once per 24 h).
+* No new odds/H2H are stored for an event already `superseded_by` another.
+* A line the source stops offering is stored once as a suspended row (only for scopes that came back).
+* Odds freshness: a stored match starting within 12 h is re-fetched when its odds are 1 h old
+  (`store.NEAR_START_HORIZON` / `NEAR_START_REFRESH`, used by `unprocessed_ids` and the scheduler).
+
+Existing rows: `python -m src.sites.betb2b.cli.main repair-data` (idempotent; run it against the hosted store
+only with the owner's say-so).
+
 ### The BetB2B Family Scraper
 
 The most important active work. `src/sites/betb2b/` is a **parameterised base scraper** for all BetB2B/1xbet-white-label bookmakers. Each brand is a thin YAML "skin" in `src/sites/betb2b/skins/<name>.yaml` — no Python changes needed to add a new bookmaker.
