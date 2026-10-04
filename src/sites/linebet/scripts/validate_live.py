@@ -28,6 +28,8 @@ from src.sites.linebet.extraction.rules import LinebetExtractionRules  # noqa: E
 
 
 async def main() -> int:
+    from src.sites.betb2b.scripts._common import require_page_access
+    require_page_access('linebet')
     out_dir = output_dir("linebet_validate")
     summary_path = out_dir / "summary.json"
     captured_dir = out_dir / "captured"

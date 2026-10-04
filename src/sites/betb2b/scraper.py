@@ -336,6 +336,12 @@ class BetB2BScraper:
         if not self.skin.enabled:
             raise RuntimeError(f"skin={self.skin.name} is disabled")
 
+        if not self._direct:
+            # Everything outside --direct loads the site's pages (browser bootstrap, DOM render),
+            # which a country-blocked machine must not do without a proxy. Fail before touching it.
+            self.session_manager.guard.require_page_access(
+                via_proxy=self.session_manager.via_proxy, what="scrape (hybrid/browser mode)")
+
         if not self._started:
             await self.start()
 

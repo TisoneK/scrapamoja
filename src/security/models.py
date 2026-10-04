@@ -47,6 +47,7 @@ class BlockVerdict:
     url: str = ""
     evidence: List[str] = field(default_factory=list)
     retry_after: Optional[float] = None      # seconds, when the site told us
+    via_page: bool = False                   # seen on a browser page load (not a data-feed response)
 
     @property
     def blocked(self) -> bool:

@@ -25,6 +25,8 @@ from playwright.async_api import async_playwright
 
 
 async def main() -> int:
+    from src.sites.betb2b.scripts._common import require_page_access
+    require_page_access('linebet')
     out_dir = output_dir("linebet_probe")
     captured: List[Dict[str, Any]] = []
 

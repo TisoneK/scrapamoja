@@ -94,6 +94,8 @@ async def probe_entry(pw, url: str) -> Dict[str, Any]:
 
 
 async def main() -> int:
+    from src.sites.betb2b.scripts._common import require_page_access
+    require_page_access('linebet')
     out_dir = output_dir("linebet_probe")
     summary: List[Dict[str, Any]] = []
 

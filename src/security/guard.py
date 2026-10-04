@@ -16,10 +16,11 @@ Typical use (see ``BetB2BSessionManager``)::
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from typing import Any, Callable, Optional
 
-from . import resolver
+from . import egress, resolver
 from .detector import DEFAULT_RULES, SiteRules, classify
 from .evidence import EvidenceLog
 from .ledger import BlockLedger
@@ -127,13 +128,31 @@ class SecurityGuard:
     async def inspect_page(self, page: Any, status: Optional[int] = None) -> BlockVerdict:
         verdict = await resolver.inspect_page(page, status, self.rules)
         if verdict.blocked:
+            verdict = dataclasses.replace(verdict, via_page=True)
             self.evidence.record("block", self.site, url=verdict.url, status=status,
                                  verdict=verdict, extra={"via": "browser page"})
         return verdict
 
     # -- decisions -------------------------------------------------------- #
+    def require_page_access(self, *, via_proxy: bool, what: str = "page load") -> None:
+        """Raise :class:`egress.PageLoadsRefused` if this machine must not load the site's pages
+        (declared restricted, or it already saw a page-level country block without a proxy)."""
+        egress.check_page_load(self.site, via_proxy=via_proxy, what=what)
+
     def on_block(self, verdict: BlockVerdict) -> Decision:
         """Record a block and choose the next rung. Escalation is applied here."""
+        if (verdict.type is BlockType.GEO_BLOCK and verdict.via_page and "@" not in self.site):
+            # A PAGE was country-blocked with no proxy: stop loading pages of this site from here.
+            # The data feeds are not country-gated, so this must not rest the feed path (a
+            # cooldown is per site); the restriction is a page-load marker, not a cooldown.
+            egress.mark_restricted(self.site)
+            decision = self.policy.decide(verdict, 1, 1)
+            logger.warning("site=%s page load country-blocked without a proxy -> page loads off for "
+                           "this machine (feeds unaffected); clear with `python -m src.security clear %s`",
+                           self.site, self.site)
+            self.evidence.record("block", self.site, url=verdict.url, status=verdict.status,
+                                 verdict=verdict, extra={"note": "page loads switched off"})
+            return decision
         attempt = self.ledger.record_block(self.site, verdict)
         consecutive = self.ledger.state(self.site).consecutive_blocks
         decision = self.policy.decide(verdict, attempt, consecutive)

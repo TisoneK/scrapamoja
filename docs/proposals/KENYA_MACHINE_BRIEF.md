@@ -172,6 +172,10 @@ that have them, `fetch_failed` is a small share, and the duplicate count is 0.
 - **Pace**: do not raise request rates to go faster. An earlier run at roughly 20 requests per
   second made the hosts refuse this IP for about half an hour. The default pacing is
   deliberate.
+- **Geo-restricted machines**: a machine whose connection the sites country-block (any machine outside the
+  allowed countries) must not load their pages without a proxy; it fetches data with `--direct` only.
+  Set `SCRAPAMOJA_GEO_RESTRICTED=1` there; the browser paths then refuse to run (see `.env.example`). This
+  Kenyan machine is not restricted, so do not set it here.
 - **One process per profile**: do not run two linebet scrapes at once.
 - **Evasion boundary**: acceptable means real-browser fidelity, patience, and a person at the
   screen. Not acceptable: CAPTCHA solvers, TLS-fingerprint spoofing, exporting cookies to

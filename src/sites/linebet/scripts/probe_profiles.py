@@ -138,6 +138,8 @@ async def try_profile(pw, profile: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def main() -> int:
+    from src.sites.betb2b.scripts._common import require_page_access
+    require_page_access('linebet')
     out_dir = output_dir("linebet_probe")
     summary: List[Dict[str, Any]] = []
 

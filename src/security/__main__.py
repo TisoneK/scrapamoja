@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import time
 
+from . import egress
 from .ledger import BlockLedger
 from .tiers import ALL_TIERS
 
@@ -26,6 +27,11 @@ def main(argv=None) -> int:
         return _evidence(a)
     led = BlockLedger()
     if a.cmd == "status":
+        if egress.declared_restricted():
+            print(f"this machine is declared geo-restricted ({egress.ENV}=1): page loads need a proxy")
+        for site, at in sorted(egress.restricted_sites().items()):
+            when = dt.datetime.fromtimestamp(at).strftime("%Y-%m-%d %H:%M")
+            print(f"{site:<24} PAGE LOADS OFF without a proxy (country-blocked at {when}); feeds unaffected")
         if not led._sites:
             print(f"no blocks recorded ({led.path})")
         for site, st in sorted(led._sites.items()):
@@ -37,7 +43,8 @@ def main(argv=None) -> int:
                   + (f"COOLDOWN {left / 60:.0f} min left" if left else "ready"))
     else:
         led.clear(a.site)
-        print(f"cleared {a.site}")
+        lifted = egress.clear_restricted(a.site)
+        print(f"cleared {a.site}" + (" (page loads allowed again)" if lifted else ""))
     return 0
 
 

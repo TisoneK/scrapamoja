@@ -187,6 +187,10 @@ class ProfileManager:
         are written into the profile, so later automated runs reuse the result.
         """
         from playwright.async_api import async_playwright
+        from src.security import egress
+
+        # A country-blocked machine must not load the site's pages without a proxy.
+        egress.check_page_load(name.removeprefix("betb2b-"), via_proxy=bool(proxy), what="profile warm-up")
 
         async with async_playwright() as pw:
             async with self.open_context(pw, name, headless=False, channel=channel,

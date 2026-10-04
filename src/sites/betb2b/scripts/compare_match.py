@@ -620,6 +620,8 @@ async def main() -> int:
                         help="Hover team names to trigger H2H popups")
     parser.add_argument("--verbose", "-v", action="store_true", help="DEBUG logging")
     args = parser.parse_args()
+    from src.sites.betb2b.scripts._common import require_page_access
+    require_page_access(getattr(args, 'skin', None))
 
     # ── Setup ───────────────────────────────────────────────────
     logging.basicConfig(

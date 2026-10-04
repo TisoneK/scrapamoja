@@ -41,6 +41,11 @@ def proxy_from_env(name: str) -> Optional[Dict[str, Any]]:
     return proxy
 
 
+def egress_error():
+    from src.security.egress import PageLoadsRefused
+    return PageLoadsRefused
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m src.browser.profiles", description=__doc__)
     ap.add_argument("--root", help="profile root (default: $SCRAPAMOJA_PROFILE_DIR or ~/.scrapamoja/profiles)")
@@ -78,13 +83,16 @@ def main(argv=None) -> int:
             pm.delete(a.name); print("deleted")
         elif a.cmd == "warmup":
             proxy = proxy_from_env(a.proxy_env) if a.proxy_env else None
+            from src.security import egress
+            egress.check_page_load(a.name.removeprefix("betb2b-"), via_proxy=bool(proxy),
+                                   what="profile warm-up")
             print(f"Opening {a.url} in profile {a.name!r}"
                   + (f" via proxy {proxy['server']}" if proxy else " (direct)")
                   + ". Pass any check, then CLOSE the window.")
             asyncio.run(pm.warmup(a.name, a.url, channel=a.channel or None, proxy=proxy,
                                   timeout_s=a.timeout))
             print("profile saved")
-    except (ProfileError, ValueError) as exc:
+    except (ProfileError, ValueError, egress_error()) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     return 0

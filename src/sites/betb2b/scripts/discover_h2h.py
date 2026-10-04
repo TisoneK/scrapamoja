@@ -38,6 +38,8 @@ async def main() -> int:
     parser.add_argument("--match-url", default=DEFAULT_MATCH_URL,
                         help="Specific match page URL to visit")
     args = parser.parse_args()
+    from src.sites.betb2b.scripts._common import require_page_access
+    require_page_access(getattr(args, 'skin', None))
 
     out = output_dir("betb2b_h2h_discovery")
     print(f"Output dir: {out}", flush=True)

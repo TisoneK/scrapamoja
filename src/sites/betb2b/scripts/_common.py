@@ -27,3 +27,17 @@ def output_dir(subdir: str = "betb2b_output") -> Path:
         out = Path.cwd() / subdir
     out.mkdir(parents=True, exist_ok=True)
     return out
+
+
+def require_page_access(skin: str | None = None) -> None:
+    """Exit (code 2) before a script opens a browser page on a machine that must not load the
+    site's pages (country-blocked connection, no proxy). A proxy is detected from the same
+    ``BETB2B_PROXY_URL`` the scripts read."""
+    import os
+    from src.security import egress
+    try:
+        egress.check_page_load(skin or "betb2b", via_proxy=bool(os.environ.get("BETB2B_PROXY_URL")),
+                               what="script browser run")
+    except egress.PageLoadsRefused as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(2)

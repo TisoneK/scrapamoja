@@ -132,6 +132,8 @@ class LinebetCLI:
     # ------------------------------------------------------------------
     async def run(self, argv: Optional[List[str]] = None) -> int:
         args = self.parser.parse_args(argv)
+        from src.sites.betb2b.scripts._common import require_page_access
+        require_page_access('linebet')
         self._configure_logging(verbose=args.verbose, quiet=args.quiet)
 
         if args.command == "scrape":

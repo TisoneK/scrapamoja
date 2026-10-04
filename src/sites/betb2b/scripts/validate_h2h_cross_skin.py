@@ -260,6 +260,8 @@ async def main() -> int:
     )
     parser.add_argument("--output", type=str, default=None)
     args = parser.parse_args()
+    from src.sites.betb2b.scripts._common import require_page_access
+    require_page_access(getattr(args, 'skin', None))
 
     skins = load_all_skins()
     if args.skins:

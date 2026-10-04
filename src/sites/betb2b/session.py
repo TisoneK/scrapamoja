@@ -128,6 +128,11 @@ class BetB2BSessionManager:
     # ------------------------------------------------------------------ #
     # Public API
     # ------------------------------------------------------------------ #
+    @property
+    def via_proxy(self) -> bool:
+        """True when the browser's traffic goes through a real proxy (not the machine's own connection)."""
+        return self.proxy is not None and not getattr(self.proxy, "is_direct", False)
+
     async def get_session(self, *, force: bool = False) -> SessionPackage:
         """Return a valid session, bootstrapping or re-bootstrapping as needed.
 
@@ -345,6 +350,7 @@ class BetB2BSessionManager:
         """
         if not self.skin.enabled:
             raise RuntimeError(f"skin={self.skin.name} is disabled")
+        self.guard.require_page_access(via_proxy=self.via_proxy, what="browser bootstrap")
         self.guard.preflight()   # SiteInCooldown: don't touch a site that just blocked us
 
         # Validate proxy egress country BEFORE opening a browser — saves
@@ -558,6 +564,7 @@ class BetB2BSessionManager:
         else:
             route = "live" if is_live else "line"
             url = self.skin.bootstrap_url(route)
+        self.guard.require_page_access(via_proxy=self.via_proxy, what="DOM render")
         try:
             self.guard.preflight()
         except SiteInCooldown as exc:
