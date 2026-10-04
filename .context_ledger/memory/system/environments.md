@@ -27,7 +27,7 @@ block (and its "last verified" date) every time you run on it again.
 > post-migration verified set.
 
 ---
-## Baos-Mac-mini (last verified 2026-10-03, session 1)
+## Baos-Mac-mini (last verified 2026-10-04, session 5)
 - **Identify by:** hostname `Baos-Mac-mini.local`, `$USER` = `bao`, workspace `/Users/bao/Code/scrapamoja`
 - **Ledger tools (verified 2026-10-03):** `sh .context_ledger/core/bin/ledger-sync|ledger-gates|ledger-mem|ledger-state|ledger-history` all run with POSIX `sh` on macOS; `sed -i` needs `-i ''`; no PowerShell engine, so the `.ps1` parse check is skipped in `verify`. The sibling `../context` clone can be behind the public package — compare with a fresh `git clone --depth 1 https://github.com/TisoneK/context-ledger.git` before trusting `ledger-sync status`.
 - **OS:** macOS 15.7.7 (build 24G720, Darwin 24.6.0), Intel **x86_64**
@@ -45,6 +45,7 @@ block (and its "last verified" date) every time you run on it again.
   - `.venv/bin/python -m src.sites.betb2b.cli <cmd>` — verified session 28. The `…cli.main` spelling also works as of `4e6aaec`; before that it exited 0 in silence.
   - `.venv/bin/ruff check <path> --select F821` — verified (session 4); note the repo's `pyproject.toml` uses deprecated top-level `select`/`ignore` keys (ruff warns; still works). Session 28: the consequence is that the project's `ignore` list is inert, so a plain `ruff check src/sites/betb2b/` reports 563 errors (baseline, pre-existing). Session 40: a full `ruff check .` reports **63,650 pre-existing errors** — never use it as a gate/baseline; use `--select F821` or the betb2b suite.
 - **Quirks / gotchas:**
+  - **Geo-restricted (US connection)** (session 5): the betting sites country-block this machine's address, so it runs with `SCRAPAMOJA_GEO_RESTRICTED=1` (in the gitignored `src/sites/betb2b/.env`) and fetches data with `scrape <skin> scheduled --sport basketball --direct` only. Browser/hybrid runs, `profiles warmup` and the probe scripts are refused here unless `BETB2B_PROXY_URL` (the allowed-country tunnel) is set — ADR-2. linebet needs the allowed-country machine (`docs/proposals/KENYA_MACHINE_BRIEF.md`). The security ledger (`~/.scrapamoja/security/`) is per machine.
   - (session 50) plain `python` is not on PATH in the agent shell — `source .venv/bin/activate` first. Local config: `src/sites/betb2b/.env` (gitignored; CLI loads it, not under pytest). The dev IP gets connect-timeouts / a Gcore challenge from the betb2b sites after request bursts — keep runs gentle.
   - `uv venv` does not install `pip` into the venv — use `uv pip ...` or `.venv/bin/python -m` for tools.
   - `--only-binary :all:` is required (see above). If a needed package has no wheel, that surfaces here as a hard error rather than a slow failing source build.

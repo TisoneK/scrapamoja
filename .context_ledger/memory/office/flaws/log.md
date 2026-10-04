@@ -46,3 +46,13 @@ names them), and roll-up candidates.
 - **Root cause:** gate result checked via pipeline, not `$?`/`pipefail`.
 - **Suggested fix:** run the gate on its own line and test its exit status before committing; fixed forward within the session (next commit restored green).
 - **Status:** fixed
+
+---
+## 2026-10-04 — Imani (S005) / claude-sonnet-5-5 (Session 5)
+
+- **Flaw:** (1) The protocol had no rule against loading a geo-blocked site's pages from a restricted machine; an unattributed browser-path run on the operator's Mac recorded country blocks and rested the skin's feed runs. (2) The office was closed and reset *while this session was working*: its roster row vanished, a different agent took the same name (Mei, S004), and a later session note was appended to the end of `sessions.md` — which was now that agent's entry.
+- **Symptom:** (1) `geo_block` for betwinner and linebet at 05:29-05:39 on a US machine; direct runs refused with "in cooldown". (2) a "Follow-up 8" bullet sitting inside S004's entry.
+- **Root cause:** (1) policy lived in people's heads, and the guard's cooldown is per site, not per access path. (2) appending to the file tail without re-reading roster/sessions after a long gap; `ledger-history close` happened under a live session with no signal to it.
+- **Suggested fix:** (1) done — ADR-2, `egress.py`, rule 18, override. (2) before every append to an append-only log re-read its tail and the roster; `ledger-history close` should refuse (or warn loudly) while a non-clocked-out row exists on the roster.
+- **Status:** (1) fixed; (2) corrected in-session by checking in as Imani (S005) and a correction line in this session's entry; protocol-level fix open (core).
+

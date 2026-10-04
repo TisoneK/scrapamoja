@@ -78,3 +78,13 @@ correction twice.
 ## Security & secrecy
 - The repo is PUBLIC — treat "no sensitive data in the repo" as a standing requirement: any security session should sweep tracked files AND git history, and never echo secret values in chat, logs, or reports (stated, 2026-09-08)
 - When a credential is found committed, rotate it even if redacted from the tree — history exposure is assumed (stated, 2026-09-08)
+
+## Scraper work style (operator, 2026-10)
+- **Scraper only.** The engine and `--ingest` are not the scraper agent's job unless asked: "Don't worry about the engine, your job is to focus on scraper" (2026-10-03). Linebet is the exception the operator wants solved.
+- **Summary, not dumps.** A scrape prints a short summary at the terminal, never the full data ("maybe just summary, not dump all data at the terminal", 2026-10-04). Full JSON only with `--json` / `--output FILE`.
+- **Skip what is already processed, by default.** Stored matches are skipped unless asked otherwise (2026-10-04).
+- **Add the rows, don't omit them.** When a table is empty (e.g. statistics), find why and store the data; do not switch the step off ("We need to add those rows not omit them", 2026-10-04). Gaps must be recorded as gaps.
+- **Strict geo rule.** Agents on geo-blocked machines never load a site's pages without the proxy and never run tests on the live site from there — page-free data fetching only (2026-10-04; ADR-2).
+- **Don't re-teach the operator the protocol.** They already know how to set a session target and that clones pull by default; don't spell out how to type the target or how to clone (2026-10-04 — "why did you have to remind me?").
+- **Answer the question asked, with evidence.** When asked "did it hang or finish" / "will the 204 be skipped" — check the store/logs and answer; say plainly what was measured vs inferred.
+
