@@ -210,17 +210,18 @@ async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
     await asyncio.gather(*[_one(e) for e in ids])
     conn = store.init_db(db_target)
     try:
-        at = datetime.now(timezone.utc).isoformat()
-        for eid, res in found:
-            store.record_result(conn, eid, stat_game_id=res["stat_game_id"],
-                                score_home=res.get("score_home"), score_away=res.get("score_away"),
-                                winner=res.get("winner"), status=res.get("status"), at=at)
-        if found or answered_none:
-            rid = store.begin_backfill_run(conn, skin_name, "backfill_stat_ids", at=at)
-            for eid, _ in found:
-                store.record_coverage(conn, rid, eid, skin_name, "stat_id", "offered", at=at)
-            for eid in answered_none:
-                store.record_coverage(conn, rid, eid, skin_name, "stat_id", "not_offered", at=at)
+        with store.batched(conn):
+            at = datetime.now(timezone.utc).isoformat()
+            for eid, res in found:
+                store.record_result(conn, eid, stat_game_id=res["stat_game_id"],
+                                    score_home=res.get("score_home"), score_away=res.get("score_away"),
+                                    winner=res.get("winner"), status=res.get("status"), at=at)
+            if found or answered_none:
+                rid = store.begin_backfill_run(conn, skin_name, "backfill_stat_ids", at=at)
+                for eid, _ in found:
+                    store.record_coverage(conn, rid, eid, skin_name, "stat_id", "offered", at=at)
+                for eid in answered_none:
+                    store.record_coverage(conn, rid, eid, skin_name, "stat_id", "not_offered", at=at)
     finally:
         conn.close()
     print(f"  [{skin_name}] stat ids backfilled: {len(found)}/{len(ids)} "
@@ -247,17 +248,18 @@ async def _backfill_h2h(scraper, db_target: str, skin_name: str) -> None:
     conn = store.init_db(db_target)
     got = 0
     try:
-        run_id = store.begin_backfill_run(conn, skin_name, "backfill_h2h", at=at)
-        for ev in stubs:
-            if ev.h2h_data is not None and ev.h2h_data.game_shorts:
-                store.record_h2h(conn, run_id, ev.event_id, skin_name, ev.h2h_data.to_dict(),
-                                 "offered", at=at)
-                got += 1
-            elif ev.h2h_status in ("ok", "none"):
-                store.record_h2h(conn, run_id, ev.event_id, skin_name, None, "not_offered", at=at)
-            elif ev.h2h_status == "failed":
-                store.record_h2h(conn, run_id, ev.event_id, skin_name, None, "fetch_failed", at=at)
-            # h2h_status None: the batch stopped before this one — not attempted, retried next run
+        with store.batched(conn):
+            run_id = store.begin_backfill_run(conn, skin_name, "backfill_h2h", at=at)
+            for ev in stubs:
+                if ev.h2h_data is not None and ev.h2h_data.game_shorts:
+                    store.record_h2h(conn, run_id, ev.event_id, skin_name, ev.h2h_data.to_dict(),
+                                     "offered", at=at)
+                    got += 1
+                elif ev.h2h_status in ("ok", "none"):
+                    store.record_h2h(conn, run_id, ev.event_id, skin_name, None, "not_offered", at=at)
+                elif ev.h2h_status == "failed":
+                    store.record_h2h(conn, run_id, ev.event_id, skin_name, None, "fetch_failed", at=at)
+                # h2h_status None: the batch stopped before this one — not attempted, retried next run
     finally:
         conn.close()
     print(f"  [{skin_name}] h2h backfilled: {got}/{len(ids)}", file=sys.stderr)
@@ -325,18 +327,19 @@ async def _record_pending_results(scraper, db_target: str, skin_name: str, pendi
     conn = store.init_db(db_target)
     periods = 0
     try:
-        rid = None
-        for eid, res in out:
-            store.record_result(
-                conn, eid, stat_game_id=res.get("stat_game_id"),
-                score_home=res.get("score_home"), score_away=res.get("score_away"),
-                winner=res.get("winner"), status=res.get("status"), at=at)
-            if res.get("status") == 3:
-                if rid is None:
-                    rid = store.begin_backfill_run(conn, skin_name, "results", at=at)
-                periods += store.record_period_results(
-                    conn, rid, eid, skin_name, res.get("periods") or [], at=at)
-                store.record_coverage(conn, rid, eid, skin_name, "result", "offered", at=at)
+        with store.batched(conn):
+            rid = None
+            for eid, res in out:
+                store.record_result(
+                    conn, eid, stat_game_id=res.get("stat_game_id"),
+                    score_home=res.get("score_home"), score_away=res.get("score_away"),
+                    winner=res.get("winner"), status=res.get("status"), at=at)
+                if res.get("status") == 3:
+                    if rid is None:
+                        rid = store.begin_backfill_run(conn, skin_name, "results", at=at)
+                    periods += store.record_period_results(
+                        conn, rid, eid, skin_name, res.get("periods") or [], at=at)
+                    store.record_coverage(conn, rid, eid, skin_name, "result", "offered", at=at)
     finally:
         conn.close()
     done = sum(1 for _, r in out if r.get("status") == 3)
@@ -371,15 +374,16 @@ async def _backfill_match_stats(scraper, db_target: str, skin_name: str) -> None
     conn = store.init_db(db_target)
     got = team = players = 0
     try:
-        rid = store.begin_backfill_run(conn, skin_name, "backfill_match_stats", at=at)
-        for eid, parsed in out:
-            if parsed:
-                t, p = store.record_match_stats(conn, rid, eid, skin_name, parsed, at=at)
-                team += t
-                players += p
-                got += 1
-            store.record_coverage(conn, rid, eid, skin_name, "match_stats",
-                                  "offered" if parsed else "not_offered", at=at)
+        with store.batched(conn):
+            rid = store.begin_backfill_run(conn, skin_name, "backfill_match_stats", at=at)
+            for eid, parsed in out:
+                if parsed:
+                    t, p = store.record_match_stats(conn, rid, eid, skin_name, parsed, at=at)
+                    team += t
+                    players += p
+                    got += 1
+                store.record_coverage(conn, rid, eid, skin_name, "match_stats",
+                                      "offered" if parsed else "not_offered", at=at)
     finally:
         conn.close()
     print(f"  [{skin_name}] match statistics: {got}/{len(todo)} matches ({team} team rows, "
@@ -412,14 +416,15 @@ async def _backfill_period_scores(scraper, db_target: str, skin_name: str) -> No
     conn = store.init_db(db_target)
     added = found = 0
     try:
-        rid = store.begin_backfill_run(conn, skin_name, "backfill_periods", at=at)
-        for eid, res in out:
-            n = store.record_period_results(conn, rid, eid, skin_name,
-                                            (res or {}).get("periods") or [], at=at)
-            added += n
-            found += 1 if n else 0
-            store.record_coverage(conn, rid, eid, skin_name, "result_periods",
-                                  "offered" if n else "not_offered", at=at)
+        with store.batched(conn):
+            rid = store.begin_backfill_run(conn, skin_name, "backfill_periods", at=at)
+            for eid, res in out:
+                n = store.record_period_results(conn, rid, eid, skin_name,
+                                                (res or {}).get("periods") or [], at=at)
+                added += n
+                found += 1 if n else 0
+                store.record_coverage(conn, rid, eid, skin_name, "result_periods",
+                                      "offered" if n else "not_offered", at=at)
     finally:
         conn.close()
     print(f"  [{skin_name}] period scores backfilled: {found}/{len(todo)} matches ({added} periods)",

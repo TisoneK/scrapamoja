@@ -159,10 +159,16 @@ def _sport(conn, sport_id: Optional[int], name: Optional[str]) -> Optional[int]:
 def _country(conn, name: Optional[str]) -> Optional[int]:
     if not name:
         return None
+    cache = conn.info.get("dim_cache")      # set by store.batched(): dimensions resolved once per batch
+    if cache is not None and ("country", name) in cache:
+        return cache[("country", name)]
     conn.execute(_ins(conn)(_countries).values(name=name)
                  .on_conflict_do_nothing(index_elements=["name"]))
-    return conn.execute(
+    cid = conn.execute(
         select(_countries.c.country_id).where(_countries.c.name == name)).scalar()
+    if cache is not None:
+        cache[("country", name)] = cid
+    return cid
 
 
 def _league(conn, league_id, name, sport_id, country_id) -> Optional[int]:
@@ -182,7 +188,22 @@ def _league(conn, league_id, name, sport_id, country_id) -> Optional[int]:
 
 def _team(conn, name, sport_id, *, backend_id=None, country_id=None,
           feed_id=None, image=None, feed_country_id=None) -> Optional[int]:
+    cache = conn.info.get("dim_cache")      # set by store.batched(): same args => same (already applied) result
+    key = ("team", backend_id, name, sport_id, country_id, feed_id, image, feed_country_id)
+    if cache is not None and key in cache:
+        return cache[key]
+    tid = _team_uncached(conn, name, sport_id, backend_id=backend_id, country_id=country_id,
+                         feed_id=feed_id, image=image, feed_country_id=feed_country_id)
+    if cache is not None:
+        cache[key] = tid
+    return tid
+
+
+def _team_uncached(conn, name, sport_id, *, backend_id=None, country_id=None,
+                   feed_id=None, image=None, feed_country_id=None) -> Optional[int]:
     def _backfill(team_id):
+        if feed_id is None and image is None and feed_country_id is None:
+            return team_id                  # nothing to fill in: skip the no-op UPDATE round-trip
         conn.execute(_teams.update().where(_teams.c.team_id == team_id).values(
             feed_id=func.coalesce(_teams.c.feed_id, feed_id),
             image=func.coalesce(_teams.c.image, image),
@@ -190,14 +211,24 @@ def _team(conn, name, sport_id, *, backend_id=None, country_id=None,
         return team_id
 
     if backend_id:
-        row = conn.execute(select(_teams.c.team_id).where(
+        row = conn.execute(select(_teams.c.team_id, _teams.c.name, _teams.c.sport_id,
+                                  _teams.c.country_id).where(
             _teams.c.backend_id == backend_id)).first()
         if row:
-            if name:
-                conn.execute(_teams.update().where(_teams.c.team_id == row[0]).values(
-                    name=func.coalesce(name, _teams.c.name),
-                    country_id=func.coalesce(country_id, _teams.c.country_id)))
-            return _backfill(row[0])
+            tid, cur_name, cur_sport, cur_country = row
+            vals: Dict[str, Any] = {}
+            if name and name != cur_name:
+                # (name, sport) is unique: never rename onto another team's name.
+                clash = conn.execute(select(_teams.c.team_id).where(
+                    _teams.c.name == name, _match(_teams.c.sport_id, cur_sport),
+                    _teams.c.team_id != tid)).first()
+                if not clash:
+                    vals["name"] = name
+            if country_id is not None and country_id != cur_country:
+                vals["country_id"] = country_id
+            if vals:
+                conn.execute(_teams.update().where(_teams.c.team_id == tid).values(**vals))
+            return _backfill(tid)
     if not name:
         return None
     row = conn.execute(select(_teams.c.team_id, _teams.c.backend_id).where(

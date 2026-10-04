@@ -26,6 +26,7 @@ Postgres-portable (TEXT/INTEGER/REAL, ISO-8601 timestamps, explicit FKs).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import sqlite3
@@ -39,6 +40,34 @@ from .labels import classify
 def _is_orm(conn: Any) -> bool:
     """A non-sqlite3 connection means the ORM/Postgres path."""
     return conn is not None and not isinstance(conn, sqlite3.Connection)
+
+
+@contextlib.contextmanager
+def batched(conn: Any):
+    """Run a write loop as ONE transaction on the remote (ORM) store.
+
+    Every ``record_*`` helper commits after each row — a network round-trip (plus a
+    server-side flush) per event against a hosted Postgres, which is what made the
+    backfill passes pause for a minute apiece. Inside this block those commits are
+    deferred to a single commit at the end, and team/country lookups are memoised.
+    Rolls back as a unit if the block raises. A no-op on local SQLite (cheap commits)."""
+    if not _is_orm(conn):
+        yield conn
+        return
+    real_commit = conn.commit
+    conn.commit = lambda: None                 # instance attribute shadows the method
+    conn.info["dim_cache"] = {}
+    try:
+        yield conn
+    except BaseException:
+        del conn.commit
+        conn.info.pop("dim_cache", None)
+        conn.rollback()
+        raise
+    else:
+        del conn.commit
+        conn.info.pop("dim_cache", None)
+        real_commit()
 
 
 # --------------------------------------------------------------------------- #
@@ -1495,6 +1524,8 @@ def record_period_results(conn, run_id: int, event_id: str, skin: str,
         conn, "SELECT period_key, home_score, away_score FROM period_scores WHERE event_id = :e",
         {"e": event_id}).fetchall()}
     added = 0
+    rows: List[Dict[str, Any]] = []
+    when = _ts_for(conn, at)
     for p in periods or []:
         key = _as_int(p.get("type"))
         if not key:                       # 0 / missing: the final total, not a period
@@ -1503,12 +1534,12 @@ def record_period_results(conn, run_id: int, event_id: str, skin: str,
         if (key, home, away) in have:
             continue
         name = h2h_period_label(key, sport_id, str(p.get("title") or ""))
-        _run_sql(conn, "INSERT INTO period_scores (run_id, event_id, skin, period_key, period_name, "
-                       "home_score, away_score, captured_at) VALUES (:r, :e, :s, :k, :n, :h, :a, :at)",
-                 {"r": run_id, "e": event_id, "s": skin, "k": key, "n": name, "h": home, "a": away,
-                  "at": _ts_for(conn, at)})
+        rows.append({"r": run_id, "e": event_id, "s": skin, "k": key, "n": name, "h": home,
+                     "a": away, "at": when})
         have.add((key, home, away))
         added += 1
+    _run_many(conn, "INSERT INTO period_scores (run_id, event_id, skin, period_key, period_name, "
+                    "home_score, away_score, captured_at) VALUES (:r, :e, :s, :k, :n, :h, :a, :at)", rows)
     conn.commit()
     return added
 
