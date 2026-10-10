@@ -204,6 +204,12 @@ def test_simulated_alternative_matches_are_not_asked_for_a_result(conn):
     assert _q(conn, "SELECT event_id, is_alternative FROM events ORDER BY event_id") == [("E1", 0), ("E2", 1)]
 
 
+def test_points_novelty_listing_is_flagged_alternative(conn):
+    store.persist_result(_result(home="1st teams (Points)", away="2nd teams (Points)", event_id="N1"), conn=conn)
+    store.persist_result(_result(event_id="R1"), conn=conn)
+    assert _q(conn, "SELECT event_id, is_alternative FROM events ORDER BY event_id") == [("N1", 1), ("R1", 0)]
+
+
 def test_events_by_ids_names_the_asked_matches_only(conn):
     """`results --event ID`: the work list is exactly the asked, stored matches (status included)."""
     store.persist_result(_result(), conn=conn)

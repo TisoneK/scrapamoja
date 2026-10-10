@@ -947,11 +947,14 @@ def mark_superseded(conn) -> int:
 
 
 def mark_alternative(conn) -> int:
-    """Flag the bookmaker's simulated "<League>. Alternative Matches" (``events.is_alternative``).
-    They reuse real team names but are not fixtures and the source never publishes a result for
-    them. Derived from the league name; idempotent. Returns the number of rows newly flagged."""
-    n = _run_sql(conn, "UPDATE events SET is_alternative = :t WHERE is_alternative = :f AND league_id IN "
-                       "(SELECT league_id FROM leagues WHERE LOWER(name) LIKE '%alternative matches%')",
+    """Flag listings that are not real fixtures (``events.is_alternative``): the bookmaker's simulated
+    "<League>. Alternative Matches" (real team names, no result is ever published) and the
+    "1st teams (Points) / 2nd teams (Points)" novelty market. Derived from the league / team name;
+    idempotent. Returns the number of rows newly flagged."""
+    n = _run_sql(conn, "UPDATE events SET is_alternative = :t WHERE is_alternative = :f AND ("
+                       "league_id IN (SELECT league_id FROM leagues WHERE LOWER(name) LIKE '%alternative matches%') "
+                       "OR LOWER(COALESCE(home_name, '')) LIKE '% teams (points)' "
+                       "OR LOWER(COALESCE(away_name, '')) LIKE '% teams (points)')",
                  {"t": True, "f": False}).rowcount
     conn.commit()
     return int(n or 0)
@@ -1697,9 +1700,9 @@ def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int 
     from datetime import timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(seconds=min_age_seconds)).isoformat()
     rows = conn.execute(
-        "SELECT e.event_id, e.stat_game_id FROM events e LEFT JOIN leagues l ON l.league_id = e.league_id "
+        "SELECT e.event_id, e.stat_game_id FROM events e "
         "WHERE e.away_team_id IS NOT NULL AND e.start_time IS NOT NULL AND e.start_time < ? "
-        "AND e.result_status IS NULL AND LOWER(COALESCE(l.name, '')) NOT LIKE '%alternative matches%' "
+        "AND e.result_status IS NULL AND e.is_alternative = 0 "
         "ORDER BY e.start_time LIMIT ?",
         (cutoff, limit),
     ).fetchall()
