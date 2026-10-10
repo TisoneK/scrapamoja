@@ -200,6 +200,8 @@ def test_simulated_alternative_matches_are_not_asked_for_a_result(conn):
         store.persist_result(r, conn=conn)
     pending = [e for e, _ in store.events_needing_results(conn, min_age_seconds=0)]
     assert "E1" in pending and "E2" not in pending
+    store.mark_alternative(conn)      # persist already flagged it; a second call changes nothing
+    assert _q(conn, "SELECT event_id, is_alternative FROM events ORDER BY event_id") == [("E1", 0), ("E2", 1)]
 
 
 def test_events_by_ids_names_the_asked_matches_only(conn):
@@ -298,7 +300,7 @@ def test_repair_cleans_old_rows_and_learns_aliases(conn):
     assert _q(conn, "SELECT result_status, final_score_home FROM events") == [(-2, None)]
     assert store.repair_data_quality(conn) == {"duplicate_h2h_games": 0, "placeholder_h2h_games": 0,
                                                "h2h_games_with_empty_periods": 0, "voided_results": 0,
-                                               "aliases_added": 0, "h2h_kind_changed": 0}
+                                               "aliases_added": 0, "h2h_kind_changed": 0, "alternative_matches_flagged": 0}
 
 
 def test_an_alias_that_matches_two_teams_is_left_unmapped(conn):

@@ -150,6 +150,7 @@ __all__ = [
     "init_db",
     "reset_all",
     "mark_superseded",
+    "mark_alternative",
     "repair_data_quality",
     "is_read_only_error",
     "persist_result",
@@ -219,7 +220,8 @@ CREATE TABLE IF NOT EXISTS events (
     winner             INTEGER,             -- entity.winner (1=home/2=away/0=none)
     result_status      INTEGER,             -- entity.status (3=finished)
     result_captured_at TEXT,
-    superseded_by      TEXT                 -- re-listed under a newer id (same teams+start+league)
+    superseded_by      TEXT,                -- re-listed under a newer id (same teams+start+league)
+    is_alternative     INTEGER NOT NULL DEFAULT 0  -- simulated "<League>. Alternative Matches" (no result ever)
 );
 
 CREATE TABLE IF NOT EXISTS markets (
@@ -520,6 +522,7 @@ _ADDED_COLUMNS = [
     ("events", "result_status", "INTEGER"),
     ("events", "result_captured_at", "TEXT"),
     ("events", "superseded_by", "TEXT"),
+    ("events", "is_alternative", "INTEGER NOT NULL DEFAULT 0"),
     ("odds_snapshots", "subject", "TEXT"),
     ("odds_snapshots", "period", "TEXT"),
     ("h2h_games", "kind", "TEXT"),
@@ -603,7 +606,8 @@ def repair_data_quality(conn) -> Dict[str, int]:
     """One-off cleanup of rows stored before the data-quality rules (``data_quality.py``)
     existed: duplicate games, placeholder scores, 0-0 period rows, voided results,
     team aliases and the ``kind`` of every H2H row. Idempotent; returns counts."""
-    out: Dict[str, int] = {"duplicate_h2h_games": dedupe_h2h_games(conn)}
+    out: Dict[str, int] = {"duplicate_h2h_games": dedupe_h2h_games(conn),
+                           "alternative_matches_flagged": mark_alternative(conn)}
     placeholder = ("sport_id = 3 AND result_flag IS NULL AND "
                    "((score1 = 0 AND score2 = 0) OR (score1 = 20 AND score2 = 0) OR (score1 = 0 AND score2 = 20))")
     ids = "SELECT id FROM h2h_games WHERE " + placeholder
@@ -942,6 +946,17 @@ def mark_superseded(conn) -> int:
     return int(n or 0)
 
 
+def mark_alternative(conn) -> int:
+    """Flag the bookmaker's simulated "<League>. Alternative Matches" (``events.is_alternative``).
+    They reuse real team names but are not fixtures and the source never publishes a result for
+    them. Derived from the league name; idempotent. Returns the number of rows newly flagged."""
+    n = _run_sql(conn, "UPDATE events SET is_alternative = :t WHERE is_alternative = :f AND league_id IN "
+                       "(SELECT league_id FROM leagues WHERE LOWER(name) LIKE '%alternative matches%')",
+                 {"t": True, "f": False}).rowcount
+    conn.commit()
+    return int(n or 0)
+
+
 def persist_result(
     result: Dict[str, Any], path: PathLike | None = None, *,
     conn: Optional[Any] = None,
@@ -960,8 +975,9 @@ def persist_result(
             run_id = store_orm.persist_result(conn, result)
             try:
                 mark_superseded(conn)
+                mark_alternative(conn)
             except Exception:  # noqa: BLE001 — linking is advisory; never fail a persist
-                logger.exception("mark_superseded failed")
+                logger.exception("mark_superseded / mark_alternative failed")
         except Exception as exc:  # noqa: BLE001
             mirror = store_fallback.recover_write_failure("persist", exc, result, path)
             if mirror is not None:
@@ -1169,8 +1185,9 @@ def persist_result(
         conn.commit()
         try:
             mark_superseded(conn)
+            mark_alternative(conn)
         except Exception:  # noqa: BLE001 — linking is advisory; never fail a persist
-            logger.exception("mark_superseded failed")
+            logger.exception("mark_superseded / mark_alternative failed")
         logger.info(
             "persist run %d (skin=%s): %d odds changes stored, %d unchanged skipped",
             run_id, skin, odds_ins, odds_skip,

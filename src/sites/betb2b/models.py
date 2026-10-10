@@ -49,6 +49,7 @@ from sqlalchemy import (
     Integer,
     Text,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import Optional
@@ -137,6 +138,10 @@ class Event(Base):
     # The bookmaker RE-LISTS a match under a new id (old id then returns nothing).
     # Same teams + start + league, older id → superseded_by = the newest id.
     superseded_by: Mapped[Optional[str]] = mapped_column(Text)
+    # True for the bookmaker's simulated "<League>. Alternative Matches": real team names, but not a
+    # fixture, and the source never publishes a result for it. Consumers (the engine) skip these.
+    is_alternative: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                                 server_default=false())
     __table_args__ = (
         Index("ix_events_league", "league_id"),
         Index("ix_events_sport", "sport_id"),
