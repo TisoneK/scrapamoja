@@ -189,6 +189,19 @@ def test_finished_basketball_with_a_placeholder_score_is_not_a_result(conn, h, a
     assert store.events_needing_results(conn, min_age_seconds=0) == []   # not asked again either way
 
 
+def test_simulated_alternative_matches_are_not_asked_for_a_result(conn):
+    """"<League>. Alternative Matches" are the bookmaker's own simulated markets: the source never
+    publishes a result for them, so the results work list leaves them out."""
+    for eid, league in (("E1", "EuroCup"), ("E2", "EuroCup. Alternative Matches")):
+        r = _result(event_id=eid)
+        r["events"][0]["competition"] = league
+        r["events"][0]["league_id"] = 100 + int(eid[1:])
+        r["events"][0]["start_time"] = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        store.persist_result(r, conn=conn)
+    pending = [e for e, _ in store.events_needing_results(conn, min_age_seconds=0)]
+    assert "E1" in pending and "E2" not in pending
+
+
 def test_events_by_ids_names_the_asked_matches_only(conn):
     """`results --event ID`: the work list is exactly the asked, stored matches (status included)."""
     store.persist_result(_result(), conn=conn)

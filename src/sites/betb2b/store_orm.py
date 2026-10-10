@@ -761,10 +761,13 @@ def list_jobs(conn, *, limit=50, status=None):
 def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):
     """(event_id, stat_game_id) for real matches that should have finished
     (start_time older than min_age, default 2.5h) and have no result yet —
-    the results pass's work list. Oldest first."""
+    the results pass's work list. Oldest first. Simulated "Alternative Matches" leagues are left
+    out: the source never resolves them."""
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=min_age_seconds)
     rows = conn.execute(
-        select(_events.c.event_id, _events.c.stat_game_id).where(
+        select(_events.c.event_id, _events.c.stat_game_id).select_from(
+            _events.outerjoin(_leagues, _events.c.league_id == _leagues.c.league_id)).where(
+            func.lower(func.coalesce(_leagues.c.name, "")).not_like("%alternative matches%"),
             _events.c.away_team_id.isnot(None),   # a real H2H match, not an outright
             _events.c.start_time.isnot(None),
             _events.c.start_time < cutoff,

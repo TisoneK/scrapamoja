@@ -1672,16 +1672,18 @@ def record_h2h(conn, run_id: int, event_id: str, skin: str, h2h: Optional[Dict[s
 
 def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):
     """(event_id, stat_game_id) for real matches past ``min_age`` (default 2.5h)
-    with no result yet — the results pass's work list. Oldest first."""
+    with no result yet — the results pass's work list. Oldest first. Simulated "Alternative Matches"
+    leagues are left out (the source never resolves them)."""
     if _is_orm(conn):
         from . import store_orm
         return store_orm.events_needing_results(conn, min_age_seconds=min_age_seconds, limit=limit)
     from datetime import timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(seconds=min_age_seconds)).isoformat()
     rows = conn.execute(
-        "SELECT event_id, stat_game_id FROM events "
-        "WHERE away_team_id IS NOT NULL AND start_time IS NOT NULL AND start_time < ? "
-        "AND result_status IS NULL ORDER BY start_time LIMIT ?",
+        "SELECT e.event_id, e.stat_game_id FROM events e LEFT JOIN leagues l ON l.league_id = e.league_id "
+        "WHERE e.away_team_id IS NOT NULL AND e.start_time IS NOT NULL AND e.start_time < ? "
+        "AND e.result_status IS NULL AND LOWER(COALESCE(l.name, '')) NOT LIKE '%alternative matches%' "
+        "ORDER BY e.start_time LIMIT ?",
         (cutoff, limit),
     ).fetchall()
     return [(r["event_id"], r["stat_game_id"]) for r in rows]
