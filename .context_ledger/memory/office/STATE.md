@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-10T08:19:25Z_
+_Regenerated: 2026-10-10T08:19:30Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-10-04)
@@ -16,7 +16,6 @@ _Regenerated: 2026-10-10T08:19:25Z_
 
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
-- **Kofi** (S006) — Working — Engineer: diagnose why the results scraper stopped filling results since 6 Oct 05:52 UTC
 
 ## Current task
 - **—** — none — no session in progress — *idle*
