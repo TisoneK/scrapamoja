@@ -78,3 +78,4 @@ close` freezes this whole directory verbatim into `.context_ledger/history/`
 (every shift preserved), and the next office starts with an empty board.
 The permanent record `history/office-<NNN>.md` keeps each office's duty
 summary forever.
+| Kofi | S006 | claude-sonnet-5-5 | Engineer: on-demand results fetch (--auto / per-game) for the betb2b scraper | Working | Checked back in; reading the results pass |
