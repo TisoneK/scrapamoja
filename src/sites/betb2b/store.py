@@ -1897,6 +1897,18 @@ def give_up_results(conn, run_id, skin: str, *, days: float = 7.0,
     return ids
 
 
+def give_up_event(conn, run_id, event_id: str, skin: str, *, at: Optional[str] = None) -> None:
+    """Close one match out now as unresolved (``result_status = -1`` + a ``result`` coverage row of
+    ``not_offered``) — what ``give_up_results`` does after a week, for a match a person knows the
+    source does not cover."""
+    _run_sql(conn, "UPDATE events SET result_status = -1 WHERE event_id = :e AND result_status IS NULL",
+             {"e": str(event_id)})
+    _run_sql(conn, "INSERT INTO coverage (run_id, event_id, skin, dataset, subject, period, status, captured_at) "
+                   "VALUES (:r, :e, :s, 'result', NULL, NULL, 'not_offered', :at)",
+             {"r": run_id, "e": str(event_id), "s": skin, "at": _ts_for(conn, at)})
+    conn.commit()
+
+
 def record_result(conn, event_id, *, stat_game_id=None, score_home=None,
                   score_away=None, winner=None, status=None, at=None) -> None:
     """Write a match's statisticfeed result onto the event. Captures

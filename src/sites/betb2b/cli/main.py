@@ -743,6 +743,13 @@ class BetB2BCLI:
                               "and has no result yet, plus their period scores and statistics")
         rs_.add_argument("--event", action="append", default=[], metavar="ID",
                          help="Only this stored match (repeatable); ignores its age")
+        rs_.add_argument("--set", action="append", default=[], metavar="ID=HOME-AWAY",
+                         help="Fill a final score by hand for a stored match the source does not cover "
+                              "(e.g. --set 758494093=62-64). Stored as a finished result, with a "
+                              "'result_manual' coverage row so it is never mistaken for a source result")
+        rs_.add_argument("--give-up", action="append", default=[], metavar="ID",
+                         help="Close a stored match out as having no result at the source "
+                              "(result_status -1, no longer asked) without waiting 7 days")
         rs_.add_argument("--limit", type=int, default=100000,
                          help="Max matches per --auto run (default: effectively all)")
         rs_.add_argument("--db", nargs="?", const="", default=None,
@@ -1070,13 +1077,17 @@ class BetB2BCLI:
         (data fetching only), so it is allowed on a geo-restricted machine."""
         from src.sites.betb2b import BetB2BScraper, store
 
-        if not args.event and not args.auto:
-            print("results: give --auto (every due match) or --event ID (that match only)",
-                  file=sys.stderr)
+        if not (args.event or args.auto or args.set or args.give_up):
+            print("results: give --auto (every due match), --event ID (that match only), "
+                  "--set ID=HOME-AWAY or --give-up ID", file=sys.stderr)
             return 2
         skin_name = args.skin_pos or args.skin
-        skin = _load_skin(skin_name)
         db_target = args.db or db_path()
+        if args.set or args.give_up:
+            rc = self._manual_results(store, db_target, skin_name, args.set, args.give_up)
+            if rc or not (args.event or args.auto):
+                return rc
+        skin = _load_skin(skin_name)
         async with BetB2BScraper(skin, sport=args.sport, direct=True) as scraper:
             if args.event:
                 conn = store.init_db(db_target)
@@ -1096,6 +1107,45 @@ class BetB2BCLI:
                 await _record_pending_results(scraper, db_target, skin_name, todo)
             else:
                 await _update_results(scraper, db_target, skin_name, limit=args.limit)
+        return 0
+
+    @staticmethod
+    def _manual_results(store, db_target: str, skin_name: str, sets, give_ups) -> int:
+        """``results --set ID=H-A`` / ``--give-up ID``: results typed in by a person for matches the
+        source does not cover. Only stored, not-yet-finished matches; nothing is overwritten."""
+        import re
+        scores = {}
+        for item in sets:
+            m = re.fullmatch(r"\s*(\w+)\s*=\s*(\d+)\s*[-:]\s*(\d+)\s*", item)
+            if not m:
+                print(f"results: --set {item!r}: expected ID=HOME-AWAY, e.g. 758494093=62-64", file=sys.stderr)
+                return 2
+            scores[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+        at = datetime.now(timezone.utc).isoformat()
+        conn = store.init_db(db_target)
+        try:
+            rid = store.begin_backfill_run(conn, skin_name, "results_manual", at=at)
+            known = {e: st for e, _, st in store.events_by_ids(conn, list(scores) + list(give_ups))}
+            for eid, (h, a) in scores.items():
+                if eid not in known:
+                    print(f"  [{skin_name}] {eid}: not in the store", file=sys.stderr)
+                elif known[eid] == 3:
+                    print(f"  [{skin_name}] {eid}: already has a result — left alone", file=sys.stderr)
+                else:
+                    store.record_result(conn, eid, score_home=h, score_away=a,
+                                        winner=1 if h > a else 2 if a > h else 0, status=3, at=at)
+                    store.record_coverage(conn, rid, eid, skin_name, "result_manual", "offered", at=at)
+                    print(f"  [{skin_name}] {eid}: set {h}-{a} (manual)", file=sys.stderr)
+            for eid in give_ups:
+                if eid not in known:
+                    print(f"  [{skin_name}] {eid}: not in the store", file=sys.stderr)
+                elif known[eid] is not None:
+                    print(f"  [{skin_name}] {eid}: already resolved — left alone", file=sys.stderr)
+                else:
+                    store.give_up_event(conn, rid, eid, skin_name, at=at)
+                    print(f"  [{skin_name}] {eid}: closed out, no result at the source", file=sys.stderr)
+        finally:
+            conn.close()
         return 0
 
     async def _cmd_quota(self, args: argparse.Namespace) -> int:

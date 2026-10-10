@@ -210,6 +210,15 @@ def test_points_novelty_listing_is_flagged_alternative(conn):
     assert _q(conn, "SELECT event_id, is_alternative FROM events ORDER BY event_id") == [("N1", 1), ("R1", 0)]
 
 
+def test_give_up_event_closes_one_match_out_with_a_coverage_row(conn):
+    store.persist_result(_result(), conn=conn)
+    rid = store.begin_backfill_run(conn, "linebet", "results_manual", at="2026-10-10T10:00:00+00:00")
+    store.give_up_event(conn, rid, "E1", "linebet", at="2026-10-10T10:00:00+00:00")
+    assert _q(conn, "SELECT result_status FROM events") == [(-1,)]
+    assert _q(conn, "SELECT dataset, status FROM coverage WHERE dataset = 'result'") == [("result", "not_offered")]
+    assert store.events_needing_results(conn, min_age_seconds=0) == []
+
+
 def test_events_by_ids_names_the_asked_matches_only(conn):
     """`results --event ID`: the work list is exactly the asked, stored matches (status included)."""
     store.persist_result(_result(), conn=conn)
