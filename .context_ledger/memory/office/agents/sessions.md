@@ -98,3 +98,6 @@ re-seeded into the new office explicitly, and nothing else carries over.
 
 ### Follow-up 3 (Kofi/S006) — two jobs
 - Operator: the full scrape stays scheduled every 6 h as usual. `scripts/schedule.sh install` now installs two launchd jobs: `com.scrapamoja.scrape` (6 h, full scrape, direct, no ingest) and `com.scrapamoja.results` (30 min, `results --auto`); the first version's `com.scrapamoja.betb2b` label is replaced. Both installed on this Mac; first scrape fires ~6 h after install, no RunAtLoad.
+
+### Follow-up 4 (Kofi/S006) — "Alternative Matches" skipped
+- Why finished games had no scores: 352 of 360 unscored matches since 6 Oct are in "<League>. Alternative Matches" (EuroCup 206, Euroleague 90, FIBA CL 56) — the bookmaker's simulated markets with real team names; the source answers "no data" for them. Real leagues are scored (Euroleague 29/29 ...). Fix: `events_needing_results` (both backends) leaves them out; 1 test; pending 514 -> 97. Engine check (read-only, Neon): 0 predictions, 0 paper bets, 0 real bets, 0 grade rows and 0 H2H on the 442 alternative events (90 upcoming) — the engine skips them (no H2H), so no engine change needed. Note: the engine's audit rule E3 (`engine/dataquality.py`) keywords don't include "alternative", so it won't flag them; optional hardening on the engine side.
