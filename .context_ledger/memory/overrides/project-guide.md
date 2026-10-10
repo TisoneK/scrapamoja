@@ -157,6 +157,10 @@ asks the source only for stored matches that should have finished (2.5 h after s
 sets up two launchd jobs: `com.scrapamoja.scrape` (full scrape, every 6 h) and `com.scrapamoja.results`
 (`results --auto`, every 30 min); `scripts/schedule.sh show` lists them.
 
+**Matches the source does not cover** (small leagues, e.g. Philippines NCAA): `results --set ID=HOME-AWAY` fills a
+score typed in by a person (stored as finished, plus a `result_manual` coverage row so it is never mistaken for a
+source result); `results --give-up ID` closes a match out now (`result_status -1`) instead of after 7 days.
+
 **`events.is_alternative`** (added 2026-10-10): true for the bookmaker's simulated "<League>. Alternative Matches"
 (real team names, not fixtures, no result ever published). Set on every write by `store.mark_alternative` (from the
 league name) and by `repair-data`; the results pass skips them. Consumers filter on the column.
