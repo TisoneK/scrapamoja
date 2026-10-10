@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-04T10:52:41Z_
+_Regenerated: 2026-10-10T08:19:25Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-10-04)
@@ -16,20 +16,22 @@ _Regenerated: 2026-10-04T10:52:41Z_
 
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
+- **Kofi** (S006) — Working — Engineer: diagnose why the results scraper stopped filling results since 6 Oct 05:52 UTC
 
 ## Current task
 - **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-03-1 | **linebet live re-verification with the fixes in place, in a rested window.** The cookie-header fix (`ec05ca0`), the burst-halt (`fb32cd1`/`6fa14bb`) and the pre-harvest grid wait are in but not yet proven end-to-end: tonight's address was rested by the guard after repeated challenges. Run the stored run (`scrape linebet scheduled --sport basketball --timeout 3600`), then a second run with no person present, then watch `python -m src.security status` and the per-skin rows from the Kenya brief's section 7 query. Also re-run **melbet** (its loop run was killed mid-scrape by mistake; earlier data intact). |
-| B-2026-10-03-2 | Run the H2H backfill and sub-game capture against Neon and watch request volume: sub-games cost up to ~12 requests per new event (was 1). Confirm the Postgres `ALTER`s for `odds_snapshots.subject/period` and the new `coverage` table applied (they run on connect; verify the schema). Existing stored events keep no sub-game odds until re-fetched — decide whether to refresh upcoming ones. |
+| B-2026-10-04-1 | Make the skip filter per skin, not per match: `store.unprocessed_ids` skips a match any skin stored, so a second skin's own odds are only fetched with `--skip-processed SECONDS` (a full re-fetch, ~9 min / ~1,500 requests per skin). Add a per-skin mode (skip only what THIS skin stored) so melbet/22bet/linebet get their odds without re-fetching or re-probing H2H/stat ids (those are skin-independent and already remembered). |
+| B-2026-10-04-2 | Volume watch on Neon with four skins and sub-games on: ~290k odds rows for 3 skins at ~200 events each; `BETB2B_DB_LIMIT_MB=1000`. Re-check `python -m src.sites.betb2b.cli quota` after a few days and decide the prune window (matches older than 7 days are prunable). Also decide whether per-stat sub-games (about half the requests per event) are worth keeping for every league. |
 
-_14 medium, 4 low priority row(s) — see tasks/backlog.md_
+_16 medium, 0 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
-- flaws/log.md (protocol/.context_ledger friction): 1 entry, last added 2026-10-03
+- flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-10-04
 - inefficiencies/log.md (project code/env friction): 4 entries, last added 2026-10-03
-- plans/decisions.md (ADRs in force — respected, not relitigated): 1 entry, last added 2026-10-03
+- plans/decisions.md (ADRs in force — respected, not relitigated): 4 entries, last added 2026-10-04
 
 ## Collaboration
 - 4 event(s) on file; most recent: `20261003T170022Z-Noor-8c5bf250.json`

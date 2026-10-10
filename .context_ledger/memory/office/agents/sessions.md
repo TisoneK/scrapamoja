@@ -78,3 +78,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Correction (appended, never edited above):** the bullet "Follow-up 8 (geo-restricted machines, operator rule)" at the end of Session 4's entry was written by S005 (Imani), not by S004; it landed there because the office had been reset and the file tail then belonged to S004. Its content is covered by ADR-2 and this entry.
 - **Closing addendum:** after the wrap the operator's three-skin refetch finished on the Mac (Neon: 681 events, 230 finished, statistics for 183 matches, 81k player rows; betwinner 477 / melbet 361 / 22bet 332 events, linebet 2) and one more bug surfaced and was fixed: a match whose source gave only player statistics (no team periods) was re-asked every run (`fix(betb2b)`, test added). The betwinner follow-up was refused once by the old `geo_block` cooldown (started 3 minutes early) and re-ran clean. All work committed and pushed; no background jobs left running.
 
+
+---
+## 2026-10-10 — Session 6 (Kofi/S006)
+- **Agent:** Kofi (S006) | **Model:** claude-sonnet-5-5 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** engineer | **Core:** 2.0.4
+- **Task:** operator pasted an engine-side report that the scraper has filled no results since 6 Oct 05:52 UTC; find out why.
+- **Commits:** ledger only (check-in, this entry). No product change, no scrape run (this Mac is geo-restricted).
+- **Outcome:** diagnosed, no code fault found. Read-only checks of Neon: last write of every scraper table is 6 Oct 05:51-05:54 UTC (`scrape_runs` 63-66, betwinner: results, backfills, prematch); store 296 MB of 1000 MB, reachable, not read-only; no scrape process, launchd job or crontab for the scraper here (the only launchd jobs are the engine's `com.scorewise.new/full/grade`). The scraper has only ever run when started by hand (runs 4, 5 and 6 Oct); `BetB2BScheduler` exists but nothing starts it. So results stopped because nobody ran the scrape, not because a run failed. Remedy: run `scrape betwinner` (results pass settles finished matches, incl. 7-9 Oct) or schedule it; the matches' results are still on the source for a week after kickoff, so a run now backfills 7-9 Oct games.
+- **Open items:** decide how the scraper is kept running (launchd job on a non-restricted machine, or the scheduler as a service).
+- **Notes:** none
+- **Report:** none
