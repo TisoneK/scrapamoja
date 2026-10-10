@@ -189,6 +189,15 @@ def test_finished_basketball_with_a_placeholder_score_is_not_a_result(conn, h, a
     assert store.events_needing_results(conn, min_age_seconds=0) == []   # not asked again either way
 
 
+def test_events_by_ids_names_the_asked_matches_only(conn):
+    """`results --event ID`: the work list is exactly the asked, stored matches (status included)."""
+    store.persist_result(_result(), conn=conn)
+    assert store.events_by_ids(conn, ["E1", "nope"]) == [("E1", None, None)]
+    store.record_result(conn, "E1", stat_game_id="s1", score_home=88, score_away=81, winner=1, status=3,
+                        at="2026-10-04T10:00:00+00:00")
+    assert store.events_by_ids(conn, ["E1"]) == [("E1", "s1", 3)]
+
+
 def test_a_football_nil_nil_is_still_a_result(conn):
     r = _result()
     r["events"][0].update(sport="football", sport_id=1)

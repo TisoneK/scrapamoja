@@ -1687,6 +1687,18 @@ def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int 
     return [(r["event_id"], r["stat_game_id"]) for r in rows]
 
 
+def events_by_ids(conn, event_ids):
+    """(event_id, stat_game_id, result_status) for the given stored events — the work list of an
+    on-demand ``results --event`` run. Ids the store does not know are simply absent."""
+    out = []
+    for eid in event_ids:
+        row = _run_sql(conn, "SELECT event_id, stat_game_id, result_status FROM events "
+                             "WHERE event_id = :e", {"e": str(eid)}).fetchone()
+        if row:
+            out.append((row[0], row[1], row[2]))
+    return out
+
+
 def _ts_for(conn, at):
     """A timestamp in the form the backend wants: datetime for Postgres, ISO text for SQLite."""
     if _is_orm(conn):

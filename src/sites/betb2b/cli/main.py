@@ -277,7 +277,8 @@ def _guard_state(guard) -> dict:
         return {}
 
 
-async def _update_results(scraper, db_target: str, skin_name: str) -> None:
+async def _update_results(scraper, db_target: str, skin_name: str, *,
+                          limit: int = 200) -> None:
     """Score updates for stored matches that should have finished: fetch their
     final result (statisticfeed ``v1/Game``) and record it with its per-period
     scores. Matches the source never resolves within a week are marked unresolved
@@ -295,7 +296,7 @@ async def _update_results(scraper, db_target: str, skin_name: str) -> None:
                 return run["id"]
 
             gave_up = store.give_up_results(conn, run_id, skin_name, at=at)
-            pending = store.events_needing_results(conn)
+            pending = store.events_needing_results(conn, limit=limit)
         finally:
             conn.close()
         if gave_up:
@@ -729,6 +730,24 @@ class BetB2BCLI:
         rd.add_argument("--db", nargs="?", const="", default=None,
                         help="Store path (default: $BETB2B_DB_PATH / DATABASE_URL if set)")
 
+        # results — on-demand final scores, no odds scrape
+        rs_ = sub.add_parser(
+            "results", help="Fetch final results on demand (no odds scrape): --auto = every "
+                            "finished match still without one, --event ID = just that match")
+        rs_.add_argument("skin_pos", nargs="?", default=None, metavar="skin",
+                         help="Skin to ask (default: $BETB2B_SKIN)")
+        rs_.add_argument("--skin", "-s", default=_env("BETB2B_SKIN", "linebet"), help=argparse.SUPPRESS)
+        rs_.add_argument("--sport", default=_env("BETB2B_SPORT", "basketball"))
+        rs_.add_argument("--auto", action="store_true",
+                         help="Every stored match that should have finished (2.5 h after start) "
+                              "and has no result yet, plus their period scores and statistics")
+        rs_.add_argument("--event", action="append", default=[], metavar="ID",
+                         help="Only this stored match (repeatable); ignores its age")
+        rs_.add_argument("--limit", type=int, default=100000,
+                         help="Max matches per --auto run (default: effectively all)")
+        rs_.add_argument("--db", nargs="?", const="", default=None,
+                         help="Store path (default: $BETB2B_DB_PATH / DATABASE_URL if set)")
+
         # compare-match
         cm = sub.add_parser("compare-match", help="Compare match page UI data vs API endpoints")
         cm.add_argument("--skin", "-s", default=_env("BETB2B_SKIN", "linebet"), help="Skin name (default: linebet)")
@@ -781,6 +800,8 @@ class BetB2BCLI:
             return await self._cmd_probe(args)
         if args.command == "schedule":
             return await self._cmd_schedule(args)
+        if args.command == "results":
+            return await self._cmd_results(args)
         if args.command == "quota":
             return await self._cmd_quota(args)
         if args.command == "repair-data":
@@ -1038,6 +1059,43 @@ class BetB2BCLI:
             conn.close()
         for name, n in out.items():
             print(f"{name:32s}: {n}")
+        return 0
+
+    async def _cmd_results(self, args: argparse.Namespace) -> int:
+        """On-demand results: no odds scrape, no pages — only the statisticfeed result lookups.
+
+        ``--event ID`` (repeatable) asks for exactly those stored matches, whatever their age.
+        ``--auto`` asks for every stored match that is due (started 2.5 h+ ago, no result yet),
+        uncapped, and also fills their period scores and statistics. Always direct mode
+        (data fetching only), so it is allowed on a geo-restricted machine."""
+        from src.sites.betb2b import BetB2BScraper, store
+
+        if not args.event and not args.auto:
+            print("results: give --auto (every due match) or --event ID (that match only)",
+                  file=sys.stderr)
+            return 2
+        skin_name = args.skin_pos or args.skin
+        skin = _load_skin(skin_name)
+        db_target = args.db or db_path()
+        async with BetB2BScraper(skin, sport=args.sport, direct=True) as scraper:
+            if args.event:
+                conn = store.init_db(db_target)
+                try:
+                    found = store.events_by_ids(conn, args.event)
+                finally:
+                    conn.close()
+                known = {e for e, _, _ in found}
+                for eid in args.event:
+                    if str(eid) not in known:
+                        print(f"  [{skin_name}] {eid}: not in the store — scrape it first",
+                              file=sys.stderr)
+                todo = [(e, sid) for e, sid, st in found if st != 3]
+                for e, _, st in found:
+                    if st == 3:
+                        print(f"  [{skin_name}] {e}: result already stored", file=sys.stderr)
+                await _record_pending_results(scraper, db_target, skin_name, todo)
+            else:
+                await _update_results(scraper, db_target, skin_name, limit=args.limit)
         return 0
 
     async def _cmd_quota(self, args: argparse.Namespace) -> int:
