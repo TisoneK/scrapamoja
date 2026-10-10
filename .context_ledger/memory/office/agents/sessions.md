@@ -88,3 +88,7 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** decide how the scraper is kept running (launchd job on a non-restricted machine, or the scheduler as a service).
 - **Notes:** none
 - **Report:** none
+
+### Follow-up (Kofi/S006, same day) — scraper service added
+- Operator asked for the missing scraper service; no ingest wanted for now. Shipped `scripts/schedule.sh` (`a08a938`): launchd job `com.scrapamoja.betb2b`, `scrape betwinner scheduled --sport basketball --direct` every 6 h, log `~/Library/Logs/scrapamoja-scrape.log`; installed on this Mac.
+- First hand run (run 71): 200 events, 25,742 markets, 589 s, rc 0. Results pass: 200 pending -> only 21 finished recorded (88 period scores). Scored games per day afterwards: 6 Oct 20/291, 7 Oct 0/48, 8 Oct 0/86, 9 Oct 0/17 -> the 7-9 Oct results are NOT backfilled yet. The pass looks capped at 200 pending per run (not verified); later runs should work through the rest. Open: verify after the next scheduled runs (~14:42 and ~20:42 UTC), and check whether the 200 cap or the source not yet resolving those games is the limit.
