@@ -157,6 +157,10 @@ asks the source only for stored matches that should have finished (2.5 h after s
 sets up two launchd jobs: `com.scrapamoja.scrape` (full scrape, every 6 h) and `com.scrapamoja.results`
 (`results --auto`, every 30 min); `scripts/schedule.sh show` lists them.
 
+**`events.is_alternative`** (added 2026-10-10): true for the bookmaker's simulated "<League>. Alternative Matches"
+(real team names, not fixtures, no result ever published). Set on every write by `store.mark_alternative` (from the
+league name) and by `repair-data`; the results pass skips them. Consumers filter on the column.
+
 ### Per-Sport Scrapers (`src/sites/betb2b/sports/`) — ✅ Initialized 2026-07-18
 
 The BetB2B backend tags every event with an integer `SI` sport id (1=Football,
