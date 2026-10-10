@@ -153,9 +153,9 @@ The most important active work. `src/sites/betb2b/` is a **parameterised base sc
 **On-demand results (`results`, added 2026-10-10).** `python -m src.sites.betb2b.cli results <skin> --auto`
 asks the source only for stored matches that should have finished (2.5 h after start) and have no result, uncapped
 (the pass inside `scrape` is capped at 200, oldest first), then fills their period scores and statistics;
-`--event ID` (repeatable) does just that stored match whatever its age. Direct mode only. The launchd job
-`com.scrapamoja.betb2b` (`scripts/schedule.sh install`) runs `results --auto` every 30 min; odds for new games
-are a manual `scripts/schedule.sh scrape`.
+`--event ID` (repeatable) does just that stored match whatever its age. Direct mode only. `scripts/schedule.sh install`
+sets up two launchd jobs: `com.scrapamoja.scrape` (full scrape, every 6 h) and `com.scrapamoja.results`
+(`results --auto`, every 30 min); `scripts/schedule.sh show` lists them.
 
 ### Per-Sport Scrapers (`src/sites/betb2b/sports/`) — ✅ Initialized 2026-07-18
 

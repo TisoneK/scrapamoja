@@ -95,3 +95,6 @@ re-seeded into the new office explicitly, and nothing else carries over.
 
 ### Follow-up 2 (Kofi/S006) — on-demand results
 - Operator found the periodic full scrape inconvenient and asked for an on-demand results mode. Cause of the missing 7-9 Oct scores found: `events_needing_results` is capped at 200, oldest first, so old unresolved games starved newer ones (an uncapped run saw 514 pending). Shipped `results <skin> --auto | --event ID` (+ `store.events_by_ids`, 1 test) and switched the launchd job to `results --auto` every 30 min (odds: manual `scripts/schedule.sh scrape`). Result: 7-10 Oct scored games 0 -> 49; the rest still unresolved by the source (ReadTimeouts and 'no data' on many; they retry each run until the 7-day give-up). Open: odds for new games now need a manual scrape or a second job; decide.
+
+### Follow-up 3 (Kofi/S006) — two jobs
+- Operator: the full scrape stays scheduled every 6 h as usual. `scripts/schedule.sh install` now installs two launchd jobs: `com.scrapamoja.scrape` (6 h, full scrape, direct, no ingest) and `com.scrapamoja.results` (30 min, `results --auto`); the first version's `com.scrapamoja.betb2b` label is replaced. Both installed on this Mac; first scrape fires ~6 h after install, no RunAtLoad.
