@@ -376,7 +376,14 @@ class BaseExtractor(ABC):
         return None
 
     async def _extract_time_info(self, element: ElementHandle, expected_status: str) -> Optional[str]:
-        """Extract time information based on match status using Playwright query."""
+        """Extract time information based on match status using Playwright query.
+
+        Scheduled/finished matches carry a kickoff/final time in ``.event__time``;
+        a live match carries its current stage (quarter/period and, for
+        basketball, the running game clock) in ``.event__stage``. Reading the
+        live stage here is what lets a live poller show "Quarter 1" / the clock
+        rather than a blank — see :mod:`src.sites.flashscore.poll`.
+        """
         if expected_status in ['scheduled', 'finished']:
             try:
                 time_el = await element.query_selector('.event__time')
@@ -385,4 +392,12 @@ class BaseExtractor(ABC):
                     return text.strip() if text else None
             except Exception as e:
                 self.logger.debug(f"Time extraction failed: {e}")
+        elif expected_status == 'live':
+            try:
+                stage_el = await element.query_selector('.event__stage--block, .event__stage')
+                if stage_el:
+                    text = await stage_el.text_content()
+                    return text.strip() if text else None
+            except Exception as e:
+                self.logger.debug(f"Live stage extraction failed: {e}")
         return None
