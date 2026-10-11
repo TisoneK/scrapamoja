@@ -18,6 +18,7 @@ from ..selector_config import sports, match_status_detection
 from .commands.scrape import ScrapeCommand
 from .commands.validate import ValidateCommand
 from .commands.test import TestCommand
+from .commands.live_poll import LivePollCommand
 from .utils.output import OutputFormatter
 from .utils.config import CLIConfig
 
@@ -33,7 +34,8 @@ class FlashscoreCLI:
         self.commands = {
             'scrape': ScrapeCommand(),
             'validate': ValidateCommand(),
-            'test': TestCommand()
+            'test': TestCommand(),
+            'live-poll': LivePollCommand()
         }
     
     def create_parser(self) -> argparse.ArgumentParser:

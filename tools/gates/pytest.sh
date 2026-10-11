@@ -24,6 +24,7 @@ fi
 
 exec "$PY" -m pytest \
     src/sites/betb2b/tests/ \
+    src/sites/flashscore/tests/ \
     src/security/tests/ \
     src/browser/profiles/tests/ \
     --no-cov -q "$@"
