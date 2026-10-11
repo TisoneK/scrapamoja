@@ -59,6 +59,7 @@ _ADDED_COLUMNS_PG = [
     ("events", "result_captured_at", "TIMESTAMPTZ"),
     ("events", "superseded_by", "TEXT"),
     ("events", "is_alternative", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("events", "canonical_event_id", "TEXT"),
     ("odds_snapshots", "subject", "TEXT"),
     ("odds_snapshots", "period", "TEXT"),
     ("h2h_games", "kind", "TEXT"),

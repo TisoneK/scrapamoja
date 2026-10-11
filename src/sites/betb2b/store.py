@@ -150,6 +150,7 @@ __all__ = [
     "init_db",
     "reset_all",
     "mark_superseded",
+    "resolve_canonical",
     "mark_alternative",
     "repair_data_quality",
     "is_read_only_error",
@@ -221,6 +222,7 @@ CREATE TABLE IF NOT EXISTS events (
     result_status      INTEGER,             -- entity.status (3=finished)
     result_captured_at TEXT,
     superseded_by      TEXT,                -- re-listed under a newer id (same teams+start+league)
+    canonical_event_id TEXT,                -- the final id of this game after following superseded_by (itself if never replaced)
     is_alternative     INTEGER NOT NULL DEFAULT 0  -- simulated "<League>. Alternative Matches" (no result ever)
 );
 
@@ -523,6 +525,7 @@ _ADDED_COLUMNS = [
     ("events", "result_captured_at", "TEXT"),
     ("events", "superseded_by", "TEXT"),
     ("events", "is_alternative", "INTEGER NOT NULL DEFAULT 0"),
+    ("events", "canonical_event_id", "TEXT"),
     ("odds_snapshots", "subject", "TEXT"),
     ("odds_snapshots", "period", "TEXT"),
     ("h2h_games", "kind", "TEXT"),
@@ -911,22 +914,52 @@ def _last_periods(conn, event_id: str, skin: str) -> Dict[Any, tuple]:
 # --------------------------------------------------------------------------- #
 # Persist
 # --------------------------------------------------------------------------- #
-_SUPERSEDE_SQL = """
+# A newer id replaces an older one when it is the same game (teams + start + league). It must be as
+# complete as the row it replaces: normally that means it has a venue when the older one has. A
+# venue-less newer id still counts when it is a real listing, not a sub-game stub: not a known
+# sub-game id, and it carries an H2H or a real market ladder (>= 8 markets) — the shape of the
+# five B.League / NCAA re-listings that the plain venue rule left unlinked.
+_NEWER_ID_OK = """e2.event_id > events.event_id
+      AND (e2.venue IS NOT NULL OR events.venue IS NULL
+           OR (e2.event_id NOT IN (SELECT sub_game_id FROM sub_games)
+               AND (EXISTS (SELECT 1 FROM h2h_games h WHERE h.event_id = e2.event_id)
+                    OR (SELECT COUNT(DISTINCT o.market_id) FROM odds_snapshots o
+                        WHERE o.event_id = e2.event_id) >= 8)))"""
+_SAME_GAME = """e2.home_name = events.home_name AND e2.away_name = events.away_name
+      AND e2.start_time = events.start_time
+      AND COALESCE(e2.league_id, -1) = COALESCE(events.league_id, -1)"""
+_SUPERSEDE_SQL = f"""
 UPDATE events SET superseded_by = (
     SELECT MAX(e2.event_id) FROM events e2
-    WHERE e2.home_name = events.home_name AND e2.away_name = events.away_name
-      AND e2.start_time = events.start_time
-      AND COALESCE(e2.league_id, -1) = COALESCE(events.league_id, -1)
-      AND e2.event_id > events.event_id
-      AND (e2.venue IS NOT NULL OR events.venue IS NULL))
+    WHERE {_SAME_GAME}
+      AND {_NEWER_ID_OK})
 WHERE superseded_by IS NULL AND EXISTS (
     SELECT 1 FROM events e2
-    WHERE e2.home_name = events.home_name AND e2.away_name = events.away_name
-      AND e2.start_time = events.start_time
-      AND COALESCE(e2.league_id, -1) = COALESCE(events.league_id, -1)
-      AND e2.event_id > events.event_id
-      AND (e2.venue IS NOT NULL OR events.venue IS NULL))
+    WHERE {_SAME_GAME}
+      AND {_NEWER_ID_OK})
 """
+
+
+def resolve_canonical(conn) -> int:
+    """Give every event its ``canonical_event_id``: the id of the game's FINAL listing (itself when
+    never replaced), following ``superseded_by`` to the end of a chain (A -> B -> C gives C), and
+    point ``superseded_by`` straight at that final id (flattening chains). Rows are never moved
+    or deleted, so first-seen times and every id's own odds/H2H stay as they were. Consumers group
+    on ``canonical_event_id``. Idempotent; returns the number of rows changed."""
+    rows = _run_sql(conn, "SELECT event_id, superseded_by, canonical_event_id FROM events", {}).fetchall()
+    nxt = {r[0]: r[1] for r in rows}
+    out = []
+    for eid, sup, canon in rows:
+        final, seen = eid, {eid}
+        while nxt.get(final) and nxt[final] not in seen:     # cycle-safe
+            final = nxt[final]
+            seen.add(final)
+        flat = final if sup else None
+        if canon != final or (sup and sup != flat):
+            out.append({"e": eid, "c": final, "s": flat})
+    _run_many(conn, "UPDATE events SET canonical_event_id = :c, superseded_by = :s WHERE event_id = :e", out)
+    conn.commit()
+    return len(out)
 
 
 def mark_superseded(conn) -> int:
@@ -940,9 +973,10 @@ def mark_superseded(conn) -> int:
         from sqlalchemy import text as _t
         n = conn.execute(_t(_SUPERSEDE_SQL)).rowcount
         conn.commit()
-        return int(n or 0)
-    n = conn.execute(_SUPERSEDE_SQL).rowcount
-    conn.commit()
+    else:
+        n = conn.execute(_SUPERSEDE_SQL).rowcount
+        conn.commit()
+    resolve_canonical(conn)
     return int(n or 0)
 
 

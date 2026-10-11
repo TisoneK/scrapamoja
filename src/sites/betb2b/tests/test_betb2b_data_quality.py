@@ -219,6 +219,45 @@ def test_give_up_event_closes_one_match_out_with_a_coverage_row(conn):
     assert store.events_needing_results(conn, min_age_seconds=0) == []
 
 
+def _relisted(conn, *ids, venues=None, h2h_for=()):
+    """Persist the same game (teams + start + league) under several event ids."""
+    start = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    for i, eid in enumerate(ids):
+        r = _result(event_id=eid, h2h=_h2h(_g("1", "ta", "tb", 90, 80)) if eid in h2h_for else None)
+        r["events"][0]["start_time"] = start
+        r["events"][0]["venue"] = (venues or {}).get(eid)
+        store.persist_result(r, conn=conn)
+
+
+def test_canonical_event_id_follows_and_flattens_a_chain(conn):
+    _relisted(conn, "E1", "E2", "E3")
+    # force a chain A -> B -> C (what a venue guard or timing used to leave behind)
+    store._run_sql(conn, "UPDATE events SET superseded_by = 'E2' WHERE event_id = 'E1'", {})
+    store._run_sql(conn, "UPDATE events SET superseded_by = 'E3' WHERE event_id = 'E2'", {})
+    store._run_sql(conn, "UPDATE events SET superseded_by = NULL WHERE event_id = 'E3'", {})
+    conn.commit()
+    store.resolve_canonical(conn)
+    assert _q(conn, "SELECT event_id, superseded_by, canonical_event_id FROM events ORDER BY event_id") == [
+        ("E1", "E3", "E3"), ("E2", "E3", "E3"), ("E3", None, "E3")]
+    assert store.resolve_canonical(conn) == 0                      # idempotent
+
+
+def test_a_never_replaced_game_is_its_own_canonical_id(conn):
+    store.persist_result(_result(event_id="Z9"), conn=conn)
+    assert _q(conn, "SELECT canonical_event_id, superseded_by FROM events") == [("Z9", None)]
+
+
+def test_a_venueless_relisting_with_h2h_supersedes_the_older_row_with_a_venue(conn):
+    _relisted(conn, "E1", "E2", venues={"E1": "Arena"}, h2h_for=("E2",))
+    assert _q(conn, "SELECT event_id, superseded_by, canonical_event_id FROM events ORDER BY event_id") == [
+        ("E1", "E2", "E2"), ("E2", None, "E2")]
+
+
+def test_a_venueless_stub_without_h2h_or_markets_does_not_supersede_a_real_match(conn):
+    _relisted(conn, "E1", "E2", venues={"E1": "Arena"})            # E2: no venue, no H2H, no markets
+    assert _q(conn, "SELECT event_id, superseded_by FROM events ORDER BY event_id") == [("E1", None), ("E2", None)]
+
+
 def test_events_by_ids_names_the_asked_matches_only(conn):
     """`results --event ID`: the work list is exactly the asked, stored matches (status included)."""
     store.persist_result(_result(), conn=conn)
