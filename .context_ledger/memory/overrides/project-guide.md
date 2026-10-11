@@ -161,6 +161,12 @@ sets up two launchd jobs: `com.scrapamoja.scrape` (full scrape, every 6 h) and `
 score typed in by a person (stored as finished, plus a `result_manual` coverage row so it is never mistaken for a
 source result); `results --give-up ID` closes a match out now (`result_status -1`) instead of after 7 days.
 
+**Re-listed games** (`events.superseded_by`, `events.canonical_event_id`, 2026-10-11): a re-listed game keeps its old
+rows (nothing is moved or deleted); `store.resolve_canonical` (run by `mark_superseded` after every write) sets
+`canonical_event_id` = the final id (itself if never replaced) and flattens `superseded_by` chains to it. Group on
+`canonical_event_id` to treat a re-listing as one game. A venue-less newer id supersedes a venue-bearing one only if it
+is not a known sub-game id and has an H2H or >= 8 markets.
+
 **`events.is_alternative`** (added 2026-10-10): true for the bookmaker's simulated "<League>. Alternative Matches"
 (real team names, not fixtures, no result ever published). Set on every write by `store.mark_alternative` (from the
 league name) and by `repair-data`; the results pass skips them. Consumers filter on the column.
