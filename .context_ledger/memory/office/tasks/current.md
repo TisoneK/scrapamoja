@@ -8,4 +8,4 @@ entry and backlog before starting.
 
 - **Session:** 2026-10-11 — Dayo (S007) / claude-opus-4-8
 - **Task:** Add a `flashscore live-poll` CLI command — poll live match score on an interval (reusing the FlashscoreScraper), score + stage only, no betting logic. Mirrors the betb2b poller pattern.
-- **Status:** done — shipped `148fde6`; session open for possible follow-on (per-quarter detail / run tonight's game)
+- **Status:** done — shipped `148fde6` (live-poll) + `1a202af` (live stage/clock); poller shows quarter + clock. Session open; slip game tips off ~15:40 UTC (may start the poller / add detail-page per-quarter)
