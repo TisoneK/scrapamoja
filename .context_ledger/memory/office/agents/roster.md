@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Achieng | S002 | deepseek/deepseek-flash | Engineer: Windows gate fix + product-tree ledger-vocabulary sweep | Done | Shipped: `tools/gates/pytest.sh` + portable `gates.conf` launcher (`80220d6`, `698d297`) — both gate runners PASS on Windows; tree sweep clean outside the managed entry points |
-| Dayo | S007 | claude-opus-4-8 | Engineer: flashscore `live-poll` CLI + live stage/clock capture | Done | Shipped `flashscore live-poll` (`148fde6`) + live stage/clock capture (`1a202af`): poller shows e.g. `Paris 17-18 Strasbourg \| 1st Quarter 8`. 17 unit tests, gated, validated live. Session open at operator's request (slip game tips off ~15:40 UTC) |
+| Dayo | S007 | claude-opus-4-8 | Engineer: flashscore live-poll/serve + task2sms Task<-DataSource wiring (cross-repo) | Blocked | scrapamoja shipped/pushed (`148fde6`,`1a202af`,`cbd5359`: live-poll, stage/clock, live-serve /score; 27 tests). task2sms wiring coded+tests (uncommitted in ~/Code/task2sms); blocked on Docker Desktop (off) to validate + operator SMS inputs |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,

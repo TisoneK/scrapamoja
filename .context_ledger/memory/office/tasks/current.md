@@ -8,4 +8,4 @@ entry and backlog before starting.
 
 - **Session:** 2026-10-11 — Dayo (S007) / claude-opus-4-8
 - **Task:** Add a `flashscore live-poll` CLI command — poll live match score on an interval (reusing the FlashscoreScraper), score + stage only, no betting logic. Mirrors the betb2b poller pattern.
-- **Status:** done — shipped `148fde6` (live-poll) + `1a202af` (live stage/clock); poller shows quarter + clock. Session open; slip game tips off ~15:40 UTC (may start the poller / add detail-page per-quarter)
+- **Status:** scrapamoja side DONE/pushed (`148fde6` live-poll, `1a202af` stage/clock, `cbd5359` live-serve /score). Now extended into ~/Code/task2sms: implemented Task<-DataSource context wiring (code + migration + tests, py_compile clean, UNCOMMITTED). BLOCKED: task2sms backend needs Docker (operator's choice; Docker Desktop not running) to validate; real SMS needs operator's provider keys + phone number + Over line.
