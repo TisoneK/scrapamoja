@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-11T15:11:18Z_
+_Regenerated: 2026-10-11T16:41:43Z_
 
 ## Standing params
 - **Core:** 2.0.4 (locked, verified 2026-10-04)
@@ -16,10 +16,9 @@ _Regenerated: 2026-10-11T15:11:18Z_
 
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
-- **Dayo** (S007) — Blocked — Engineer: flashscore live-poll/serve + task2sms Task<-DataSource wiring (cross-repo)
 
 ## Current task
-- **2026-10-11 — Dayo (S007) / claude-opus-4-8** — Add a `flashscore live-poll` CLI command — poll live match score on an interval (reusing the FlashscoreScraper), score + stage only, no b… — *scrapamoja side DONE/pushed (`148fde6` live-poll, `1a202af` stage/clock, `cbd5359` live-serve /score). Now extended into ~/Code/task2sms: implemented Task<-DataSource context wiring (code + migration + tests, py_compile clean, UNCOMMITTED). BLOCKED: task2sms backend needs Docker (operator's choice; Docker Desktop not running) to validate; real SMS needs operator's provider keys + phone number + Over line.*
+- **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-03-1 | **linebet live re-verification with the fixes in place, in a rested window.** The cookie-header fix (`ec05ca0`), the burst-halt (`fb32cd1`/`6fa14bb`) and the pre-harvest grid wait are in but not yet proven end-to-end: tonight's address was rested by the guard after repeated challenges. Run the stored run (`scrape linebet scheduled --sport basketball --timeout 3600`), then a second run with no person present, then watch `python -m src.security status` and the per-skin rows from the Kenya brief's section 7 query. Also re-run **melbet** (its loop run was killed mid-scrape by mistake; earlier data intact). |

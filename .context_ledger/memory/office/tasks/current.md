@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 its roster row (if left behind) says who was here; check the session
 entry and backlog before starting.
 
-- **Session:** 2026-10-11 — Dayo (S007) / claude-opus-4-8
-- **Task:** Add a `flashscore live-poll` CLI command — poll live match score on an interval (reusing the FlashscoreScraper), score + stage only, no betting logic. Mirrors the betb2b poller pattern.
-- **Status:** scrapamoja side DONE/pushed (`148fde6` live-poll, `1a202af` stage/clock, `cbd5359` live-serve /score). task2sms Task<-DataSource wiring implemented + VALIDATED natively (Docker isn't installed; fixed the cryptography wheel, alembic 0012 applied, full suite 54 passed), committed LOCAL in ~/Code/task2sms (push pending operator ok). Next: live end-to-end mock send; real SMS needs operator provider keys + phone number + Over line.
+- **Session:** —
+- **Task:** none — no session in progress
+- **Status:** idle

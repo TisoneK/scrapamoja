@@ -53,7 +53,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Achieng | S002 | deepseek/deepseek-flash | Engineer: Windows gate fix + product-tree ledger-vocabulary sweep | Done | Shipped: `tools/gates/pytest.sh` + portable `gates.conf` launcher (`80220d6`, `698d297`) — both gate runners PASS on Windows; tree sweep clean outside the managed entry points |
-| Dayo | S007 | claude-opus-4-8 | Engineer: flashscore live-poll/serve + task2sms Task<-DataSource wiring (cross-repo) | Working | scrapamoja shipped/pushed (`148fde6`,`1a202af`,`cbd5359`; 27 tests). Docker NOT installed → ran task2sms natively instead (cryptography wheel fix); wiring validated (alembic 0012 + full suite 54 passed), committed LOCAL in ~/Code/task2sms (push pending operator ok). Next: live mock send; real SMS needs operator keys+number+Over line |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
