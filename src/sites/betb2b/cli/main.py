@@ -189,6 +189,7 @@ async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
     found = []
     answered_none = []     # the source answered "no data": remembered so it is not asked again today
     state = {"streak": 0, "tripped": False}
+    scraper._direct_block_seen = False   # one challenge = one guard block, not one per reply in flight
 
     async def _one(eid):
         if state["tripped"]:
@@ -197,6 +198,12 @@ async def _backfill_stat_ids(scraper, db_target: str, skin_name: str) -> None:
             if state["tripped"]:
                 return
             res, errored = await scraper.fetch_result_checked(eid)
+        if scraper._direct_block_seen:      # a sibling already recorded this block; stop the batch
+            if not state["tripped"]:
+                state["tripped"] = True
+                print(f"  [{skin_name}] stat id backfill: guard blocked the endpoint — the rest "
+                      "of the batch is left to another run", file=sys.stderr)
+            return
         state["streak"] = state["streak"] + 1 if errored else 0
         if state["streak"] >= 6 and not state["tripped"]:
             state["tripped"] = True
@@ -316,10 +323,23 @@ async def _record_pending_results(scraper, db_target: str, skin_name: str, pendi
         return
     sem = asyncio.Semaphore(scraper.concurrency)
     out = []
+    halted = False    # a challenge stops the batch: one guard incident, not one per reply in flight
+    scraper._direct_block_seen = False
 
     async def _one(eid, stat_id):
+        nonlocal halted
+        if halted:
+            return
         async with sem:
+            if halted:
+                return
             res = await scraper.fetch_result(stat_id or eid)
+        if scraper._direct_block_seen:      # a sibling already recorded this block; stop the batch
+            if not halted:
+                halted = True
+                print(f"  [{skin_name}] results: guard blocked the endpoint — the rest of the "
+                      "batch is left to another run", file=sys.stderr)
+            return
         if res:
             out.append((eid, res))
 
@@ -363,10 +383,23 @@ async def _backfill_match_stats(scraper, db_target: str, skin_name: str) -> None
         return
     sem = asyncio.Semaphore(scraper.concurrency)
     out = []
+    halted = False    # a challenge stops the batch: one guard incident, not one per reply in flight
+    scraper._direct_block_seen = False
 
     async def _one(eid, stat_id):
+        nonlocal halted
+        if halted:
+            return
         async with sem:
+            if halted:
+                return
             parsed, errored = await scraper.fetch_match_stats_checked(stat_id or eid)
+        if scraper._direct_block_seen:      # a sibling already recorded this block; stop the batch
+            if not halted:
+                halted = True
+                print(f"  [{skin_name}] match statistics: guard blocked the endpoint — the rest "
+                      "of the batch is left to another run", file=sys.stderr)
+            return
         if not errored:
             out.append((eid, parsed))
 
@@ -405,10 +438,23 @@ async def _backfill_period_scores(scraper, db_target: str, skin_name: str) -> No
         return
     sem = asyncio.Semaphore(scraper.concurrency)
     out = []
+    halted = False    # a challenge stops the batch: one guard incident, not one per reply in flight
+    scraper._direct_block_seen = False
 
     async def _one(eid, stat_id):
+        nonlocal halted
+        if halted:
+            return
         async with sem:
+            if halted:
+                return
             res, errored = await scraper.fetch_result_checked(stat_id or eid)
+        if scraper._direct_block_seen:      # a sibling already recorded this block; stop the batch
+            if not halted:
+                halted = True
+                print(f"  [{skin_name}] period scores: guard blocked the endpoint — the rest "
+                      "of the batch is left to another run", file=sys.stderr)
+            return
         if not errored:
             out.append((eid, res))
 
