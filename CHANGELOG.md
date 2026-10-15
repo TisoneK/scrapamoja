@@ -6,6 +6,17 @@ this file is the plain-language public record.
 
 ## [Unreleased]
 
+### Fixed — files are read as UTF-8, whatever the machine's own default is (2026-10-15)
+
+On Windows, a read that does not name an encoding uses the machine's local code
+page (usually cp1252), so any file containing a non-Latin character failed with a
+decoding error — for example the offline pipeline fixture, which has a Cyrillic
+team name and made the project's own test gate fail on Windows. Every read on the
+scraper's path now names UTF-8: the end-to-end fixture, HAR replay inputs (the
+format is UTF-8 by spec), the security block ledger and its country-block marker,
+browser-profile metadata, and the linebet ingest command's input file. Files the
+tools write were already UTF-8-compatible, so nothing on disk needs converting.
+
 ### Added — blocked and failed requests now leave evidence automatically (2026-10-02)
 
 Working out why a site was dropping or challenging us took hand-made probes,

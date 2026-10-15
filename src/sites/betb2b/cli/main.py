@@ -1393,7 +1393,7 @@ class BetB2BCLI:
             return 1
 
         if args.output:
-            Path(args.output).write_text(json.dumps(probe_result, indent=2))
+            Path(args.output).write_text(json.dumps(probe_result, indent=2), encoding="utf-8")
             print(f"Wrote probe result to {args.output}", file=sys.stderr)
         else:
             print(json.dumps(probe_result, indent=2))

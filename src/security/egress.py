@@ -55,7 +55,7 @@ def _marker_path() -> Path:
 
 def _read() -> Dict[str, float]:
     try:
-        return {str(k): float(v) for k, v in json.loads(_marker_path().read_text()).items()}
+        return {str(k): float(v) for k, v in json.loads(_marker_path().read_text(encoding="utf-8")).items()}
     except (OSError, ValueError, TypeError):
         return {}
 
@@ -71,7 +71,7 @@ def mark_restricted(site: str) -> None:
     try:
         p = _marker_path()
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(data, indent=1))
+        p.write_text(json.dumps(data, indent=1), encoding="utf-8")
     except OSError:
         pass                      # a read-only home must not break scraping
 
@@ -82,7 +82,7 @@ def clear_restricted(site: str) -> bool:
         return False
     del data[site]
     try:
-        _marker_path().write_text(json.dumps(data, indent=1))
+        _marker_path().write_text(json.dumps(data, indent=1), encoding="utf-8")
     except OSError:
         pass
     return True

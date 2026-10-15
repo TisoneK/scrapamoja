@@ -131,7 +131,7 @@ def test_probe_reports_zero_cookies_as_not_harvested(monkeypatch, tmp_path, caps
     args = argparse.Namespace(skin="linebet", sport="basketball", settle=0.0, output=str(out))
     asyncio.run(BetB2BCLI()._cmd_probe(args))
     import json
-    res = json.loads(out.read_text())
+    res = json.loads(out.read_text(encoding="utf-8"))
     assert res["cookie_count"] == 0 and res["session_harvested"] is False
     assert res["security"]["site"] == "linebet" and res["security"]["cooldown_seconds_left"] == 0
 

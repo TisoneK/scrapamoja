@@ -134,7 +134,7 @@ class HarReplayer:
             )
 
         try:
-            har = json.loads(har_path.read_text())
+            har = json.loads(har_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             return HarReplayResult(
                 input_path=str(har_path), total_har_entries=0,
@@ -206,7 +206,7 @@ class HarReplayer:
 
         # Re-load + normalize (cheap — files are small)
         try:
-            har = json.loads(har_path.read_text())
+            har = json.loads(har_path.read_text(encoding="utf-8"))
             captures = har_entries_to_captures(har)
             if self.url_filter:
                 captures = [

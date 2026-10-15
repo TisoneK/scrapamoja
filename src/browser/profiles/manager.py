@@ -75,14 +75,14 @@ class ProfileManager:
 
     def get(self, name: str) -> ProfileMeta:
         try:
-            return ProfileMeta(**json.loads((self._dir(name) / "profile.json").read_text()))
+            return ProfileMeta(**json.loads((self._dir(name) / "profile.json").read_text(encoding="utf-8")))
         except (OSError, ValueError, TypeError) as exc:
             raise ProfileError(f"profile {name!r} not found") from exc
 
     def _write(self, meta: ProfileMeta) -> None:
         d = self._dir(meta.name)
         d.mkdir(parents=True, exist_ok=True)
-        (d / "profile.json").write_text(json.dumps(asdict(meta), indent=1))
+        (d / "profile.json").write_text(json.dumps(asdict(meta), indent=1), encoding="utf-8")
 
     def get_or_create(self, name: str, identity: Optional[Dict[str, Any]] = None,
                       notes: str = "") -> ProfileMeta:
@@ -116,7 +116,7 @@ class ProfileManager:
     # -- locking ---------------------------------------------------------- #
     def _lock_holder(self, name: str) -> Optional[int]:
         try:
-            pid = int((self._dir(name) / ".lock").read_text().strip())
+            pid = int((self._dir(name) / ".lock").read_text(encoding="utf-8").strip())
         except (OSError, ValueError):
             return None
         return pid if _pid_alive(pid) and pid != os.getpid() else None
@@ -125,7 +125,7 @@ class ProfileManager:
         pid = self._lock_holder(name)
         if pid is not None:
             raise ProfileInUse(f"profile {name!r} is open in pid {pid}; Chromium allows one process per profile")
-        (self._dir(name) / ".lock").write_text(str(os.getpid()))
+        (self._dir(name) / ".lock").write_text(str(os.getpid()), encoding="utf-8")
 
     def _release(self, name: str) -> None:
         try:

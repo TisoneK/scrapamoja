@@ -96,7 +96,7 @@ def test_compress_then_decompress_file(tmp_path):
 
     back = decompress_file(gz)
     assert back.name == "card.json"  # foo.json.gz -> foo.json
-    assert json.loads(back.read_text()) == obj
+    assert json.loads(back.read_text(encoding="utf-8")) == obj
 
 
 def test_compress_file_does_not_double_compress(tmp_path):

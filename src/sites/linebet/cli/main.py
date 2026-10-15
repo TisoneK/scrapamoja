@@ -241,7 +241,7 @@ class LinebetCLI:
             return 1
 
         try:
-            payload = json.loads(input_path.read_text())
+            payload = json.loads(input_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             print(f"ERROR: invalid JSON in {input_path}: {exc}", file=sys.stderr)
             return 1

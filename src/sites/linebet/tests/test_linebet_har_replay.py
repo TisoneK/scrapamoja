@@ -41,7 +41,7 @@ def synthetic_har() -> Dict[str, Any]:
     """Load the committed synthetic HAR fixture."""
     if not SYNTHETIC_HAR.exists():
         pytest.skip(f"synthetic HAR not present: {SYNTHETIC_HAR}")
-    return json.loads(SYNTHETIC_HAR.read_text())
+    return json.loads(SYNTHETIC_HAR.read_text(encoding="utf-8"))
 
 
 def _linebet_extractor():
@@ -62,7 +62,7 @@ class TestLinebetHarReplayIntegration:
     def test_linebet_extractor_via_har_replayer(self, synthetic_har, tmp_path):
         """End-to-end: HAR → HarReplayer → Linebet extractor → events."""
         har_path = tmp_path / "test.har"
-        har_path.write_text(json.dumps(synthetic_har))
+        har_path.write_text(json.dumps(synthetic_har), encoding="utf-8")
 
         replayer = HarReplayer(
             url_filter=["/bff-api/", "/fatman-api/", "/analytics-module-api/"],
@@ -91,7 +91,7 @@ class TestLinebetHarReplayIntegration:
     def test_har_replay_can_normalize_to_snapshot(self, synthetic_har, tmp_path):
         """The captures from a HAR can be normalized via the framework."""
         har_path = tmp_path / "test.har"
-        har_path.write_text(json.dumps(synthetic_har))
+        har_path.write_text(json.dumps(synthetic_har), encoding="utf-8")
 
         replayer = HarReplayer(
             url_filter=["/bff-api/", "/fatman-api/", "/analytics-module-api/"],

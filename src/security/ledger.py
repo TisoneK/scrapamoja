@@ -49,7 +49,7 @@ class BlockLedger:
     # -- persistence ---------------------------------------------------- #
     def _load(self) -> None:
         try:
-            raw = json.loads(self.path.read_text())
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
             self._sites = {k: SiteState(**v) for k, v in raw.items()}
         except (OSError, ValueError, TypeError):
             self._sites = {}          # missing or corrupt: start clean, never block a scrape
@@ -58,7 +58,7 @@ class BlockLedger:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             fd, tmp = tempfile.mkstemp(dir=self.path.parent, suffix=".tmp")
-            with os.fdopen(fd, "w") as fh:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 json.dump({k: asdict(v) for k, v in self._sites.items()}, fh, indent=1)
             os.replace(tmp, self.path)
         except OSError:

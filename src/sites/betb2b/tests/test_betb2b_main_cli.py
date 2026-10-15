@@ -136,4 +136,4 @@ def test_output_file_gets_the_full_json_and_stdout_stays_quiet(capsys, tmp_path)
     BetB2BCLI()._emit(_fake_result(), argparse.Namespace(output=str(f), json=False, pretty=False,
                                                          compress=False), summary=True)
     assert capsys.readouterr().out == ""
-    assert json.loads(f.read_text())["skin"] == "betwinner"
+    assert json.loads(f.read_text(encoding="utf-8"))["skin"] == "betwinner"

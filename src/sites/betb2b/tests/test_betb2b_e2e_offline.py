@@ -38,7 +38,7 @@ def _cap(decoded, status=200):
 @pytest.fixture
 def feed():
     """A tiny recorded 'site': one league, three listed games."""
-    base = json.loads(FIX.read_text())["Value"]
+    base = json.loads(FIX.read_text(encoding="utf-8"))["Value"]
     start = int(time.time()) + 7200
 
     def game(gid, **over):
