@@ -94,7 +94,7 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 
 | ID | Summary |
 |----|---------|
-| B-2026-10-15-1 | Framework-wide text I/O without an explicit encoding, outside the scraper path: the scraper/test/HAR/security side is fixed, but `src/core/snapshot/normalize.py` + `diff.py` (snapshot JSON reads), `src/storage/adapter.py` and telemetry storage still rely on the platform default (cp1252 artifacts on Windows when content is non-ASCII). Walk each read (and its write pair) and make encoding explicit; no gate suite covers most of them today. |
+| B-2026-10-15-1 | Framework-wide text I/O without an explicit encoding, outside the scraper path. Done: scraper/test/HAR/security side, snapshot tools, `src/storage/adapter.py`, telemetry JSON/archival stores (4284f46). Remaining: ~91 bare `open()`/`read_text()`/`write_text()` sites in ~25 files — `src/sites/base/template/migration.py` (11), `sites/base/development.py` (7), `telemetry/configuration/alert_thresholds.py` (6), `sites/_template/flow_discovery.py` (5), `selectors/rollback_utils.py` (5), `telemetry/configuration/storage_config.py` (4), plus 2-3 each in navigation/selectors/resilience/stealth modules and `telemetry/security/data_protection.py`. Walk each read and its write pair; no gate suite covers most of them. |
 
 <!-- TEMPLATE — add one ACTIONABLE row to the matching priority table
      (a finding, question, or someday idea goes in parking-lot.md instead):
