@@ -103,3 +103,16 @@ def test_derive_q1_final_is_sticky_after_freeze():
     half = derive_score_state(_match("30-28", "Half Time"), q2)
     assert half["q1_final"] == 27
     assert half["q1_ended"] is True
+
+
+def test_derive_unparseable_score_in_q1_does_not_lose_the_freeze():
+    # One scoreless scrape mid-Q1 must not wipe the remembered Q1 total — if it
+    # did, a quarter boundary right after would find nothing to freeze and the
+    # q1_final would be lost for the rest of the match.
+    q1 = derive_score_state(_match("14-13", "1st Quarter 1"))
+    glitch = derive_score_state(_match("-", "1st Quarter 0:20"), q1)
+    assert glitch["q1_total"] == 27
+
+    q2 = derive_score_state(_match("15-13", "2nd Quarter 9"), glitch)
+    assert q2["q1_ended"] is True
+    assert q2["q1_final"] == 27

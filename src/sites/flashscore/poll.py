@@ -251,8 +251,10 @@ def derive_score_state(
     parsed = parse_stage(match.get("time"))
     is_q1 = parsed["is_q1"]
 
-    # While in Q1 the running total *is* the Q1 total; remember the last one.
-    q1_total = total if is_q1 else prev.get("q1_total")
+    # While in Q1 the running total *is* the Q1 total; remember the last numeric one
+    # (a scoreless scrape — a transient "-" — must not wipe it, or the freeze below
+    # would have nothing to freeze when play leaves Q1 right after).
+    q1_total = total if (is_q1 and total is not None) else prev.get("q1_total")
 
     # Freeze: we previously saw Q1 and now play has moved past it.
     if not q1_ended and parsed["past_q1"] and prev.get("q1_total") is not None:
