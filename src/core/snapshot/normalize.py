@@ -401,7 +401,7 @@ def main() -> int:
         return 1
 
     try:
-        raw = json.loads(args.input.read_text())
+        raw = json.loads(args.input.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         print(f"ERROR: invalid JSON in {args.input}: {exc}", file=sys.stderr)
         return 1
@@ -413,7 +413,7 @@ def main() -> int:
     snapshot = normalize_capture_list(raw)
     indent = 2 if args.pretty else None
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(snapshot, indent=indent, default=str))
+    args.output.write_text(json.dumps(snapshot, indent=indent, default=str), encoding="utf-8")
     print(
         f"Normalized {snapshot['metadata']['capture_count']} captures "
         f"into {snapshot['metadata']['unique_endpoint_count']} unique endpoints."

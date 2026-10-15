@@ -159,7 +159,7 @@ def load_settings_from_file(config_path: str) -> SnapshotSettings:
     import json
     
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             config_data = json.load(f)
         
         return SnapshotSettings(**config_data)
@@ -181,7 +181,7 @@ def save_settings_to_file(settings: SnapshotSettings, config_path: str) -> bool:
         # Ensure directory exists
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
         
-        with open(config_path, 'w') as f:
+        with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(settings.to_dict(), f, indent=2, cls=EnumEncoder)
         
         return True

@@ -382,7 +382,7 @@ class YourExistingModule:
 # 4. Snapshot system is a good citizen!
 '''
     
-    with open('good_citizen_template.py', 'w') as f:
+    with open('good_citizen_template.py', 'w', encoding='utf-8') as f:
         f.write(template)
     
     print("📝 Created good_citizen_template.py")

@@ -283,7 +283,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
             existing_metrics = []
             if file_path.exists():
                 try:
-                    content = file_path.read_text()
+                    content = file_path.read_text(encoding='utf-8')
                     existing_data = json.loads(content)
                     existing_metrics = existing_data.get("metrics", [])
                 except Exception:
@@ -309,7 +309,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
                 "metrics": existing_metrics
             }
             
-            file_path.write_text(json.dumps(data, indent=2, cls=EnumEncoder))
+            file_path.write_text(json.dumps(data, indent=2, cls=EnumEncoder), encoding='utf-8')
             
             self._logger.debug(
                 "metrics_stored",
@@ -341,7 +341,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
                 
                 if file_path.exists():
                     try:
-                        content = file_path.read_text()
+                        content = file_path.read_text(encoding='utf-8')
                         data = json.loads(content)
                         
                         for metrics_dict in data.get("metrics", []):
@@ -657,7 +657,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
             index = {}
             if index_file.exists():
                 try:
-                    content = index_file.read_text()
+                    content = index_file.read_text(encoding='utf-8')
                     index = json.loads(content)
                 except Exception:
                     index = {}
@@ -667,7 +667,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
                 return
             
             # Load existing index
-            content = index_file.read_text()
+            content = index_file.read_text(encoding='utf-8')
             index = json.loads(content)
             
             # Remove entry
@@ -675,7 +675,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
                 del index[snapshot_id]
                 
                 # Save updated index
-                index_file.write_text(json.dumps(index, indent=2, cls=EnumEncoder))
+                index_file.write_text(json.dumps(index, indent=2, cls=EnumEncoder), encoding='utf-8')
             
         except Exception as e:
             self._logger.warning(
@@ -692,7 +692,7 @@ class FileSystemStorageAdapter(IStorageAdapter):
             if not index_file.exists():
                 return {}
             
-            content = index_file.read_text()
+            content = index_file.read_text(encoding='utf-8')
             return json.loads(content)
             
         except Exception as e:

@@ -553,12 +553,12 @@ class DataArchival:
     
     async def _extract_gz_archive(self, archive_file: Path, target_dir: Path) -> None:
         """Extract gzip compressed archive"""
-        with gzip.open(archive_file, 'rt') as gz_file:
+        with gzip.open(archive_file, 'rt', encoding='utf-8') as gz_file:
             content = gz_file.read()
             
         # Determine output filename
         output_file = target_dir / archive_file.stem
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             f.write(content)
     
     async def _extract_archive(self, archive_file: Path, target_dir: Path) -> None:

@@ -1163,7 +1163,7 @@ class JSONStorage(ITelemetryStorage):
                     decompressed = gzip.decompress(content).decode('utf-8')
                     return json.loads(decompressed)
             else:
-                async with aiofiles.open(file_path, 'r') as f:
+                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
                     content = await f.read()
                     return json.loads(content)
         
@@ -1190,7 +1190,7 @@ class JSONStorage(ITelemetryStorage):
                 async with aiofiles.open(file_path, 'wb') as f:
                     await f.write(compressed)
             else:
-                async with aiofiles.open(file_path, 'w') as f:
+                async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
                     await f.write(content)
         
         except Exception as e:

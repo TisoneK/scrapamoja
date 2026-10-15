@@ -112,8 +112,8 @@ def main() -> int:
             return 2
 
     try:
-        old = json.loads(old_path.read_text())
-        new = json.loads(new_path.read_text())
+        old = json.loads(old_path.read_text(encoding="utf-8"))
+        new = json.loads(new_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         print(f"ERROR: invalid JSON: {exc}", file=sys.stderr)
         return 2
