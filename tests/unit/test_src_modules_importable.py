@@ -49,10 +49,13 @@ for f in files:
         mods.append(m)
 class T(Exception): pass
 def h(*a): raise T()
-signal.signal(signal.SIGALRM, h)
+ALARM = hasattr(signal, "SIGALRM")   # POSIX-only; on Windows the outer subprocess timeout bounds the sweep
+if ALARM:
+    signal.signal(signal.SIGALRM, h)
 bad = {}
 for m in mods:
-    signal.alarm(20)
+    if ALARM:
+        signal.alarm(20)
     try:
         importlib.import_module(m)
     except T:
@@ -60,7 +63,8 @@ for m in mods:
     except BaseException as e:
         bad[m] = f"{type(e).__name__}: {str(e)[:160]}"
     finally:
-        signal.alarm(0)
+        if ALARM:
+            signal.alarm(0)
 print("RESULT" + json.dumps({"count": len(mods), "bad": bad}))
 """
 
