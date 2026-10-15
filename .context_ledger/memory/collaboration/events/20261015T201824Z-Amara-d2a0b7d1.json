@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20261015T201824Z-Amara-d2a0b7d1",
+  "type": "claim",
+  "session": "S008",
+  "agent": "Amara",
+  "created": "2026-10-15T20:18:24Z",
+  "issue": "general-sweep",
+  "body": "Amara (S008) on DESKTOP-2VPR9IB (the operator's Windows box, TisoneK-Windows env block):\ngeneral sweep per the standing target — discovery + review + fix all safe issues, then report.\n\nFirst item found at baseline: the pre-commit gate fails on this box with two Windows-only\nerrors in src/sites/betb2b/tests/test_betb2b_e2e_offline.py — fixture reads a JSON capture\nwith Path.read_text() without an encoding, which decodes as cp1252 here and raises\nUnicodeDecodeError (byte 0x81 at position 3065). Pre-existing, not caused by this session;\ndocumented in the session notes; fixing it (add encoding=\"utf-8\", deep-scan for the same\nunencoded-read pattern in test files) is the first safe fix.\n\nScope claimed: a review-and-fix sweep over the betb2b scraper/store, the security guard and\nthe browser profiles on this box — safe fixes with tests, architectural items flagged in the\nreview instead. No engine/ingest work (scraper only). Office is otherwise idle (no live peer\nrows, no open collab session), so no worktree ceremony: work happens on main as the protocol\nallows solo.",
+  "paths": ["src/sites/betb2b/", "src/security/", "src/browser/profiles/"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
