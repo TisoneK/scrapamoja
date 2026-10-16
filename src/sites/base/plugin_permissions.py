@@ -108,6 +108,24 @@ class PermissionAuditLog:
     granted_by: Optional[str] = None     # who granted/denied (auto_grant, an approver, ...)
 
 
+def _serialize_permission(perm_id: str, perm: Permission) -> Dict[str, Any]:
+    """The dict shape ``import_permissions`` / ``import_plugin_permissions`` read back."""
+    return {
+        'id': perm_id,
+        'name': perm.name,
+        'description': perm.description,
+        'type': perm.permission_type.value,
+        'level': perm.level.value,
+        'scope': perm.scope.value,
+        'default_granted': perm.default_granted,
+        'required_for': perm.required_for,
+        'conflicts_with': perm.conflicts_with,
+        'auto_grant_for': perm.auto_grant_for,
+        'created_at': perm.created_at.isoformat(),
+        'updated_at': perm.updated_at.isoformat(),
+    }
+
+
 class PermissionManager:
     """Plugin permission manager."""
     
@@ -641,26 +659,27 @@ class PermissionManager:
         count = len(self._audit_log)
         self._audit_log.clear()
         return count
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Live counts, derived from state on demand (no counters to drift)."""
+        with self._lock:
+            grants = [g for per_plugin in self._permission_grants.values() for g in per_plugin.values()]
+            return {
+                'total_permissions': len(self._permissions),
+                'plugins_with_permissions': len(self._plugin_permissions),
+                'total_grants': len(grants),
+                'granted_grants': sum(1 for g in grants if g.granted),
+                'requests': sum(len(r) for r in self._permission_requests.values()),
+                'audit_entries': len(self._audit_log),
+            }
     
     def export_permissions(self) -> Dict[str, Any]:
         """Export all permissions to dictionary format."""
         return {
-            'permissions': {
-                perm_id: {
-                    'name': perm.name,
-                    'description': perm.description,
-                    'type': perm.permission_type.value,
-                    'level': perm.level.value,
-                    'scope': perm.scope.value,
-                    'default_granted': perm.default_granted,
-                    'required_for': perm.required_for,
-                    'conflicts_with': perm.conflicts_with,
-                    'auto_grant_for': perm.auto_grant_for,
-                    'created_at': perm.created_at.isoformat(),
-                    'updated_at': perm.updated_at.isoformat()
-                }
+            'permissions': [
+                _serialize_permission(perm_id, perm)
                 for perm_id, perm in self._permissions.items()
-            },
+            ],
             'plugin_permissions': {
                 plugin_id: list(perms) for plugin_id, perms in self._plugin_permissions.items()
             },
@@ -688,7 +707,7 @@ class PermissionManager:
                 }
                 for entry in self._audit_log
             ],
-            'statistics': self._stats.copy()
+            'statistics': self.get_statistics()
         }
     
     def import_permissions(self, permissions_data: Dict[str, Any]) -> None:
@@ -716,37 +735,38 @@ class PermissionManager:
         """Export permissions for a specific plugin."""
         permissions = self.get_plugin_permissions(plugin_id)
         grants = self.get_permission_grants(plugin_id)
-        
+
         return {
             'plugin_id': plugin_id,
             'permissions': [
-                self.get_permission(perm_id).__dict__ for perm_id in permissions
+                _serialize_permission(perm_id, self._permissions[perm_id])
+                for perm_id in permissions
             ],
             'grants': grants
         }
-    
+
     def import_plugin_permissions(self, plugin_id: str, permissions_data: Dict[str, Any]) -> None:
-        """Import permissions for a specific plugin."""
+        """Import permissions for a specific plugin (``export_plugin_permissions``'s
+        payload): register each definition and link it to the plugin."""
         for perm_data in permissions_data.get('permissions', []):
-            if perm_data.get('id') == permission_id:
-                permission = Permission(
-                    id=perm_data['id'],
-                    name=perm_data['name'],
-                    description=perm_data['description'],
-                    permission_type=PermissionType(perm_data['type']),
-                    level=PermissionLevel(perm_data['level']),
-                    scope=PermissionScope(perm_data['scope']),
-                    default_granted=perm_data.get('default_granted', False),
-                    required_for=perm_data.get('required_for', []),
-                    conflicts_with=perm_data.get('conflicts_with', []),
-                    auto_grant_for=perm_data.get('auto_grant_for', []),
-                    created_at=datetime.fromisoformat(perm_data['created_at']) if perm_data.get('created_at') else datetime.utcnow(),
-                    updated_at=datetime.fromisoformat(perm_data['updated_at']) if perm_data.get('updated_at') else datetime.utcnow(),
-                    metadata=perm_data.get('metadata', {})
-                )
-                
-                self.register_permission(permission)
-                break
+            permission = Permission(
+                id=perm_data['id'],
+                name=perm_data['name'],
+                description=perm_data['description'],
+                permission_type=PermissionType(perm_data['type']),
+                level=PermissionLevel(perm_data['level']),
+                scope=PermissionScope(perm_data['scope']),
+                default_granted=perm_data.get('default_granted', False),
+                required_for=perm_data.get('required_for', []),
+                conflicts_with=perm_data.get('conflicts_with', []),
+                auto_grant_for=perm_data.get('auto_grant_for', []),
+                created_at=datetime.fromisoformat(perm_data['created_at']) if perm_data.get('created_at') else datetime.utcnow(),
+                updated_at=datetime.fromisoformat(perm_data['updated_at']) if perm_data.get('updated_at') else datetime.utcnow(),
+                metadata=perm_data.get('metadata', {})
+            )
+
+            self.register_permission(permission)
+            self._plugin_permissions.setdefault(plugin_id, set()).add(permission.id)
 
 
 # Global permission manager instance

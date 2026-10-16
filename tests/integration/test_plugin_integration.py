@@ -19,7 +19,7 @@ from src.sites.base.plugin_interface import (
 from src.sites.base.plugin_discovery import PluginDiscovery, DiscoverySource
 from src.sites.base.plugin_lifecycle import PluginLifecycleManager
 from src.sites.base.plugin_hooks import HookManager, HookExecutionMode
-from src.sites.base.plugin_permissions import PluginManager, PermissionType, PermissionLevel
+from src.sites.base.plugin_permissions import PermissionManager, PermissionType, PermissionLevel
 from src.sites.base.plugin_sandbox import PluginSandbox, SandboxConfig, SandboxType, SecurityLevel
 from src.sites.base.plugin_config import PluginConfigManager, ConfigScope, ConfigFormat
 from src.sites.base.plugin_compatibility import PluginCompatibilityChecker, CompatibilityStatus
@@ -125,7 +125,7 @@ class TestPluginSystemIntegration(unittest.TestCase):
         self.discovery = PluginDiscovery()
         self.lifecycle_manager = PluginLifecycleManager()
         self.hook_manager = HookManager()
-        self.permission_manager = PluginManager()
+        self.permission_manager = PermissionManager()
         self.sandbox = PluginSandbox(SandboxConfig(
             sandbox_type=SandboxType.MEMORY,
             security_level=SecurityLevel.STANDARD
