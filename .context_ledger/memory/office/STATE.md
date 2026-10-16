@@ -5,10 +5,10 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-16T16:18:31Z_
+_Regenerated: 2026-10-16T17:02:55Z_
 
 ## Standing params
-- **Core:** 2.0.4 (locked, verified 2026-10-16)
+- **Core:** 2.2.0 (locked, verified 2026-10-16)
 - **Target:** general sweep
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
@@ -17,7 +17,7 @@ _Regenerated: 2026-10-16T16:18:31Z_
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
 - **Amara** (S008) — Working — Synced this Windows box (DESKTOP-2VPR9IB) to latest main; session startup — awaiting th…
-- **Kwame** (S009) — Working — Engineer: two-tier storage (scorewise-engine handoff) — local-first writes + lean, capp…
+- **Kwame** (S009) — Done — Engineer: two-tier storage (scorewise-engine handoff), re-scoped by supervisor — scrape…
 
 ## Current task
 - **—** — none — no session in progress — *idle*
@@ -31,7 +31,7 @@ _13 medium, 1 low priority row(s) — see tasks/backlog.md_
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-10-04
 - inefficiencies/log.md (project code/env friction): 4 entries, last added 2026-10-03
-- plans/decisions.md (ADRs in force — respected, not relitigated): 5 entries, last added 2026-10-16
+- plans/decisions.md (ADRs in force — respected, not relitigated): 6 entries, last added 2026-10-16
 
 ## Collaboration
 - 5 event(s) on file; most recent: `20261015T201824Z-Amara-d2a0b7d1.json`
