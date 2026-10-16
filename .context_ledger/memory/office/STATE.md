@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-16T17:02:55Z_
+_Regenerated: 2026-10-16T17:05:18Z_
 
 ## Standing params
 - **Core:** 2.2.0 (locked, verified 2026-10-16)
@@ -17,7 +17,6 @@ _Regenerated: 2026-10-16T17:02:55Z_
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
 - **Amara** (S008) — Working — Synced this Windows box (DESKTOP-2VPR9IB) to latest main; session startup — awaiting th…
-- **Kwame** (S009) — Done — Engineer: two-tier storage (scorewise-engine handoff), re-scoped by supervisor — scrape…
 
 ## Current task
 - **—** — none — no session in progress — *idle*
