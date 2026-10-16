@@ -25,11 +25,12 @@ class TestFeatureFlagServiceSiteEnhancements:
         """Create temporary service for testing."""
         with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
             db_path = f.name
-        
+
         try:
             service = FeatureFlagService(db_path, cache_ttl=1)  # Short cache for testing
             yield service
         finally:
+            service._repository.engine.dispose()   # Windows cannot unlink an open SQLite file
             if os.path.exists(db_path):
                 os.unlink(db_path)
     
@@ -157,7 +158,6 @@ class TestFeatureFlagServiceSiteEnhancements:
         result2 = temp_service.is_adaptive_enabled("basketball", "flashscore")
         assert result2 is False
     
-    @pytest.mark.asyncio
     def test_bulk_site_operations(self, temp_service):
         """Test bulk operations with site-specific flags."""
         # Prepare bulk data
@@ -216,9 +216,7 @@ class TestFeatureFlagServiceSiteEnhancements:
 @pytest.mark.integration
 class TestFeatureFlagServiceIntegration:
     """Integration tests for site-based feature flag service."""
-    
-    @pytest.mark.xfail(reason="B-24: reads local state (test isolation)", strict=False)
-    
+
     def test_service_with_migration_data(self):
         """Test service with migration data from 002_add_site_flags.sql."""
         # Create service with temp database
@@ -272,7 +270,7 @@ class TestFeatureFlagServiceIntegration:
             # Enable a global flag
             service.update_feature_flag("basketball", None, True)
             result = service.is_adaptive_enabled("basketball", "flashscore")
-            assert result is True  # Should still be False due to site-specific flag
+            assert result is False  # site-specific flag (FALSE) overrides the global one
             
             # Enable site-specific flag
             service.update_feature_flag("basketball", "flashscore", True)
@@ -280,5 +278,6 @@ class TestFeatureFlagServiceIntegration:
             assert result is True  # Now should be True
             
         finally:
+            service._repository.engine.dispose()   # Windows cannot unlink an open SQLite file
             if os.path.exists(db_path):
                 os.unlink(db_path)
