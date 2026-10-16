@@ -600,10 +600,11 @@ class BetB2BCLI:
                             help="Don't persist this run to the odds store.")
         scrape.add_argument("--skip-processed", nargs="?", const=float("inf"), default=float("inf"),
                             type=float, metavar="SECONDS",
-                            help="ON by default: never re-scrape a match already in the store; "
-                                 "with SECONDS, re-scrape it once older than that. Also skips "
-                                 "matches already started. Live scrapes are never "
-                                 "filtered (they update scores). Direct mode only; "
+                            help="ON by default: never re-scrape a match this skin already stored "
+                                 "(a match another skin stored is still fetched — brands price "
+                                 "their own odds); with SECONDS, re-scrape it once older than "
+                                 "that. Also skips matches already started. Live scrapes are "
+                                 "never filtered (they update scores). Direct mode only; "
                                  "needs the store (not --no-db).")
         scrape.add_argument("--refetch", "--no-skip-processed", dest="refetch", action="store_true",
                             help="Turn skipping off: fetch every discovered match again, "
@@ -887,8 +888,8 @@ class BetB2BCLI:
         if skip is not None and not no_db:
             from src.sites.betb2b.store import unprocessed_ids
 
-            def id_filter(pairs, _t=db_target, _w=float(skip)):
-                return unprocessed_ids(pairs, _t, refresh_window=_w)
+            def id_filter(pairs, _t=db_target, _w=float(skip), _s=skin_name):
+                return unprocessed_ids(pairs, _t, refresh_window=_w, skin=_s)
 
         async with BetB2BScraper(
             skin, proxy_manager=proxy_manager, proxy_endpoint_id=proxy_endpoint_id,

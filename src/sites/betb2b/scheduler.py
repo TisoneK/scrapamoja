@@ -4,8 +4,8 @@ Runs decoupled scrape passes on their own cadences. Matches flow between passes
 by **feed root + DB state**, not by any cross-scraper trigger (Supabase
 is the bus):
 
-  - **scheduled** (~3h): LineFeed discovery → skip matches already scraped
-    recently or already kicked off → fetch only new/stale prematch odds.
+  - **scheduled** (~3h): LineFeed discovery → skip matches this skin already
+    scraped recently or already kicked off → fetch only new/stale prematch odds.
   - **live** (~15s): LiveFeed discovery → fetch (always; live odds move fast).
   - **results** (~10min): finished-match final scores — the Line/Live
     feeds drop a match once it ends, so this reads statisticfeed `v1/Game` for
@@ -336,12 +336,12 @@ class BetB2BScheduler:
     # -- helpers --------------------------------------------------------- #
     def _filter_scheduled(self, pairs: List[Tuple[str, object]]) -> List[str]:
         """Skip conditions (deliberate): skip a discovered prematch match if it
-        has already kicked off (→ the live pass owns it) or was scraped within
-        the refresh window. Keep new + stale."""
+        has already kicked off (→ the live pass owns it) or was scraped by this
+        skin within the refresh window. Keep new + stale."""
         now = time.time()
         conn = store.init_db(self.db_path)
         try:
-            last_seen = store.events_last_seen(conn, [i for i, _ in pairs])
+            last_seen = store.events_last_seen(conn, [i for i, _ in pairs], skin=self.skin_name)
         finally:
             conn.close()
         keep: List[str] = []

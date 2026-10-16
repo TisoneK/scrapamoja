@@ -736,12 +736,19 @@ def _job_dict(row) -> Optional[dict]:
     return dict(row._mapping) if row is not None else None
 
 
-def events_last_seen(conn, event_ids):
+def events_last_seen(conn, event_ids, skin=None):
     ids = [str(e) for e in event_ids]
     if not ids:
         return {}
-    rows = conn.execute(select(_events.c.event_id, _events.c.last_seen)
-                        .where(_events.c.event_id.in_(ids))).all()
+    if skin:
+        # skin basis: when THIS skin last stored the event, not when any skin did
+        rows = conn.execute(
+            select(_states.c.event_id, func.max(_states.c.captured_at).label("last_seen"))
+            .where(_states.c.event_id.in_(ids), _states.c.skin == skin)
+            .group_by(_states.c.event_id)).all()
+    else:
+        rows = conn.execute(select(_events.c.event_id, _events.c.last_seen)
+                            .where(_events.c.event_id.in_(ids))).all()
     return {r[0]: r[1] for r in rows}
 
 

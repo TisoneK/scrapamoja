@@ -70,6 +70,19 @@ def test_filter_scheduled_can_disable_skip_started(tmp_path):
     assert s._filter_scheduled([("X", time.time() - 100)]) == ["X"]
 
 
+def test_filter_scheduled_per_skin_basis(tmp_path):
+    """Another skin's stored match doesn't block this skin's scheduled pass:
+    brands price their own odds, so each skin fetches what it lacks."""
+    db = str(tmp_path / "sched4.db")
+    store.init_db(db).close()
+    _seed_event(db, "LINEBET_SEEN")     # stored under skin 'linebet'
+    future = time.time() + 7200
+    melbet = BetB2BScheduler("melbet", db_path=db, refresh_window=3600)
+    assert melbet._filter_scheduled([("LINEBET_SEEN", future)]) == ["LINEBET_SEEN"]
+    linebet = BetB2BScheduler("linebet", db_path=db, refresh_window=3600)
+    assert linebet._filter_scheduled([("LINEBET_SEEN", future)]) == []
+
+
 def test_scheduler_skips_live_pass_when_disabled(tmp_path):
     """live_interval<=0 → the live pass (the storage firehose) is not run;
     scheduled still runs. The 'scheduled-only' low-storage mode."""

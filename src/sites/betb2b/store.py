@@ -1397,25 +1397,34 @@ def get_job(conn, job_id: int):
     return conn.execute("SELECT * FROM scraper_jobs WHERE job_id=?", (job_id,)).fetchone()
 
 
-def events_last_seen(conn, event_ids) -> Dict[str, Any]:
+def events_last_seen(conn, event_ids, skin: Optional[str] = None) -> Dict[str, Any]:
     """``{event_id: last_seen}`` for the given ids (missing = never scraped).
 
     Used by the scheduler's skip filter (follow-up): a discovered event
     is fetched only if it's new (absent here) or its ``last_seen`` is older than
     the refresh window. ``last_seen`` is an ISO string (SQLite) or datetime (PG).
+    With ``skin``, "last seen" is when THAT skin last stored the event
+    (``event_states``, per run per skin); without it, when any skin did.
     """
     ids = [str(e) for e in event_ids]
     if not ids:
         return {}
     if _is_orm(conn):
         from . import store_orm
-        return store_orm.events_last_seen(conn, ids)
+        return store_orm.events_last_seen(conn, ids, skin=skin)
     out: Dict[str, Any] = {}
     # chunk to stay well under SQLite's variable limit
     for i in range(0, len(ids), 400):
         chunk = ids[i:i + 400]
-        q = f"SELECT event_id, last_seen FROM events WHERE event_id IN ({','.join('?' * len(chunk))})"
-        for r in conn.execute(q, chunk):
+        if skin:
+            q = ("SELECT event_id, MAX(captured_at) AS last_seen FROM event_states "
+                 f"WHERE skin = ? AND event_id IN ({','.join('?' * len(chunk))}) "
+                 "GROUP BY event_id")
+            params = [skin, *chunk]
+        else:
+            q = f"SELECT event_id, last_seen FROM events WHERE event_id IN ({','.join('?' * len(chunk))})"
+            params = chunk
+        for r in conn.execute(q, params):
             out[r["event_id"]] = r["last_seen"]
     return out
 
@@ -1448,7 +1457,8 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
                     skip_started: bool = True,
                     retry_incomplete_after: float = 3600.0,
                     near_horizon: float = NEAR_START_HORIZON,
-                    near_refresh: float = NEAR_START_REFRESH) -> List[str]:
+                    near_refresh: float = NEAR_START_REFRESH,
+                    skin: Optional[str] = None) -> List[str]:
     """Filter discovered ``[(event_id, start_epoch)]`` down to ids worth fetching:
     drop events already scraped within ``refresh_window`` seconds (default inf =
     never re-scrape a stored event; 0 = always re-fetch) and, if ``skip_started``, ones that have kicked off.
@@ -1456,6 +1466,9 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
     once ``retry_incomplete_after`` seconds have passed since it was last seen.
     Works on whichever store ``init_db`` resolves (local SQLite or remote DB), so
     several machines sharing one remote store skip each other's work.
+    With ``skin``, "already scraped" means by THAT skin — brands price their own
+    odds, so a match another skin stored is still fetched for this one; without
+    it, a match any skin stored is skipped.
 
     A stored match that starts within ``near_horizon`` seconds is the one a bettor
     (and the engine) will act on, so its odds are re-fetched once they are
@@ -1479,11 +1492,11 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
     sources.append(init_db(path) if store_mode() != "remote" or not sources else None)
     for conn in [c for c in sources if c is not None]:
         try:
-            for eid, seen in events_last_seen(conn, ids).items():
+            for eid, seen in events_last_seen(conn, ids, skin=skin).items():
                 if eid not in last_seen or (seen is not None and str(seen) > str(last_seen[eid])):
                     last_seen[eid] = seen
             sub_ids |= known_sub_game_ids(conn, ids)
-            incomplete |= incomplete_event_ids(conn, ids)
+            incomplete |= incomplete_event_ids(conn, ids, skin=skin)
         except Exception as exc:  # noqa: BLE001
             logger.warning("skip filter: read failed on one store (%s)", exc)
         finally:
@@ -1523,24 +1536,28 @@ def unprocessed_ids(pairs, path: PathLike | None = None, *,
     return keep
 
 
-def incomplete_event_ids(conn, event_ids) -> set:
+def incomplete_event_ids(conn, event_ids, skin: Optional[str] = None) -> set:
     """Events whose latest totals coverage says a fetch failed or was never attempted
     (``fetch_failed`` / ``not_attempted``). Events with no coverage rows are not
-    counted: nothing says they are incomplete."""
+    counted: nothing says they are incomplete. With ``skin``, only that skin's
+    coverage rows count — another skin's failed fetch is not this skin's problem."""
     ids = [str(i) for i in event_ids]
     out: set = set()
     for i in range(0, len(ids), 400):
         chunk = ids[i:i + 400]
         sql = ("SELECT DISTINCT c.event_id FROM coverage c JOIN (SELECT event_id, subject, period, "
-               "MAX(id) mid FROM coverage WHERE dataset = 'totals' AND event_id IN {ph} "
+               "MAX(id) mid FROM coverage WHERE dataset = 'totals'{skin} AND event_id IN {ph} "
                "GROUP BY event_id, subject, period) m ON c.id = m.mid "
                "WHERE c.status IN ('fetch_failed', 'not_attempted')")
+        params = ({"skin": skin} if skin else {})
         if _is_orm(conn):
             from sqlalchemy import bindparam, text as _t
-            rows = conn.execute(_t(sql.format(ph=":ids")).bindparams(
-                bindparam("ids", expanding=True)), {"ids": chunk}).fetchall()
+            rows = conn.execute(_t(sql.format(ph=":ids", skin=" AND skin = :skin" if skin else "")).bindparams(
+                bindparam("ids", expanding=True)), {"ids": chunk, **params}).fetchall()
         else:
-            rows = conn.execute(sql.format(ph="(%s)" % ",".join("?" * len(chunk))), chunk).fetchall()
+            rows = conn.execute(sql.format(ph="(%s)" % ",".join("?" * len(chunk)),
+                                           skin=" AND skin = ?" if skin else ""),
+                                ([skin] if skin else []) + chunk).fetchall()
         out.update(r[0] for r in rows)
     return out
 
