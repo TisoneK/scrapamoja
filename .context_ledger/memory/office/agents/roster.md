@@ -54,6 +54,7 @@ is your stable session tag.
 |------|----------|-------|-------|--------|---------------|
 | Achieng | S002 | deepseek/deepseek-flash | Engineer: Windows gate fix + product-tree ledger-vocabulary sweep | Done | Shipped: `tools/gates/pytest.sh` + portable `gates.conf` launcher (`80220d6`, `698d297`) — both gate runners PASS on Windows; tree sweep clean outside the managed entry points |
 | Amara | S008 | unknown | Synced this Windows box (DESKTOP-2VPR9IB) to latest main; session startup — awaiting the target | Working | Door check-in — pull kept (`80f8fee`), core 2.0.4 verified; orientation next |
+| Kwame | S009 | claude-opus-4-8 | Engineer: two-tier storage (scorewise-engine handoff) — local-first writes + lean, capped, H2H-qualified cloud | Working | Door check-in on Baos-Mac-mini; read engine HANDOFF-scrapamoja-two-tier-storage; coordinating — Amara (S008) holds a live `src/sites/betb2b/` claim this task overlaps |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
