@@ -65,7 +65,6 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 | ID | Summary |
 |----|---------|
 | B-2026-10-03-1 | **linebet live re-verification with the fixes in place, in a rested window.** The cookie-header fix (`ec05ca0`), the burst-halt (`fb32cd1`/`6fa14bb`) and the pre-harvest grid wait are in but not yet proven end-to-end: tonight's address was rested by the guard after repeated challenges. Run the stored run (`scrape linebet scheduled --sport basketball --timeout 3600`), then a second run with no person present, then watch `python -m src.security status` and the per-skin rows from the Kenya brief's section 7 query. Also re-run **melbet** (its loop run was killed mid-scrape by mistake; earlier data intact). |
-| B-2026-10-04-1 | Make the skip filter per skin, not per match: `store.unprocessed_ids` skips a match any skin stored, so a second skin's own odds are only fetched with `--skip-processed SECONDS` (a full re-fetch, ~9 min / ~1,500 requests per skin). Add a per-skin mode (skip only what THIS skin stored) so melbet/22bet/linebet get their odds without re-fetching or re-probing H2H/stat ids (those are skin-independent and already remembered). |
 | B-2026-10-04-2 | Volume watch on Neon with four skins and sub-games on: ~290k odds rows for 3 skins at ~200 events each; `BETB2B_DB_LIMIT_MB=1000`. Re-check `python -m src.sites.betb2b.cli quota` after a few days and decide the prune window (matches older than 7 days are prunable). Also decide whether per-stat sub-games (about half the requests per event) are worth keeping for every league. |
 
 

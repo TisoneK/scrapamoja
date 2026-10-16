@@ -35,8 +35,15 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 
 ---
 ## ADR-4: Skip what is already stored, and remember the source's "no data" (2026-10-04)
-- **Status:** accepted
+- **Status:** accepted (skip basis amended 2026-10-16 by ADR-5)
 - **Context:** re-scrapes re-probed every event (in-scrape H2H/stat-id steps, the stat-id backfill), doubled the H2H history, dumped hundreds of events of JSON to the terminal, and a hard timeout discarded a whole pass.
 - **Decision:** a stored match is not fetched again by default (`--refetch` / `--skip-processed SECONDS` override; live scrapes are never filtered); a stored match whose totals coverage is `fetch_failed`/`not_attempted` is fetched again at most hourly; H2H and stat-id probes skip events that already have the data or got a "no data" answer in the last 24 h (`probe_state`, `probe_filter`); a re-scrape stores each H2H game once per result; a timeout keeps the events already fetched and reports the rest as failed ids; `scrape` prints a short summary (`--json` / `--output FILE` for the data).
-- **Consequences:** odds of stored matches do not refresh (and line movement does not accumulate) unless `--skip-processed SECONDS`/`--refetch`; the skip list is per match, not per skin, so another skin's own odds need `--skip-processed` (backlog B-2026-10-04-1).
+- **Consequences:** odds of stored matches do not refresh (and line movement does not accumulate) unless `--skip-processed SECONDS`/`--refetch`; (the "skip list is per match, not per skin" clause was superseded by ADR-5).
+
+---
+## ADR-5: The skip filter is per skin (2026-10-16)
+- **Status:** accepted (amends ADR-4)
+- **Context:** BetB2B-family brands price their own odds (margins differ per skin), so a second skin's stored match is not this skin's data — yet the skip basis was "a match any skin stored", which left melbet/22bet/linebet with no odds of their own for everything an earlier skin had stored; the only workaround (`--skip-processed SECONDS`) was a full re-fetch (backlog B-2026-10-04-1).
+- **Decision:** "already stored" in the skip filter means stored **by the running skin**: `store.unprocessed_ids(..., skin=...)` reads `event_states` (one row per run per skin) for last-seen, and that skin's `coverage` rows for the incomplete-retry rule; both the CLI (`--skip-processed` path) and the scheduler's scheduled pass pass their skin. Sub-game knowledge and the H2H/stat-id probe memory stay skin-independent. The raw store API without `skin` keeps the cross-skin basis (tools/tests).
+- **Consequences:** the first run of each skin fetches the full discovered set once to lay down its own odds (~9 min / ~1,500 requests per skin — the same cost the old workaround had, minus the H2H/stat-id re-probes); work-sharing across machines sharing one remote store still holds, per skin.
 
