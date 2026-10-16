@@ -3,7 +3,7 @@
 Moved verbatim from the root `AGENTS.md` when the ledger core moved to 2.0.3
 (that file is regenerated from the core template on every core update, so
 project text cannot live there). Read this right after your edition: it is the
-architecture, the BetB2B rules (11-17 below) and the key-files map. The generic
+architecture, the BetB2B rules (11-19 below) and the key-files map. The generic
 protocol rules the old `AGENTS.md` repeated (1-10) are dropped — the 2.0.3
 floor files and `kickoff.md` state them. One project-specific note from them:
 `ledger-mem lint --tree` flags the `.context_ledger/` routing paths inside
@@ -457,6 +457,18 @@ python -m src.sites.betb2b.cli.main compare-match --skin linebet --sport basketb
     or route around the refusal to make a run proceed; if a task needs a browser, say the machine cannot do
     it and name the allowed-country machine instead. Tests must not touch the real site from such a machine:
     use the offline fixtures. (set by user, 2026-10-04)
+
+19. **Two-tier storage: the scraper stores, the engine filters/retains the cloud (ADR-6).** The scraper
+    fetches and stores — local-first (local SQLite = the full archive: all odds history + all H2H) and
+    mirrors everything up to the cloud with **no omission**. It does **not** apply usefulness filters
+    (no "drop games without H2H", no `is_alternative` drop, no latest-odds collapse) and does **not**
+    prune, cap or truncate the cloud. The scheduler's quota pass is observe-only + fail-loud by default:
+    it reads the hosted size and logs an ERROR at the warn/over levels but deletes nothing
+    (`BETB2B_CLOUD_RETENTION=1` restores the old self-pruning for single-tier / standalone use with no
+    engine on the same store). The **engine** owns cloud retention of the scraped tables (its `sw retain`)
+    and all usefulness filtering on read. Run production local-first + full mirror with
+    `BETB2B_STORE_MODE=mirror DATABASE_URL=<neon> scripts/schedule.sh install`. Do not add scraper-side
+    cloud pruning/filtering back without a new ADR. (set by user, 2026-10-16)
 
 ### Development Setup
 
