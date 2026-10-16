@@ -14,6 +14,15 @@
 #
 # Overrides (environment, at install time): SCRAPE_SKIN (default betwinner), SCRAPE_SPORT (basketball),
 # SCRAPE_EVERY (21600 s), RESULTS_EVERY (1800 s), SCRAPE_TIMEOUT (3600 s).
+#
+# Two-tier storage (ADR-5): the scraper is LOCAL-FIRST — it writes the full archive to a local
+# SQLite file and never prunes/filters the cloud (the engine owns cloud retention). To run
+# local-first AND mirror everything up to the cloud the engine reads, install with:
+#     BETB2B_STORE_MODE=mirror DATABASE_URL=<neon-url> scripts/schedule.sh install
+# BETB2B_STORE_MODE / BETB2B_DB_PATH / DATABASE_URL are passed through to the jobs when set
+# (empty = unset: default `auto` mode writes local SQLite when DATABASE_URL is absent). No secret
+# is stored in this tracked script — DATABASE_URL is expanded from the install-time environment
+# into the per-user plist under ~/Library/LaunchAgents (not tracked).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LA="$HOME/Library/LaunchAgents"
@@ -23,6 +32,10 @@ SPORT="${SCRAPE_SPORT:-basketball}"
 EVERY="${SCRAPE_EVERY:-21600}"
 RESULTS_EVERY="${RESULTS_EVERY:-1800}"
 TIMEOUT="${SCRAPE_TIMEOUT:-3600}"
+# Local-first / two-tier passthrough (empty = unset → `auto` mode, local SQLite when no DATABASE_URL).
+STORE_MODE="${BETB2B_STORE_MODE:-}"
+DB_PATH_VAL="${BETB2B_DB_PATH:-}"
+DATABASE_URL_VAL="${DATABASE_URL:-}"
 PY="$ROOT/.venv/bin/python"
 
 results() {
@@ -55,6 +68,9 @@ install_job() {   # name interval-seconds
     <key>SCRAPE_SKIN</key><string>$SKIN</string>
     <key>SCRAPE_SPORT</key><string>$SPORT</string>
     <key>SCRAPE_TIMEOUT</key><string>$TIMEOUT</string>
+    <key>BETB2B_STORE_MODE</key><string>$STORE_MODE</string>
+    <key>BETB2B_DB_PATH</key><string>$DB_PATH_VAL</string>
+    <key>DATABASE_URL</key><string>$DATABASE_URL_VAL</string>
   </dict>
   <key>StartInterval</key><integer>$2</integer>
   <key>RunAtLoad</key><false/>

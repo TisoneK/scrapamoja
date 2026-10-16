@@ -11,9 +11,11 @@ is the bus):
     feeds drop a match once it ends, so this reads statisticfeed `v1/Game` for
     real matches past ~2.5h with no result yet and stamps score/winner on finish.
   - **quota** (~1h): hosted-store size monitor — reads the server-side database
-    size, warns at the warn level, and prunes odds/fact history for events past
-    the prune age at the critical level, so the store never crosses the
-    provider's size quota (which flips it read-only and loses writes).
+    size and **fails loud** at the warn/over levels. By default it is
+    OBSERVE-ONLY: under the two-tier model (ADR-6) the engine owns cloud
+    retention of the scraped tables, so the scraper never prunes/truncates the
+    cloud. Opt back into self-pruning with ``BETB2B_CLOUD_RETENTION=1`` (single
+    tier / standalone, no engine on the same store).
 
 Single-flight: passes share one lock, so only one scrape runs at a time (one
 httpx pool, no self-contention). Browser-free/proxy-free via direct mode.
@@ -224,10 +226,18 @@ class BetB2BScheduler:
                     len(pending), len(out), finished)
 
     async def _quota_pass(self) -> Optional[float]:
-        """Hosted-store size monitor. Read the primary's server-side size (the
-        same number the provider's dashboard reports and its quota acts on),
-        warn at the warn level, and act automatically before the provider
-        flips the project read-only:
+        """Hosted-store size monitor.
+
+        Two-tier model (ADR-6), the default: OBSERVE-ONLY. Read the primary's
+        server-side size and **fail loud** at the warn/over levels so the
+        incident is visible before the provider flips the store read-only — but
+        do NOT prune or truncate the cloud. The engine owns cloud retention of
+        the scraped tables.
+
+        The actions below run ONLY when the scraper is opted back into owning
+        cloud retention (``BETB2B_CLOUD_RETENTION=1`` — single-tier / standalone,
+        no engine managing the same store), decided by
+        :func:`quota.retention_action`:
 
           - at the critical level: prune fact history for events past the
             prune age (batched; the events rows with their final results and
@@ -265,12 +275,25 @@ class BetB2BScheduler:
         logger.info("quota: store %.1f MB / %.0f MB (%.0f%%) — level %s%s",
                     st["used_mb"], st["limit_mb"], st["pct"], st["level"],
                     " (OVER the limit — provider read-only likely)" if st["over"] else "")
-        if st["level"] == "critical":
-            if st["over"] and quota.hard_enabled():
-                await self._truncate_primary()
-            else:
-                await self._prune_primary()
+        action = quota.retention_action(st)
+        if action == "truncate":
+            await self._truncate_primary()
             return 600.0
+        if action == "prune":
+            await self._prune_primary()
+            return 600.0
+        # Observe-only (the default under the two-tier model, ADR-6): the ENGINE
+        # owns cloud retention/filtering, so the scraper never deletes cloud
+        # data. Fail loud so an approaching/over cap is visible before the
+        # provider flips the store read-only and writes start failing.
+        if st["level"] != "ok":
+            logger.error(
+                "quota: hosted store at %.0f%% (%.1f/%.0f MB) — level %s%s. The "
+                "scraper does NOT prune the cloud (engine owns cloud retention: "
+                "extend `sw retain` to the scraped tables). Free space engine-side; "
+                "set BETB2B_CLOUD_RETENTION=1 to let the scraper self-prune (single-tier).",
+                st["pct"], st["used_mb"], st["limit_mb"], st["level"].upper(),
+                " — OVER LIMIT, writes will fail" if st["over"] else "")
         return None
 
     async def _prune_primary(self) -> None:

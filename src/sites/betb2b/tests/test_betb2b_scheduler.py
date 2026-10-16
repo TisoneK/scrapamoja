@@ -263,13 +263,15 @@ def test_db_bytes_sqlite_and_prune_roundtrip(tmp_path):
 
 
 def test_quota_pass_prunes_when_critical(tmp_path, monkeypatch, caplog):
-    """The scheduler's quota pass prunes aged fact history only at the
-    critical level; ok/warn just log. (Auto-retention is what keeps the
-    hosted store under the platform's size limit.)"""
+    """With the scraper opted back into owning cloud retention
+    (BETB2B_CLOUD_RETENTION=1), its quota pass prunes aged fact history at the
+    critical level; ok/warn just log. (Single-tier / standalone behaviour.)"""
     import asyncio
     import logging
 
     from src.sites.betb2b import quota
+
+    monkeypatch.setenv("BETB2B_CLOUD_RETENTION", "1")
 
     db = str(tmp_path / "qp.db")
     conn = store.init_db(db)
@@ -385,12 +387,15 @@ def test_truncate_facts_sqlite_keeps_events_and_results(tmp_path):
 
 
 def test_quota_pass_escalates_to_truncate_when_over_limit(tmp_path, monkeypatch, caplog):
-    """OVER the hard limit → the pass resets fact history itself (the operator
-    playbook, automatic) and asks for a fast 10-min re-check."""
+    """OVER the hard limit, with the scraper owning retention
+    (BETB2B_CLOUD_RETENTION=1) → the pass resets fact history itself (the
+    operator playbook, automatic) and asks for a fast 10-min re-check."""
     import asyncio
     import logging
 
     from src.sites.betb2b import quota
+
+    monkeypatch.setenv("BETB2B_CLOUD_RETENTION", "1")
 
     db = str(tmp_path / "qe.db")
     store.init_db(db).close()
@@ -427,3 +432,67 @@ def test_quota_pass_escalates_to_truncate_when_over_limit(tmp_path, monkeypatch,
 
     monkeypatch.setattr(store_orm, "truncate_facts", _boom)
     asyncio.run(s._quota_pass())  # must not raise / must not truncate
+
+
+def test_retention_action_default_observe_and_optin(monkeypatch):
+    """Two-tier default: the scraper never acts on cloud size (engine owns
+    retention). Opting in (BETB2B_CLOUD_RETENTION=1) restores prune/truncate."""
+    from src.sites.betb2b import quota
+
+    MB = 1024 * 1024
+    crit = quota.evaluate(0.95 * 500 * MB, limit=500)      # critical, not over
+    over = quota.evaluate(1.2 * 500 * MB, limit=500)       # critical + over
+    ok = quota.evaluate(100 * MB, limit=500)               # ok
+
+    # default (env unset) → observe only, whatever the level
+    monkeypatch.delenv("BETB2B_CLOUD_RETENTION", raising=False)
+    assert quota.retention_action(crit) is None
+    assert quota.retention_action(over) is None
+    assert quota.retention_action(None) is None
+
+    # opted in → act at the critical level only
+    monkeypatch.setenv("BETB2B_CLOUD_RETENTION", "1")
+    assert quota.retention_action(ok) is None
+    assert quota.retention_action(crit) == "prune"
+    assert quota.retention_action(over) == "truncate"
+    # hard reset disabled → prune even when over
+    monkeypatch.setenv("BETB2B_QUOTA_HARD", "0")
+    assert quota.retention_action(over) == "prune"
+    # explicit enabled= overrides the env
+    assert quota.retention_action(crit, enabled=False) is None
+
+
+def test_quota_pass_observe_only_by_default(tmp_path, monkeypatch, caplog):
+    """Default (two-tier): OVER the limit, the scraper does NOT prune or
+    truncate the cloud — it only fails loud. The engine owns cloud retention."""
+    import asyncio
+    import logging
+
+    from src.sites.betb2b import quota
+
+    monkeypatch.delenv("BETB2B_CLOUD_RETENTION", raising=False)
+
+    db = str(tmp_path / "qo.db")
+    store.init_db(db).close()
+    s = BetB2BScheduler("linebet", db_path=db, scheduled_interval=0,
+                        live_interval=0, results_interval=0, quota_interval=0)
+
+    class _Conn:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(store_orm, "connect", lambda: _Conn())
+    monkeypatch.setattr(store_orm, "db_bytes",
+                        lambda _c: int(1.2 * quota.limit_mb() * 1024 * 1024))
+
+    def _no_delete(*a, **kw):
+        raise AssertionError("the scraper must not prune/truncate the cloud by default")
+
+    monkeypatch.setattr(store_orm, "prune_expired", _no_delete)
+    monkeypatch.setattr(store_orm, "truncate_facts", _no_delete)
+
+    with caplog.at_level(logging.ERROR):
+        ret = asyncio.run(s._quota_pass())   # must not raise, must not delete
+
+    assert ret is None
+    assert any("engine owns cloud retention" in r.getMessage() for r in caplog.records)

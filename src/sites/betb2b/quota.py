@@ -10,11 +10,16 @@ scheduler can warn — and then act — BEFORE the provider does:
   ``pg_database_size`` on Postgres — the same number the provider's dashboard
   shows. A local SQLite store has no hosted quota → ``None``.
 * ``evaluate`` maps used/limit onto levels: ``ok`` → ``warn`` (default 80%)
-  → ``critical`` (default 92%). The scheduler's quota pass prunes aged odds
-  history at the critical level — tick history past the prune window has no
-  product value (final results live on ``events``), so pruning keeps the
-  store under the limit without touching anything the prediction products
-  read.
+  → ``critical`` (default 92%). The scheduler's quota pass reads the size and
+  **fails loud** at warn/over so the incident is visible before the provider
+  flips the store read-only.
+
+Two-tier model (ADR-6): by default the scraper only OBSERVES the hosted
+store's size — it does **not** prune or truncate the cloud. The engine owns
+cloud retention/filtering of the scraped tables. ``retention_action`` /
+``BETB2B_CLOUD_RETENTION=1`` restore the scraper's own self-pruning (aged odds
+history has no product value — final results live on ``events``) for
+single-tier / standalone use where no engine manages the same store.
 
 Env (all optional):
 
@@ -42,6 +47,7 @@ CRITICAL_ENV = "BETB2B_DB_CRITICAL_PCT"
 PRUNE_DAYS_ENV = "BETB2B_PRUNE_DAYS"
 PRUNE_BATCH_ENV = "BETB2B_PRUNE_BATCH"
 HARD_ENV = "BETB2B_QUOTA_HARD"
+RETENTION_ENV = "BETB2B_CLOUD_RETENTION"
 
 
 def _num(env: str, default: float) -> float:
@@ -77,6 +83,38 @@ def hard_enabled() -> bool:
     run automatically; the delete ladder alone cannot reclaim the reported
     size of an already-over store)."""
     return os.environ.get(HARD_ENV, "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def retention_enabled() -> bool:
+    """Whether the SCRAPER may delete/prune the hosted (cloud) store itself.
+
+    **Default OFF** under the two-tier model (ADR-6, supervisor's division of
+    labour): the scraper fetches and stores — local-first archive, then mirrors
+    everything up — and never omits or deletes cloud data. The **engine** owns
+    cloud retention and filtering of the scraped tables (its own ``sw retain``
+    extended to cover them). Set ``BETB2B_CLOUD_RETENTION=1`` to restore the
+    scraper's old self-pruning for single-tier / standalone use (no engine
+    reading the same store)."""
+    return os.environ.get(RETENTION_ENV, "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def retention_action(st: Optional[Dict[str, Any]], *, enabled: Optional[bool] = None) -> Optional[str]:
+    """What the scheduler's quota pass should DO about hosted-store size.
+
+    * ``None`` — observe only (**the default**: the engine owns cloud
+      retention). The pass still reads the size and fails loud at warn/over;
+      it just never deletes.
+    * ``"prune"`` — bounded aged-fact prune (only when retention is opted in
+      AND the store is at the critical level).
+    * ``"truncate"`` — hard fact-history reset (opted in, critical, already
+      over the hard limit, and :func:`hard_enabled`).
+
+    ``enabled`` overrides :func:`retention_enabled` (for tests)."""
+    if enabled is None:
+        enabled = retention_enabled()
+    if not enabled or st is None or st.get("level") != "critical":
+        return None
+    return "truncate" if (st.get("over") and hard_enabled()) else "prune"
 
 
 def evaluate(used_bytes: Optional[int], *, limit: Optional[float] = None,
