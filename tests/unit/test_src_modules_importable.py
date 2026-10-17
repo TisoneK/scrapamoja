@@ -21,9 +21,6 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # module -> why it cannot be imported yet (all need a design decision, not a typo fix)
 KNOWN_BROKEN = {
-    "src.browser.authority": "StealthSettings has no 'webgl_protection' field (presets in browser/models/stealth.py use fields that were renamed/never added)",
-    "src.browser.configuration": "same StealthSettings 'webgl_protection' mismatch",
-    "src.selectors.integration": "imports src.selectors.engine.configuration.*, which does not exist ('engine' is a module, not a package)",
     "src.telemetry.integration.alerting_integration": "ITelemetryIntegration does not exist (only ISelectorTelemetryIntegration)",
 }
 # (src.sites.flashscore.cli* import the top-level 'tests' package: they only import when the

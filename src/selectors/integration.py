@@ -11,10 +11,8 @@ from typing import Dict, List, Any, Optional
 import logging
 
 from .engine import SelectorEngine
-from .engine.configuration.loader import ConfigurationLoader
-from .engine.configuration.discovery import ConfigurationDiscovery
 from .models.selector_config import SemanticSelector
-from ..sites.wikipedia.selector_loader import WikipediaSelectorLoader
+from ..sites.wikipedia.selector_loader import WikipediaSelectorIntegration
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +24,7 @@ class YAMLSelectorIntegrator:
         """Initialize the integrator."""
         self.selector_engine = selector_engine
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        self._wikipedia_loader: Optional[WikipediaSelectorLoader] = None
+        self._wikipedia_loader: Optional[WikipediaSelectorIntegration] = None
     
     async def initialize_yaml_selectors(self, site_name: str = "wikipedia") -> bool:
         """Initialize YAML selectors for a specific site."""
@@ -47,10 +45,10 @@ class YAMLSelectorIntegrator:
         """Initialize Wikipedia-specific YAML selectors."""
         try:
             # Create Wikipedia selector loader
-            self._wikipedia_loader = WikipediaSelectorLoader(self.selector_engine)
-            
+            self._wikipedia_loader = WikipediaSelectorIntegration(self.selector_engine)
+
             # Load Wikipedia selectors
-            success = await self._wikipedia_loader.load_wikipedia_selectors()
+            success = await self._wikipedia_loader.initialize_wikipedia_selectors()
             
             if success:
                 self.logger.info("Wikipedia YAML selectors successfully initialized")
@@ -75,7 +73,7 @@ class YAMLSelectorIntegrator:
             self.logger.error(f"Error initializing Wikipedia selectors: {str(e)}")
             return False
     
-    def get_wikipedia_loader(self) -> Optional[WikipediaSelectorLoader]:
+    def get_wikipedia_loader(self) -> Optional[WikipediaSelectorIntegration]:
         """Get the Wikipedia selector loader instance."""
         return self._wikipedia_loader
     
@@ -85,7 +83,7 @@ class YAMLSelectorIntegrator:
             self.logger.info(f"Reloading YAML selectors for site: {site_name}")
             
             if site_name.lower() == "wikipedia" and self._wikipedia_loader:
-                return self._wikipedia_loader.reload_selectors()
+                return await self._wikipedia_loader.reload_selectors()
             else:
                 return await self.initialize_yaml_selectors(site_name)
                 
@@ -117,10 +115,10 @@ class YAMLSelectorIntegrator:
             }
             
             if self._wikipedia_loader:
-                loader_stats = self._wikipedia_loader.get_statistics()
+                loader_stats = self._wikipedia_loader.get_integration_status()
                 status.update({
-                    "loaded_selectors": loader_stats["loaded_selectors"],
-                    "selector_names": loader_stats["selector_names"]
+                    "loaded_selectors": loader_stats.get("total_engine_selectors", 0),
+                    "selector_names": loader_stats.get("engine_selectors", [])
                 })
             
             return status
