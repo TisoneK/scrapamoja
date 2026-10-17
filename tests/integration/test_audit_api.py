@@ -7,11 +7,12 @@ export, and connected decision detection.
 
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from fastapi.testclient import TestClient
 
 from src.selectors.adaptive.api.app import create_app
 from src.selectors.adaptive.db.models.audit_event import AuditEvent
+from src.selectors.adaptive.services.audit_trail_service import get_audit_trail_service
 
 
 @pytest.mark.integration
@@ -60,13 +61,12 @@ class TestAuditAPI:
             ),
         ]
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_get_audit_trail_basic(self, mock_get_service, client, sample_audit_events):
+    def test_get_audit_trail_basic(self, client, sample_audit_events):
         """Test getting audit trail without filters."""
         # Arrange
         mock_service = Mock()
         mock_service.get_chronological_audit_trail.return_value = sample_audit_events
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/trail")
@@ -85,14 +85,13 @@ class TestAuditAPI:
             action_types=None, selector_ids=None, limit=1000
         )
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_get_audit_trail_with_filters(self, mock_get_service, client, sample_audit_events):
+    def test_get_audit_trail_with_filters(self, client, sample_audit_events):
         """Test getting audit trail with filters."""
         # Arrange
         filtered_events = [event for event in sample_audit_events if event.user_id == "user1"]
         mock_service = Mock()
         mock_service.get_chronological_audit_trail.return_value = filtered_events
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/trail?user_ids=user1&user_ids=user2&action_types=selector_approved")
@@ -109,8 +108,7 @@ class TestAuditAPI:
             action_types=["selector_approved"], selector_ids=None, limit=1000
         )
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_get_audit_trail_with_date_range(self, mock_get_service, client, sample_audit_events):
+    def test_get_audit_trail_with_date_range(self, client, sample_audit_events):
         """Test getting audit trail with date range."""
         # Arrange
         base_time = datetime.now(timezone.utc)
@@ -121,15 +119,18 @@ class TestAuditAPI:
                          if start_date <= event.timestamp <= end_date]
         mock_service = Mock()
         mock_service.get_chronological_audit_trail.return_value = filtered_events
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
-        # Act
-        response = client.get(f"/audit/trail?start_date={start_date.isoformat()}&end_date={end_date.isoformat()}")
+        # Act - pass dates via params so the '+' in the UTC offset is properly encoded
+        response = client.get("/audit/trail", params={
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+        })
         
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["total_count"] == 1  # Only event 2 falls in the range
+        assert data["total_count"] == 2  # Events at -2h and -1h fall in the range
         
         mock_service.get_chronological_audit_trail.assert_called_once()
         call_args = mock_service.get_chronological_audit_trail.call_args
@@ -145,8 +146,7 @@ class TestAuditAPI:
         assert response.status_code == 400
         assert "Invalid start_date format" in response.json()["detail"]
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_get_selector_audit_trail(self, mock_get_service, client, sample_audit_events):
+    def test_get_selector_audit_trail(self, client, sample_audit_events):
         """Test getting audit trail for specific selector."""
         # Arrange
         selector_events = [event for event in sample_audit_events if event.selector_id == "sel-001"]
@@ -170,7 +170,7 @@ class TestAuditAPI:
         
         mock_service = Mock()
         mock_service.get_selector_audit_trail.return_value = trail_data
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/trail/sel-001")
@@ -190,14 +190,13 @@ class TestAuditAPI:
             selector_id="sel-001", include_connected_decisions=True, limit=100
         )
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_get_user_decision_history(self, mock_get_service, client, sample_audit_events):
+    def test_get_user_decision_history(self, client, sample_audit_events):
         """Test getting decision history for specific user."""
         # Arrange
         user_events = [event for event in sample_audit_events if event.user_id == "user1"]
         mock_service = Mock()
         mock_service.get_user_decision_history.return_value = user_events
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/trail/user/user1")
@@ -214,8 +213,7 @@ class TestAuditAPI:
             user_id="user1", action_type=None, start_date=None, end_date=None, limit=100
         )
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_get_user_decision_history_with_action_filter(self, mock_get_service, client, sample_audit_events):
+    def test_get_user_decision_history_with_action_filter(self, client, sample_audit_events):
         """Test getting user decision history with action type filter."""
         # Arrange
         user_approval_events = [
@@ -224,7 +222,7 @@ class TestAuditAPI:
         ]
         mock_service = Mock()
         mock_service.get_user_decision_history.return_value = user_approval_events
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/trail/user/user1?action_type=selector_approved")
@@ -239,8 +237,7 @@ class TestAuditAPI:
             user_id="user1", action_type="selector_approved", start_date=None, end_date=None, limit=100
         )
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_get_audit_trail_summary(self, mock_get_service, client):
+    def test_get_audit_trail_summary(self, client):
         """Test getting audit trail summary."""
         # Arrange
         summary_data = {
@@ -261,7 +258,7 @@ class TestAuditAPI:
         
         mock_service = Mock()
         mock_service.get_audit_trail_summary.return_value = summary_data
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/summary")
@@ -277,13 +274,12 @@ class TestAuditAPI:
         
         mock_service.get_audit_trail_summary.assert_called_once_with(start_date=None, end_date=None)
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_export_audit_trail_json(self, mock_get_service, client, sample_audit_events):
+    def test_export_audit_trail_json(self, client, sample_audit_events):
         """Test exporting audit trail as JSON."""
         # Arrange
         mock_service = Mock()
         mock_service.get_chronological_audit_trail.return_value = sample_audit_events
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/export/json")
@@ -305,20 +301,19 @@ class TestAuditAPI:
             action_types=None, selector_ids=None, limit=10000
         )
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_export_audit_trail_csv(self, mock_get_service, client, sample_audit_events):
+    def test_export_audit_trail_csv(self, client, sample_audit_events):
         """Test exporting audit trail as CSV."""
         # Arrange
         mock_service = Mock()
         mock_service.get_chronological_audit_trail.return_value = sample_audit_events
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/export/csv")
         
         # Assert
         assert response.status_code == 200
-        assert response.headers["content-type"] == "text/csv"
+        assert response.headers["content-type"].startswith("text/csv")
         assert "attachment" in response.headers["content-disposition"]
         assert ".csv" in response.headers["content-disposition"]
         
@@ -333,19 +328,19 @@ class TestAuditAPI:
         for col in expected_columns:
             assert col in header
         
+        # Verify - the CSV export streams in 2000-event chunks with offset pagination
         mock_service.get_chronological_audit_trail.assert_called_once_with(
             start_date=None, end_date=None, user_ids=None,
-            action_types=None, selector_ids=None, limit=10000
+            action_types=None, selector_ids=None, limit=2000, offset=0
         )
-    
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_export_with_filters(self, mock_get_service, client, sample_audit_events):
+
+    def test_export_with_filters(self, client, sample_audit_events):
         """Test exporting audit trail with filters."""
         # Arrange
         filtered_events = [event for event in sample_audit_events if event.user_id == "user1"]
         mock_service = Mock()
         mock_service.get_chronological_audit_trail.return_value = filtered_events
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/export/json?user_ids=user1&action_types=selector_approved")
@@ -362,13 +357,12 @@ class TestAuditAPI:
             action_types=["selector_approved"], selector_ids=None, limit=10000
         )
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_export_with_limit(self, mock_get_service, client, sample_audit_events):
+    def test_export_with_limit(self, client, sample_audit_events):
         """Test exporting audit trail with custom limit."""
         # Arrange
         mock_service = Mock()
         mock_service.get_chronological_audit_trail.return_value = sample_audit_events[:1]
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/export/json?limit=1")
@@ -383,13 +377,12 @@ class TestAuditAPI:
             action_types=None, selector_ids=None, limit=1
         )
     
-    @patch('src.selectors.adaptive.services.audit_trail_service.get_audit_trail_service')
-    def test_audit_api_error_handling(self, mock_get_service, client):
+    def test_audit_api_error_handling(self, client):
         """Test API error handling."""
         # Arrange
         mock_service = Mock()
         mock_service.get_chronological_audit_trail.side_effect = Exception("Database error")
-        mock_get_service.return_value = mock_service
+        client.app.dependency_overrides[get_audit_trail_service] = lambda: mock_service
         
         # Act
         response = client.get("/audit/trail")

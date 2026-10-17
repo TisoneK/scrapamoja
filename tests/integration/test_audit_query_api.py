@@ -104,8 +104,9 @@ class TestAuditQueryAPIIntegration:
         assert response.status_code == 200
         data = response.json()
         
-        assert data["filters_applied"]["start_date"] == start_date
-        assert data["filters_applied"]["end_date"] == end_date
+        # The route echoes the parsed datetimes (isoformat, not the raw input strings)
+        assert datetime.fromisoformat(data["filters_applied"]["start_date"]) == datetime(2024, 1, 1, tzinfo=timezone.utc)
+        assert datetime.fromisoformat(data["filters_applied"]["end_date"]) == datetime(2024, 1, 2, tzinfo=timezone.utc)
     
     def test_query_audit_log_invalid_date_range(self, client):
         """Test audit log query with invalid date range."""
