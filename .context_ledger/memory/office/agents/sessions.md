@@ -150,3 +150,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** (1) THE ENGINE must now extend `sw retain` to the scraped tables (`odds_snapshots`, `player_stats`, …) or the cloud refills to 100% — operator accepted the risk; relayed in the response note. (2) Operator to validate local-first + mirror against Neon with `DATABASE_URL` set and pick the Neon history-retention window (the reclaim caveat). (3) `.claude/settings.json` commit decision (self-mod guard).
 - **Notes:** none
 - **Report:** none
+
+---
+## 2026-10-17 — Session 10 (Juma/S010)
+- **Agent:** Juma (S010) | **Model:** undisclosed | **Platform:** DESKTOP-2VPR9IB (Windows, Qoder CLI) | **Role:** skill-evolution session | **Core:** 2.2.0
+- **Task:** operator: verify source session 31d52d87 (Amara/S008's "pull changes" session) and draft a reusable Skill from its Windows test-infra fixes; plan-only first round, then operator confirmed.
+- **Commits:** ledger only — check-in `4e653fc`, this clock-out. No product code touched (Amara/S008 holds an in-flight working tree on this box — 4 integration test files).
+- **Outcome:** skill `windows-sqlite-test-teardown` created in the user Skill dir via `skill_manage create` (no name collision; frontmatter validated by the skill registry). Content verified against committed state, not the recommendation JSON: dispose-before-unlink (`ab24e35` — `tests/unit/test_feature_flag_service_site_enhancements.py:33,281`; 10 setup errors → 44 passing, 2 stale xfails dropped), SIGALRM hasattr guard (`596860a` — `tests/unit/test_src_modules_importable.py:49`), and `store_orm._engines.clear()` around DATABASE_URL-backed tests (`store_orm.py:47` + betb2b tests). JSON correction recorded in the skill: the `_engines.clear` pattern predates that session — an established repo pattern, not "the third fix of the session". Skill also records known gaps: integration fixtures still unlink without dispose (`tests/integration/test_site_flags_migration.py:36`, `test_selector_engine_site_integration.py:34`, `test_site_api_endpoints.py:41`).
+- **Open items:** the three integration fixtures above remain unfixed — deliberately left alone; Amara/S008's live session owns adjacent integration test files.
+- **Notes:** source session 31d52d87 was LIVE while verifying; all skill citations were taken from committed state only. Office headcount 9 at check-in (limit 20) — no close needed.
+- **Report:** none
