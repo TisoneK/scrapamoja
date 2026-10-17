@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 import structlog
 
 from ..exceptions import BrowserError
+from .proxy import ProxySettings
+from .stealth import StealthSettings
 
 
 class SessionStatus(Enum):
@@ -81,7 +83,44 @@ class BrowserConfiguration:
     ignore_https_errors: bool = False
     locale: str = "en-US"
     timezone: str = "America/New_York"
-    
+
+    # Grouped views the BrowserConfigurationManager works with: a stealth
+    # preset / proxy object alongside the flat fields above.
+    stealth_settings: Optional[StealthSettings] = None
+    proxy_settings: Optional[ProxySettings] = None
+    proxy_rotation: bool = False
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BrowserConfiguration":
+        """Build from the shape ``to_dict`` emits (nested viewport/proxy/stealth)."""
+        viewport = data.get("viewport") or {}
+        proxy = data.get("proxy_settings") or {}
+        stealth = data.get("stealth_settings") or {}
+        return cls(
+            config_id=data.get("config_id", ""),
+            browser_type=data.get("browser_type", "chromium"),
+            headless=data.get("headless", True),
+            viewport_width=viewport.get("width", 1920),
+            viewport_height=viewport.get("height", 1080),
+            device_scale_factor=viewport.get("device_scale_factor", 1.0),
+            is_mobile=viewport.get("is_mobile", False),
+            has_touch=viewport.get("has_touch", False),
+            user_agent=data.get("user_agent"),
+            proxy_server=proxy.get("server"),
+            proxy_username=proxy.get("username"),
+            proxy_password=proxy.get("password"),
+            proxy_bypass_list=list(proxy.get("bypass_list") or []),
+            fingerprint_randomization=stealth.get("fingerprint_randomization", True),
+            mouse_movement_simulation=stealth.get("mouse_movement_simulation", True),
+            typing_simulation=stealth.get("typing_simulation", True),
+            scroll_simulation=stealth.get("scroll_simulation", True),
+            timing_randomization=stealth.get("timing_randomization", True),
+            permissions=list(data.get("permissions") or []),
+            ignore_https_errors=data.get("ignore_https_errors", False),
+            locale=data.get("locale", "en-US"),
+            timezone=data.get("timezone", "America/New_York"),
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {

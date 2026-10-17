@@ -487,7 +487,7 @@ class StealthSettings:
                 typing_simulation=True,
                 scroll_simulation=True,
                 canvas_fingerprint_protection=True,
-                webgl_protection=True,
+                webgl_fingerprint_protection=True,
                 audio_context_protection=True,
                 font_fingerprint_protection=True
             ),

@@ -62,7 +62,15 @@ class ProxySettings:
     def has_credentials(self) -> bool:
         """Check if proxy has authentication credentials."""
         return self.username is not None and self.password is not None
-        
+
+    @classmethod
+    def create_residential_proxy(cls, server: str, port: int,
+                                 username: Optional[str] = None,
+                                 password: Optional[str] = None) -> "ProxySettings":
+        """Create an authenticated HTTP proxy entry for a residential provider."""
+        return cls(server=server, port=port, proxy_type=ProxyType.HTTP,
+                   username=username, password=password)
+
     def is_bypassed(self, hostname: str) -> bool:
         """Check if hostname should bypass proxy."""
         if not self.bypass_list:

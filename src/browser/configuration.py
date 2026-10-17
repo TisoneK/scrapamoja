@@ -435,7 +435,7 @@ class BrowserConfigurationManager:
             result.add_suggestion("Consider using GUI browser for mobile viewport testing")
             
         # Check for stealth settings with headless browser
-        if config.stealth_settings.stealth_level == StealthLevel.MAXIMUM and config.headless:
+        if config.stealth_settings and config.stealth_settings.stealth_level == StealthLevel.MAXIMUM and config.headless:
             result.add_warning("Maximum stealth with headless browser may have limited effectiveness")
             
         # Check for proxy settings without rotation
@@ -501,7 +501,7 @@ class BrowserConfigurationManager:
             "headless": config.headless,
             "viewport": {
                 "width": config.viewport_width,
-                "height": config.height,
+                "height": config.viewport_height,
                 "device_scale_factor": config.device_scale_factor,
                 "is_mobile": config.is_mobile,
                 "has_touch": config.has_touch
@@ -646,8 +646,15 @@ class BrowserConfigurationManager:
         """Get the default browser configuration."""
         default_type = self.app_config.browser.default_browser_type
         default_id = f"{default_type}_default"
-        
-        return self.get_configuration(default_id) or self.default_configurations[default_id]
+
+        if (config := self.get_configuration(default_id)) is not None:
+            return config
+        # No saved "{type}_default" config: fall back to the first default
+        # preset for that browser type (any one, if none matches).
+        for config in self.default_configurations.values():
+            if config.browser_type == default_type:
+                return config
+        return next(iter(self.default_configurations.values()))
 
 
 # Global configuration manager instance
