@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 its roster row (if left behind) says who was here; check the session
 entry and backlog before starting.
 
-- **Session:** Zuri (S011)
-- **Task:** DB handoff — local-Postgres cutover (engine `HANDOFF-scrapamoja-local-postgres-cutover.md`). DONE + verified.
-- **Status:** done — scraper repointed to `postgresql://bao@localhost:5432/scorewise` via `src/sites/betb2b/.env`; verified 3 scrape_runs + 191 event results written to local PG on 2026-10-24; response written (ADR-7). Awaiting operator's next task.
+- **Session:** —
+- **Task:** none — no session in progress
+- **Status:** idle
