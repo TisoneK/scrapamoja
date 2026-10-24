@@ -5,10 +5,10 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-16T17:05:18Z_
+_Regenerated: 2026-10-24T06:54:19Z_
 
 ## Standing params
-- **Core:** 2.2.0 (locked, verified 2026-10-16)
+- **Core:** 2.2.0 (locked, verified 2026-10-23)
 - **Target:** general sweep
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
@@ -17,15 +17,16 @@ _Regenerated: 2026-10-16T17:05:18Z_
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
 - **Amara** (S008) — Working — Synced this Windows box (DESKTOP-2VPR9IB) to latest main; session startup — awaiting th…
+- **Zuri** (S011) — Working — Engineer: session startup — confirming handoff, awaiting target
 
 ## Current task
 - **—** — none — no session in progress — *idle*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-03-1 | **linebet live re-verification with the fixes in place, in a rested window.** The cookie-header fix (`ec05ca0`), the burst-halt (`fb32cd1`/`6fa14bb`) and the pre-harvest grid wait are in but not yet proven end-to-end: tonight's address was rested by the guard after repeated challenges. Run the stored run (`scrape linebet scheduled --sport basketball --timeout 3600`), then a second run with no person present, then watch `python -m src.security status` and the per-skin rows from the Kenya brief's section 7 query. Also re-run **melbet** (its loop run was killed mid-scrape by mistake; earlier data intact). |
-| B-2026-10-04-2 | Volume watch on Neon with four skins and sub-games on: ~290k odds rows for 3 skins at ~200 events each; `BETB2B_DB_LIMIT_MB=1000`. Re-check `python -m src.sites.betb2b.cli quota` after a few days and decide the prune window (matches older than 7 days are prunable). Also decide whether per-stat sub-games (about half the requests per event) are worth keeping for every league. |
+| B-2026-10-04-2 | **Neon hit the ceiling — quota monitor is blind to it.** 2026-10-17 live: writes fail (`DiskFull: project size limit 1024 MB exceeded`) while `quota` reads ~170 MB table sizes / OK — the size sum cannot see the WAL + un-GC'd history Neon counts toward the limit. Retention itself is engine-side now (ADR-6); scraper side: make the quota pass fail loud on a real rolled-back write probe (as `store_fallback._probe_primary_writable` does), not just the size read; keep the mirror + outbox replay (working). Also decide whether per-stat sub-games (~half the requests per event) are worth keeping for every league. |
 
-_13 medium, 1 low priority row(s) — see tasks/backlog.md_
+_10 medium, 1 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-10-04
