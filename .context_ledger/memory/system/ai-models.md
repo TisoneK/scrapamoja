@@ -19,6 +19,7 @@ accordingly).
 | ZCode | qwen3.8-flash | 2026-09-14 | 2026-09-14 | 2 |
 | Claude Code | claude-sonnet-5-5 | 2026-10-02 | 2026-10-03 | 3 |
 | ZCode | deepseek/deepseek-flash | 2026-10-03 | 2026-10-03 | 2 |
+| Qoder Desktop | unknown | 2026-10-24 | 2026-10-24 | 1 |
 
 ## Observations
 
@@ -54,3 +55,4 @@ Update in place when a newer session contradicts an old observation.
 
 - **ZCode / deepseek/deepseek-flash:** Model id taken from the agent's own system prompt (stated fact, not a guess). Session 53 — the "Kenyan machine" linebet/Gcore session: designed and ran controlled live probes (fresh-context first/second-load matrix, cookie-subset matrix, timed clearance-lifetime rounds) and turned them into two real fixes (session cookies dropped from the harvested Cookie header; concurrent challenges walking the guard ladder once per response) plus a pre-harvest grid wait. Fixed three Windows-only baseline failures (store-fallback connect-timeout classification, a path-vs-name test assertion, the Pacer collapsing starts on Windows' ~15.6 ms timer). Operated the other skins from this machine (betwinner/22bet persisted). Limit to know: did not get linebet's live end-to-end verification done — the address was rested by the guard after the evening's challenge hits; the retry is backlogged. (2026-10-03)
 - **Claude Code / claude-sonnet-5-5:** Core 1.1.3 -> 2.0.4 migration (2026-10-03): needed two operator corrections — first pass skipped the protocol reads, gates, upstream check, office close and entry-point regeneration. Treat a "migration done" claim from this pairing as unverified until `ledger-sync verify`, `ledger-sync status` against the package remote and the exit gate are shown. (2026-10-03)
+- **Qoder Desktop / unknown:** Session 12 (DESKTOP-2VPR9IB) — pull-only + ledger lifecycle; no product code touched. Model id not disclosed by the harness, recorded `unknown` per the kickoff rule. Verified `ledger-sync verify|status` (core 2.2.0, upstream in sync) and `ledger-gates run pre-commit` green on Windows via `sh`. Git hooks remain uninstalled on this box (`ledger-guard status`: all MISSING) — gates are manual-only until the operator approves install. (2026-10-24)

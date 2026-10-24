@@ -174,3 +174,13 @@ re-seeded into the new office explicitly, and nothing else carries over.
 ### Follow-up (Zuri/S011) — on-demand full scrape populates today/tomorrow
 - Operator asked whether today's/tomorrow's games were in the DB (they weren't: 0/0; the last scheduled full scrape ran ~1 h before the cutover and its discovery went to the dead Neon). Confirmed the scraper IS running — both launchd jobs loaded; the 30-min `results --auto` runs were already landing in local PG post-cutover (cutover verified on the scheduled path), but `results` only settles finished games and doesn't discover upcoming ones.
 - Ran an on-demand full `scrape betwinner scheduled --sport basketball --direct` (`--direct`, geo-safe). Persisted run 991: 200 events / 232,988 odds / 27,582 markets / 74 with H2H → local Postgres (`remote, mode=auto`). events 2840 → 3040; **today 2026-10-24 = 71 games, tomorrow 2026-10-25 = 19**. The next scheduled 6 h scrape (~11:52 UTC) will refresh again.
+
+---
+## 2026-10-24 — Session 12 (Nia/S012)
+- **Agent:** Nia (S012) | **Model:** unknown | **Platform:** DESKTOP-2VPR9IB (Windows 11, Qoder Desktop) | **Role:** engineer | **Core:** 2.2.0
+- **Task:** operator: "Pull changes" — sync the checkout with `origin/main` and run the ledger lifecycle.
+- **Commits:** ledger only — check-in `c13f7aa`, STATE regen `c5fa312`, this clock-out. No product code touched.
+- **Outcome:** fast-forward pulled `a1cdf52`→`da2d2e7` (9 commits, 6 files: office STATE/roster/sessions/decisions/backlog + `HANDOFF-RESPONSE-local-postgres-cutover.md`); `ledger-sync verify` OK and `status` reports core 2.2.0 up to date against `TisoneK/context-ledger`; pre-commit gate PASSED on both staged ledger trees.
+- **Open items:** none from this session. The pulled `HANDOFF-RESPONSE-local-postgres-cutover.md` is Zuri/S011's cutover response — already reflected in ADR-7/STATE; no action required.
+- **Notes:** git hooks are MISSING (`ledger-guard status`) — reported to the operator; gates were run manually. Untracked `.freebuff/` and `tmp_fix_encoding.py` were present before the pull and left untouched. Office headcount 10 at check-in (limit 20) — no close needed.
+- **Report:** none

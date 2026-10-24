@@ -89,7 +89,7 @@ block (and its "last verified" date) every time you run on it again.
   - **The package repo `TisoneK/.context` is private.** The original external kickoff file contradicted itself on this (line 27 said private, line 81 said public) — ground truth is private. The in-repo `.context/kickoff.md` (generated session 5) records this correctly. **(Corrected 2026-09-14: renamed to `TisoneK/context-ledger`, now PUBLIC — verified by a tokenless clone from Lameck-Windows. No PAT is needed for package clones anymore; project pushes still use the user's own credentials or their sandbox token.)**
 
 ---
-## TisoneK-Windows (last verified 2026-09-06, session 41)
+## TisoneK-Windows (last verified 2026-10-24, session 12)
 - **Identify by:** hostname `DESKTOP-*`, `$env:USERNAME` = `tison`, workspace `C:\Users\tison\Dev\scrapamoja`
 - **OS:** Windows 11, PowerShell (pwsh)
 - **Runtimes:** system python = 3.14.2 (from `.venv\Scripts\python.exe`); `.venv\` exists at repo root
@@ -167,3 +167,8 @@ block (and its "last verified" date) every time you run on it again.
 - `powershell -NoProfile -ExecutionPolicy Bypass -File .context_ledger/core/bin/ledger-gates.ps1 run pre-commit` — **PASSED** (this is exactly what `ledger-gates.cmd` runs; no `sh` on the clean machine PATH, which is why the launcher goes through git's own shell).
 - `sh tools/gates/pytest.sh` — direct run of the launcher: 283 passed (dots; summary suppressed), exit 0; `sh tools/gates/pytest.sh -k no_such_test` exits 5 (a failing suite cannot pass the gate silently).
 - `sh .context_ledger/core/bin/ledger-mem lint --tree` — 23 hits, **all** in `AGENTS.md` (13) and `CLAUDE.md` (10), zero elsewhere in the tree; a known upstream limitation (the managed entry points must name the ledger directory they route to).
+
+**Session 12 additions (2026-10-24, Nia/S012 — pull + ledger lifecycle):**
+- `sh .context_ledger/core/bin/ledger-sync verify|status` — green; core 2.2.0, source in sync with `TisoneK/context-ledger` (source path `C:/Users/tison/Dev/context-ledger`, commit `c7c7a51`).
+- `sh .context_ledger/core/bin/ledger-gates run pre-commit` — PASSED twice on ledger-only staged trees (Windows, Git Bash `sh` path). Venv: `.venv/Scripts/python.exe` = Python 3.14.2.
+- `ledger-guard status` — all hooks MISSING (pre-commit / prepare-commit-msg / pre-push); gates and surface separation are manual until the operator approves `ledger-guard install`.
