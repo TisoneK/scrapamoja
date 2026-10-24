@@ -170,3 +170,7 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** engine side still owes the local→remote push + `sw retain` against Neon before pruning (ADR-6, their ADR-18). B-2026-10-04-2 (quota-monitor blind spot) re-scoped to low-urgency — scraper no longer writes cloud on this machine. The scheduled jobs will now feed local PG on their 6 h / 30 min cadence; operator to confirm the next scheduled run lands locally.
 - **Notes:** this Mac is geo-restricted — direct feed fetch works, pages do not; cutover doesn't depend on the proxy. Office headcount 10 at check-in (limit 20) — no close needed.
 - **Report:** none
+
+### Follow-up (Zuri/S011) — on-demand full scrape populates today/tomorrow
+- Operator asked whether today's/tomorrow's games were in the DB (they weren't: 0/0; the last scheduled full scrape ran ~1 h before the cutover and its discovery went to the dead Neon). Confirmed the scraper IS running — both launchd jobs loaded; the 30-min `results --auto` runs were already landing in local PG post-cutover (cutover verified on the scheduled path), but `results` only settles finished games and doesn't discover upcoming ones.
+- Ran an on-demand full `scrape betwinner scheduled --sport basketball --direct` (`--direct`, geo-safe). Persisted run 991: 200 events / 232,988 odds / 27,582 markets / 74 with H2H → local Postgres (`remote, mode=auto`). events 2840 → 3040; **today 2026-10-24 = 71 games, tomorrow 2026-10-25 = 19**. The next scheduled 6 h scrape (~11:52 UTC) will refresh again.
