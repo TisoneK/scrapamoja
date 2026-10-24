@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-10-24T06:54:19Z_
+_Regenerated: 2026-10-24T07:10:20Z_
 
 ## Standing params
 - **Core:** 2.2.0 (locked, verified 2026-10-23)
@@ -16,22 +16,21 @@ _Regenerated: 2026-10-24T06:54:19Z_
 
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
-- **Amara** (S008) — Working — Synced this Windows box (DESKTOP-2VPR9IB) to latest main; session startup — awaiting th…
-- **Zuri** (S011) — Working — Engineer: session startup — confirming handoff, awaiting target
+- **Zuri** (S011) — Done — Engineer: DB handoff — local-Postgres cutover (engine HANDOFF 2026-10-24)
 
 ## Current task
-- **—** — none — no session in progress — *idle*
+- **Zuri (S011)** — DB handoff — local-Postgres cutover (engine `HANDOFF-scrapamoja-local-postgres-cutover.md`). DONE + verified. — *done — scraper repointed to `postgresql://bao@localhost:5432/scorewise` via `src/sites/betb2b/.env`; verified 3 scrape_runs + 191 event results written to local PG on 2026-10-24; response written (ADR-7). Awaiting operator's next task.*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-03-1 | **linebet live re-verification with the fixes in place, in a rested window.** The cookie-header fix (`ec05ca0`), the burst-halt (`fb32cd1`/`6fa14bb`) and the pre-harvest grid wait are in but not yet proven end-to-end: tonight's address was rested by the guard after repeated challenges. Run the stored run (`scrape linebet scheduled --sport basketball --timeout 3600`), then a second run with no person present, then watch `python -m src.security status` and the per-skin rows from the Kenya brief's section 7 query. Also re-run **melbet** (its loop run was killed mid-scrape by mistake; earlier data intact). |
-| B-2026-10-04-2 | **Neon hit the ceiling — quota monitor is blind to it.** 2026-10-17 live: writes fail (`DiskFull: project size limit 1024 MB exceeded`) while `quota` reads ~170 MB table sizes / OK — the size sum cannot see the WAL + un-GC'd history Neon counts toward the limit. Retention itself is engine-side now (ADR-6); scraper side: make the quota pass fail loud on a real rolled-back write probe (as `store_fallback._probe_primary_writable` does), not just the size read; keep the mirror + outbox replay (working). Also decide whether per-stat sub-games (~half the requests per event) are worth keeping for every league. |
+| B-2026-10-04-2 | **Quota monitor is blind to the real ceiling (now low-urgency after the local-PG cutover, ADR-7).** The scraper no longer writes Neon on the operator machine (writes go to local Postgres), so the live `DiskFull` incident is resolved for production. Still a latent bug for standalone / `mirror` / `BETB2B_CLOUD_RETENTION=1` use: `quota` sums ~170 MB table sizes and reports OK while a provider refuses writes over cap (the size sum can't see WAL + un-GC'd history). Scraper fix if that mode returns: make the quota pass fail loud on a real rolled-back write probe (as `store_fallback._probe_primary_writable` does), not just the size read. Also still open: decide whether per-stat sub-games (~half the requests per event) are worth keeping for every league. |
 
 _10 medium, 1 low priority row(s) — see tasks/backlog.md_
 
 ## Logs at a glance — open only if your task touches these
 - flaws/log.md (protocol/.context_ledger friction): 2 entries, last added 2026-10-04
 - inefficiencies/log.md (project code/env friction): 4 entries, last added 2026-10-03
-- plans/decisions.md (ADRs in force — respected, not relitigated): 6 entries, last added 2026-10-16
+- plans/decisions.md (ADRs in force — respected, not relitigated): 7 entries, last added 2026-10-24
 
 ## Collaboration
 - 5 event(s) on file; most recent: `20261015T201824Z-Amara-d2a0b7d1.json`

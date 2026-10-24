@@ -53,7 +53,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Achieng | S002 | deepseek/deepseek-flash | Engineer: Windows gate fix + product-tree ledger-vocabulary sweep | Done | Shipped: `tools/gates/pytest.sh` + portable `gates.conf` launcher (`80220d6`, `698d297`) — both gate runners PASS on Windows; tree sweep clean outside the managed entry points |
-| Zuri | S011 | claude-opus-4-8 | Engineer: general sweep (standing target) — discovery + review + fix safe issues | Working | Oriented; baseline next. First focus: B-2026-10-04-2 (quota monitor blind to the real disk ceiling) |
+| Zuri | S011 | claude-opus-4-8 | Engineer: DB handoff — local-Postgres cutover (engine HANDOFF 2026-10-24) | Done | Shipped: scraper repointed off Neon → local Postgres via `src/sites/betb2b/.env`; verified 3 scrape_runs + 191 results written locally (ADR-7, `67e0155`). Awaiting next task |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
