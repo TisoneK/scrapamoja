@@ -53,7 +53,6 @@ is your stable session tag.
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
 | Achieng | S002 | deepseek/deepseek-flash | Engineer: Windows gate fix + product-tree ledger-vocabulary sweep | Done | Shipped: `tools/gates/pytest.sh` + portable `gates.conf` launcher (`80220d6`, `698d297`) — both gate runners PASS on Windows; tree sweep clean outside the managed entry points |
-| Zuri | S011 | claude-opus-4-8 | Engineer: DB cutover + on-demand full scrape to populate today/tomorrow | Done | Shipped: cutover to local PG (ADR-7); scrape run 991 persisted 200 events / 232,988 odds locally — today=71, tomorrow=19 games. Awaiting next task |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
