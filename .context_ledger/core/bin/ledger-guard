@@ -11,9 +11,13 @@
 #   sessions            registered sessions + heartbeat age; roster rows gone stale
 #   heartbeat S<NNN> [Name]
 #                       register / refresh a session (a check-in commit does this)
-#   release S<NNN>      drop a session's heartbeat when you clock out
+#   release S<NNN>      drop a session's heartbeat when you end your session
+#                       (clock out / check out / close out -- same step)
 #   push-check [range]  fail on mixed-surface commits and edited append-only logs
 #                       (the pre-push hook and CI run this)
+#   exit-check          assert the close-out checklist for the acting session
+#                       (session logged, task cleared, row not left Working);
+#                       `ledger-gates run exit` runs this
 #   remind              print the protocol floor + live roster + current task
 #                       (hook: SessionStart / UserPromptSubmit stdout reaches the agent)
 #   tool-check          PreToolUse hook: reads the tool call JSON on stdin; blocks
@@ -40,7 +44,7 @@ case "$LEDGER_NAME" in
 esac
 MEMORY_DIR=$LEDGER_DIR/memory
 
-usage() { sed -n '5,25p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '5,30p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 
 git_p() { git -C "$PROJECT_DIR" "$@"; }
 git_dir() { git_p rev-parse --absolute-git-dir 2>/dev/null; }
@@ -111,7 +115,7 @@ cmd_remind() {
   _r=$MEMORY_DIR/office/agents/roster.md
   if [ -f "$_r" ]; then
     say "Board (rows not Done):"
-    grep -E '^\| *[^|-][^|]*\| *S[0-9]+ ' "$_r" | awk -F'|' '{ gsub(/^ +| +$/, "", $2); gsub(/^ +| +$/, "", $3); gsub(/^ +| +$/, "", $6); gsub(/^ +| +$/, "", $7); if ($6 != "Done") print "  - " $2 " (" $3 ") " $6 ": " substr($7, 1, 100) }'
+    grep -E '^\| *[^|-][^|]*\| *(S[0-9]+|OF[0-9]+SS[0-9]+) ' "$_r" | awk -F'|' '{ gsub(/^ +| +$/, "", $2); gsub(/^ +| +$/, "", $3); gsub(/^ +| +$/, "", $6); gsub(/^ +| +$/, "", $7); if ($6 != "Done") print "  - " $2 " (" $3 ") " $6 ": " substr($7, 1, 100) }'
   fi
   _c=$MEMORY_DIR/office/tasks/current.md
   if [ -f "$_c" ]; then
@@ -119,9 +123,25 @@ cmd_remind() {
     _s=$(sed -n 's/^- \*\*Status:\*\* *//p' "$_c" | tail -n1)
     say "Current task: ${_t:-?} [${_s:-?}]"
   fi
+  # Self-correction surface: put the open flaws and recurring traps in front of
+  # every agent every turn, so the ledger raises them itself instead of waiting
+  # for the supervisor to notice. (ledger-mem resolves its own office dir.)
+  if [ -f "$CORE_DIR/bin/ledger-mem" ]; then
+    _fa=$(sh "$CORE_DIR/bin/ledger-mem" audit --brief 2>/dev/null)
+    [ -n "$_fa" ] && say "$_fa"
+  fi
   _me=$(resolve_session); _rc=$?
   case "$_rc" in
-    0) if [ -n "$_me" ]; then heartbeat_write "$_me"; say "You are: $_me (commits get a Ledger-Session trailer; this prompt refreshed your heartbeat)"
+    0) if [ -n "$_me" ]; then
+         heartbeat_write "$_me"
+         say "You are: $_me (commits get a Ledger-Session trailer; this prompt refreshed your heartbeat)"
+         # Resume-proof exit reminder: if your own row is still open, you owe a
+         # clock-out. This line re-appears every turn — including the first turn
+         # after a resume, when the open-session obligation has dropped out of
+         # context — so the most-forgotten step stops depending on memory.
+         if roster_open_rows | awk -F'|' -v me="$_me" '$2 == me { f = 1 } END { exit !f }'; then
+           say "OPEN SESSION — your row $_me is still live. Before you STOP (easy to miss right after a resume): run the Exit checklist — log agents/sessions.md, clear tasks/current.md, \`ledger-mem prune\`, \`ledger-state generate\` — then CLOCK OUT: remove your roster row + \`ledger-guard release $_me\`. A left-behind live row is the most common flaw."
+         fi
        else say "No session registered in this checkout yet -- your check-in commit registers you."; fi ;;
     1) say "Several sessions are live in this checkout ($(live_sessions | tr '\n' ' ')) and LEDGER_SESSION is not set -- prefix your commits: LEDGER_SESSION=S<NNN> git commit ..." ;;
     *) say "LEDGER_SESSION is set but is not a codename (S<NNN>)." ;;
@@ -145,7 +165,11 @@ sessions_dir() {
   case "$_sc" in /*) ;; *) _sc=$PROJECT_DIR/$_sc ;; esac
   printf '%s/ledger-sessions\n' "$_sc"
 }
-valid_codename() { case "$1" in S[0-9][0-9][0-9]|S[0-9][0-9][0-9][0-9]) return 0 ;; esac; return 1; }
+valid_codename() {
+  # legacy office-local S<NNN>, or structured OF<oo>SS<ss> (office+session,
+  # globally unique). Both are accepted everywhere; cohorts generate the latter.
+  printf '%s' "${1:-}" | grep -Eq '^(S[0-9]{3,4}|OF[0-9]+SS[0-9]+)$'
+}
 now_s() { date +%s; }
 sess_field() { sed -n "s/^$2=//p" "$1" | head -n1 | tr -d '\r'; }
 
@@ -187,7 +211,7 @@ resolve_session() {
 roster_open_rows() { # name|codename|status for every row that is not Done
   _rr=$MEMORY_DIR/office/agents/roster.md
   [ -f "$_rr" ] || return 0
-  grep -E '^\| *[^|-][^|]*\| *S[0-9]+ ' "$_rr" | awk -F'|' '{ for (i = 2; i <= 6; i++) gsub(/^ +| +$/, "", $i); if ($6 != "Done") print $2 "|" $3 "|" $6 }'
+  grep -E '^\| *[^|-][^|]*\| *(S[0-9]+|OF[0-9]+SS[0-9]+) ' "$_rr" | awk -F'|' '{ for (i = 2; i <= 6; i++) gsub(/^ +| +$/, "", $i); if ($6 != "Done") print $2 "|" $3 "|" $6 }'
 }
 
 stale_rows() { # roster rows still open whose registered session has gone quiet
@@ -328,6 +352,21 @@ EOF
     say "NOTICE: $_prod product commit(s) in this push and no session entry (agents/sessions.md) -- fine mid-session; log it before you finish."
   fi
   [ "$_untr" -gt 0 ] && say "NOTICE: $_untr of $_n commit(s) carry no Ledger-Session trailer (committed without the guard hooks installed?)."
+  # End-of-session nudge: push while your own row is still Working. Fine
+  # mid-session; the point is to catch the clock-out you meant to do but didn't
+  # -- the row left Working is the single most common flaw. A notice, never a
+  # block: this runs on every push and must not stand between you and the remote.
+  _me=$(resolve_session 2>/dev/null) || _me=""
+  if [ -n "$_me" ]; then
+    _rst=$(roster_open_rows | awk -F'|' -v me="$_me" '$2 == me { print $3 }')
+    if [ "$_rst" = Working ]; then
+      if [ "$_sess" -eq 1 ]; then
+        say "NOTICE: your roster row $_me is still Working, yet this push logs a session entry -- if you are closing out, finish it: mark the row Done or remove it + \`ledger-guard release $_me\`."
+      else
+        say "NOTICE: your roster row $_me is still Working and no session entry is in this push -- fine mid-session; when you end/close out, run the Exit checklist and clear the row first."
+      fi
+    fi
+  fi
   [ "$_viol" -eq 0 ] && { say "push-check: $_n commit(s) OK"; return 0; }
   err "push-check: $_viol violation(s) in $_n commit(s)"
   return 1
@@ -341,6 +380,53 @@ cmd_push_check() {
     fi
   fi
   push_check "$@"
+}
+
+# ---- exit assertion ---------------------------------------------------------
+# The close-out (a.k.a. clock-out / check-out / end-of-session) checklist, made
+# mechanical. `ledger-gates run exit` calls this; it can also be run by hand. It
+# resolves the acting session, then asserts the three facts an ending shift owes
+# the next worker. It never cares what you *called* the step -- only that it is
+# done. Fails (exit 1) so the exit gate goes red; skips cleanly (exit 0) when it
+# cannot tell who is exiting, so it never blocks a non-ledger or many-session
+# checkout. Severity by intent, not by word:
+#   - a session entry logged for your codename           (missing  -> fail)
+#   - tasks/current.md no longer in-progress              (still so -> fail)
+#   - your roster row not left Working                    (Working  -> fail;
+#     Done, Blocked or removed all pass -- a parked Done row and a blocked
+#     hand-off are legitimate ways to end, not the flaw we are catching)
+cmd_exit_check() {
+  [ -n "$LEDGER_NAME" ] || { say "exit-check: package layout (no ledger surface) -- skipped"; return 0; }
+  _me=$(resolve_session); _rc=$?
+  case "$_rc" in
+    1) say "exit-check: several sessions are live and none is named (LEDGER_SESSION unset) -- cannot tell which is ending; skipped"; return 0 ;;
+    2) err "exit-check: LEDGER_SESSION='${LEDGER_SESSION:-}' is not a codename -- set it to your S<NNN> or OF..SS.. and retry."; return 1 ;;
+  esac
+  [ -n "$_me" ] || { say "exit-check: no session registered in this checkout -- skipped (a check-in commit registers one)"; return 0; }
+  _bad=0
+  _sm=$MEMORY_DIR/office/agents/sessions.md
+  if [ ! -f "$_sm" ] || ! grep -Fq -- "$_me" "$_sm"; then
+    err "exit-check: no session entry for $_me in agents/sessions.md -- log your shift before you close out."
+    _bad=1
+  fi
+  _cm=$MEMORY_DIR/office/tasks/current.md
+  if [ -f "$_cm" ]; then
+    _cs=$(sed -n 's/^- \*\*Status:\*\* *//p' "$_cm" | tail -n1 | tr -d '\r')
+    case "$_cs" in
+      *in-progress*) err "exit-check: tasks/current.md still reads in-progress -- clear it (done/idle) before you close out."; _bad=1 ;;
+    esac
+  fi
+  _rst=$(roster_open_rows | awk -F'|' -v me="$_me" '$2 == me { print $3 }')
+  if [ "$_rst" = Working ]; then
+    err "exit-check: your roster row $_me is still Working -- end the session: mark it Done or remove it + \`ledger-guard release $_me\`."
+    _bad=1
+  fi
+  if [ "$_bad" -ne 0 ]; then
+    err "exit-check: FAILED -- the close-out is not complete for $_me."
+    return 1
+  fi
+  say "exit-check: $_me -- session logged, task cleared, row not left Working. OK"
+  return 0
 }
 
 cmd_git_pre_push() {
@@ -442,6 +528,7 @@ case "$CMD" in
   git-prepare-commit-msg) cmd_git_prepare_commit_msg "$@" ;;
   git-pre-push) cmd_git_pre_push ;;
   push-check) cmd_push_check "$@" ;;
+  exit-check) cmd_exit_check "$@" ;;
   sessions) cmd_sessions ;;
   heartbeat) cmd_heartbeat "$@" ;;
   release) cmd_release "$@" ;;

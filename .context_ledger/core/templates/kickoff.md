@@ -190,6 +190,18 @@ Full rules for names, codenames, roster-edit etiquette, and identity
 "The live office" table and "Office lifecycle" — this file only tells you
 *when*, not *how*; don't re-derive the how here.
 
+**Were you spawned as part of a sibling cohort** (your brief handed you a
+specific codename and a cohort id)? Then do **not** scan for the next free
+number — your parent already reserved it. Find the `Reserved` roster row for
+your codename and **claim it in place**: set your name and Status `Working`
+in that row, don't add a second. If you are the **parent** dispatching a
+wave, reserve the block first with
+`sh .context_ledger/core/bin/ledger-collab cohort open --count N`
+(commit + push the reserved rows and cohort event before spawning anyone),
+and when the wave's branches come back, merge them and run
+`ledger-state reconcile`. Full mechanics: `ledger-schema.md` →
+"Sibling cohorts".
+
 **Office past `office_size` sessions (default 20)?** It's full — close it
 now, as part of check-in, before the deep read:
 `sh .context_ledger/core/bin/ledger-history close` (dry run, then
@@ -263,7 +275,7 @@ sh .context_ledger/core/bin/ledger-gates run exit
 next lifecycle transition; record the exact failing command and output in
 the session notes or event trail. Registry missing? `ledger-gates init`.
 
-### Phase 6 — Exit
+### Phase 6 — Exit (a.k.a. close out / clock out / check out / end the session — the supervisor's word for it does not change the steps)
 
 Not done until:
 
@@ -282,6 +294,14 @@ Not done until:
    isn't over until the user says so; if more work arrives after
    clock-out, check back in first (same name and codename) and extend
    your existing `sessions.md` entry, never open a second one.
+
+Run `ledger-gates run exit` as the last check before the closing commit,
+while your heartbeat is still live so it can tell it is you leaving: its
+`exit-check` asserts items 2, 3 and 6 (session logged, `current.md` not
+in-progress, your roster row not left Working) and fails the gate if the
+close-out is incomplete. Release the heartbeat after the commit. And
+`push-check` (pre-push + CI) warns when you push with your row still
+Working — a backstop, not a substitute for running the gate.
 
 If the user has to remind you to commit or push, that is a protocol
 failure — log it in `memory/office/flaws/log.md`.

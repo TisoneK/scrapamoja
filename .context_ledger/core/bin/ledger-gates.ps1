@@ -283,6 +283,13 @@ function Run-Gate { param([string]$RequestedGate, [string[]]$GateArgs)
     if ($script:ChildExit -ne 0) { $failed = $true }
     if (-not (Run-One 'exit (universal)' 'git diff --check')) { $failed = $true }
     if (-not (Run-ProjectCommands 'exit')) { $failed = $true }
+    # close-out checklist, asserted (session logged, task cleared, row not left
+    # Working). Skips cleanly when it cannot tell who is ending, or without sh.
+    $guardScript = Join-Path $coreDir 'bin/ledger-guard.ps1'
+    if (Test-Path -LiteralPath $guardScript) {
+      Invoke-ChildScript $guardScript @('exit-check')
+      if ($script:ChildExit -ne 0) { $failed = $true }
+    }
     # advisory nudge (never blocks the gate): surface archive-eligible
     # entries at the natural moment instead of only when someone thinks
     # to run it by hand

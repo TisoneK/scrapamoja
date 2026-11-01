@@ -10,6 +10,225 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 2.3.3 — 2026-10-31
+
+**Fix: close the loop so the ledger enforces and notices, instead of the
+human.** Two related gaps, batched (PATCH — hardening existing behavior, not
+a spec change). Both grew out of the same session: the supervisor kept being
+the one to catch the recurring flaw, which is the loop broken.
+
+Exit enforcement (continues 2.3.2's resume-proof reminder):
+
+- `ledger-guard exit-check` — new; `ledger-gates run exit` runs it. It
+  resolves the acting session and asserts the close-out: a session entry is
+  logged for your codename, `tasks/current.md` is no longer in-progress, and
+  your roster row is not left `Working`. `Done`, `Blocked` and a removed row
+  all pass — a parked Done row and a blocked hand-off are legitimate endings,
+  not the flaw. Fails the exit gate when the close-out is incomplete; skips
+  cleanly when it cannot tell who is leaving (several live, or none).
+- `ledger-guard push-check` now warns (never blocks) when you push with your
+  own roster row still `Working` — the pre-push backstop for a forgotten
+  close-out. Runs automatically via the pre-push hook and CI.
+
+Self-correction (the flaw log stops being write-only):
+
+- `ledger-mem audit [--brief]` — new. Surfaces the OPEN flaws and the themes
+  that recur across 3+ open entries (heuristic: a salient term shared across
+  entries), so the system raises "this keeps happening" itself. The per-turn
+  `remind` hook shows `audit --brief`, putting the live traps in front of
+  every agent every turn.
+- Binding Rule 15 ("Notice the system's own faults"): hunt for friction
+  yourself, read the surfaced flaws before repeating one, and promote a
+  recurring trap to a rule/gate/tool-check rather than logging it a fourth
+  time — enforcement beats memory.
+
+Terminology (Rule 14): the protocol floor, kickoff, rule 14 and `ledger-guard`
+now treat "close out / clock out / check out / end the session / wrap up" as
+one action and tell agents to map the supervisor's varied words to the
+protocol step instead of fixating on a fixed phrase.
+
+- sh is the single implementation for `exit-check` and `audit`; the `.ps1`
+  editions delegate to it and skip cleanly without `sh`. Suite 114 → 120.
+- PATCH, backward-compatible, no spec or layout change.
+
+## 2.3.2 — 2026-10-31
+
+**Fix: the ledger reminds you to clock out, instead of trusting you to
+remember.** The Exit checklist / clock-out is the most-forgotten step for
+every agent (`flaws/log.md`, S021) — worst right after a **session resume**,
+when the fact that you even hold an open row has dropped out of context.
+"Session end" is not a git event, so it can't be gated like a commit or a
+push; the reliable lever is resume-proof *reminding*:
+
+- `ledger-guard remind` — the per-turn prompt hook that already survives
+  compaction and fires on the first turn after a resume — now detects that
+  your own roster row is still open (your live session matches a non-`Done`
+  row) and spells out the Exit checklist + the clock-out you owe. So a
+  resumed agent is re-told "you're mid-session" instead of starting blank.
+- A matching line in the `guard-reminder.md` floor (both editions, and the
+  no-`sh` Windows fallback that only prints the floor) carries the same
+  directive statically.
+- PATCH, backward-compatible, no new capability. Complements the existing
+  next-session self-heal (stale-row detection). Still open, not yet built:
+  the `ledger-gates run exit` assertion and a pre-push warning — tracked in
+  `flaws/log.md`.
+
+---
+
+## 2.3.1 — 2026-10-31
+
+**Fixes from a live cohort run + supervisor review — batched into one PATCH
+rather than dripped as separate releases.**
+
+- **Global codenames — fixes the office-local ambiguity.** A codename was
+  office-local `S<NNN>`, which means nothing the moment two offices or two
+  fleet projects are compared (the same `S001` recurs in every office). New
+  sessions and `ledger-collab cohort open` now generate the structured
+  **`OF<oo>SS<ss>`** form — office number (frozen offices in `history/` plus
+  one) + session number — globally unique. Fully backward-compatible: every
+  tool (`ledger-collab`, `ledger-mem`, `ledger-state`, and `ledger-guard` via
+  the sh edition) accepts BOTH forms, legacy rows keep working, nothing
+  migrates. sh + ps1.
+- **Binding Rule 14 (both editions) + a guard-reminder line — "Think past
+  the literal: read intent, don't just execute the words."** With the
+  manager corollary: a parent directing sibling agents gives the goal, the
+  interface and the quality bar — not a procedure — lets the protocol do what
+  it already enforces (agents self-name, check in, run the gates), and
+  supervises for drift instead of dictating or vanishing. Encodes the
+  operating doctrine surfaced across a session of supervisor corrections.
+- Docs: roster header and schema codename definition updated to the
+  structured form; the "Sibling cohorts" section notes the parent-as-manager
+  role and that the parent pre-allocates the **codename** but never the
+  **name** — the agent self-names, because the protocol already enforces it.
+- PATCH, not MINOR: an ambiguity fix plus a conduct rule from a logged
+  pattern, backward-compatible, adding no new user-invoked capability.
+  Rationale: `designs/sibling-cohorts-and-input-comprehension.md` §5.
+
+---
+
+## 2.3.0 — 2026-10-30
+
+**Sibling cohorts: a wave of agents, spawned together, modeled as one.**
+The protocol assumed agents arrive one at a time — scan the board, pick the
+next free codename, first-push-wins settles the rare collision. The
+sibling-agent pattern (one parent fans a multi-item task into N sessions at
+once, each a clone in its own worktree, archived together) breaks that
+assumption deterministically: N siblings scanning the same board collide on
+a codename *every* time (the S016/S017 flaw, N-fold), and their exit
+checklists conflict on the shared logs *every* time. This release makes the
+cohort a first-class thing instead of something each wave improvises around.
+Rationale: `designs/sibling-cohorts-and-input-comprehension.md` §2.
+
+- **Pre-allocated codenames — `ledger-collab cohort`.** New subcommands
+  `open` / `list` / `status`. The parent runs
+  `cohort open --count N [--agent NAME] [--task TEXT]` **once**, before
+  spawning anyone: it reads the board a single time and reserves a
+  contiguous block, writing one `Reserved` roster row per member (visible to
+  any concurrent check-in) plus one immutable `cohort` collaboration event
+  (attribution + the member list), and prints a ready-made spawn brief per
+  member. A sibling then **claims its reserved row in place** at check-in
+  instead of scanning — one allocating write by the parent, so the race is
+  gone. `cohort status` cross-references the roster to show who has claimed,
+  is still reserved, or clocked out.
+- **The bookkeeping-merge step is defined, not improvised — `merge=union` +
+  `ledger-state reconcile`.** The append-only logs (`agents/sessions.md`,
+  `flaws/log.md`, `inefficiencies/log.md`, `plans/decisions.md`) now carry
+  `merge=union` in both the shipped `.gitattributes`
+  (`core/templates/.gitattributes`) and this package's own, so sibling
+  branches that each appended their entries merge **clean** — git keeps both
+  sides, no markers (proven against a control merge). `STATE.md` is a
+  derived view and is never union-merged; new `ledger-state reconcile`
+  regenerates it from the now-merged sources after a cohort merge and flags
+  any file still carrying conflict markers. The whole recipe, which this
+  session had resolved by hand three times across the LocalMind siblings, is
+  now: union the logs (automatic), run `reconcile`.
+- **`cohort` collaboration-event type.** Added to the schema
+  (`collab-event.schema.json`: type enum + a `participants`-required rule)
+  and tolerated by `ledger-collab check` like a note (no refs, no
+  obligations, never gates integration).
+- **Docs:** new "Sibling cohorts" section in `ledger-schema.md`, a cohort
+  note in the kickoff check-in phase, and cohort usage in the collaboration
+  README template.
+- Windows: the `.ps1` ports of both tools carry the full cohort/reconcile
+  logic but are **unrun on this host** (no pwsh on the release machine) —
+  same open Windows-pass caveat as the existing backlog row.
+- MINOR: new tooling + a new schema type; no spec or memory-layout break.
+  Existing projects pick up the union rules by re-copying
+  `core/templates/.gitattributes` into `.context_ledger/.gitattributes`
+  (noted for the migrate path).
+
+---
+
+## 2.2.2 — 2026-10-30
+
+**Input-comprehension floor: read the whole message, enumerate, don't latch.**
+A logged flaw (`office/flaws/log.md`, S021): when the user packs several
+points into one message — especially one ending on a question — attention
+rides recency and the agent acts on the last point, silently dropping the
+rest. The protocol governed what *rules* are collected (kickoff, the STATE
+digest, the per-turn re-injection) but treated the user's own message as
+understood by default. This closes the *intake* half of the decay Priya
+logged (S018): 2.1.0 pushes rules *into* context; nothing pulled the user's
+points back *out*.
+
+- **New binding rule (both protocol editions):** "Read the whole message
+  before you act — enumerate, don't latch." A multi-point message is listed
+  back as a short checklist, each point addressed or explicitly deferred,
+  and the list written into `office/tasks/current.md` so it survives
+  compaction and resume — chat is the most volatile store there is.
+- **New line in `guard-reminder.md`** (the floor `ledger-guard` re-injects
+  every turn): the same directive, so it lands in the attended slot instead
+  of being prose that decays.
+- PATCH: guidance fix for a logged flaw; no new tooling, schema, or
+  template files. Design rationale:
+  `designs/sibling-cohorts-and-input-comprehension.md` §4.
+
+---
+
+## 2.2.1 — 2026-10-27
+
+**Guidance fix: sandbox/ephemeral hosts — what survives a platform reset,
+and how to recover.** Four observed resets on one cloud host produced three
+different survival outcomes, and the protocol carried one now-falsified
+claim in this area: the cloud-agent secrets note said the in-repo secrets
+file "dies with the sandbox", but on hosts that restore workspaces it comes
+back with everything else — non-persistence must never be sold as a safety
+property.
+
+- **New subsection under Git Workflow** ("Sandbox and ephemeral hosts —
+  durability and reset recovery"): the durability law (a push is the only
+  durable write; platform snapshot/restore is best-effort — it may lag,
+  end-of-session work can miss it); secrets on restoring hosts (the
+  untracked placement is leak prevention, not persistence; re-apply
+  `chmod 600` after any platform restore — boot-time permission sweeps
+  have been observed stripping secrets to world-readable; rotate anything
+  that crossed a trust boundary in plaintext); and the five-step
+  reset-recovery runbook (detect and classify → verify against the remote,
+  never against memory → harden → report → resume; re-cloning is normal
+  recovery, logged in the session entry).
+- **Woven into existing sections:** the EXIT checklist now demands a clean
+  working tree (untracked work dies silently at the next reset); the
+  cloud-agent secrets note states the placement is leak-prevention, not a
+  persistence guarantee; the re-check-in rule covers mid-session reset
+  resumption; the worklog scope note ranks it a best-effort cache,
+  authoritative for nothing; Getting Unstuck covers the missing-clone
+  case.
+- **Host-agnostic by design:** no platform-specific names in core — those
+  live in each project's `memory/system/environments.md`. A repo may ship
+  a reset-survival probe as a companion test; the runbook's report step
+  references it if present.
+
+Semver note: shaped as PATCH on purpose — a falsified-claim fix plus
+clarifying wording woven into existing sections; no new roles, pitfalls,
+templates, or schema fields, and no change to the `.context_ledger/` spec
+or memory layout. A secrets-mode guard in `ledger-guard` (warn when a
+secrets file is group/world-readable) was considered and deferred to 2.3.x
+as tooling.
+
+Migration: none; `ledger-sync update` picks it up.
+
+---
+
 ## 2.2.0 — 2026-10-04
 
 **`ledger-guard` finishes the enforcement set from the host-repo audit:

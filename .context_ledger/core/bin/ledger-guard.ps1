@@ -196,6 +196,12 @@ switch ($Command) {
   'remind' { if (Get-Command sh -ErrorAction SilentlyContinue) { & sh (Join-Path $PSScriptRoot 'ledger-guard') remind; exit $LASTEXITCODE } else { [void](Cmd-Remind) } }
   'tool-check' { exit (Cmd-ToolCheck) }
   'git-pre-commit' { exit (Cmd-GitPreCommit) }
+  # exit-check resolves the acting session (sh-only logic). The exit gate runs it, so
+  # without sh it skips cleanly (exit 0) rather than blocking the gate on this host.
+  'exit-check' {
+    if (Get-Command sh -ErrorAction SilentlyContinue) { & sh (Join-Path $PSScriptRoot 'ledger-guard') exit-check @restArgs; exit $LASTEXITCODE }
+    else { Say 'exit-check: needs sh on PATH for session resolution -- skipped'; exit 0 }
+  }
   # Session identity and push-time checks are implemented once, in the sh edition: git runs
   # its hooks with its own sh, so the sh edition must exist and work on every machine anyway.
   { $_ -in @('sessions', 'heartbeat', 'release', 'push-check', 'git-prepare-commit-msg', 'git-pre-push') } {

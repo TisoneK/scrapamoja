@@ -155,7 +155,7 @@ function Check-Roster {
     $cells = $line.Split('|')
     if ($cells.Count -lt 4) { continue }
     $name = $cells[1].Trim(); $code = $cells[2].Trim()
-    if ($code -notmatch '^[Ss][0-9]+$') { continue }
+    if ($code -notmatch '^([Ss][0-9]+|OF[0-9]+SS[0-9]+)$') { continue }
     if ($nseen.ContainsKey($name)) { $nseen[$name]++; $nwhere[$name] += " $ln" } else { $nseen[$name] = 1; $nwhere[$name] = "$ln" }
     if ($cseen.ContainsKey($code)) { $cseen[$code]++; $cwhere[$code] += " $ln" } else { $cseen[$code] = 1; $cwhere[$code] = "$ln" }
     $st = if ($cells.Count -ge 8) { $cells[5].Trim() } else { '' }
@@ -187,13 +187,14 @@ function Check-RosterStale {
     if ($cells.Count -lt 4) { continue }
     $code = $cells[2].Trim()
     if ($code -match '^[Ss]([0-9]+)$') { $nums += $Matches[1] }
+    elseif ($code -match '^OF[0-9]+SS([0-9]+)$') { $nums += $Matches[1] }
   }
   if ($nums.Count -eq 0) { return }
   $heads = @(Get-Content -Encoding UTF8 -LiteralPath $s | Where-Object { $_ -match '^## ' })
   foreach ($num in ($nums | Sort-Object -Unique)) {
     foreach ($h in $heads) {
       if ($h -match ("Session {0}([^0-9]|`$)" -f $num)) {
-        Say ('WARN roster.md: codename S{0} is still on the board, but a Session {0} entry already exists in agents/sessions.md - the session logged itself done without clocking out; remove the row' -f $num)
+        Say ('WARN roster.md: a codename for session {0} is still on the board, but a Session {0} entry already exists in agents/sessions.md - the session logged itself done without clocking out; remove the row' -f $num)
         break
       }
     }
@@ -545,6 +546,13 @@ switch ($Command) {
     if ($RestArgs -contains '-h' -or $RestArgs -contains '--help') { Usage }
     Invoke-Closeout -Confirm:($RestArgs -contains '--confirm')
     exit 0
+  }
+  # audit's flaw-log scan is implemented once, in the sh edition (a single awk
+  # pass): with sh on PATH (Git for Windows ships it) delegate; without it, skip
+  # cleanly so a Windows close-out is never blocked on this surfacing step.
+  'audit' {
+    if (Get-Command sh -ErrorAction SilentlyContinue) { & sh (Join-Path $scriptDir 'ledger-mem') audit @RestArgs; exit $LASTEXITCODE }
+    else { if (-not ($RestArgs -contains '--brief')) { Say 'audit: needs sh on PATH for the flaw-log scan -- skipped' }; exit 0 }
   }
   { $_ -in @('', '-h', '--help', 'help') } { Usage }
   default { Die "unknown command '$Command' (try: ledger-mem.ps1 help)" }

@@ -67,13 +67,17 @@ usage() {
   say "          entry moves mechanically (creates archive.md if needed) —"
   say "          it does NOT do the Recurring roll-up, which needs an"
   say "          agent to compose the consolidated entry."
+  say "  audit   surface the OPEN flaws and the themes that keep recurring, so"
+  say "          the ledger raises 'this keeps happening' itself (the per-turn"
+  say "          remind hook shows 'audit --brief'). Recurrence is heuristic;"
+  say "          confirm, then promote the trap to a rule or gate, don't re-log."
   say "  closeout delete finished backlog items (- [x] tombstones) from the"
   say "          tasks/backlog.md work queue — open work stays. Dry run by"
   say "          default (lists the tombstones); --confirm deletes. Every"
   say "          deleted line stays recoverable in git history; the completion"
   say "          record is the finishing session's entry + commit."
   say ""
-  say "Exit codes: check/lint 0 clean, 1 problem; prune/closeout always 0; 2 usage/error"
+  say "Exit codes: check/lint 0 clean, 1 problem; prune/audit/closeout always 0; 2 usage/error"
   exit 2
 }
 
@@ -150,7 +154,7 @@ check_roster() {
       if (n < 4) next
       name = c[2]; code = c[3]
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", name); gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
-      if (code !~ /^[Ss][0-9]+$/) next
+      if (code !~ /^([Ss][0-9]+|OF[0-9]+SS[0-9]+)$/) next
       nseen[name]++; nwhere[name] = nwhere[name] " " FNR
       cseen[code]++; cwhere[code] = cwhere[code] " " FNR
       st = (n >= 7) ? c[6] : ""
@@ -231,10 +235,11 @@ check_roster_stale() {
       code = c[3]
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
       if (code ~ /^[Ss][0-9]+$/) { sub(/^[Ss]/, "", code); print code }
+      else if (code ~ /^OF[0-9]+SS[0-9]+$/) { sub(/^OF[0-9]+SS/, "", code); print code }
     }
   ' "$_r" | sort -u); do
     if grep -Eq "^## .*Session $_num([^0-9]|$)" "$_s"; then
-      say "WARN roster.md: codename S$_num is still on the board, but a Session $_num entry already exists in agents/sessions.md — the session logged itself done without clocking out; remove the row"
+      say "WARN roster.md: a codename for session $_num is still on the board, but a Session $_num entry already exists in agents/sessions.md — the session logged itself done without clocking out; remove the row"
     fi
   done
   return 0
@@ -568,11 +573,109 @@ lint() {
   return "$_rc"
 }
 
+# audit — make the flaw log self-correcting instead of write-only. It surfaces
+# the OPEN flaws and the themes that keep recurring, so the system raises "this
+# keeps happening" on its own rather than waiting for a human to notice. The
+# per-turn `remind` hook shows `audit --brief`, so every agent sees the live
+# traps every turn. Recurrence is heuristic (a salient term shared across 3+
+# open entries) — it points; the agent confirms and then promotes the trap to a
+# rule or a gate (the real fix) instead of re-logging it a fourth time.
+audit() {
+  _brief=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --brief) _brief=1; shift ;;
+      -h|--help) usage ;;
+      *) die "unknown argument '$1'" ;;
+    esac
+  done
+  _f=$OFFICE_DIR/flaws/log.md
+  [ -f "$_f" ] || { [ "$_brief" -eq 1 ] || say "audit: no flaws log yet."; return 0; }
+  awk -v brief="$_brief" '
+    function norm(s){ s = tolower(s); gsub(/`/, "", s); return s }
+    function flush(   i, n, w, t) {
+      if (!inseg) return
+      total++
+      if (!closed) {
+        openN++; oidx++; ohead[oidx] = heading; oflaw[oidx] = flaw1
+        n = split(norm(ftext), w, /[^a-z0-9._-]+/)
+        for (t in seenterm) delete seenterm[t]
+        for (i = 1; i <= n; i++) {
+          t = w[i]; sub(/^[._-]+/, "", t); sub(/[._-]+$/, "", t)
+          if (length(t) < 6 || (t in STOP) || (t in seenterm)) continue
+          seenterm[t] = 1; termcnt[t]++
+        }
+      }
+      inseg = 0; ftext = ""; flaw1 = ""
+    }
+    BEGIN {
+      # ubiquitous words carry no theme: English function words + the ledger
+      # vocabulary that appears in nearly every entry. Dropped so the signal
+      # that surfaces is the actual trap (clock-out, current.md, staging...).
+      split("about after before while during because through against between within without across again once only also just very there here into down over under where which what when whom whose would should could might must have been being itself other some such then them their your ours only still always never every each both more most many much what", sw, " ")
+      for (i in sw) STOP[sw[i]] = 1
+      # the ubiquitous ledger vocabulary carries no theme of its own — it is in
+      # nearly every entry, so without this it always "recurs". Theme = the
+      # specific trap, not the words the whole log is written in.
+      split("flaw flaws protocol package ledger context memory office session sessions agent agents entry entries conduct thing things nothing something instead really actually matter number people happen happened happens commit commits committed push pushed change changes changed checkout check checked found named naming release released event events state states status report reported mode step steps rule rules worked working", dw, " ")
+      for (i in dw) STOP[dw[i]] = 1
+    }
+    /^<!--/ { if (!inseg) { intpl = ($0 ~ /-->/) ? 0 : 1; next } }
+    intpl { if ($0 ~ /-->/) intpl = 0; next }
+    /^## / { flush(); inseg = 1; closed = 0; heading = $0; ftext = ""; flaw1 = ""; next }
+    inseg && /\*\*Status:\*\*/ && /RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)/ { closed = 1 }
+    inseg && /\*\*Fixed in package:\*\*/ { closed = 1 }
+    inseg && /\*\*(Flaw|Problem):\*\*/ {
+      t = $0; sub(/.*\*\*(Flaw|Problem):\*\*[[:space:]]*/, "", t)
+      ftext = ftext " " t; if (flaw1 == "") flaw1 = t
+    }
+    inseg && /\*\*Root cause:\*\*/ { t = $0; sub(/.*\*\*Root cause:\*\*[[:space:]]*/, "", t); ftext = ftext " " t }
+    END {
+      flush()
+      # pick the top themes by count (3+ open entries), most frequent first and
+      # capped, so the surface stays a sharp hint and never the noise a full
+      # term dump would be. Term-frequency is a rough signal, labelled as such.
+      ntop = 0; cap = (brief == 1) ? 2 : 5
+      for (;;) {
+        best = ""; bestc = 2
+        for (t in termcnt) if (!(t in picked) && termcnt[t] > bestc) { best = t; bestc = termcnt[t] }
+        if (best == "") break
+        picked[best] = 1; ntop++; topt[ntop] = best; topc[ntop] = bestc
+        if (ntop >= cap) break
+      }
+      if (brief == 1) {
+        if (openN == 0 && ntop == 0) exit 0
+        printf "Open flaws (self-audit — did you repeat one? log new ones unprompted): %d", openN
+        if (ntop > 0) {
+          printf " | recurring, promote to a rule/gate: "
+          for (i = 1; i <= ntop; i++) printf "%s%s (%d)", (i > 1 ? ", " : ""), topt[i], topc[i]
+        }
+        printf "\n"
+        exit 0
+      }
+      printf "Flaws audit: %d entr%s, %d open.\n", total, (total == 1 ? "y" : "ies"), openN
+      if (openN > 0) {
+        printf "Open flaws (most recent first):\n"
+        stop = oidx - 2; if (stop < 1) stop = 1
+        for (i = oidx; i >= stop; i--) printf "  - %s\n      %.100s\n", ohead[i], oflaw[i]
+      }
+      if (ntop > 0) {
+        printf "Recurring themes (rough term-frequency hint, top %d — confirm, then promote to a rule/gate or roll up, do not re-log):\n", ntop
+        for (i = 1; i <= ntop; i++) printf "  * \"%s\" in %d open entries\n", topt[i], topc[i]
+      } else if (openN > 0) {
+        printf "No single term recurs across 3+ open entries.\n"
+      }
+      exit 0
+    }
+  ' "$_f"
+}
+
 CMD=${1:-}; [ $# -gt 0 ] && shift
 case "$CMD" in
   check) check "$@" ;;
   lint)  lint "$@" ;;
   prune) prune "$@" ;;
+  audit) audit "$@" ;;
   closeout) closeout "$@" ;;
   ''|-h|--help|help) usage ;;
   *) die "unknown command '$CMD' (try: ledger-mem help)" ;;
