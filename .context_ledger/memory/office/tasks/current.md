@@ -6,6 +6,9 @@ you find a stale in-progress entry here, a prior session died mid-task —
 its roster row (if left behind) says who was here; check the session
 entry and backlog before starting.
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** Tariq (S014)
+- **Task:** Investigate operator report "the grader is a bit behind / not efficient" — scraper-side (the results pass that feeds the engine's grader). Open points from this turn:
+  1. (done) Explain why Phase 1 sync was skipped.
+  2. (done) Log the skipped-sync flaw so it can be fixed upstream — flaws/log.md 2026-11-01.
+  3. (in progress) Diagnose the grader lag with evidence — launchd jobs, scrape/results logs, local Postgres results freshness.
+- **Status:** in-progress
