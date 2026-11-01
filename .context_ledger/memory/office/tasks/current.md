@@ -10,5 +10,7 @@ entry and backlog before starting.
 - **Task:** Investigate operator report "the grader is a bit behind / not efficient" — scraper-side (the results pass that feeds the engine's grader). Open points from this turn:
   1. (done) Explain why Phase 1 sync was skipped.
   2. (done) Log the skipped-sync flaw so it can be fixed upstream — flaws/log.md 2026-11-01.
-  3. (in progress) Diagnose the grader lag with evidence — launchd jobs, scrape/results logs, local Postgres results freshness.
-- **Status:** in-progress
+  3. (done) Diagnose the grader lag with evidence — review at reviews/2026-11-01-review.md.
+  4. (done) Fix the results-pass inefficiency — age-scaled re-ask backoff (commit bbc2878).
+  5. (done) DB reset to clean slate — ADR-8. Local Postgres only; events 5,559 → 496 (today 295 + future 201); ~8.8M historical rows deleted; backup at output/db-backup-20261101/; jobs restarted; VACUUM run.
+- **Status:** all requested work done (grader diagnosis + results backoff fix + data reset); session open pending operator release / any follow-up.
