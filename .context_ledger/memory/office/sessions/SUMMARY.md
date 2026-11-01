@@ -35,3 +35,4 @@ records.
   First pass skipped the protocol (stale sibling source, no gates, no reads); redone properly after two corrections.
   Detail: reviews/2026-10-03-review.md.
 - 2026-10-03 — Achieng (S002) — deepseek/deepseek-flash — fixed the Windows gate trap (portable launcher via a git alias; both runners PASS) and swept the product tree for ledger vocabulary (none outside the managed entry points).
+- 2026-11-01 — Tariq (S014) — claude-opus-4-8 — diagnosed the grader lag as engine-side cadence (scraper current); shipped an age-scaled results re-ask backoff (`bbc2878`); reset local Postgres to a clean slate from 2026-11-01 (ADR-8, events 5,559→496, ~8.8M rows deleted, backup kept). Detail: reviews/2026-11-01-review.md.
