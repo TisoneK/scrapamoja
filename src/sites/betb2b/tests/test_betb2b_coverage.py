@@ -409,6 +409,44 @@ def test_a_recent_unresolved_match_is_still_asked(conn):
     assert store.events_needing_results(conn) == [("E1", None)]
 
 
+def test_result_backoff_skip_predicate():
+    """Fresh matches are never throttled; the stale tail backs off by age-scaled
+    window; only a recent ``not_offered`` probe throttles."""
+    now = datetime.now(timezone.utc)
+    fresh = now - timedelta(hours=12)      # inside the fresh window
+    mid = now - timedelta(hours=48)        # 1-3 days -> hourly re-ask
+    old = now - timedelta(days=5)          # >3 days -> few-hourly re-ask
+    ago = lambda h: now - timedelta(hours=h)  # noqa: E731
+    # fresh: asked every run even just after a no-data probe
+    assert store._result_backoff_skip(fresh, "not_offered", ago(0.01), now) is False
+    # 1-3 days: throttled within the hour, asked again after it
+    assert store._result_backoff_skip(mid, "not_offered", ago(0.5), now) is True
+    assert store._result_backoff_skip(mid, "not_offered", ago(2), now) is False
+    # >3 days: throttled within ~6h, asked again after it
+    assert store._result_backoff_skip(old, "not_offered", ago(2), now) is True
+    assert store._result_backoff_skip(old, "not_offered", ago(7), now) is False
+    # no probe, or a non-"no-data" status, never throttles a still-open match
+    assert store._result_backoff_skip(old, None, None, now) is False
+    assert store._result_backoff_skip(old, "offered", now, now) is False
+    assert store._result_backoff_skip(None, "not_offered", now, now) is False
+
+
+def test_results_pass_backs_off_a_stale_no_data_match(conn):
+    """A finished match the source has no result for is asked once, then skipped
+    for its backoff window, then asked again once the window passes."""
+    old = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+    store.persist_result(_result("2026-10-03T10:00:00+00:00", start=old), conn=conn)
+    assert store.events_needing_results(conn) == [("E1", None)]           # no probe yet -> asked
+    run = store.begin_backfill_run(conn, "linebet", "results")
+    assert store.record_results_no_data(conn, run, ["E1"], "linebet") == 1
+    assert store.events_needing_results(conn) == []                        # just probed, >3d -> backed off
+    stale_probe = (datetime.now(timezone.utc) - timedelta(hours=7)).isoformat()
+    store.record_results_no_data(conn, run, ["E1"], "linebet", at=stale_probe)
+    assert store.events_needing_results(conn) == [("E1", None)]            # window passed -> asked again
+    # still never marked given-up: it stays open (result_status NULL), unlike the 7-day path
+    assert _q(conn, "SELECT result_status FROM events")[0][0] is None
+
+
 def test_finished_matches_without_period_scores_are_queued_once(conn):
     store.persist_result(_result("2026-10-03T10:00:00+00:00"), conn=conn)
     assert store.events_missing_period_scores(conn) == []                    # not finished yet

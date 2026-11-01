@@ -1741,23 +1741,80 @@ def record_h2h(conn, run_id: int, event_id: str, skin: str, h2h: Optional[Dict[s
     conn.commit()
 
 
+# Results re-ask backoff: a finished match the source has not scored yet answers
+# "no data" (204) on every probe. Without a throttle the results pass re-asks the
+# whole unresolved backlog every run (~30 min) until the 7-day give-up — hundreds
+# of 204s per run for a handful of fills, against the "be gentle with the
+# endpoints" rule. The backoff is scaled by how long ago the match started so the
+# tier that matters for grading is never slowed: fresh matches keep full cadence;
+# only the stale tail that the source has no data for yet is asked less often.
+RESULT_FRESH_WINDOW_H = 24.0   # younger than this: ask every run, never throttle
+RESULT_RETRY_RECENT_H = 1.0    # 1-3 days old: re-ask at most hourly
+RESULT_RETRY_OLD_H = 6.0       # older than 3 days: re-ask every few hours
+
+
+def _result_backoff_skip(start_dt, cov_status, cov_when, now) -> bool:
+    """True if a still-unresolved match should be skipped THIS run: it is past the
+    fresh window and was probed within its tier's window with the source still
+    answering "no result yet" (``not_offered``). Matches younger than
+    ``RESULT_FRESH_WINDOW_H``, and matches with no recent ``not_offered`` probe,
+    are never skipped — so a match never gets scored later than it would have."""
+    if start_dt is None:
+        return False
+    age_h = (now - start_dt).total_seconds() / 3600.0
+    if age_h < RESULT_FRESH_WINDOW_H:
+        return False
+    if cov_status != "not_offered" or cov_when is None:
+        return False
+    window_h = RESULT_RETRY_RECENT_H if age_h < 72.0 else RESULT_RETRY_OLD_H
+    return (now - cov_when).total_seconds() < window_h * 3600.0
+
+
+def _latest_result_coverage(conn, event_ids) -> Dict[str, tuple]:
+    """``{event_id: (status, captured_at)}`` — the latest ``result`` coverage row
+    per event, for the re-ask backoff. Portable across both backends."""
+    out: Dict[str, tuple] = {}
+    ids = [str(e) for e in event_ids]
+    for i in range(0, len(ids), 400):
+        chunk = ids[i:i + 400]
+        ph = ",".join(f":p{n}" for n in range(len(chunk)))
+        params = {f"p{n}": v for n, v in enumerate(chunk)}
+        rows = _run_sql(conn,
+            f"SELECT c.event_id, c.status, c.captured_at FROM coverage c "
+            f"JOIN (SELECT event_id, MAX(id) mid FROM coverage "
+            f"WHERE dataset = 'result' AND event_id IN ({ph}) GROUP BY event_id) m "
+            f"ON c.id = m.mid", params).fetchall()
+        for eid, status, at in rows:
+            out[eid] = (status, _parse_ts(at))
+    return out
+
+
 def events_needing_results(conn, *, min_age_seconds: float = 9000.0, limit: int = 200):
     """(event_id, stat_game_id) for real matches past ``min_age`` (default 2.5h)
-    with no result yet — the results pass's work list. Oldest first. Simulated "Alternative Matches"
-    leagues are left out (the source never resolves them)."""
-    if _is_orm(conn):
-        from . import store_orm
-        return store_orm.events_needing_results(conn, min_age_seconds=min_age_seconds, limit=limit)
-    from datetime import timedelta
-    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=min_age_seconds)).isoformat()
-    rows = conn.execute(
-        "SELECT e.event_id, e.stat_game_id FROM events e "
-        "WHERE e.away_team_id IS NOT NULL AND e.start_time IS NOT NULL AND e.start_time < ? "
-        "AND e.result_status IS NULL AND e.is_alternative = 0 "
-        "ORDER BY e.start_time LIMIT ?",
-        (cutoff, limit),
-    ).fetchall()
-    return [(r["event_id"], r["stat_game_id"]) for r in rows]
+    with no result yet — the results pass's work list, oldest first. Simulated
+    "Alternative Matches" leagues are left out (the source never resolves them).
+    A match the source has already answered "no result yet" for gets an age-scaled
+    re-ask backoff (:func:`_result_backoff_skip`) so the stale tail is not re-probed
+    every run; fresh matches are never throttled."""
+    now = datetime.now(timezone.utc)
+    cutoff = _ts_for(conn, (now - timedelta(seconds=min_age_seconds)).isoformat())
+    cands = _run_sql(conn,
+        "SELECT event_id, stat_game_id, start_time FROM events "
+        "WHERE away_team_id IS NOT NULL AND start_time IS NOT NULL AND start_time < :c "
+        "AND result_status IS NULL AND COALESCE(is_alternative, FALSE) = FALSE "
+        "ORDER BY start_time", {"c": cutoff}).fetchall()
+    if not cands:
+        return []
+    last = _latest_result_coverage(conn, [r[0] for r in cands])
+    out = []
+    for eid, sid, st in cands:
+        cov_status, cov_when = last.get(eid) or (None, None)
+        if _result_backoff_skip(_parse_ts(st), cov_status, cov_when, now):
+            continue
+        out.append((eid, sid))
+        if len(out) >= limit:
+            break
+    return out
 
 
 def events_by_ids(conn, event_ids):
@@ -1796,6 +1853,24 @@ def record_coverage(conn, run_id: int, event_id: str, skin: str, dataset: str,
                    "VALUES (:r, :e, :s, :d, NULL, NULL, :st, :at)",
              {"r": run_id, "e": event_id, "s": skin, "d": dataset, "st": status, "at": _ts_for(conn, at)})
     conn.commit()
+
+
+def record_results_no_data(conn, run_id: int, event_ids, skin: str, *, at: Optional[str] = None) -> int:
+    """Throttle marker for the results re-ask backoff: the source still had no
+    result for these finished matches this run. One ``result``/``not_offered``
+    coverage row each (``events_needing_results`` reads the latest to decide when
+    to ask again). The 7-day ``give_up_results`` writes the same row but also sets
+    ``result_status = -1``; these do not — the match is still open, just not re-probed
+    for a while. Returns rows written."""
+    when = _ts_for(conn, at)
+    rows = [{"r": run_id, "e": str(e), "s": skin, "st": "not_offered", "at": when}
+            for e in event_ids]
+    if not rows:
+        return 0
+    _run_many(conn, "INSERT INTO coverage (run_id, event_id, skin, dataset, subject, period, status, captured_at) "
+                    "VALUES (:r, :e, :s, 'result', NULL, NULL, :st, :at)", rows)
+    conn.commit()
+    return len(rows)
 
 
 def record_period_results(conn, run_id: int, event_id: str, skin: str,

@@ -347,6 +347,7 @@ async def _record_pending_results(scraper, db_target: str, skin_name: str, pendi
     at = datetime.now(timezone.utc).isoformat()
     conn = store.init_db(db_target)
     periods = 0
+    got = {eid for eid, _ in out}
     try:
         with store.batched(conn):
             rid = None
@@ -361,6 +362,14 @@ async def _record_pending_results(scraper, db_target: str, skin_name: str, pendi
                     periods += store.record_period_results(
                         conn, rid, eid, skin_name, res.get("periods") or [], at=at)
                     store.record_coverage(conn, rid, eid, skin_name, "result", "offered", at=at)
+            # The source answered "no result yet" (204) for these. Mark them so the
+            # re-ask backoff stops re-probing the stale tail every run. Skip when a
+            # block halted the batch — a block is not "no data".
+            no_data = [] if halted else [e for e, _ in pending if e not in got]
+            if no_data:
+                if rid is None:
+                    rid = store.begin_backfill_run(conn, skin_name, "results", at=at)
+                store.record_results_no_data(conn, rid, no_data, skin_name, at=at)
     finally:
         conn.close()
     done = sum(1 for _, r in out if r.get("status") == 3)

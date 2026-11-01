@@ -220,6 +220,13 @@ class BetB2BScheduler:
                     winner=res.get("winner"), status=res.get("status"), at=at)
                 if res.get("status") == 3:
                     finished += 1
+            # "no result yet" matches: mark them so the re-ask backoff throttles
+            # the stale tail instead of re-probing it every run.
+            got = {eid for eid, _ in out}
+            no_data = [e for e, _ in pending if e not in got]
+            if no_data:
+                rid = store.begin_backfill_run(conn, self.skin_name, "results", at=at)
+                store.record_results_no_data(conn, rid, no_data, self.skin_name, at=at)
         finally:
             conn.close()
         logger.info("results: %d pending → %d checked → %d finished captured",
