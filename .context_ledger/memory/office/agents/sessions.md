@@ -200,3 +200,15 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Flaw logged:** Phase 1 Sync skipped at entry — root cause: the loud "check in before the deep read" guidance crowded out the quiet Phase-1-before-Phase-2 ordering (flaws/log.md 2026-11-01, open, with an upstream fix suggestion).
 - **Notes:** this Mac is geo-restricted (direct feed only). Office headcount 2 live at check-in (limit 20) — no close needed.
 - **Report:** none
+
+---
+## 2026-11-26 — Session 15 (Baraka/S015)
+- **Agent:** Baraka (S015) | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** engineer | **Core:** 2.5.0
+- **Task:** operator: "Sync protocol" → run the entry/sync sequence.
+- **Commits:** ledger only — `53d84ce` core 2.3.3→2.5.0, `9b0d85d` check-in, `5f42c56` STATE regen, + this clock-out. No product code.
+- **Outcome:** done. Phase 0 remote confirmed; Phase 1 `git pull` already current, `ledger-sync verify` OK, core migrated 2.3.3→2.5.0 (upstream in-sync, same-MAJOR safe); checked in, STATE regen; oriented (office idle). Pre-commit gate green on every commit.
+- **Core 2.5.0 note:** new `ledger-guard sweep`/`stale-rows` (cross-checkout committed signal, row horizon 72h) wired into exit+checkpoint gates; 2.4.0 floor enforcement + aggressive prune + codename-form check. `stale-rows` reports none; stale `Achieng (S002)` row is `Done` (not an abandoned Working session) so the sweep leaves it, and 2.5.0 forbids hand-editing a peer row — left in place.
+- **Flaw logged:** `ledger-mem prune` over-flags mixed open+fixed dated blocks as closed; exit gate's auto `prune --apply` would bury open flaws (flaws/log.md 2026-11-26, open). Worked around: declined to archive, ran the Exit checklist by hand instead of `ledger-gates run exit`.
+- **Open items:** none new beyond that flaw. Prior open items unchanged (grader cadence engine-side, Neon divergence, FK-child indexes B-2026-11-01-1, `~/ScoreWise` Oct zips + `build/`/`output/` scratch pending operator `rm`). Top backlog B-2026-10-03-1 (linebet live re-verify) still needs a non-geo-restricted machine.
+- **Notes:** geo-restricted Mac. Office headcount 1 live at check-in (Achieng Done) — no close needed.
+- **Report:** none

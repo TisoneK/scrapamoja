@@ -68,3 +68,12 @@ names them), and roll-up candidates.
   3. Optional mechanical backstop (fits 2.3.3's loop-closing theme): the check-in commit's `prepare-commit-msg`/`pre-commit` path could note when `core.lock`'s last `ledger-sync status` is older than this session / absent, i.e. a check-in landing with no sync recorded this session — a warning, like `push-check`'s Working-row warning, so the ledger catches the skip, not the supervisor (Rule 15).
 - **Status:** open — remediated in-session (Phase 1 run late: pull was a no-op fast-forward, core updated 2.2.0 → 2.3.3, `verify` green); protocol-level fix open (core package).
 
+---
+## 2026-11-26 — Baraka (S015) / claude-opus-4-8 (Session 15)
+
+- **Flaw:** `ledger-mem prune` over-flags a dated block holding mixed open+fixed sub-entries as fully closed. Since the exit gate auto-runs `prune --apply` (2.4.0), a routine close-out would silently archive OPEN flaws out of the startup read.
+- **Symptom:** `prune --list` flagged `2026-10-03 Noor (S1)` and `2026-10-04 Imani (S5)` archive-eligible, but each holds a live open sub-flaw (Noor: migration-from-memory / `ledger-sync status` sibling-clone staleness, `Status: open`; Imani: item (2) close-under-live-row, "protocol-level fix open").
+- **Root cause:** `prune_apply_one` (ledger-mem ~L332) sets `closed=1` on ANY `**Status:**` line matching `fixed|resolved|…`; the open-guard only excludes `still open|partly|partial|unverified`, so bare `open` / `fix open` on an earlier sub-entry is missed and one `fixed` line closes the whole multi-flaw block.
+- **Suggested fix:** (a) add bare `\bopen\b` to the open-guard; (b) require ALL Status lines in a block closed, not ANY; (c) make the exit gate's `prune --apply` warn-only (no auto-move) unless every Status line is resolved.
+- **Status:** open — worked around: declined to archive, left `flaws/log.md` intact, ran manual Exit checklist instead of `ledger-gates run exit` to avoid the auto-archive.
+
