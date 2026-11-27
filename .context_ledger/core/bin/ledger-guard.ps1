@@ -24,7 +24,7 @@ function Err { param([string]$Message) [Console]::Error.WriteLine("ledger-guard:
 function Die { param([string]$Message) Err $Message; exit 2 }
 function Usage {
   @('Commands:', '  install [--force] [--ci]', '  status', '  remind', '  tool-check', '  git-pre-commit',
-    '  sessions | heartbeat S<NNN> [Name] | release S<NNN> | push-check [range]   (run through the sh edition)') | ForEach-Object { Say $_ }
+    '  sessions | stale-rows | sweep [--apply] | heartbeat S<NNN> [Name] | release S<NNN> | push-check [range]   (run through the sh edition)') | ForEach-Object { Say $_ }
   exit 2
 }
 
@@ -204,7 +204,7 @@ switch ($Command) {
   }
   # Session identity and push-time checks are implemented once, in the sh edition: git runs
   # its hooks with its own sh, so the sh edition must exist and work on every machine anyway.
-  { $_ -in @('sessions', 'heartbeat', 'release', 'push-check', 'git-prepare-commit-msg', 'git-pre-push') } {
+  { $_ -in @('sessions', 'stale-rows', 'sweep', 'heartbeat', 'release', 'push-check', 'git-prepare-commit-msg', 'git-pre-push') } {
     if (-not (Get-Command sh -ErrorAction SilentlyContinue)) { Die "'$Command' needs sh on PATH (Git for Windows provides it)" }
     & sh (Join-Path $PSScriptRoot 'ledger-guard') $Command @restArgs
     exit $LASTEXITCODE

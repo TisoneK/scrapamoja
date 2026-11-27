@@ -343,9 +343,11 @@ read stays cheap:
   no block to `flaws/log.md` or `inefficiencies/log.md` — "none this
   session" entries are noise, not history. The session's honesty lives
   in its `agents/sessions.md` entry; only real friction earns a block.
-- **Closed entries move verbatim to the archive.** Once an entry is
-  explicitly marked `RESOLVED` / `superseded` / fixed, it is cold
-  history: cut it unchanged into the log's companion archive
+- **Closed entries move verbatim to the archive.** Once an entry's own
+  `**Status:**` line carries a closed marker — `resolved` / `superseded` /
+  `closed` / `retired` / `fixed` / `no longer`, matched case-insensitively,
+  with no `partly` / `partial` / `still open` / `unverified` tail that keeps
+  it live — it is cold history: cut it unchanged into the log's companion archive
   (`flaws/archive.md`, `inefficiencies/archive.md`, `plans/archive.md`).
   Startup reads only the active log; the archive stays in git,
   grep-able. `ledger-mem prune --apply` performs this move mechanically
@@ -375,9 +377,10 @@ read stays cheap:
   `inefficiencies_cap` in `workflows/history.conf` (default 15 each) are
   hygiene nudges, not hard limits — `ledger-mem check` warns past them,
   pointing at `prune`/`prune --apply`; an unresolved entry is never
-  pruned regardless of count. `ledger-gates run exit` also calls
-  `ledger-mem prune` (report mode) so the nudge surfaces at the natural
-  moment, not only when someone thinks to run it by hand.
+  pruned regardless of count. `ledger-gates run exit` calls
+  `ledger-mem prune --apply` so closed entries are archived automatically at
+  the natural moment (verbatim, reversible in git) — the durable logs never
+  accumulate cold closed entries; only the roll-up stays a manual judgment call.
 
 `ledger-mem prune` reports each log's size, the archive-eligible
 entries (`--list` names them), and roll-up candidates. `ledger-mem prune
@@ -386,6 +389,27 @@ roll-up) mechanically, creating the companion `archive.md` with a header
 if it doesn't exist yet; every moved line survives unchanged in the
 archive and in git history. Compaction relocates; it never rewrites or
 deletes context.
+
+### Write for an LLM, not a human
+
+The only reader of this memory is the next agent. Optimize every written
+entry for the fewest tokens that stay unambiguous, not for prose polish:
+
+- **Points, not paragraphs.** Session entries, flaw/inefficiency/decision
+  blocks, roster detail, task lines, reports — bullets and sentence
+  fragments, one fact per line. Drop narrative connective tissue ("after
+  investigating, it turned out that…"); state the fact. A reader that is an
+  LLM loses nothing and every startup read pays less.
+- **No ceremony restated.** Don't re-explain the protocol, re-justify a
+  routine choice, or recap what the template already says. Link, don't
+  repeat (`see [[ADR-9]]`, "per S014").
+- **Terse is not lossy.** Keep the specifics that a future agent acts on —
+  commit SHAs, file paths, exact failing commands, the open thread — and
+  cut only the words around them. A closed flaw/decision still needs its
+  `resolved`/`fixed`/`closed` Status line so prune can retire it.
+
+This rule is why the floor re-injects it every turn: prose creeps back one
+comfortable session at a time, and the token cost compounds on every reader.
 
 ### Reading order (session start)
 
@@ -452,7 +476,17 @@ shift, clock-out closes it). Each agent presents itself by that name in
 events and to the supervisor, and
 name + codename are each unique in the office. `ledger-mem check` flags a
 duplicate and warns when a session entry was logged while a row still
-claimed the office (a forgotten clock-out). The roster is never reset or
+claimed the office (a forgotten clock-out). A row left open past the
+staleness horizon (`row_stale_hours`, default 72h, with no committed
+`Ledger-Session` activity for its codename) is an abandoned session, not
+a live peer: `ledger-guard sweep` — run automatically by the exit gate —
+retires the row and logs the sweep to `agents/sessions.md`. That
+staleness is read from committed history, so it is visible from **every**
+checkout, unlike the per-checkout heartbeat; a row left by a session on
+another machine therefore no longer lingers forever, read by newcomers as
+a live peer. The committed signal is also why a sweep (not a hand edit) is
+the one sanctioned way to clear a row that is not your own — evidence, not
+a guess. The roster is never reset or
 trimmed — the whole office is frozen with it intact at close.
 
 An office moves through three zones, and only the live one is read at session

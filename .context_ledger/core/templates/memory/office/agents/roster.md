@@ -11,7 +11,7 @@ see an empty board and collide on codenames. Push the check-in (its own
 `chore(ledger):` commit) before any product work; if the push forces a
 rebase, a peer checked in concurrently — re-read the board. Your codename
 is claimed by your push: the earlier commit keeps a colliding number —
-fix your own row to the next free codename, never drop a peer's row.
+fix your own row to the next free codename, never drop a live peer's row.
 
 **Pick a real name you like when you start** — any human name (John, Ada,
 Kwame, Mei, …) — and add your row. **Not your own model or product name,
@@ -78,8 +78,15 @@ history (the check-in commit opens your shift, the clock-out commit
 closes it). Until you actually leave, a finished session stays on the
 board as `Done` + what shipped — exactly what the next worker needs to
 see. A row left behind after you leave sends the next agent hunting for
-a peer who has gone. `ledger-mem check` flags a duplicate name or
-codename, and warns when a session entry was logged while your row
+a peer who has gone — so the ledger retires it for you. A row open past
+the staleness horizon (no committed activity for `row_stale_hours`,
+default 72h, measured by its `Ledger-Session` trailer date) is an
+abandoned session, not a live peer; `ledger-guard sweep --apply` removes
+it and logs the sweep, and the exit gate runs it automatically. That
+signal is committed, cross-checkout evidence — not a guess — which is why
+the sweep is the one sanctioned way to clear a row that is not your own.
+Never hand-edit a *live* peer's row. `ledger-mem check` flags a duplicate
+name or codename, and warns when a session entry was logged while your row
 still claimed the office. This roster is the **current office's** only —
 it is never reset or trimmed: when the office fills up, `ledger-history
 close` freezes this whole directory verbatim into `.context_ledger/history/`

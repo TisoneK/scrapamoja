@@ -9,6 +9,10 @@
 #                       .github/workflows/ledger-guard.yml
 #   status              show what is installed and the gate-pass state of the index
 #   sessions            registered sessions + heartbeat age; roster rows gone stale
+#   stale-rows          report open roster rows past the staleness horizon
+#                       (committed Ledger-Session trailer date -- cross-checkout)
+#   sweep [--apply]     retire stale rows (dry run by default): remove the row +
+#                       log it to agents/sessions.md; the exit gate runs --apply
 #   heartbeat S<NNN> [Name]
 #                       register / refresh a session (a check-in commit does this)
 #   release S<NNN>      drop a session's heartbeat when you end your session
@@ -44,7 +48,7 @@ case "$LEDGER_NAME" in
 esac
 MEMORY_DIR=$LEDGER_DIR/memory
 
-usage() { sed -n '5,30p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '5,33p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 
 git_p() { git -C "$PROJECT_DIR" "$@"; }
 git_dir() { git_p rev-parse --absolute-git-dir 2>/dev/null; }
@@ -160,6 +164,19 @@ cmd_remind() {
 TTL_HOURS=${LEDGER_SESSION_TTL_HOURS:-4}
 case "$TTL_HOURS" in ''|*[!0-9]*) TTL_HOURS=4 ;; esac
 
+# Row-staleness horizon: how long an OPEN roster row may show Working with no
+# committed activity before it is judged abandoned. Much larger than the
+# heartbeat TTL -- the heartbeat is local and expires in hours; a live session
+# commits (a Ledger-Session trailer) well within days, so a row silent past
+# this horizon is a session that left without clocking out. Env wins, else
+# history.conf, else 72h (3 days) -- long enough a live session cannot trip it.
+ROW_STALE_HOURS=${LEDGER_ROW_STALE_HOURS:-}
+if [ -z "$ROW_STALE_HOURS" ]; then
+  _rsh=$MEMORY_DIR/workflows/history.conf
+  [ -f "$_rsh" ] && ROW_STALE_HOURS=$(sed -n 's/^row_stale_hours=//p' "$_rsh" | tr -d '\r' | head -n1)
+fi
+case "$ROW_STALE_HOURS" in ''|*[!0-9]*) ROW_STALE_HOURS=72 ;; esac
+
 sessions_dir() {
   _sc=$(git_p rev-parse --git-common-dir 2>/dev/null) || return 1
   case "$_sc" in /*) ;; *) _sc=$PROJECT_DIR/$_sc ;; esac
@@ -196,6 +213,33 @@ live_sessions() { # codenames whose heartbeat is younger than the TTL, one per l
   return 0
 }
 
+# The COMMITTED, cross-checkout liveness signal. The local heartbeat lives
+# under the git common dir and never leaves the checkout that wrote it, so a
+# row checked in on another machine is invisible to it -- exactly the row that
+# goes stale. The `Ledger-Session:` trailer every commit carries is committed
+# history, readable from any checkout. Newest epoch secs of a commit carrying
+# this codename's trailer, empty when none.
+committed_last_seen() { # $1 codename
+  git_p log --format='%ct%x09%(trailers:key=Ledger-Session,valueonly)' 2>/dev/null \
+    | awk -F'\t' -v c="$1" '{ sub(/[ \r]+$/, "", $2) } $2 == c { print $1; exit }'
+}
+
+# Newest activity for a codename across BOTH signals (local heartbeat + the
+# committed trailer). Empty when neither exists.
+row_last_seen() { # $1 codename
+  _rh=""; _rc=""
+  _rsd=$(sessions_dir 2>/dev/null) || _rsd=""
+  [ -n "$_rsd" ] && [ -f "$_rsd/$1" ] && _rh=$(sess_field "$_rsd/$1" at)
+  _rc=$(committed_last_seen "$1")
+  case "$_rh" in *[!0-9]*) _rh="" ;; esac
+  case "$_rc" in *[!0-9]*) _rc="" ;; esac
+  if [ -n "$_rh" ] && [ -n "$_rc" ]; then
+    [ "$_rh" -ge "$_rc" ] && printf '%s' "$_rh" || printf '%s' "$_rc"
+  else
+    printf '%s' "${_rh}${_rc}"
+  fi
+}
+
 # Who is acting? $LEDGER_SESSION wins; else the single live session. Prints the
 # codename (nothing when no session is registered). Returns 1 when several
 # sessions are live and none was named, 2 for a malformed $LEDGER_SESSION.
@@ -214,17 +258,68 @@ roster_open_rows() { # name|codename|status for every row that is not Done
   grep -E '^\| *[^|-][^|]*\| *(S[0-9]+|OF[0-9]+SS[0-9]+) ' "$_rr" | awk -F'|' '{ for (i = 2; i <= 6; i++) gsub(/^ +| +$/, "", $i); if ($6 != "Done") print $2 "|" $3 "|" $6 }'
 }
 
-stale_rows() { # roster rows still open whose registered session has gone quiet
-  _sd=$(sessions_dir) || return 0
-  [ -d "$_sd" ] || return 0
-  _lim=$(( $(now_s) - TTL_HOURS * 3600 ))
+# A stale row is an OPEN row, not the acting session's own, whose newest signal
+# (committed trailer or local heartbeat) is older than the row horizon -- or
+# which has no signal at all (a session that acted, if ever, long enough ago to
+# be gone). Keyed off committed history, so it sees rows from every checkout,
+# not just this one. Prints: codename|name|status|reason, one per candidate.
+sweep_candidates() {
+  _lim=$(( $(now_s) - ROW_STALE_HOURS * 3600 ))
+  _self=$(resolve_session 2>/dev/null) || _self=""
   roster_open_rows | while IFS='|' read -r _n _c _st; do
-    [ -f "$_sd/$_c" ] || continue
-    _se=$(sess_field "$_sd/$_c" at); case "$_se" in ''|*[!0-9]*) continue ;; esac
-    if [ "$_se" -lt "$_lim" ]; then
-      say "  STALE? $_n ($_c) $_st -- no heartbeat for $(( ($(now_s) - _se) / 3600 ))h (ttl ${TTL_HOURS}h). Ask the supervisor, then clock the row out; never edit a peer's row on a guess."
+    [ -n "$_self" ] && [ "$_c" = "$_self" ] && continue
+    _ls=$(row_last_seen "$_c")
+    if [ -z "$_ls" ]; then
+      printf '%s|%s|%s|no committed activity, no heartbeat -- never acted or long gone\n' "$_c" "$_n" "$_st"
+    elif [ "$_ls" -lt "$_lim" ]; then
+      printf '%s|%s|%s|last seen %dd ago, past the %dh horizon\n' "$_c" "$_n" "$_st" "$(( ($(now_s) - _ls) / 86400 ))" "$ROW_STALE_HOURS"
     fi
   done
+}
+
+stale_rows() { # human-readable report of the sweep candidates
+  sweep_candidates | while IFS='|' read -r _c _n _st _why; do
+    say "  STALE? $_n ($_c) $_st -- $_why. Exit auto-sweeps it, or: ledger-guard sweep --apply"
+  done
+}
+
+# Retire stale rows. The signal is committed evidence, not a guess, so a sweep
+# is sanctioned where a hand edit of a peer's row is not: each removal is a
+# reversible git change plus an append to the session log. Dry run by default.
+cmd_sweep() {
+  _apply=0
+  case "${1:-}" in
+    --apply) _apply=1 ;;
+    ''|--dry-run) ;;
+    *) die "usage: ledger-guard sweep [--apply]" ;;
+  esac
+  _cand=$(sweep_candidates)
+  if [ -z "$_cand" ]; then
+    say "no stale roster rows (horizon ${ROW_STALE_HOURS}h): the board is current"
+    return 0
+  fi
+  _rr=$MEMORY_DIR/office/agents/roster.md
+  _sm=$MEMORY_DIR/office/agents/sessions.md
+  _today=$(date -u +%Y-%m-%d)
+  _by=$(resolve_session 2>/dev/null) || _by=""; [ -n "$_by" ] || _by="unattributed"
+  printf '%s\n' "$_cand" | while IFS='|' read -r _c _n _st _why; do
+    if [ "$_apply" -eq 1 ]; then
+      if [ -f "$_rr" ]; then
+        _tmp=$_rr.sweep.$$
+        awk -v c="$_c" '$0 ~ ("^\\| *[^|]*\\| *" c " ") { next } { print }' "$_rr" > "$_tmp" && mv "$_tmp" "$_rr"
+      fi
+      [ -f "$_sm" ] && printf -- '- **Stale row swept** %s: %s (%s) was %s -- %s; removed by %s (ledger-guard sweep).\n' "$_today" "$_n" "$_c" "$_st" "$_why" "$_by" >> "$_sm"
+      _sd=$(sessions_dir 2>/dev/null) && [ -n "$_sd" ] && rm -f "$_sd/$_c" 2>/dev/null
+      say "swept: $_n ($_c) -- $_why"
+    else
+      say "would sweep: $_n ($_c) $_st -- $_why"
+    fi
+  done
+  if [ "$_apply" -eq 1 ]; then
+    say "stale rows removed + logged to agents/sessions.md; commit the memory surface to record it"
+  else
+    say "(dry run) re-run with --apply to retire these rows -- a sweep is a reversible git change"
+  fi
 }
 
 cmd_heartbeat() {
@@ -530,6 +625,8 @@ case "$CMD" in
   push-check) cmd_push_check "$@" ;;
   exit-check) cmd_exit_check "$@" ;;
   sessions) cmd_sessions ;;
+  stale-rows) stale_rows ;;
+  sweep) cmd_sweep "$@" ;;
   heartbeat) cmd_heartbeat "$@" ;;
   release) cmd_release "$@" ;;
   ''|-h|--help|help) usage ;;

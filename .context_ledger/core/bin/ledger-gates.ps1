@@ -239,6 +239,12 @@ function Checkpoint { param([string[]]$CheckpointArgs)
       if ((Test-Path -LiteralPath $gh -PathType Leaf) -and ([System.IO.File]::ReadAllText($gh) -match 'ledger-guard')) { $installed = $true }
     }
     if (-not $installed) { Say "NOTICE: ledger-guard hooks are not installed in this checkout - run: ledger-guard install" }
+    # advisory nudge (never blocks): abandoned Working rows still on the board
+    $sr = & (Join-Path $coreDir 'bin/ledger-guard.ps1') stale-rows 2>$null
+    if ($sr) {
+      Say "NOTICE: stale roster rows (a peer left without clocking out - do not assume they are live). Exit auto-sweeps them; or: ledger-guard sweep --apply"
+      $sr | ForEach-Object { Say $_ }
+    }
   }
   if ($scope.Session -and $scope.Issue) { & (Join-Path $coreDir 'bin/ledger-collab.ps1') status --session $scope.Session --issue $scope.Issue }
   Say 'CHECKPOINT PASSED: re-read the latest state before the next action'
@@ -269,6 +275,14 @@ function Run-Gate { param([string]$RequestedGate, [string[]]$GateArgs)
   $scope = Parse-Scope $GateArgs; $failed = $false
   if ($RequestedGate -eq 'pre-commit') {
     if (-not (Run-One 'pre-commit (universal)' 'git diff --cached --check')) { $failed = $true }
+    # memory hygiene with teeth: a non-canonical codename (S<NNN> only) or a
+    # duplicate name/codename in the live roster fails the commit, so a drifted
+    # identity (OF01S01, a second row) cannot land. Warn-only checks never block.
+    $memScript = Join-Path $coreDir 'bin/ledger-mem.ps1'
+    if (Test-Path -LiteralPath $memScript) {
+      Invoke-ChildScript $memScript @('check')
+      if ($script:ChildExit -ne 0) { $failed = $true }
+    }
     if (-not (Run-ProjectCommands 'pre-commit')) { $failed = $true }
   } elseif ($RequestedGate -eq 'integration') {
     if (-not (Run-One 'integration (universal)' 'git diff --check')) { $failed = $true }
@@ -290,11 +304,19 @@ function Run-Gate { param([string]$RequestedGate, [string[]]$GateArgs)
       Invoke-ChildScript $guardScript @('exit-check')
       if ($script:ChildExit -ne 0) { $failed = $true }
     }
-    # advisory nudge (never blocks the gate): surface archive-eligible
-    # entries at the natural moment instead of only when someone thinks
-    # to run it by hand
+    # aggressive compaction at the natural moment: auto-archive entries whose
+    # own Status line carries a closed marker (verbatim, reversible in git), so
+    # the durable logs never accumulate cold closed entries that bloat every
+    # future startup read. Never blocks the gate; roll-ups still need judgment.
     $memScript = Join-Path $coreDir 'bin/ledger-mem.ps1'
-    if (Test-Path -LiteralPath $memScript) { Invoke-ChildScript $memScript @('prune') }
+    if (Test-Path -LiteralPath $memScript) { Invoke-ChildScript $memScript @('prune','--apply') }
+    # retire abandoned Working rows at the natural moment. A row past the
+    # staleness horizon is a session that left without clocking out; the local
+    # heartbeat cannot see a row from another checkout, so it would read as a
+    # live peer forever. The signal is committed, so this is evidence, not a
+    # guess; each removal is logged + reversible. Never blocks the gate.
+    $guardPs1 = Join-Path $coreDir 'bin/ledger-guard.ps1'
+    if (Test-Path -LiteralPath $guardPs1) { Invoke-ChildScript $guardPs1 @('sweep','--apply') }
   }
   if ($failed) { if ($RequestedGate -eq 'pre-commit') { Clear-Pass }; Die "$RequestedGate gate failed" }
   if ($RequestedGate -eq 'pre-commit') { Record-Pass }

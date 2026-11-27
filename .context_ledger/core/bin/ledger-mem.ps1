@@ -54,7 +54,10 @@ function Usage {
     '',
     '  check   duplicate keys in the update-in-place registries',
     '          (ai-models.md by Agent+Model, environments.md by Identify-by;',
-    '          roster.md by Name and codename) plus warn-only audits: a',
+    '          roster.md by Name and codename) AND codename format: a live',
+    '          roster codename must be S<NNN> (solo) or OF<NN>SS<NN> (cohort);',
+    '          a single-S OF01S01 or lowercase fails the check (a valid but',
+    '          unpadded S5 only warns). Plus warn-only audits: a',
     '          roster row with no Status cell (the at-a-glance column), a',
     '          roster row whose Session N is already in agents/sessions.md',
     '          means the session never clocked out, and a duplicated',
@@ -68,9 +71,10 @@ function Usage {
     '          sweeps every tracked product file (strip leaks old sessions left)',
     '  prune   report log compaction: each append-only durable log''s size',
     '          (flaws, inefficiencies, decisions), which entries carry a',
-    '          closed marker on their own Status line (resolved/',
-    '          superseded/fixed - move them verbatim to the',
-    "          log's archive.md), and which logs hold 3+ entries hitting",
+    '          closed marker on their own Status line (resolved / superseded /',
+    '          closed / retired / fixed / no longer, case-insensitive; a',
+    "          'partly'/'still open'/'unverified' tail keeps it active) - move",
+    "          them verbatim to the log's archive.md, and which logs hold 3+ entries hitting",
     '          the same recurring thing (roll up into one Recurring entry,',
     "          instances archived verbatim); --list names them. Report",
     '          mode never moves or deletes; --apply performs the closed-',
@@ -147,21 +151,39 @@ function Check-Roster {
   # (legacy pre-1.1.0 four-column rows warn too; they fail nothing).
   $f = Join-Path $officeDir 'agents/roster.md'
   if (-not (Test-Path -LiteralPath $f)) { return $true }
-  $nseen = @{}; $nwhere = @{}; $cseen = @{}; $cwhere = @{}; $nostat = @{}; $ln = 0
+  $nseen = @{}; $nwhere = @{}; $cseen = @{}; $cwhere = @{}; $nostat = @{}; $ln = 0; $inc = $false; $dup = $false
   foreach ($raw in Get-Content -Encoding UTF8 -LiteralPath $f) {
     $ln++
     $line = $raw.TrimEnd("`r")
+    if ($line -match '^\s*<!--') { if ($line -notmatch '-->') { $inc = $true }; continue }
+    if ($inc) { if ($line -match '-->') { $inc = $false }; continue }
     if ($line -notmatch '^\s*\|') { continue }
     $cells = $line.Split('|')
     if ($cells.Count -lt 4) { continue }
     $name = $cells[1].Trim(); $code = $cells[2].Trim()
-    if ($code -notmatch '^([Ss][0-9]+|OF[0-9]+SS[0-9]+)$') { continue }
+    if ($name -eq 'Name' -and $code -eq 'Codename') { continue }
+    if ($code -match '^[-:\s]*$') { continue }
+    # Two valid codename forms, nothing else: a solo session is S<NNN>
+    # (capital S + session number, e.g. S023); a cohort session reserved by
+    # 'ledger-collab cohort open' is OF<NN>SS<NN> (e.g. OF01SS01). Anything
+    # else -- a single-S OF01S01, a lowercase s001 -- is drift and fails.
+    if ($code -match '^OF[0-9]+SS[0-9]+$') {
+      # valid structured cohort codename; no zero-pad nudge
+    } elseif ($code -match '^S[0-9]+$') {
+      if ($code -notmatch '^S[0-9][0-9][0-9]$') {
+        $padnum = [int]($code.Substring(1))
+        [Console]::Out.WriteLine(('WARN roster.md (line {0}): codename {1} is valid but not zero-padded to three digits (S{2:D3}) -- pad it for stable sorting' -f $ln, $code, $padnum))
+      }
+    } else {
+      ErrLine ('BAD roster.md (line {0}): codename "{1}" is not a valid form. Use S<NNN> for a solo session (e.g. S023) or OF<NN>SS<NN> for a cohort (e.g. OF01SS01). OF01S01 (single S) or lowercase are invalid. Fix your OWN row only.' -f $ln, $code)
+      $dup = $true
+      continue
+    }
     if ($nseen.ContainsKey($name)) { $nseen[$name]++; $nwhere[$name] += " $ln" } else { $nseen[$name] = 1; $nwhere[$name] = "$ln" }
     if ($cseen.ContainsKey($code)) { $cseen[$code]++; $cwhere[$code] += " $ln" } else { $cseen[$code] = 1; $cwhere[$code] = "$ln" }
     $st = if ($cells.Count -ge 8) { $cells[5].Trim() } else { '' }
     if ($st -eq '') { $nostat[$code] = "$ln" }
   }
-  $dup = $false
   foreach ($k in $nseen.Keys) { if ($nseen[$k] -gt 1) { ErrLine ('DUP roster.md: name "{0}" used by {1} rows (lines {2}) - one name per office; pick another, or edit your own row' -f $k, $nseen[$k], $nwhere[$k].Trim()); $dup = $true } }
   foreach ($k in $cseen.Keys) { if ($cseen[$k] -gt 1) { ErrLine ('DUP roster.md: codename "{0}" on {1} rows (lines {2}) - one row per session codename; edit your row instead of adding a second' -f $k, $cseen[$k], $cwhere[$k].Trim()); $dup = $true } }
   # The warn goes straight to the console, not Say/Write-Output: the check
@@ -399,7 +421,7 @@ function Invoke-PruneApply {
       }
       if ($inseg) {
         $curBuf.Add($line)
-        if ($line -match '^\s*[-*]?\s*\*\*Status:\*\*' -and $line -match 'RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)') { $curClosed = $true }
+        if (($line -match '^\s*[-*]?\s*\*\*Status:\*\*') -and ($line -match 'resolved|superseded|closed|retired|no longer|fixed') -and ($line -notmatch 'partly|partial|still open|unverified')) { $curClosed = $true }
         if ($line -match '^\s*[-*]?\s*\*\*Fixed in package:\*\*') { $curClosed = $true }
         continue
       }
@@ -470,7 +492,7 @@ function Invoke-Prune {
         $inseg = $true; $closed = $false; $heading = $line; $total++; $fp = ''
         continue
       }
-      if ($inseg -and ($line -match '^[ ]*[-*]?[ ]*[*][*]Status:[*][*]') -and ($line -match 'RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)')) { $closed = $true }
+      if ($inseg -and ($line -match '^[ ]*[-*]?[ ]*[*][*]Status:[*][*]') -and ($line -match 'resolved|superseded|closed|retired|no longer|fixed') -and ($line -notmatch 'partly|partial|still open|unverified')) { $closed = $true }
       if ($inseg -and ($line -match '^[ ]*[-*]?[ ]*[*][*]Fixed in package:[*][*]')) { $closed = $true }
       if ($inseg -and $fp -eq '' -and $line -match '^[ ]*[-*]?[ ]*[*][*](Problem|Flaw):[*][*][ ]*(.+)$') {
         $t = $Matches[2].Trim().ToLower().Replace("`t", ' ')
@@ -525,7 +547,7 @@ switch ($Command) {
     Check-LogCap 'flaws/log.md' 'flaws_cap' 15
     Check-LogCap 'inefficiencies/log.md' 'inefficiencies_cap' 15
     if ($ok1 -and $ok2 -and $ok3) { Say 'memory check passed: no duplicate keys in the update-in-place registries'; exit 0 }
-    ErrLine 'memory check failed: a registry has more than one entry for a key - correct in place (edit the entry), do not append a duplicate'
+    ErrLine 'memory check failed: fix the BAD/DUP item(s) above - a non-canonical codename (use S<NNN>) or a duplicated name/codename in a registry; correct your own row in place, do not append a duplicate'
     exit 1
   }
   'lint' {

@@ -243,6 +243,12 @@ checkpoint() {
     if ! grep -qs 'ledger-guard' "$_gh"; then
       say "NOTICE: ledger-guard hooks are not installed in this checkout -- run: sh $CORE_DIR/bin/ledger-guard install"
     fi
+    # advisory nudge (never blocks): abandoned Working rows still on the board
+    _sr=$(sh "$CORE_DIR/bin/ledger-guard" stale-rows 2>/dev/null)
+    if [ -n "$_sr" ]; then
+      say "NOTICE: stale roster rows (a peer left without clocking out -- do not assume they are live). Exit auto-sweeps them; or: ledger-guard sweep --apply"
+      say "$_sr"
+    fi
   fi
   if [ -n "$GATE_SESSION" ] && [ -n "$GATE_ISSUE" ]; then
     sh "$CORE_DIR/bin/ledger-collab" status --session "$GATE_SESSION" --issue "$GATE_ISSUE"
@@ -274,6 +280,11 @@ run_gate() {
   case "$_gate" in
     pre-commit)
       run_one 'pre-commit (universal)' 'git diff --cached --check' || _failed=$((_failed + 1))
+      # memory hygiene with teeth: a non-canonical codename (S<NNN> only) or a
+      # duplicate name/codename in the live roster fails the commit, so a drifted
+      # identity (OF01S01, a second row) cannot land. Warn-only checks (empty
+      # Status, stale/ghost rows, log caps) never block here.
+      [ -x "$CORE_DIR/bin/ledger-mem" ] && { sh "$CORE_DIR/bin/ledger-mem" check || _failed=$((_failed + 1)); }
       run_project_commands pre-commit || _failed=$((_failed + 1))
       ;;
     integration)
@@ -292,10 +303,17 @@ run_gate() {
       # close-out checklist, asserted (session logged, task cleared, row not
       # left Working). Skips cleanly when it cannot tell who is ending.
       [ -f "$CORE_DIR/bin/ledger-guard" ] && { sh "$CORE_DIR/bin/ledger-guard" exit-check || _failed=$((_failed + 1)); }
-      # advisory nudge (never blocks the gate): surface archive-eligible
-      # entries at the natural moment instead of only when someone thinks
-      # to run it by hand
-      [ -x "$CORE_DIR/bin/ledger-mem" ] && sh "$CORE_DIR/bin/ledger-mem" prune
+      # aggressive compaction at the natural moment: auto-archive entries whose
+      # own Status line carries a closed marker (verbatim, reversible in git), so
+      # the durable logs never accumulate cold closed entries that bloat every
+      # future startup read. Never blocks the gate; roll-ups still need judgment.
+      [ -x "$CORE_DIR/bin/ledger-mem" ] && sh "$CORE_DIR/bin/ledger-mem" prune --apply
+      # retire abandoned Working rows at the natural moment. A row past the
+      # staleness horizon is a session that left without clocking out; left
+      # alone it reads as a live peer forever (the local heartbeat can't see a
+      # row from another checkout). The signal is committed, so this is
+      # evidence, not a guess; each removal is logged + reversible. Never blocks.
+      [ -f "$CORE_DIR/bin/ledger-guard" ] && sh "$CORE_DIR/bin/ledger-guard" sweep --apply
       ;;
   esac
   if [ "$_failed" -ne 0 ]; then

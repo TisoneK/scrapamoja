@@ -44,7 +44,10 @@ usage() {
   say ""
   say "  check   duplicate keys in the update-in-place registries"
   say "          (ai-models.md by Agent+Model, environments.md by Identify-by;"
-  say "          roster.md by Name and codename) plus warn-only audits: a"
+  say "          roster.md by Name and codename) AND codename format: a live"
+  say "          roster codename must be S<NNN> (solo) or OF<NN>SS<NN> (cohort);"
+  say "          a single-S OF01S01 or lowercase fails the check (a valid but"
+  say "          unpadded S5 only warns). Plus warn-only audits: a"
   say "          roster row with no Status cell (the at-a-glance column), a"
   say "          roster row whose Session N is already in agents/sessions.md"
   say "          means the session never clocked out, and a duplicated"
@@ -58,9 +61,11 @@ usage() {
   say "          sweeps every tracked product file (strip leaks old sessions left)"
   say "  prune   report log compaction: each append-only durable log's size"
   say "          (flaws, inefficiencies, decisions), which entries carry a"
-  say "          closed marker on their own Status line (resolved/"
-  say "          superseded/fixed — move them verbatim to the"
-  say "          log's archive.md), and which logs hold 3+ entries hitting"
+  say "          closed marker on their own Status line (resolved / superseded /"
+  say "          closed / retired / fixed / no longer, case-insensitive; a"
+  say "          'partly'/'still open'/'unverified' tail keeps it active) —"
+  say "          move them verbatim to the log's archive.md — and which logs"
+  say "          hold 3+ entries hitting"
   say "          the same recurring thing (roll up into one Recurring entry,"
   say "          instances archived verbatim); --list names them. Report"
   say "          mode never moves or deletes; --apply performs the closed-"
@@ -149,12 +154,28 @@ check_roster() {
   _f=$OFFICE_DIR/agents/roster.md
   [ -f "$_f" ] || return 0
   awk '
+    /^[[:space:]]*<!--/ { inc = ($0 ~ /-->/) ? 0 : 1; next }
+    inc { if ($0 ~ /-->/) inc = 0; next }
     /^[[:space:]]*\|/ {
       n = split($0, c, "|")
       if (n < 4) next
       name = c[2]; code = c[3]
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", name); gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
-      if (code !~ /^([Ss][0-9]+|OF[0-9]+SS[0-9]+)$/) next
+      if (name == "Name" && code == "Codename") next
+      if (code ~ /^[-:[:space:]]*$/) next
+      # Two valid codename forms, nothing else: a solo session is S<NNN>
+      # (capital S + session number, e.g. S023); a cohort session reserved by
+      # the ledger-collab cohort command is OF<NN>SS<NN> (e.g. OF01SS01). Any
+      # other spelling -- a single-S OF01S01, a lowercase s001 -- is drift and
+      # fails the check, so the board never carries an off-convention identity.
+      if (code ~ /^OF[0-9]+SS[0-9]+$/) {
+        d = d + 0
+      } else if (code ~ /^S[0-9]+$/) {
+        if (code !~ /^S[0-9][0-9][0-9]$/)
+          printf "WARN roster.md (line %d): codename %s is valid but not zero-padded to three digits (S%03d) -- pad it for stable sorting\n", FNR, code, substr(code, 2) + 0
+      } else {
+        printf "BAD roster.md (line %d): codename \"%s\" is not a valid form. Use S<NNN> for a solo session (e.g. S023) or OF<NN>SS<NN> for a cohort (e.g. OF01SS01). OF01S01 (single S) or lowercase are invalid. Fix your OWN row only.\n", FNR, code | "cat 1>&2"; d++; next
+      }
       nseen[name]++; nwhere[name] = nwhere[name] " " FNR
       cseen[code]++; cwhere[code] = cwhere[code] " " FNR
       st = (n >= 7) ? c[6] : ""
@@ -162,7 +183,6 @@ check_roster() {
       if (st == "") nostat[code] = nwhere[code]
     }
     END {
-      d = 0
       for (k in nseen) if (nseen[k] > 1) {
         printf "DUP roster.md: name \"%s\" used by %d rows (lines%s) — one name per office; pick another, or edit your own row\n", k, nseen[k], nwhere[k] | "cat 1>&2"; d++
       }
@@ -214,7 +234,7 @@ check() {
   if [ "$_rc" -eq 0 ]; then
     say "memory check passed: no duplicate keys in the update-in-place registries"
   else
-    err "memory check failed: a registry has more than one entry for a key — correct in place (edit the entry), do not append a duplicate"
+    err "memory check failed: fix the BAD/DUP item(s) above — a non-canonical codename (use S<NNN>) or a duplicated name/codename in a registry; correct your own row in place, do not append a duplicate"
   fi
   return "$_rc"
 }
@@ -309,8 +329,10 @@ prune_apply_one() {
     }
     inseg {
       n++; buf[n] = $0
-      if ($0 ~ /^[[:space:]]*[-*]?[[:space:]]*\*\*Status:\*\*/ &&
-          $0 ~ /RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)/) closed = 1
+      if ($0 ~ /^[[:space:]]*[-*]?[[:space:]]*\*\*Status:\*\*/) {
+        lc = tolower($0)
+        if (lc ~ /resolved|superseded|closed|retired|no longer|fixed/ && lc !~ /partly|partial|still open|unverified/) closed = 1
+      }
       if ($0 ~ /^[[:space:]]*[-*]?[[:space:]]*\*\*Fixed in package:\*\*/) closed = 1
       next
     }
@@ -396,8 +418,10 @@ prune() {
       /^## / {
         flush(); inseg = 1; closed = 0; heading = $0; total++; fp = ""; next
       }
-      inseg && /^[[:space:]]*[-*]?[[:space:]]*\*\*Status:\*\*/ &&
-        /RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)/ { closed = 1 }
+      inseg && /^[[:space:]]*[-*]?[[:space:]]*\*\*Status:\*\*/ {
+        lc = tolower($0)
+        if (lc ~ /resolved|superseded|closed|retired|no longer|fixed/ && lc !~ /partly|partial|still open|unverified/) closed = 1
+      }
       inseg && /^[[:space:]]*[-*]?[[:space:]]*\*\*Fixed in package:\*\*/ { closed = 1 }
       inseg && fp == "" && /^[[:space:]]*[-*]?[[:space:]]*\*\*(Problem|Flaw):\*\*/ {
         fp = $0

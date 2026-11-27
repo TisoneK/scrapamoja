@@ -10,6 +10,106 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 2.5.0 — 2026-11-26
+
+**Stale roster rows are swept with a committed, cross-checkout signal.**
+Supervisor directive: abandoned `Working` rows are left all over the board and
+future agents presume those peers are still live. Root cause: `ledger-guard`
+judged staleness from the **local** heartbeat file, which never leaves the
+checkout that wrote it — so a row checked in on another machine (exactly the
+one that goes stale) was invisible and lingered forever, frozen in place by the
+"never drop a peer's row" rule. MINOR — new command + exit-gate behavior,
+backward-compatible.
+
+Cross-checkout staleness signal (`ledger-guard`):
+
+- Staleness is now read from the newest `Ledger-Session:` trailer date for a
+  codename — committed history, visible from every checkout — maxed with the
+  local heartbeat when present. A row open past the **row horizon**
+  (`row_stale_hours` in `history.conf`, default 72h; env `LEDGER_ROW_STALE_HOURS`)
+  with no committed activity is judged an abandoned session. The horizon is far
+  above the 4h heartbeat TTL: a live session commits well within days, so it
+  cannot trip it.
+- New `ledger-guard sweep [--apply]`: dry-run by default; `--apply` removes each
+  stale row and appends a terse `**Stale row swept**` line to
+  `agents/sessions.md`. Never touches the acting session's own row. Because the
+  signal is committed evidence (not a guess), a sweep — unlike a hand edit — is
+  the sanctioned way to clear a row that is not your own; each one is a
+  reversible git change.
+- New `ledger-guard stale-rows`: the report alone (no removal), used by the
+  checkpoint nudge.
+
+Gate wiring (`ledger-gates`):
+
+- The **exit gate** now runs `ledger-guard sweep --apply` (alongside the 2.4.0
+  `prune --apply`): abandoned rows are retired at the natural close-out moment.
+- The **checkpoint gate** surfaces a never-blocking notice listing any stale
+  rows, so a newcomer does not read a departed peer as live.
+
+Rule text: the roster clock-out prose, the per-turn guard reminder, and
+`ledger-schema.md` now state the horizon, the committed signal, and that a
+sweep is the one sanctioned way to clear a peer's row — never a hand edit of a
+live one.
+
+PowerShell parity: the `.ps1` editions delegate `stale-rows`/`sweep` to the sh
+edition (git ships sh on Windows), and the `.ps1` gates call them — no new
+engine-specific logic. Runtime on Windows still unverified on this macOS host
+(ADR-8 caveat), but no new ps1 code paths were added.
+
+Tests: +4 (suite 124 → 128) — cross-checkout detection flags only the
+abandoned row (not Done/fresh/self), dry run is read-only, `--apply`
+retires+logs the row and keeps the acting row, a fresh peer is never swept;
+plus a ps1-parity check where an engine is present.
+
+---
+
+## 2.4.0 — 2026-11-26
+
+**Give the floor teeth, prune aggressively, enforce the codename form, write
+for an LLM.** Supervisor directive: the advisory floor does not stick (agents
+follow it turn 1, then drift), the ledger hoards tokens, and codenames are
+written inconsistently. MINOR — new enforcement + behavior, backward-compatible
+(both valid codename forms still pass; legacy rows unaffected).
+
+Codename enforcement (`ledger-mem check`):
+
+- A live roster codename must now be a valid form — `S<NNN>` (solo) or
+  `OF<NN>SS<NN>` (cohort, reserved by `ledger-collab cohort`). A malformed one
+  (single-S `OF01S01`, lowercase `s001`) **fails** the check; a valid but
+  unpadded `S5` warns to zero-pad. Previously any `[Ss][0-9]+|OF…SS…` was
+  silently accepted and anything else silently skipped, so drift never
+  surfaced. The check skips `<!-- -->` template blocks, the header, and the
+  separator row.
+- `ledger-gates run pre-commit` now runs `ledger-mem check`, so a drifted
+  identity (or a duplicate name/codename) **cannot land in a commit**. Warn-only
+  audits (empty Status, stale/ghost rows, log caps) never block.
+
+Aggressive pruning (`ledger-mem prune`, `ledger-gates run exit`):
+
+- The closed-marker vocabulary widened: case-insensitive `resolved` /
+  `superseded` / `closed` / `retired` / `fixed` / `no longer` (was uppercase
+  `RESOLVED` / `[Ss]uperseded` / `fixed in package` only), with a
+  `partly` / `partial` / `still open` / `unverified` tail keeping an entry
+  active. Still scoped to the entry's own `**Status:**` line — prose and
+  template placeholders never match.
+- `ledger-gates run exit` now calls `ledger-mem prune --apply` (was report
+  mode), so closed entries are archived automatically every session, verbatim
+  and reversible in git. The durable logs stop accumulating cold closed
+  entries that bloat the startup read.
+
+Write for an LLM, not a human:
+
+- New schema subsection + a floor bullet: memory entries (sessions, flaws,
+  decisions, roster detail, reports) are terse points, not prose paragraphs —
+  the fewest tokens that stay unambiguous. The only reader is the next agent;
+  prose padding is a token cost paid on every startup read.
+
+Tools touched: `ledger-mem` (+ `.ps1`), `ledger-gates` (+ `.ps1`),
+`templates/guard-reminder.md`, `schemas/ledger-schema.md`. Suite 120 → 124
+(sh). Note: the ps1 ports mirror the sh logic and pass the ASCII/parse guard in
+`verify`, but their runtime was not executed (no PowerShell engine on the
+authoring host) — a Windows verification pass is the follow-up.
+
 ## 2.3.3 — 2026-10-31
 
 **Fix: close the loop so the ledger enforces and notices, instead of the
