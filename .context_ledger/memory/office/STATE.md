@@ -5,10 +5,10 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-01T09:48:47Z_
+_Regenerated: 2026-11-27T07:09:53Z_
 
 ## Standing params
-- **Core:** 2.3.3 (locked, verified 2026-10-31)
+- **Core:** 2.5.0 (locked, verified 2026-11-26)
 - **Target:** general sweep
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
@@ -16,6 +16,7 @@ _Regenerated: 2026-11-01T09:48:47Z_
 
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
+- **Baraka** (S015) — Working — Operator: "Sync protocol" — entry sync + core migration
 
 ## Current task
 - **—** — (none — office idle) — *No active task. Last session: Tariq (S014) closed out 2026-11-01 (grader diagnosis + results backoff fix `bbc2878` + clean-slate data reset ADR-8). See agents/sessions.md.*
