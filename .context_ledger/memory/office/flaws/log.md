@@ -77,3 +77,10 @@ names them), and roll-up candidates.
 - **Suggested fix:** (a) add bare `\bopen\b` to the open-guard; (b) require ALL Status lines in a block closed, not ANY; (c) make the exit gate's `prune --apply` warn-only (no auto-move) unless every Status line is resolved.
 - **Status:** open — worked around: declined to archive, left `flaws/log.md` intact, ran manual Exit checklist instead of `ledger-gates run exit` to avoid the auto-archive.
 
+
+---
+## 2026-11-28 — Jabari (S017) / claude-opus-4-8 (Session 17)
+- **Symptom:** repeated the 2026-11-26 Baraka (S15) flaw: ran `ledger-gates run exit`; its auto `ledger-mem prune --apply` moved the Noor (S1, `Status: open`) and Imani (S5, protocol-fix open) blocks to `flaws/archive.md`, burying open flaws.
+- **Root cause:** unchanged — `prune_apply_one` closes a multi-flaw block on any one `fixed` Status line (see Baraka's entry).
+- **Recovery:** `git checkout -- flaws/log.md` + removed the generated `archive.md` (nothing committed). Open flaws intact.
+- **Status:** open (upstream) — now **promoted to an override** (`overrides/rules.md`): run the exit gate, but never commit its auto-prune move without checking it didn't archive an open block; prefer the manual Exit checklist. Stop re-logging; this is the last repeat entry.
