@@ -778,6 +778,19 @@ class BetB2BCLI:
         qt.add_argument("--prune-batch", type=int, default=None,
                         help="Max events to prune in one pass (default: $BETB2B_PRUNE_BATCH / 2000)")
 
+        # drain-outbox — explicit, out-of-persist replay of the local fallback outbox
+        do = sub.add_parser(
+            "drain-outbox",
+            help="Replay the local fallback store's on-disk outbox into the primary "
+                 "(DATABASE_URL) when it is writable. Closes the cross-process gap: a "
+                 "short-lived launchd job that queued writes during an outage exits "
+                 "before recovery, so those rows sit undrained until this is run "
+                 "(an operator or boot step). Safe to re-run; replays carry each "
+                 "payload's original timestamp.")
+        do.add_argument("--db", nargs="?", const="", default=None,
+                        help="Fallback store path (default: $BETB2B_FALLBACK_DB_PATH / "
+                             "$BETB2B_DB_PATH / the service default)")
+
         # repair-data — one-off cleanup of rows stored before the data-quality rules
         rd = sub.add_parser("repair-data",
                             help="Clean rows stored before the data-quality rules: duplicate H2H games, "
@@ -867,6 +880,8 @@ class BetB2BCLI:
             return await self._cmd_results(args)
         if args.command == "quota":
             return await self._cmd_quota(args)
+        if args.command == "drain-outbox":
+            return self._cmd_drain_outbox(args)
         if args.command == "repair-data":
             return self._cmd_repair_data(args)
         if args.command == "reset":
@@ -1106,6 +1121,42 @@ class BetB2BCLI:
             finally:
                 conn.close()
         return rc
+
+    def _cmd_drain_outbox(self, args: argparse.Namespace) -> int:
+        """Explicitly replay the local fallback outbox into the primary.
+
+        Closes the cross-process gap (B-2026-10-03-5): the automatic drain only
+        runs inside a process still in fallback mode, so rows a short-lived
+        launchd job queued during an outage sit on disk until this is run.
+        """
+        from src.sites.betb2b import store_fallback
+
+        # bare --db or omitted → the module's own resolution
+        # ($BETB2B_FALLBACK_DB_PATH > the store path > the service default).
+        explicit = None if args.db in (None, "") else args.db
+        out = store_fallback.drain_outbox(explicit)
+
+        print(f"fallback store : {out.get('path')}")
+        print(f"queued         : {out['queued']}")
+        print(f"drained        : {out['drained']}")
+        print(f"remaining      : {out['remaining']}")
+        print(f"status         : {out['status']}")
+        note = {
+            "empty": "outbox empty — nothing to drain",
+            "disabled": "BETB2B_FALLBACK=0 — the fallback store is off",
+            "no_primary": "no DATABASE_URL — no primary to replay into",
+            "primary_unwritable": "primary not writable now — outbox left queued; "
+                                  "re-run once it recovers",
+            "drained": "outbox fully replayed to the primary",
+            "partial": "outbox partially replayed — re-run to continue",
+            "primary_broke": "primary failed mid-drain — the rest stay queued; "
+                             "re-run once it recovers",
+        }.get(out["status"], "")
+        if note:
+            print(f"note           : {note}")
+        # Non-zero only when rows we meant to drain are still stranded, so a boot
+        # step / monitor can alert on it.
+        return 0 if out["remaining"] == 0 else 1
 
     def _cmd_repair_data(self, args: argparse.Namespace) -> int:
         """Clean already-stored rows (see ``store.repair_data_quality``)."""

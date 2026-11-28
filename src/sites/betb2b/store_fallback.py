@@ -400,6 +400,63 @@ def maybe_finish_drain() -> None:
     _drain()
 
 
+def drain_outbox(explicit: Any = None) -> Dict[str, Any]:
+    """Explicit, out-of-persist replay of the on-disk fallback outbox — the
+    operator/boot entry point.
+
+    The automatic recovery cycle (``maybe_probe_and_drain`` / ``maybe_finish_drain``)
+    only runs inside a process that is *in* fallback mode, and ``_drain`` self-gates
+    on the in-memory ``_outbox_remaining`` flag, which a fresh process starts
+    ``False``. So a short-lived launchd process that queued writes during an outage
+    exits before its probe recovers, and the next process starts in primary mode and
+    never looks at the on-disk outbox (B-2026-10-03-5). This drains that outbox to
+    the primary directly: it seeds from the on-disk count (not the in-memory flag),
+    does not care whether fallback mode is active, and loops ``_drain`` past the
+    per-pass ``BETB2B_FALLBACK_DRAIN_MAX`` cap until the outbox is empty or the
+    primary stops accepting writes. Replay rides the normal upsert/dedup paths and
+    carries each payload's original ``captured_at`` — late history, not fabrication.
+
+    Returns a summary: ``queued`` (rows found on disk), ``drained``, ``remaining``,
+    ``path`` (the fallback store) and ``status``:
+    ``empty`` | ``disabled`` | ``no_primary`` | ``primary_unwritable`` |
+    ``drained`` | ``partial`` | ``primary_broke``.
+    """
+    global _outbox_remaining
+    _resolve_mirror_path(explicit)
+    # Count the on-disk outbox directly. A mirror that was never created (no
+    # fallback ever happened) means nothing queued — don't create one to look.
+    if not _mirror_path or not os.path.exists(_mirror_path):
+        return {"queued": 0, "drained": 0, "remaining": 0,
+                "path": _mirror_path, "status": "empty"}
+    try:
+        queued = _outbox_count()
+    except Exception as exc:  # noqa: BLE001 — a mirror with no outbox table = nothing queued
+        logger.debug("drain_outbox: no readable outbox (%s)", exc)
+        queued = 0
+    base = {"queued": queued, "drained": 0, "remaining": queued, "path": _mirror_path}
+    if not enabled():
+        return {**base, "status": "disabled"}
+    if queued == 0:
+        return {**base, "remaining": 0, "status": "empty"}
+    if not os.environ.get("DATABASE_URL"):
+        return {**base, "status": "no_primary"}
+    # Only drain into a writable primary; otherwise report cleanly instead of
+    # flipping this command's process into fallback mode and churning.
+    if not _probe_primary_writable():
+        return {**base, "status": "primary_unwritable"}
+    _outbox_remaining = True
+    total = 0
+    while _outbox_remaining and not _state["active"]:
+        before = _outbox_count()
+        total += _drain()
+        if _outbox_count() >= before:   # no progress (empty, or primary broke)
+            break
+    remaining = _outbox_count()
+    status = "drained" if remaining == 0 else ("primary_broke" if _state["active"] else "partial")
+    return {"queued": queued, "drained": total, "remaining": remaining,
+            "path": _mirror_path, "status": status}
+
+
 def _connect_primary():
     from . import store_orm
     return store_orm.connect()

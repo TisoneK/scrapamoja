@@ -296,6 +296,89 @@ def test_post_recovery_leftover_drain(fb_env, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# explicit, out-of-persist drain (cross-process gap — B-2026-10-03-5)
+# --------------------------------------------------------------------------- #
+def _fresh_process():
+    """Simulate a brand-new process: module state reset (so _outbox_remaining is
+    False and fallback is inactive) while the on-disk mirror + DATABASE_URL
+    persist — exactly a new launchd process started after a DB recovery."""
+    store_orm._engines.clear()
+    store_fallback._reset_for_tests()
+
+
+def test_explicit_drain_replays_preexisting_on_disk_outbox(fb_env, monkeypatch):
+    """The automatic drain never touches a pre-existing on-disk outbox from a
+    prior process; drain_outbox() replays it anyway."""
+    real_persist = store_orm.persist_result
+
+    # Phase 1 — a 'first process' queues writes during an outage.
+    monkeypatch.setattr(store_orm, "persist_result",
+                        lambda conn, r: (_ for _ in ()).throw(ReadOnlyError()))
+    store.persist_result(_result(event_id="EV1"), None)
+    store.persist_result(_result(event_id="EV2", skin="melbet"), None)
+    assert len(_mirror_rows(fb_env, "SELECT seq FROM fallback_outbox")) == 2
+
+    # Phase 2 — a fresh process: primary healthy, but state reset to defaults.
+    monkeypatch.setattr(store_orm, "persist_result", real_persist)
+    _fresh_process()
+    assert not store_fallback.active()
+    assert store_fallback._outbox_remaining is False
+
+    # The automatic opportunistic path does nothing (this is the bug).
+    store_fallback.maybe_finish_drain()
+    assert len(_mirror_rows(fb_env, "SELECT seq FROM fallback_outbox")) == 2
+
+    # The explicit command drains it.
+    out = store_fallback.drain_outbox(str(fb_env / "mirror.db"))
+    assert out["status"] == "drained"
+    assert out["queued"] == 2 and out["drained"] == 2 and out["remaining"] == 0
+    assert _mirror_rows(fb_env, "SELECT seq FROM fallback_outbox") == []
+    assert _primary_count("events") == 2
+    assert _primary_count("odds_snapshots") == 4
+
+
+def test_explicit_drain_loops_past_drain_max(fb_env, monkeypatch):
+    """A single _drain pass is capped at BETB2B_FALLBACK_DRAIN_MAX; the explicit
+    command loops until the whole on-disk outbox is replayed."""
+    real_persist = store_orm.persist_result
+    monkeypatch.setattr(store_orm, "persist_result",
+                        lambda conn, r: (_ for _ in ()).throw(ReadOnlyError()))
+    for eid in ("E1", "E2", "E3", "E4", "E5"):
+        store.persist_result(_result(event_id=eid), None)
+    monkeypatch.setattr(store_orm, "persist_result", real_persist)
+    _fresh_process()
+    monkeypatch.setenv("BETB2B_FALLBACK_DRAIN_MAX", "2")
+
+    out = store_fallback.drain_outbox(str(fb_env / "mirror.db"))
+    assert out["status"] == "drained"
+    assert out["queued"] == 5 and out["drained"] == 5 and out["remaining"] == 0
+    assert _primary_count("events") == 5
+
+
+def test_explicit_drain_noop_when_empty(fb_env):
+    """No mirror / empty outbox → clean no-op, and no mirror file is created."""
+    out = store_fallback.drain_outbox(str(fb_env / "mirror.db"))
+    assert out["status"] == "empty"
+    assert out["queued"] == 0 and out["drained"] == 0 and out["remaining"] == 0
+    assert not (fb_env / "mirror.db").exists()
+
+
+def test_explicit_drain_leaves_queue_when_primary_unwritable(fb_env, monkeypatch):
+    """When the primary is not writable, the outbox is left queued intact."""
+    monkeypatch.setattr(store_orm, "persist_result",
+                        lambda conn, r: (_ for _ in ()).throw(ReadOnlyError()))
+    store.persist_result(_result(event_id="EV1"), None)
+    _fresh_process()
+    monkeypatch.setattr(store_fallback, "_probe_primary_writable", lambda: False)
+
+    out = store_fallback.drain_outbox(str(fb_env / "mirror.db"))
+    assert out["status"] == "primary_unwritable"
+    assert out["queued"] == 1 and out["drained"] == 0 and out["remaining"] == 1
+    assert len(_mirror_rows(fb_env, "SELECT seq FROM fallback_outbox")) == 1
+    assert not store_fallback.active()   # the command never flips into fallback
+
+
+# --------------------------------------------------------------------------- #
 # outbox cap + disabled mode
 # --------------------------------------------------------------------------- #
 def test_outbox_cap_drops_oldest(fb_env, monkeypatch):
