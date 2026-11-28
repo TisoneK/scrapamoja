@@ -5,10 +5,10 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-28T07:43:23Z_
+_Regenerated: 2026-11-28T08:40:42Z_
 
 ## Standing params
-- **Core:** 2.5.0 (locked, verified 2026-11-27)
+- **Core:** 2.5.0 (locked, verified 2026-11-28)
 - **Target:** general sweep
 - **Scope:** discovery + review + fix all safe issues
 - **Push policy:** push to main directly after each commit
@@ -16,6 +16,7 @@ _Regenerated: 2026-11-28T07:43:23Z_
 
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
+- **Jabari** (S017) — Working — Engineer: pick up odds handoff — `list_prematch` scrape stalled since 2026-11-26 DB out…
 
 ## Current task
 - **—** — (none — office idle) — *No active task. Last session: Amani (S016) closed out 2026-11-27 (diagnosis-only; stale-APK report routed to scorewise-engine — wrong repo; no scrapamoja change). See agents/sessions.md.*
