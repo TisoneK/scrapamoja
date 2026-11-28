@@ -212,3 +212,16 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Open items:** none new beyond that flaw. Prior open items unchanged (grader cadence engine-side, Neon divergence, FK-child indexes B-2026-11-01-1, `~/ScoreWise` Oct zips + `build/`/`output/` scratch pending operator `rm`). Top backlog B-2026-10-03-1 (linebet live re-verify) still needs a non-geo-restricted machine.
 - **Notes:** geo-restricted Mac. Office headcount 1 live at check-in (Achieng Done) — no close needed.
 - **Report:** none
+
+---
+## 2026-11-27 — Session 16 (Amani/S016)
+- **Agent:** Amani (S016) | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** engineer (diagnosis only) | **Core:** 2.5.0
+- **Task:** operator chat: "we won that bet" + report "the apk is so basic and day-one data is still current". Mid-diagnosis operator corrected: wrong repo — APK/data-pipeline work belongs in scorewise-engine, not scrapamoja. "close out."
+- **Commits:** ledger only — check-in `8e599f7`, STATE regen `4f828f5`, this clock-out. No product code.
+- **Outcome:** diagnosis only, no scraper change.
+  - Confirmed in the log the live-validation bet won (sessions.md S? note): Hapoel Beer Sheva v Hapoel Tel Aviv, Q1 Total Over 41.5 → Q1 23–24=47, cleared; poller `q1_final` matched.
+  - Stale-APK symptom = **already-known open item**, not new: scraper writes LOCAL Postgres only since the 2026-10-24 cutover (ADR-7); Neon cloud frozen (DiskFull 1 GB); any cloud consumer (website/APK) stuck at pre-cutover snapshot. `.env` confirms `DATABASE_URL=...@localhost:5432/scorewise` (old Neon URL parked for rollback). Fix is engine-side (local→remote push, ADR-6) + repointing/refreshing the app's cloud read — **scorewise-engine repo**, not here. No scrapamoja code warranted.
+- **Open items:** none new. APK staleness maps onto the existing Neon-divergence open item. Operator to re-initiate in scorewise-engine.
+- **Flaw:** none mine. Phase 1 Sync NOT skipped (ran pull + `ledger-sync verify`/`status`) — deliberately avoided Tariq/S014's 2026-11-01 flaw.
+- **Notes:** geo-restricted Mac. Office headcount 2 (Amani live + Achieng Done) at check-in (limit 20) — no close needed.
+- **Report:** none

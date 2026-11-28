@@ -8,4 +8,4 @@ entry and backlog before starting.
 
 - **Session:** —
 - **Task:** (none — office idle)
-- **Status:** No active task. Last session: Tariq (S014) closed out 2026-11-01 (grader diagnosis + results backoff fix `bbc2878` + clean-slate data reset ADR-8). See agents/sessions.md.
+- **Status:** No active task. Last session: Amani (S016) closed out 2026-11-27 (diagnosis-only; stale-APK report routed to scorewise-engine — wrong repo; no scrapamoja change). See agents/sessions.md.
