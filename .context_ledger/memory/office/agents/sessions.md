@@ -239,3 +239,18 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Flaw:** none mine. Phase 1 Sync ran (pull + `ledger-sync verify`/`status`) — did not skip it (avoided Tariq/S014's 2026-11-01 flaw).
 - **Notes:** geo-restricted Mac (direct feed only; no page loads). Office headcount 2 (Jabari live + Achieng Done) at check-in (limit 20) — no close needed.
 - **Report:** none
+
+---
+## 2026-11-28 — Session 18 (Kofi/S018)
+- **Agent:** Kofi (S018) | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** engineer | **Core:** 2.5.0
+- **Task:** operator "Yes, fix it" → B-2026-10-03-5 cross-process facet (Jabari/S017's latent): fallback outbox drain never fires across process boundaries; implement the explicit out-of-persist drain command.
+- **Commits:** product `7838030` `feat(betb2b): explicit out-of-persist fallback outbox drain`; ledger (check-in `a8ef1eb`, backlog B-2026-10-03-5 update, current.md, STATE regen, this entry, clock-out).
+- **Outcome:** FIXED (code) — live drain of the 858 real rows pending operator run (see Open items).
+  - Root of the gap: `_drain` self-gates on in-memory `_outbox_remaining` (a fresh process starts it `False`), and the auto recovery (`maybe_probe_and_drain`/`maybe_finish_drain`) only runs in a process already in fallback mode. Short-lived launchd jobs exit before recovery → on-disk outbox ignored by the next (primary-mode) process.
+  - Fix: new `store_fallback.drain_outbox(explicit=None)` — seeds from the **on-disk** outbox count (not the flag), probes primary writable, loops `_drain` past the per-pass `BETB2B_FALLBACK_DRAIN_MAX` cap until empty or primary stops accepting; replay keeps original `captured_at` (late history, not fabrication). Wired as `betb2b drain-outbox` CLI (operator/boot step; `--db`; rc=1 while rows remain so a monitor can alert). Status strings: empty/disabled/no_primary/primary_unwritable/drained/partial/primary_broke.
+  - Tests (4, all green + full betb2b suite via pre-commit gate): cross-process replay of a pre-existing on-disk outbox (the bug repro: `maybe_finish_drain` no-ops, `drain_outbox` replays), multi-pass loop past `DRAIN_MAX`, empty no-op (no mirror file created), queue left intact when primary unwritable (never flips into fallback). CLI `--help` + empty-store no-op verified live.
+  - Scope held tight: cross-process facet only. B-2026-10-03-5's other facets (inline-replay deadline over marginal link; unexplained exit-1 on the original Windows host) stay open.
+- **Open items:** live store `data/betb2b/odds.db` holds **858** real outage-window rows (5 persist + 853 result, created 2026-11-27 03:44 → 2026-11-28 07:46 UTC). Draining them is now a one-liner — `export $(grep ^DATABASE_URL= src/sites/betb2b/.env | xargs) && .venv/bin/python -m src.main betb2b drain-outbox` — but the Claude Code auto-mode classifier blocked me running it (858-row prod write); left for the operator to run. Idempotent (upsert/dedup), fills the Nov 26→28 gap with real late history. Was going to replay in an uncontrolled burst on the next down→up cycle anyway; the command does it controlled.
+- **Flaw:** none new. Hit the known piped-gate guard once (`ledger-gates ... | tail`) — already hook-enforced + an override rule; corrected by running the gate bare. Did NOT trip Baraka/S015's exit-gate auto-prune trap (ran the Exit checklist by hand per the override).
+- **Notes:** geo-restricted Mac (direct feed only). Office headcount 2 (Kofi live + Achieng Done) at check-in (limit 20) — no close needed. Did not run `ledger-gates run exit` auto-prune (override: it buries open flaws); ran the checklist manually.
+- **Report:** none
