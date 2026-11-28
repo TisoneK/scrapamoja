@@ -8,4 +8,4 @@ entry and backlog before starting.
 
 - **Session:** —
 - **Task:** (none — office idle)
-- **Status:** No active task. Last session: Amani (S016) closed out 2026-11-27 (diagnosis-only; stale-APK report routed to scorewise-engine — wrong repo; no scrapamoja change). See agents/sessions.md.
+- **Status:** No active task. Last session: Jabari (S017) closed out 2026-11-28 — picked up the odds handoff; `list_prematch` resumed to Postgres (run 4611, fresh odds). Latent: fallback outbox drain never fires across processes (B-2026-10-03-5). See agents/sessions.md.

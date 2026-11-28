@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-28T08:40:42Z_
+_Regenerated: 2026-11-28T09:01:36Z_
 
 ## Standing params
 - **Core:** 2.5.0 (locked, verified 2026-11-28)
@@ -16,10 +16,9 @@ _Regenerated: 2026-11-28T08:40:42Z_
 
 ## Office — who's in, right now
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
-- **Jabari** (S017) — Working — Engineer: pick up odds handoff — `list_prematch` scrape stalled since 2026-11-26 DB out…
 
 ## Current task
-- **—** — (none — office idle) — *No active task. Last session: Amani (S016) closed out 2026-11-27 (diagnosis-only; stale-APK report routed to scorewise-engine — wrong repo; no scrapamoja change). See agents/sessions.md.*
+- **—** — (none — office idle) — *No active task. Last session: Jabari (S017) closed out 2026-11-28 — picked up the odds handoff; `list_prematch` resumed to Postgres (run 4611, fresh odds). Latent: fallback outbox drain never fires across processes (B-2026-10-03-5). See agents/sessions.md.*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-03-1 | **linebet live re-verification with the fixes in place, in a rested window.** The cookie-header fix (`ec05ca0`), the burst-halt (`fb32cd1`/`6fa14bb`) and the pre-harvest grid wait are in but not yet proven end-to-end: tonight's address was rested by the guard after repeated challenges. Run the stored run (`scrape linebet scheduled --sport basketball --timeout 3600`), then a second run with no person present, then watch `python -m src.security status` and the per-skin rows from the Kenya brief's section 7 query. Also re-run **melbet** (its loop run was killed mid-scrape by mistake; earlier data intact). |

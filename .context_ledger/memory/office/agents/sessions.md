@@ -225,3 +225,17 @@ re-seeded into the new office explicitly, and nothing else carries over.
 - **Flaw:** none mine. Phase 1 Sync NOT skipped (ran pull + `ledger-sync verify`/`status`) — deliberately avoided Tariq/S014's 2026-11-01 flaw.
 - **Notes:** geo-restricted Mac. Office headcount 2 (Amani live + Achieng Done) at check-in (limit 20) — no close needed.
 - **Report:** none
+
+---
+## 2026-11-28 — Session 17 (Jabari/S017)
+- **Agent:** Jabari (S017) | **Model:** claude-opus-4-8 | **Platform:** Baos-Mac-mini (macOS, Claude Code desktop) | **Role:** engineer | **Core:** 2.5.0
+- **Task:** operator: "Pickup the odds handoff" → `scorewise-engine/HANDOFF-scrapamoja-odds-scrape-stalled.md` (Tariq/S014): prematch `list_prematch` odds frozen since the 2026-11-26 DB outage while `results` recovered.
+- **Commits:** product `f1a1d45` `docs(handoff)` HANDOFF-RESPONSE-odds-scrape-stalled.md; ledger (check-in, STATE regens, backlog B-2026-10-03-5 enrichment, this entry, clock-out). No scraper code changed.
+- **Outcome:** RESOLVED (operational recovery, no code fault).
+  - Root cause: not a job-not-firing fault. `com.scrapamoja.scrape` fired (03:58 UTC, rc=0) and `list_prematch` succeeded, but writes went to the **local SQLite fallback** (`data/betb2b/odds.db`, run ids 1–64), not Postgres. During the ~1.5-day outage the scrape process hit `connection refused` 127.0.0.1/::1:5432 → per-process fallback. The `(remote, mode=auto)` log label is cosmetic (`_describe_store` reads $DATABASE_URL only). `results` recovered fast only because of cadence (30 min vs scrape 6 h); the last scrape landed just before PG came back (~04:05–04:13).
+  - Verified PG writable now via the scraper's own rolled-back probe → True. Kicked one `--direct` scrape (geo-safe). Persisted **run 4611** (200 events, +~63k odds) → Postgres; `list_prematch` newest `extracted_at` 2026-11-28 08:54, `success=t`; `odds_snapshots` newest → 08:54 (was 2026-11-26 21:37); all 200 upcoming events now carry a today snapshot. Engine watchdog DATA_STALE clears on its own.
+  - Goal #3 (survive DB down→up without a manual kick): confirmed it self-heals — each fresh scrape process writes primary once PG is up; my kick just beat the ~09:58 scheduled run by ~1 h.
+- **Open items:** latent — the fallback **outbox drain never fires across process boundaries**; 858 rows stranded from the outage, will replay in a burst only on the next down→up cycle (real data, original `captured_at`, so late history not fabrication — left in place, NOT drained, per the handoff's don't-backfill bar). Enriched B-2026-10-03-5 with this facet (explicit out-of-persist drain command is the fix). Related: B-2026-10-04-2.
+- **Flaw:** none mine. Phase 1 Sync ran (pull + `ledger-sync verify`/`status`) — did not skip it (avoided Tariq/S014's 2026-11-01 flaw).
+- **Notes:** geo-restricted Mac (direct feed only; no page loads). Office headcount 2 (Jabari live + Achieng Done) at check-in (limit 20) — no close needed.
+- **Report:** none
