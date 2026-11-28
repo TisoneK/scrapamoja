@@ -8,4 +8,4 @@ entry and backlog before starting.
 
 - **Session:** —
 - **Task:** (none — office idle)
-- **Status:** No active task. Last session: Kofi (S018) closed out 2026-11-28 — fixed B-2026-10-03-5 cross-process facet: new `betb2b drain-outbox` command (`7838030`). PENDING operator action: drain the 858 real rows still queued in `data/betb2b/odds.db` (`export $(grep ^DATABASE_URL= src/sites/betb2b/.env | xargs) && .venv/bin/python -m src.main betb2b drain-outbox`) — auto-mode classifier blocked the prod write. B-2026-10-03-5 still open for the inline-replay deadline + exit-1 facets. See agents/sessions.md.
+- **Status:** No active task. Last session: Kofi (S018) closed out 2026-11-28 — fixed B-2026-10-03-5 cross-process facet: new `betb2b drain-outbox` command (`7838030`). Operator then ran it: all **858** stranded rows drained to Postgres (3 passes 109+500+249, remaining 0) — fix confirmed in prod; the 5 persist payloads replayed as runs 4629–4633. B-2026-10-03-5 still open for the inline-replay deadline + exit-1 facets only. See agents/sessions.md.
