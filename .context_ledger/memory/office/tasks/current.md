@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 its roster row (if left behind) says who was here; check the session
 entry and backlog before starting.
 
-- **Session:** —
-- **Task:** (none — office idle)
-- **Status:** No active task. Last session: Jabari (S017) closed out 2026-11-28 — picked up the odds handoff; `list_prematch` resumed to Postgres (run 4611, fresh odds). Latent: fallback outbox drain never fires across processes (B-2026-10-03-5). See agents/sessions.md.
+- **Session:** Kofi (S018), 2026-11-28
+- **Task:** B-2026-10-03-5 — fallback outbox drain never fires across process boundaries. Add an explicit out-of-persist drain command (operator/boot step) that drains the on-disk SQLite outbox to primary when primary is writable, independent of the in-memory `_outbox_remaining` gate. Scope: new facet only (cross-process drain); the inline-replay-deadline + exit-1 facets stay on the backlog unless trivially co-fixed.
+- **Status:** Working — implementing + testing against the real on-disk outbox (858 stranded rows in `data/betb2b/odds.db`). Quality bar: replay carries original `captured_at` (late history, not fabrication); do not fabricate/backfill.
