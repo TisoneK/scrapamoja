@@ -5,7 +5,7 @@ at check-in and at exit. This is a DERIVED VIEW for fast orientation;
 open the file a line points at when your task needs more than the
 line gives you. Full reading order: ledger-schema.md. -->
 
-_Regenerated: 2026-11-28T12:11:20Z_
+_Regenerated: 2026-11-28T12:42:09Z_
 
 ## Standing params
 - **Core:** 2.5.0 (locked, verified 2026-11-28)
@@ -18,7 +18,7 @@ _Regenerated: 2026-11-28T12:11:20Z_
 - **Achieng** (S002) — Done — Engineer: Windows gate fix + product-tree ledger-vocabulary sweep
 
 ## Current task
-- **—** — (none — office idle) — *No active task. Last session: Kofi (S018) closed out 2026-11-28 — fixed B-2026-10-03-5 cross-process facet: new `betb2b drain-outbox` command (`7838030`). PENDING operator action: drain the 858 real rows still queued in `data/betb2b/odds.db` (`export $(grep ^DATABASE_URL= src/sites/betb2b/.env | xargs) && .venv/bin/python -m src.main betb2b drain-outbox`) — auto-mode classifier blocked the prod write. B-2026-10-03-5 still open for the inline-replay deadline + exit-1 facets. See agents/sessions.md.*
+- **—** — (none — office idle) — *No active task. Last session: Kofi (S018) closed out 2026-11-28 — fixed B-2026-10-03-5 cross-process facet: new `betb2b drain-outbox` command (`7838030`). Operator then ran it: all **858** stranded rows drained to Postgres (3 passes 109+500+249, remaining 0) — fix confirmed in prod; the 5 persist payloads replayed as runs 4629–4633. B-2026-10-03-5 still open for the inline-replay deadline + exit-1 facets only. See agents/sessions.md.*
 
 ## Backlog — High priority (the top of the queue)
 | B-2026-10-03-1 | **linebet live re-verification with the fixes in place, in a rested window.** The cookie-header fix (`ec05ca0`), the burst-halt (`fb32cd1`/`6fa14bb`) and the pre-harvest grid wait are in but not yet proven end-to-end: tonight's address was rested by the guard after repeated challenges. Run the stored run (`scrape linebet scheduled --sport basketball --timeout 3600`), then a second run with no person present, then watch `python -m src.security status` and the per-skin rows from the Kenya brief's section 7 query. Also re-run **melbet** (its loop run was killed mid-scrape by mistake; earlier data intact). |
